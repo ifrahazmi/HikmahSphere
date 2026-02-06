@@ -2,7 +2,7 @@
 
 ![HikmahSphere Banner](https://via.placeholder.com/800x200/2D5A87/FFFFFF?text=MuslimHub+%F0%9F%95%8C+Digital+Islamic+Platform)
 
-# ![nav_logo](https://github.com/user-attachments/assets/bb25ff85-d566-471b-896e-a4bbba6b5e17)
+# ![nav_logo](https://github.com/user-attachments/assets/c38fae85-e277-43b6-af22-258cb72b9965)
  HikmahSphere
 
 ### *The Modern Digital Platform for the Global Muslim Community*
