@@ -1,7 +1,7 @@
 <div align="center">
 
 # ![nav_logo](https://github.com/user-attachments/assets/c38fae85-e277-43b6-af22-258cb72b9965)
- HikmahSphere
+# HikmahSphere
 
 ### *The Modern Digital Platform for the Global Muslim Community*
 
