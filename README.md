@@ -45,7 +45,7 @@
 
 ---
 
-## 🎯 **About MuslimHub**
+## 🎯 **About HikmahSphere**
 
 <div align="center">
 
@@ -60,7 +60,7 @@
 
 </div>
 
-### 🌟 **What Makes MuslimHub Special**
+### 🌟 **What Makes HikmahSphere Special**
 
 <table>
 <tr>
@@ -478,10 +478,10 @@ graph LR
 #### **Step 1: Clone & Navigate**
 ```bash
 # 📥 Clone the repository
-git clone https://github.com/yani2298/MuslimHub.git
+git clone https://github.com/yani2298/HikmahSphere.git
 
 # 📂 Navigate to project directory
-cd MuslimHub
+cd HikmahSphere
 ```
 
 #### **Step 2: Install Dependencies**
@@ -498,7 +498,7 @@ npm run install-deps
 cp backend/.env.example backend/.env
 
 # ✏️ Edit the .env file with your MongoDB connection
-# Default MongoDB URI: mongodb://localhost:27017/muslimhub
+# Default MongoDB URI: mongodb://localhost:27017/HikmahSphere
 ```
 
 #### **Step 4: Launch Application**
@@ -518,7 +518,7 @@ npm run dev
 
 | Service | URL | Status Check |
 |---------|-----|--------------|
-| 🎨 **Frontend** | [http://localhost:3000](http://localhost:3000) | Should show MuslimHub homepage |
+| 🎨 **Frontend** | [http://localhost:3000](http://localhost:3000) | Should show HikmahSphere homepage |
 | ⚡ **Backend API** | [http://localhost:5000/health](http://localhost:5000/health) | Should return `{"status": "success"}` |
 | 📊 **Database** | Local MongoDB | Check connection in terminal logs |
 
@@ -598,7 +598,7 @@ PORT=5000
 NODE_ENV=development
 
 # 📊 Database Configuration
-MONGODB_URI=mongodb://localhost:27017/muslimhub
+MONGODB_URI=mongodb://localhost:27017/HikmahSphere
 
 # 🔐 Authentication Configuration
 JWT_SECRET=your_super_secure_secret_key_here
@@ -653,7 +653,7 @@ NODE_ENV=production
 PORT=5000
 
 # 🔒 Secure Database Connection
-MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/muslimhub
+MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/HikmahSphere
 
 # 🔐 Strong Security Keys (Generate with: openssl rand -base64 64)
 JWT_SECRET=your_production_jwt_secret_64_characters_minimum
@@ -686,7 +686,7 @@ GOOGLE_ANALYTICS_ID=your_ga_id
 [![Docs](https://img.shields.io/badge/Docs-OpenAPI_3.0-85EA2D?style=for-the-badge&logo=swagger)](https://github.com/yani2298/MuslimHub)
 [![Postman](https://img.shields.io/badge/Postman-Collection-FF6C37?style=for-the-badge&logo=postman)](https://github.com/yani2298/MuslimHub)
 
-**Base URL:** `http://localhost:5000/api` (Development) • `https://api.muslimhub.com/api` (Production)
+**Base URL:** `http://localhost:5000/api` (Development) • `https://api.HikmahSphere.com/api` (Production)
 
 </div>
 
@@ -893,7 +893,7 @@ curl -X GET "http://localhost:5000/api/quran/search?q=patience&translation=en.sa
 
 </details>
 
-## 🤝 **Contributing to MuslimHub**
+## 🤝 **Contributing to HikmahSphere**
 
 <div align="center">
 
@@ -1070,7 +1070,7 @@ graph LR
 
 ```mermaid
 timeline
-    title MuslimHub Development Roadmap 2025
+    title HikmahSphere Development Roadmap 2025
     
     Q1 2025 : Beta Launch
              : Enhanced UI/UX
