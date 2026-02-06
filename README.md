@@ -1,8 +1,9 @@
 <div align="center">
 
-![MuslimHub Banner](https://via.placeholder.com/800x200/2D5A87/FFFFFF?text=MuslimHub+%F0%9F%95%8C+Digital+Islamic+Platform)
+![HikmahSphere Banner](https://via.placeholder.com/800x200/2D5A87/FFFFFF?text=MuslimHub+%F0%9F%95%8C+Digital+Islamic+Platform)
 
-# 🕌 MuslimHub
+# ![nav_logo](https://github.com/user-attachments/assets/bb25ff85-d566-471b-896e-a4bbba6b5e17)
+ HikmahSphere
 
 ### *The Modern Digital Platform for the Global Muslim Community*
 
