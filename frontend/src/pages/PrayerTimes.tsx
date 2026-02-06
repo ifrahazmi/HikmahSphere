@@ -7,7 +7,9 @@ import {
   GlobeAltIcon,
   MagnifyingGlassIcon,
   CloudIcon,
-  BoltIcon
+  BoltIcon,
+  ArrowUpIcon,
+  ArrowDownIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../hooks/useAuth';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -147,16 +149,25 @@ const PrayerTimes: React.FC = () => {
           return d.getDate() === now.getDate() && d.getHours() === currentHour;
       });
       
+      // Get Min/Max for the current day (Index 0 is today)
+      // daily.temperature_2m_max[0] and min[0]
+      const dailyMax = weatherData.daily?.temperature_2m_max?.[0];
+      const dailyMin = weatherData.daily?.temperature_2m_min?.[0];
+
       if (index !== -1) {
           return {
               temp: weatherData.hourly.temperature_2m[index],
-              code: weatherData.hourly.weather_code[index]
+              code: weatherData.hourly.weather_code[index],
+              min: dailyMin,
+              max: dailyMax
           };
       }
       
       return {
           temp: weatherData.current.temperature_2m,
-          code: weatherData.current.weather_code
+          code: weatherData.current.weather_code,
+          min: dailyMin,
+          max: dailyMax
       };
   };
 
@@ -332,12 +343,18 @@ const PrayerTimes: React.FC = () => {
                             )}
                         </div>
 
-                        {/* Right Side: Enhanced Weather Info */}
+                        {/* Right Side: Enhanced Weather Info with Max/Min */}
                         {weather && weatherStyle && (
                             <div className="flex items-center justify-end text-right">
                                 <div className="mr-2 flex flex-col items-end">
-                                    <span className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">{weatherStyle.label}</span>
-                                    <span className="text-xl font-bold text-gray-700 leading-none">{Math.round(weather.temp)}°</span>
+                                    <span className="text-[10px] uppercase tracking-wider text-gray-400 font-medium mb-0.5">{weatherStyle.label}</span>
+                                    <div className="flex items-baseline">
+                                         <span className="text-xl font-bold text-gray-700 leading-none mr-2">{Math.round(weather.temp)}°</span>
+                                         <div className="flex flex-col text-[10px] text-gray-400 leading-tight">
+                                            {weather.max && <span>H: {Math.round(weather.max)}°</span>}
+                                            {weather.min && <span>L: {Math.round(weather.min)}°</span>}
+                                         </div>
+                                    </div>
                                 </div>
                                 <div className={`p-1.5 rounded-full bg-gray-50 ${weatherStyle.color.replace('text-', 'bg-').replace('600', '100').replace('500', '100').replace('400', '100').replace('300', '50')}`}>
                                      <WeatherIcon className={`h-8 w-8 ${weatherStyle.color}`} />
