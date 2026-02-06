@@ -1,6 +1,6 @@
 ---
 name: Bug Report / Feature Request
-about: Create a report to help us improve MuslimHub
+about: Create a report to help us improve HikmahSphere
 title: '[BUG/FEATURE] Brief description'
 labels: ''
 assignees: ''
