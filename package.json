@@ -1,0 +1,45 @@
+{
+  "name": "muslimhub",
+  "version": "1.0.0",
+  "description": "🕌 MuslimHub - Modern Digital Platform for Global Muslim Community. Islamic app with Prayer Times, Quran Reader, Zakat Calculator, Community Features & AI Assistant. Built with React 18 + TypeScript + MongoDB.",
+  "main": "index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm start",
+    "build": "npm run build:frontend && npm run build:backend",
+    "build:frontend": "cd frontend && npm run build",
+    "build:backend": "cd backend && npm run build",
+    "start": "cd backend && npm start",
+    "test": "npm run test:frontend && npm run test:backend",
+    "test:frontend": "cd frontend && npm test",
+    "test:backend": "cd backend && npm test",
+    "install-deps": "npm install && cd frontend && npm install && cd ../backend && npm install"
+  },
+  "keywords": [
+    "islamic-app",
+    "muslim-platform",
+    "prayer-times",
+    "quran-reader",
+    "zakat-calculator",
+    "qibla-finder",
+    "islamic-community",
+    "muslim-community",
+    "islamic-technology",
+    "halal-software",
+    "digital-islam",
+    "react",
+    "typescript",
+    "mongodb",
+    "pwa",
+    "open-source"
+  ],
+  "author": "MuslimHub Team",
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "concurrently": "^9.2.0",
+    "create-react-app": "^1.2.1",
+    "typescript": "^5.8.3"
+  }
+}
