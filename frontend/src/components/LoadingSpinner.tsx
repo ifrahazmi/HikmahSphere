@@ -1,4 +1,5 @@
 import React from 'react';
+import logo from '../logo-bgremov.png';
 
 interface LoadingSpinnerProps {
   size?: 'sm' | 'md' | 'lg' | 'xl';
@@ -37,7 +38,7 @@ const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
       <div className="relative">
         <div className={`${sizeClasses[size]} border-4 border-gray-200 rounded-full animate-spin ${colorClasses[color]} border-t-transparent`}></div>
         <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-xs">🕌</span>
+          <img src={logo} alt="HikmahSphere Logo" className="w-48 h-48 object-contain" />
         </div>
       </div>
       
