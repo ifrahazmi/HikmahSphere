@@ -1,4 +1,4 @@
-name: 🚀 MuslimHub CI/CD Pipeline
+name: 🚀 HikmahSphere CI/CD Pipeline
 
 on:
   push:
@@ -54,7 +54,7 @@ jobs:
       - name: 🧪 Run tests
         run: npm run test:coverage
         env:
-          MONGODB_URI: mongodb://localhost:27017/muslimhub_test
+          MONGODB_URI: mongodb://localhost:27017/hikmahsphere
           JWT_SECRET: test_secret_key
 
       - name: 📊 Upload coverage reports
@@ -183,7 +183,7 @@ jobs:
 
       - name: 🚀 Deploy to Production
         run: |
-          echo "🚀 Deploying MuslimHub to production..."
+          echo "🚀 Deploying HikmahSphere to production..."
           echo "🕌 May Allah bless this revolutionary platform!"
           # Add your deployment commands here
           # Example: kubectl apply -f k8s/ or docker-compose up
@@ -191,7 +191,7 @@ jobs:
       - name: 📢 Notify Success
         if: success()
         run: |
-          echo "✅ MuslimHub deployed successfully!"
+          echo "✅ HikmahSphere deployed successfully!"
           echo "🌍 Serving the global Muslim community"
 
       - name: 📢 Notify Failure
