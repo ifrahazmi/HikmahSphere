@@ -25,14 +25,14 @@ const PrayerTimes: React.FC = () => {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [showSearch, setShowSearch] = useState(false);
   
+  // Calculation method settings
+  const [selectedMadhab, setSelectedMadhab] = useState<string>(user?.madhab || 'shafi');
+  const method = 3; // Muslim World League
+  
   // Data states
   const [prayerData, setPrayerData] = useState<any>(null);
   const [fastingData, setFastingData] = useState<any>(null);
-  const [weatherData, setWeatherData] = useState<any>(null);
-
-  // Default settings
-  const method = 3; 
-  const school = user?.madhab === 'hanafi' ? 2 : 1; 
+  const [weatherData, setWeatherData] = useState<any>(null); 
 
   useEffect(() => {
     setLoading(true); // Ensure loading starts immediately on mount
@@ -60,11 +60,15 @@ const PrayerTimes: React.FC = () => {
     if (location) {
       fetchData(location.lat, location.lon);
     }
-  }, [location, user]); 
+  }, [location, selectedMadhab]); // Re-fetch when location or madhab changes
 
   const fetchData = async (lat: number, lon: number) => {
     setLoading(true);
     setError(null);
+    
+    // Convert madhab to school parameter (Aladhan API: 0=Shafi, 1=Hanafi)
+    const school = selectedMadhab === 'hanafi' ? 1 : 0;
+    
     try {
       // Fetch Prayer Times
       const prayerRes = await fetch(`${API_URL}/prayers/times?latitude=${lat}&longitude=${lon}&method=${method}&school=${school}`);
@@ -221,9 +225,6 @@ const PrayerTimes: React.FC = () => {
     return <LoadingSpinner fullScreen text="Loading prayer times..." />;
   }
 
-  // Helper to extract fasting info
-  const fastingInfo = fastingData?.fasting?.[0]?.time;
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 pt-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -241,6 +242,20 @@ const PrayerTimes: React.FC = () => {
                     {location ? `${cityQuery || 'Current Location'} (${location.lat.toFixed(2)}, ${location.lon.toFixed(2)})` : 'Select Location'}
                 </span>
             </button>
+            
+            {/* Madhab Selector */}
+            <div className="mt-3 flex items-center space-x-2">
+              <label className="text-sm font-medium text-gray-700">Calculation Method:</label>
+              <select 
+                value={selectedMadhab}
+                onChange={(e) => setSelectedMadhab(e.target.value)}
+                className="text-sm border border-gray-300 rounded-md px-3 py-1 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              >
+                <option value="shafi">Shafi'i / Maliki / Hanbali (Standard)</option>
+                <option value="hanafi">Hanafi (Later Asr)</option>
+              </select>
+            </div>
+            
             <div className="flex items-center space-x-2 mt-1">
                 <p className="text-sm text-emerald-600 font-medium">
                     {prayerData?.date?.readable} • {prayerData?.date?.hijri?.day} {prayerData?.date?.hijri?.month?.en} {prayerData?.date?.hijri?.year}
@@ -329,16 +344,16 @@ const PrayerTimes: React.FC = () => {
                     <div className="mt-4 flex items-end justify-between border-t border-gray-50 pt-3 min-h-[50px]">
                         {/* Left Side: Fasting Info */}
                         <div className="flex-1">
-                            {prayer.name === 'Fajr' && fastingInfo && (
+                            {prayer.name === 'Fajr' && fastingData && (
                                 <div className="flex flex-col">
-                                    <span className="text-xs font-medium text-gray-500">Sahur Ends</span>
-                                    <span className="text-sm font-bold text-emerald-600">{fastingInfo.sahur}</span>
+                                    <span className="text-xs font-medium text-gray-500">Sehri Ends</span>
+                                    <span className="text-sm font-bold text-emerald-600">{fastingData.sahur || fastingData.imsak}</span>
                                 </div>
                             )}
-                            {prayer.name === 'Maghrib' && fastingInfo && (
+                            {prayer.name === 'Maghrib' && fastingData && (
                                 <div className="flex flex-col">
                                     <span className="text-xs font-medium text-gray-500">Iftar Time</span>
-                                    <span className="text-sm font-bold text-emerald-600">{fastingInfo.iftar}</span>
+                                    <span className="text-sm font-bold text-emerald-600">{fastingData.iftar}</span>
                                 </div>
                             )}
                         </div>

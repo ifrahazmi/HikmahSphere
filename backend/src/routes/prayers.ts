@@ -4,11 +4,9 @@ import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth';
 
 const router = express.Router();
 
-// Configuration
-const API_BASE_URL = 'https://islamicapi.com/api/v1/prayer-time';
-const FASTING_API_URL = 'https://islamicapi.com/api/v1/fasting';
-// Using the provided API Key directly to ensure it works
-const API_KEY = process.env.PRAYER_TIMES_API_KEY || 'icgUaIHMO8GWEVLh7XhFcFoTHjQlsfhSBpJtYfrtTUJXY1eI'; 
+// Configuration - Using Aladhan API (free, no Cloudflare protection)
+const API_BASE_URL = 'https://api.aladhan.com/v1/timings';
+const CALENDAR_API_URL = 'https://api.aladhan.com/v1/calendar'; 
 
 // Helper function to get compass direction
 function getCompassDirection(bearing: number): string {
@@ -60,34 +58,48 @@ router.get('/times', [
       school?: string;
     };
 
-    const apiUrl = `${API_BASE_URL}/?lat=${latitude}&lon=${longitude}&method=${method}&school=${school}&api_key=${API_KEY}`;
+    const timestamp = Math.floor(Date.now() / 1000);
+    const apiUrl = `${API_BASE_URL}/${timestamp}?latitude=${latitude}&longitude=${longitude}&method=${method}&school=${school === '2' ? '1' : '0'}`;
     
-    // Log URL with masked key for debugging
-    console.log(`Fetching prayer times from: ${apiUrl.replace(API_KEY, 'API_KEY_HIDDEN')}`);
+    console.log(`Fetching prayer times from Aladhan: ${apiUrl}`);
 
     const apiResponse = await fetch(apiUrl);
     
     if (!apiResponse.ok) {
-        throw new Error(`External API responded with ${apiResponse.status}: ${apiResponse.statusText}`);
+        throw new Error(`Aladhan API responded with ${apiResponse.status}`);
     }
 
     const apiData = await apiResponse.json();
+    
+    console.log('Prayer API Response received successfully');
 
-    // The external API returns data in apiData.data
-    // We pass it through directly but wrap in our success format
-    if (apiData.data) {
+    if (apiData.code === 200 && apiData.data) {
+        const data = apiData.data;
         res.json({
             status: 'success',
             data: {
-                // Map fields to match what frontend likely expects or just pass full object
-                // Frontend expects: date.readable, times.Fajr, qibla.direction.degrees
-                times: apiData.data.times,
-                date: apiData.data.date,
-                qibla: apiData.data.qibla,
-                timezone: apiData.data.timezone,
-                prohibited_times: apiData.data.prohibited_times,
-                
-                // Metadata
+                times: {
+                    Fajr: data.timings.Fajr,
+                    Sunrise: data.timings.Sunrise,
+                    Dhuhr: data.timings.Dhuhr,
+                    Asr: data.timings.Asr,
+                    Maghrib: data.timings.Maghrib,
+                    Isha: data.timings.Isha,
+                    Midnight: data.timings.Midnight,
+                    Imsak: data.timings.Imsak
+                },
+                date: {
+                    readable: data.date.readable,
+                    timestamp: data.date.timestamp,
+                    gregorian: data.date.gregorian,
+                    hijri: data.date.hijri
+                },
+                qibla: {
+                    direction: {
+                        degrees: parseFloat(data.meta.qibla || '0')
+                    }
+                },
+                meta: data.meta,
                 location: {
                     latitude: parseFloat(latitude),
                     longitude: parseFloat(longitude),
@@ -96,7 +108,7 @@ router.get('/times', [
             }
         });
     } else {
-        throw new Error('Invalid response structure from external API');
+        throw new Error('Invalid response from Aladhan API');
     }
 
   } catch (error: any) {
@@ -117,7 +129,6 @@ router.get('/times', [
 router.get('/fasting', [
   query('latitude').isFloat({ min: -90, max: 90 }),
   query('longitude').isFloat({ min: -180, max: 180 }),
-  query('method').optional().isInt()
 ], async (req, res) => {
     try {
         const errors = validationResult(req);
@@ -127,28 +138,38 @@ router.get('/fasting', [
 
         const { latitude, longitude, method = '3' } = req.query as any;
         
-        const apiUrl = `${FASTING_API_URL}/?lat=${latitude}&lon=${longitude}&method=${method}&api_key=${API_KEY}`;
+        const timestamp = Math.floor(Date.now() / 1000);
+        const apiUrl = `${API_BASE_URL}/${timestamp}?latitude=${latitude}&longitude=${longitude}&method=${method}`;
         
-        console.log(`Fetching fasting times from: ${apiUrl.replace(API_KEY, 'API_KEY_HIDDEN')}`);
+        console.log(`Fetching fasting times from Aladhan: ${apiUrl}`);
 
         const response = await fetch(apiUrl);
         if (!response.ok) {
-            throw new Error(`External API error: ${response.status}`);
+            throw new Error(`Aladhan API error: ${response.status}`);
         }
         
-        const data = await response.json();
+        const apiData = await response.json();
         
-        if (data.status === 'success' && data.data) {
-             res.json({
-                 status: 'success',
-                 data: data.data
-             });
+        console.log('Fasting API Response received successfully');
+        
+        if (apiData.code === 200 && apiData.data) {
+            const data = apiData.data;
+            res.json({
+                status: 'success',
+                data: {
+                    sahur: data.timings.Imsak,
+                    imsak: data.timings.Imsak,
+                    fajr: data.timings.Fajr,
+                    iftar: data.timings.Maghrib,
+                    date: data.date
+                }
+            });
         } else {
-            throw new Error('Invalid response from fasting API');
+            throw new Error('Invalid response from Aladhan API');
         }
     } catch (error: any) {
         console.error('Fasting API error:', error.message);
-        res.status(500).json({ status: 'error', message: 'Failed to fetch fasting times' });
+        res.status(500).json({ status: 'error', message: 'Failed to fetch fasting times', details: error.message });
     }
 });
 
@@ -169,9 +190,8 @@ router.get('/weather', [
   
           const { latitude, longitude } = req.query as any;
           
-          // Open-Meteo URL - requesting hourly temperature to map to prayer times
-          // Added daily=temperature_2m_max,temperature_2m_min for max/min values
-          const apiUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code&hourly=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&timezone=auto`;
+          // Open-Meteo URL with comprehensive weather data
+          const apiUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m&hourly=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&timezone=auto`;
           
           console.log(`Fetching weather from: ${apiUrl}`);
   
@@ -203,26 +223,40 @@ router.get('/qibla', [
 ], async (req, res) => {
     try {
         const { latitude, longitude } = req.query as { latitude: string, longitude: string };
-        const apiUrl = `${API_BASE_URL}/?lat=${latitude}&lon=${longitude}&method=1&school=1&api_key=${API_KEY}`;
+        const timestamp = Math.floor(Date.now() / 1000);
+        const apiUrl = `${API_BASE_URL}/${timestamp}?latitude=${latitude}&longitude=${longitude}&method=3`;
+        
+        console.log(`Fetching Qibla direction from Aladhan: ${apiUrl}`);
         
         const apiResponse = await fetch(apiUrl);
+        
+        if (!apiResponse.ok) {
+            throw new Error(`Aladhan API error: ${apiResponse.status}`);
+        }
+        
         const apiData = await apiResponse.json();
         
-        if (apiData.data && apiData.data.qibla) {
+        if (apiData.code === 200 && apiData.data && apiData.data.meta) {
+            const qiblaDegrees = parseFloat(apiData.data.meta.qibla || '0');
              res.json({
                 status: 'success',
                 data: {
                     location: { latitude, longitude },
-                    qibla: apiData.data.qibla,
-                    compass: getCompassDirection(apiData.data.qibla.direction.degrees)
+                    qibla: {
+                        direction: {
+                            degrees: qiblaDegrees
+                        }
+                    },
+                    compass: getCompassDirection(qiblaDegrees)
                 }
             });
         } else {
             throw new Error("Qibla data missing from API response");
         }
 
-    } catch (error) {
-        res.status(500).json({ status: 'error', message: 'Failed to fetch Qibla' });
+    } catch (error: any) {
+        console.error('Qibla API error:', error.message);
+        res.status(500).json({ status: 'error', message: 'Failed to fetch Qibla', details: error.message });
     }
 });
 
