@@ -98,10 +98,97 @@ Password: Admin@123456
 
 ⚠️ **Change these after first login!**
 
+---
+
+## 🎯 **What's New & Working Now**
+
+<div align="center">
+
+### ✨ **Latest Feature Updates**
+
+</div>
+
+<table>
+<tr>
+<td width="50%">
+
+#### **🆕 Recently Completed** *(February 2026)*
+
+✅ **Advanced Quran Customization**
+- 5 premium Arabic fonts (Amiri, Scheherazade, Noto Naskh, Cairo, Lateef)
+- 5 color schemes with emerald, blue, amber, rose themes
+- 5 background options with dark mode support
+- Full theme synchronization across app
+
+✅ **Complete Zakat Management System**
+- Donor & recipient tracking with full details
+- Credit (Collection) & Debit (Distribution) management
+- UPI payment integration with transaction IDs
+- Real-time statistics dashboard
+- Role-based access control
+
+✅ **Enhanced Prayer Times**
+- Daily, Monthly, and Yearly prayer schedules
+- Real-time weather integration
+- Islamic calendar with Hijri dates
+- Multiple calculation methods & Madhab selection
+- Fasting times (Suhoor/Iftar)
+
+✅ **One-Click Docker Deployment**
+- Automated 4-service deployment (Frontend, Backend, MongoDB, Redis)
+- Health checks & verification scripts
+- Environment configuration wizard
+- Fresh install, update, and dev modes
+
+</td>
+<td width="50%">
+
+#### **🎯 Core Features Status**
+
+| Feature | Status | Completion |
+|---------|--------|-----------|
+| **Authentication & Security** | ✅ Production Ready | 100% |
+| **Prayer Times Calculator** | ✅ Production Ready | 90% |
+| **Quran Reader** | ✅ Production Ready | 95% |
+| **Zakat Calculator & Management** | ✅ Production Ready | 85% |
+| **Qibla Direction Finder** | ✅ Production Ready | 100% |
+| **User Dashboard (Admin)** | ✅ Production Ready | 80% |
+| **Docker Deployment** | ✅ Production Ready | 100% |
+| **Dark Mode Support** | ✅ Production Ready | 100% |
+| **Community Forums UI** | ⚠️ Frontend Only | 60% |
+| **Prayer Notifications** | 🚧 In Development | 30% |
+
+#### **🛠️ Technology Stack**
+
+![React 19](https://img.shields.io/badge/React-19.1-61DAFB?style=flat-square&logo=react)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?style=flat-square&logo=typescript)
+![Node.js](https://img.shields.io/badge/Node.js-20.x-339933?style=flat-square&logo=node.js)
+![MongoDB](https://img.shields.io/badge/MongoDB-6.0-47A248?style=flat-square&logo=mongodb)
+![Redis](https://img.shields.io/badge/Redis-7.x-DC382D?style=flat-square&logo=redis)
+![Docker](https://img.shields.io/badge/Docker-24.x-2496ED?style=flat-square&logo=docker)
+![TailwindCSS](https://img.shields.io/badge/Tailwind-3.3-06B6D4?style=flat-square&logo=tailwindcss)
+
+</td>
+</tr>
+</table>
+
+---
+
+⚠️ **Change these after first login!**
+
 ### 📖 Full Documentation
 
-For detailed deployment options, troubleshooting, and production setup:
-👉 **[Read DEPLOYMENT.md](DEPLOYMENT.md)**
+**📚 Comprehensive Guides:**
+- 🐳 **[DEPLOYMENT.md](DEPLOYMENT.md)** - Complete Docker deployment guide with health checks
+- 🚀 **[DOCKER-SETUP.md](DOCKER-SETUP.md)** - Detailed Docker configuration & troubleshooting
+- 📦 **[INSTALL.md](INSTALL.md)** - Quick installation instructions
+- 🛠️ **[CONTRIBUTING.md](CONTRIBUTING.md)** - Contribution guidelines
+
+**⚡ Quick Deploy Scripts:**
+- `./deploy.sh` - Interactive deployment with 3 modes (fresh/update/dev)
+- `./start.sh` - Quick start wrapper
+- `./stop.sh` - Stop all services
+- `./verify.sh` - Health check verification
 
 ---
 
@@ -267,10 +354,10 @@ Providing **comprehensive Islamic digital services** that enhance daily religiou
 
 ### 🏗️ **Development Status Overview**
 
-![Progress](https://img.shields.io/badge/Overall_Progress-65%25-brightgreen?style=for-the-badge)
-![Frontend](https://img.shields.io/badge/Frontend-80%25-green?style=for-the-badge)
-![Backend](https://img.shields.io/badge/Backend-70%25-yellow?style=for-the-badge)
-![API](https://img.shields.io/badge/API-60%25-orange?style=for-the-badge)
+![Progress](https://img.shields.io/badge/Overall_Progress-75%25-brightgreen?style=for-the-badge)
+![Frontend](https://img.shields.io/badge/Frontend-85%25-green?style=for-the-badge)
+![Backend](https://img.shields.io/badge/Backend-75%25-yellow?style=for-the-badge)
+![Deployment](https://img.shields.io/badge/Deployment-100%25-success?style=for-the-badge)
 
 </div>
 
@@ -283,74 +370,86 @@ Providing **comprehensive Islamic digital services** that enhance daily religiou
 <img src="https://img.shields.io/badge/Prayer-Times-2E8B57?style=for-the-badge&logo=clock" alt="Prayer Times"/>
 
 **🕐 Prayer Times**
-- GPS-based calculations
-- Multiple calculation methods
-- Custom location settings
-- Prayer notifications
+- GPS-based accurate calculations
+- Daily/Monthly/Yearly prayer schedules
+- Multiple calculation methods (MWL, ISNA, etc.)
+- Madhab selection (Hanafi, Shafi, Maliki, Hanbali)
+- Weather integration with forecasts
+- Islamic calendar with Hijri dates
+- Sunrise/sunset & Qiyam times
+- Fasting timings (Suhoor/Iftar)
+- Location search by city name
 </td>
 <td width="25%" align="center">
 <img src="https://img.shields.io/badge/Quran-Reader-4169E1?style=for-the-badge&logo=book" alt="Quran Reader"/>
 
 **📖 Quran Reader**
-- Full Arabic text
-- Multiple translations
-- Audio recitations
-- Search functionality
+- Full Arabic text with Uthmanic script
+- Multiple translations (up to 3 simultaneous)
+- 5 Arabic font families (Amiri, Scheherazade, etc.)
+- 5 font colors + 5 background themes
+- Dark mode with synchronized theme
+- Bookmarking & last read tracking
+- Translation & transliteration support
 </td>
 <td width="25%" align="center">
 <img src="https://img.shields.io/badge/Zakat-Calculator-DAA520?style=for-the-badge&logo=calculator" alt="Zakat Calculator"/>
 
-**💰 Zakat Calculator**
-- Comprehensive calculations
-- Multiple asset types
-- Real-time rates
-- Detailed breakdowns
+**💰 Zakat Calculator & Management**
+- Comprehensive calculations for 8+ asset types
+- Real-time Nisab calculations (Gold/Silver)
+- Complete Zakat fund management
+- Collection (Credit) & Distribution (Debit) tracking
+- Donor & recipient management
+- UPI/payment method integration
+- Role-based access (SuperAdmin/Manager)
+- Transaction history & reporting
 </td>
 <td width="25%" align="center">
 <img src="https://img.shields.io/badge/Qibla-Finder-8B4513?style=for-the-badge&logo=compass" alt="Qibla Finder"/>
 
 **🧭 Qibla Finder**
-- Accurate direction
-- GPS integration
-- Compass interface
-- AR capabilities *(planned)*
+- Accurate direction calculation
+- GPS-based coordinates
+- Distance to Kaaba
+- Prayer times integration
 </td>
 </tr>
 </table>
 
-### 🚧 **Next-Generation Features** 
-> *Innovation meets Islamic tradition*
+### 🎨 **Advanced Customization Features**
+> *Personalized Islamic experience*
 
 <table>
 <tr>
 <td width="33%" align="center">
 
-![AI](https://img.shields.io/badge/Status-In_Development-yellow?style=for-the-badge)
-**🤖 Islamic AI Assistant**
-- Quran & Sunnah based responses
-- Multi-language support
-- Context-aware answers
-- Scholar-verified content
+![Quran](https://img.shields.io/badge/Status-Complete-green?style=for-the-badge)
+**📖 Quran Customization**
+- 5 font color options
+- 5 Arabic font families  
+- 5 background themes
+- Dark/Light mode support
 
 </td>
 <td width="33%" align="center">
 
-![Search](https://img.shields.io/badge/Status-Planning-orange?style=for-the-badge)
-**🔍 Semantic Search**
-- AI-powered Quran search
-- Hadith collection integration
-- Cross-reference capabilities
-- Contextual understanding
+![Zakat](https://img.shields.io/badge/Status-Complete-green?style=for-the-badge)
+**💰 Zakat Management**
+- Collection tracking (Credit)
+- Distribution tracking (Debit)
+- Donor & recipient management
+- Transaction history with UPI
 
 </td>
 <td width="33%" align="center">
 
-![Community](https://img.shields.io/badge/Status-Research-red?style=for-the-badge)
-**🌐 Community Platform**
-- Discussion forums
-- Study groups
-- Local mosque integration
-- Event coordination
+![Prayer](https://img.shields.io/badge/Status-Complete-green?style=for-the-badge)
+**🕐 Prayer Enhancements**
+- Daily/Monthly/Yearly views
+- Weather integration
+- Islamic calendar
+- Multiple calculation methods
 
 </td>
 </tr>
@@ -365,10 +464,10 @@ Providing **comprehensive Islamic digital services** that enhance daily religiou
 |---------|--------|-------------|
 | 📱 **Mobile Responsive** | ✅ Complete | Optimized for all screen sizes |
 | ⚡ **Fast Loading** | ✅ Complete | Sub-2s load times |
-| 🔄 **Offline Support** | 🚧 Development | Basic offline functionality |
-| 📥 **App Installation** | ✅ Beta | Install as native app |
-| 🔔 **Push Notifications** | 🚧 Development | Prayer time reminders |
-| 🌙 **Dark Mode** | 📋 Planned | Eye-friendly night mode |
+| 🔄 **Offline Support** | � Planned | Basic offline functionality |
+| 📥 **App Installation** | 📋 Planned | Install as native app |
+| 🔔 **Push Notifications** | 📋 Planned | Prayer time reminders |
+| 🌙 **Dark Mode** | ✅ Complete | Quran Reader with synchronized theme |
 
 </div>
 
@@ -396,19 +495,35 @@ Providing **comprehensive Islamic digital services** that enhance daily religiou
 frontend/
 ├── 🎯 src/
 │   ├── 🧩 components/     // Reusable UI components
-│   │   ├── ui/           // Base UI elements
-│   │   ├── forms/        // Form components
-│   │   └── islamic/      // Islamic-specific components
+│   │   ├── Navbar.tsx            // Navigation with dark mode sync
+│   │   ├── Footer.tsx            // Site footer
+│   │   ├── LoadingSpinner.tsx    // Loading states
+│   │   ├── ProtectedRoute.tsx    // Auth protection
+│   │   └── IslamicCalendar.tsx   // Hijri calendar
 │   ├── 📄 pages/         // Application pages
-│   │   ├── auth/         // Authentication pages
-│   │   ├── dashboard/    // User dashboard
-│   │   └── features/     // Feature-specific pages
+│   │   ├── Home.tsx              // Landing page
+│   │   ├── Auth.tsx              // Login/Register
+│   │   ├── Dashboard.tsx         // Admin dashboard
+│   │   ├── QuranReader.tsx       // Advanced Quran reader
+│   │   ├── PrayerTimes.tsx       // Prayer times & calendar
+│   │   ├── ZakatCalculator.tsx   // Zakat calc & management
+│   │   ├── Community.tsx         // Community features
+│   │   └── Profile.tsx           // User profile
 │   ├── 🎣 hooks/         // Custom React hooks
-│   ├── 🔗 services/      // API integration services
+│   │   └── useAuth.tsx           // Authentication hook
+│   ├── 🔗 contexts/      // React Context providers
+│   │   └── QuranContext.tsx      // Quran state management
 │   ├── 🛠️ utils/         // Helper functions
-│   └── 🎨 styles/        // Styling and themes
+│   ├── 📊 data/          // Static data
+│   │   └── islamicReminders.ts   // Islamic quotes
+│   ├── 📝 types/         // TypeScript definitions
+│   │   └── quran.ts              // Quran type definitions
+│   └── 🎨 styles/        // Styling
 ├── 📦 public/            // Static assets
+│   └── index.html                // HTML with Google Fonts
 └── ⚙️ config/            // Build configurations
+    ├── tailwind.config.js        // Tailwind + Arabic fonts
+    └── postcss.config.js         // PostCSS config
 ```
 
 </td>
@@ -419,19 +534,20 @@ frontend/
 backend/
 ├── 🎯 src/
 │   ├── 🛣️ routes/        // API endpoints
-│   │   ├── auth/         // Authentication routes
-│   │   ├── islamic/      // Islamic features routes
-│   │   └── community/    // Community features
+│   │   ├── auth.ts               // Authentication (JWT)
+│   │   ├── prayers.ts            // Prayer times & Qibla
+│   │   ├── quran.ts              // Quran API integration
+│   │   ├── zakat.ts              // Zakat calc & management
+│   │   └── community.ts          // Community endpoints
 │   ├── 📊 models/        // MongoDB schemas
-│   │   ├── User.ts       // User model
-│   │   ├── Prayer.ts     // Prayer times model
-│   │   └── Community.ts  // Community model
+│   │   ├── User.ts               // User model with roles
+│   │   └── ZakatPayment.ts       // Zakat transaction model
 │   ├── 🔒 middleware/    // Express middleware
-│   ├── 🎯 services/      // Business logic
-│   ├── 🔧 utils/         // Backend utilities
+│   │   └── auth.ts               // JWT verification & roles
+│   ├── 📋 index.ts       // Main server file
 │   └── 📋 types/         // TypeScript definitions
-├── 🧪 tests/             // Test suites
-└── 🐳 docker/            // Containerization
+├── 📦 package.json       // Dependencies
+└── 🔧 tsconfig.json      // TypeScript config
 ```
 
 </td>
@@ -457,10 +573,11 @@ backend/
 | Technology | Version | Purpose | Status |
 |------------|---------|---------|--------|
 | ![Node.js](https://img.shields.io/badge/Node.js-20.x-339933?logo=node.js) | 20.x | Runtime Environment | ✅ Implemented |
-| ![Express](https://img.shields.io/badge/Express-4.18-000000?logo=express) | 4.18+ | Web Framework | ✅ Implemented |
+| ![Express](https://img.shields.io/badge/Express-5.1-000000?logo=express) | 5.1+ | Web Framework | ✅ Implemented |
 | ![MongoDB](https://img.shields.io/badge/MongoDB-6.0-47A248?logo=mongodb) | 6.0+ | Database | ✅ Implemented |
 | ![JWT](https://img.shields.io/badge/JWT-9.0-000000?logo=jsonwebtokens) | 9.0+ | Authentication | ✅ Implemented |
-| ![Docker](https://img.shields.io/badge/Docker-24.x-2496ED?logo=docker) | 24.x+ | Containerization | 📋 Planned |
+| ![Docker](https://img.shields.io/badge/Docker-24.x-2496ED?logo=docker) | 24.x+ | Containerization | ✅ Implemented |
+| ![Redis](https://img.shields.io/badge/Redis-7.x-DC382D?logo=redis) | 7.x+ | Caching Layer | ✅ Implemented |
 
 </div>
 
@@ -584,14 +701,26 @@ npm run dev
 
 </div>
 
-### 🐳 **Docker Alternative** *(Coming Soon)*
+### 🐳 **Docker Deployment** ✅ **Available Now!**
 
 ```bash
-# 🚀 One-command setup with Docker
-docker-compose up --build
+# 🚀 One-click deployment with automated setup
+chmod +x deploy.sh
+./deploy.sh
 
-# ✨ Everything configured automatically
+# Choose from:
+# 1) Fresh installation (clean start)
+# 2) Update deployment (keeps data)
+# 3) Development mode (hot reload)
+
+# ✨ Automatically deploys:
+# - Frontend (React on port 3000)
+# - Backend (Node.js on port 5000)
+# - MongoDB (Database on port 27017)
+# - Redis (Cache on port 6379)
 ```
+
+**📖 Full Docker Guide:** [DEPLOYMENT.md](DEPLOYMENT.md) | [DOCKER-SETUP.md](DOCKER-SETUP.md)
 
 ### 💡 **Troubleshooting**
 
@@ -658,13 +787,18 @@ PORT=5000
 NODE_ENV=development
 
 # 📊 Database Configuration
-MONGODB_URI=mongodb://localhost:27017/HikmahSphere
+MONGODB_URI=mongodb://localhost:27017/hikmahsphere
 
 # 🔐 Authentication Configuration
 JWT_SECRET=your_super_secure_secret_key_here
 JWT_EXPIRE=30d
 REFRESH_TOKEN_SECRET=your_refresh_token_secret
 REFRESH_TOKEN_EXPIRE=7d
+
+# 🚀 Redis Cache Configuration
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_PASSWORD=
 ```
 
 </td>
@@ -698,6 +832,7 @@ MAPS_API_KEY=your_maps_api_key
 | **JWT_SECRET** | 32+ chars | 64+ chars, cryptographically secure | Used for token signing |
 | **NODE_ENV** | `development` | `production` | Environment mode |
 | **MONGODB_URI** | Local MongoDB | MongoDB Atlas cluster | Database connection |
+| **REDIS_HOST** | `localhost` or `redis` (Docker) | Production Redis host | Cache server |
 | **CORS_ORIGIN** | `http://localhost:3000` | Your domain | Allowed origins |
 
 </div>
@@ -712,26 +847,21 @@ MAPS_API_KEY=your_maps_api_key
 NODE_ENV=production
 PORT=5000
 
-# 🔒 Secure Database Connection
-MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/HikmahSphere
+# 🔒 Secure Database Connection (MongoDB Atlas recommended)
+MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/hikmahsphere
 
 # 🔐 Strong Security Keys (Generate with: openssl rand -base64 64)
 JWT_SECRET=your_production_jwt_secret_64_characters_minimum
 REFRESH_TOKEN_SECRET=your_production_refresh_secret_64_characters_minimum
 
+# 🚀 Redis Cache Configuration (Production)
+REDIS_HOST=your-redis-host
+REDIS_PORT=6379
+REDIS_PASSWORD=your-redis-password
+
 # 🌐 CORS & Security
 CORS_ORIGIN=https://yourdomain.com
 ALLOWED_HOSTS=yourdomain.com,www.yourdomain.com
-
-# 📧 Email Configuration (for notifications)
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your_email@gmail.com
-SMTP_PASS=your_app_password
-
-# 📊 Monitoring & Analytics
-SENTRY_DSN=your_sentry_dsn
-GOOGLE_ANALYTICS_ID=your_ga_id
 ```
 
 </details>
@@ -746,9 +876,21 @@ GOOGLE_ANALYTICS_ID=your_ga_id
 [![Docs](https://img.shields.io/badge/Docs-OpenAPI_3.0-85EA2D?style=for-the-badge&logo=swagger)](https://github.com/yani2298/HikmahSphere)
 [![Postman](https://img.shields.io/badge/Postman-Collection-FF6C37?style=for-the-badge&logo=postman)](https://github.com/yani2298/HikmahSphere)
 
-**Base URL:** `http://localhost:5000/api` (Development) • `https://api.HikmahSphere.com/api` (Production)
+**Base URL:** `http://localhost:5000/api` (Development) • `https://api.hikmahsphere.com/api` (Production)
+
+**🔐 Authentication:** JWT Bearer tokens required for protected endpoints  
+**👥 Role-Based Access:** SuperAdmin, Manager, User roles with granular permissions  
+**📊 Rate Limiting:** 100 requests per 15 minutes per IP
 
 </div>
+
+**📌 Key API Features:**
+- ✅ RESTful architecture with JSON responses
+- ✅ JWT authentication with refresh token support  
+- ✅ Role-based authorization (SuperAdmin/Manager/User)
+- ✅ Comprehensive error handling
+- ✅ Request validation & sanitization
+- ✅ Rate limiting & security middleware
 
 ### 🔐 **Authentication Endpoints**
 
@@ -906,19 +1048,19 @@ GOOGLE_ANALYTICS_ID=your_ga_id
 <td width="15%"><strong>Status</strong></td>
 </tr>
 <tr>
-<td><code>/community/forums</code></td>
+<td><code>/api/community/forums</code></td>
 <td><img src="https://img.shields.io/badge/GET-green?style=flat-square"/></td>
 <td>List available discussion forums</td>
 <td>📋 Planned</td>
 </tr>
 <tr>
-<td><code>/community/posts</code></td>
+<td><code>/api/community/posts</code></td>
 <td><img src="https://img.shields.io/badge/POST-blue?style=flat-square"/></td>
 <td>Create new community posts</td>
 <td>📋 Planned</td>
 </tr>
 <tr>
-<td><code>/community/events</code></td>
+<td><code>/api/community/events</code></td>
 <td><img src="https://img.shields.io/badge/GET-green?style=flat-square"/></td>
 <td>Find local Islamic events and gatherings</td>
 <td>📋 Planned</td>
@@ -1088,24 +1230,27 @@ graph LR
 <tr>
 <td width="50%">
 
-#### **🏗️ Foundation Phase** *(Completed)*
+#### **🏗️ Foundation Phase** *(✅ Completed)*
 - ✅ **Project Architecture** - Modern monorepo structure
-- ✅ **Authentication System** - JWT-based security
-- ✅ **Prayer Times Engine** - GPS-based calculations
-- ✅ **Quran Reader Core** - Multi-translation support
-- ✅ **Zakat Calculator** - Comprehensive calculations
-- ✅ **PWA Foundation** - Progressive web app setup
+- ✅ **Authentication System** - JWT-based security with roles
+- ✅ **Prayer Times Engine** - GPS-based with multiple methods
+- ✅ **Quran Reader Core** - Multi-translation + customization
+- ✅ **Zakat Calculator** - Comprehensive with management
+- ✅ **Docker Deployment** - One-click deployment system
+- ✅ **Redis Integration** - Caching layer infrastructure
 
 </td>
 <td width="50%">
 
-#### **🎨 User Experience** *(Completed)*
+#### **🎨 User Experience** *(✅ Completed)*
 - ✅ **Responsive Design** - Mobile-first approach
 - ✅ **Islamic Theme** - Culturally appropriate UI
-- ✅ **Component Library** - Reusable UI elements
+- ✅ **Dark Mode** - Quran Reader with synchronized theme
 - ✅ **Navigation System** - Intuitive user flow
 - ✅ **Loading States** - Smooth user experience
 - ✅ **Error Handling** - Graceful error management
+- ✅ **Role-Based Access** - SuperAdmin/Manager/User
+- ✅ **Component Library** - Reusable UI with Heroicons
 
 </td>
 </tr>
@@ -1117,10 +1262,10 @@ graph LR
 
 | Feature | Progress | Expected Completion | Priority |
 |---------|----------|-------------------|----------|
-| **🤖 Islamic AI Assistant** | ![40%](https://img.shields.io/badge/Progress-40%25-yellow) | Q2 2025 | ![High](https://img.shields.io/badge/High-red) |
-| **🌐 Community Platform** | ![25%](https://img.shields.io/badge/Progress-25%25-orange) | Q3 2025 | ![Medium](https://img.shields.io/badge/Medium-yellow) |
-| **📱 Mobile Apps** | ![10%](https://img.shields.io/badge/Progress-10%25-red) | Q4 2025 | ![Medium](https://img.shields.io/badge/Medium-yellow) |
-| **🔍 Semantic Search** | ![60%](https://img.shields.io/badge/Progress-60%25-green) | Q1 2025 | ![High](https://img.shields.io/badge/High-red) |
+| **🔔 Prayer Notifications** | ![30%](https://img.shields.io/badge/Progress-30%25-orange) | Q2 2025 | ![High](https://img.shields.io/badge/High-red) |
+| **🌐 Community Backend** | ![20%](https://img.shields.io/badge/Progress-20%25-orange) | Q2 2025 | ![Medium](https://img.shields.io/badge/Medium-yellow) |
+| **📱 PWA Features** | ![40%](https://img.shields.io/badge/Progress-40%25-yellow) | Q3 2025 | ![Medium](https://img.shields.io/badge/Medium-yellow) |
+| **🤖 Islamic AI Assistant** | ![15%](https://img.shields.io/badge/Progress-15%25-red) | Q4 2025 | ![Low](https://img.shields.io/badge/Low-green) |
 
 </div>
 
