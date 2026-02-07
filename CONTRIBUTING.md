@@ -1,10 +1,10 @@
-# Contributing to MuslimHub 🤝
+# Contributing to HikmahSphere 🤝
 
-Thank you for your interest in contributing to MuslimHub! We welcome contributions from developers, designers, and community members who want to help build a better digital platform for the Muslim community.
+Thank you for your interest in contributing to HikmahSphere! We welcome contributions from developers, designers, and community members who want to help build a better digital platform for the Muslim community.
 
 ## 🚧 Project Status
 
-MuslimHub is currently in **beta development**. We're actively building core features and would love your help!
+HikmahSphere is currently in **beta development**. We're actively building core features and would love your help!
 
 ## 🌟 Ways to Contribute
 

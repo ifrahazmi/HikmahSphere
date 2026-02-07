@@ -1,7 +1,7 @@
 {
-  "name": "muslimhub",
+  "name": "hikmahsphere",
   "version": "1.0.0",
-  "description": "🕌 MuslimHub - Modern Digital Platform for Global Muslim Community. Islamic app with Prayer Times, Quran Reader, Zakat Calculator, Community Features & AI Assistant. Built with React 18 + TypeScript + MongoDB.",
+  "description": "🕌 HikmahSphere - Modern Digital Platform for Global Muslim Community. Islamic app with Prayer Times, Quran Reader, Zakat Calculator, Community Features & AI Assistant. Built with React 18 + TypeScript + MongoDB.",
   "main": "index.js",
   "scripts": {
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
@@ -34,7 +34,7 @@
     "pwa",
     "open-source"
   ],
-  "author": "MuslimHub Team",
+  "author": "HikmahSphere Team",
   "license": "MIT",
   "type": "commonjs",
   "dependencies": {

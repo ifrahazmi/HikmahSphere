@@ -1,7 +1,7 @@
 {
-  "name": "muslimhub-backend",
+  "name": "hikmahsphere-backend",
   "version": "1.0.0",
-  "description": "Backend API for MuslimHub - Modern Islamic Digital Platform. RESTful API with Prayer Times, Quran, Zakat Calculator, Authentication & Community Features. Built with Node.js + TypeScript + MongoDB.",
+  "description": "Backend API for HikmahSphere - Modern Islamic Digital Platform. RESTful API with Prayer Times, Quran, Zakat Calculator, Authentication & Community Features. Built with Node.js + TypeScript + MongoDB.",
   "main": "dist/index.js",
   "directories": {
     "test": "tests"
@@ -19,8 +19,8 @@
     "clean": "rm -rf dist",
     "prebuild": "npm run clean",
     "postbuild": "cp package.json dist/",
-    "docker:build": "docker build -t muslimhub-backend .",
-    "docker:run": "docker run -p 5000:5000 muslimhub-backend"
+    "docker:build": "docker build -t hikmahsphere-backend .",
+    "docker:run": "docker run -p 5000:5000 hikmahsphere-backend"
   },
   "keywords": [
     "islam",
@@ -30,7 +30,7 @@
     "express",
     "revolutionary"
   ],
-  "author": "MuslimHub Team",
+  "author": "HikmahSphere Team",
   "license": "MIT",
   "type": "commonjs",
   "dependencies": {

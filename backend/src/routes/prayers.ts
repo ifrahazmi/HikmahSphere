@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import { body, query, validationResult } from 'express-validator';
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth';
 
@@ -65,7 +65,7 @@ router.get('/times', [
     .optional()
     .isInt()
     .withMessage('School must be an integer (1=Shafi, 2=Hanafi)'),
-], optionalAuthMiddleware, async (req, res) => {
+], optionalAuthMiddleware, async (req: Request, res: Response) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -99,7 +99,7 @@ router.get('/times', [
         throw new Error(`Aladhan API responded with ${apiResponse.status}`);
     }
 
-    const apiData = await apiResponse.json();
+    const apiData: any = await apiResponse.json();
     
     console.log('Prayer API Response received successfully');
 
@@ -108,7 +108,7 @@ router.get('/times', [
         const qiblaDegrees = calculateQiblaDirection(parseFloat(latitude), parseFloat(longitude));
         const distanceToMecca = calculateDistanceToMecca(parseFloat(latitude), parseFloat(longitude));
         
-        res.json({
+        return res.json({
             status: 'success',
             data: {
                 times: {
@@ -149,7 +149,7 @@ router.get('/times', [
 
   } catch (error: any) {
     console.error('Prayer times API error:', error.message);
-    res.status(500).json({
+    return res.status(500).json({
       status: 'error',
       message: 'Failed to fetch prayer times',
       details: error.message
@@ -165,7 +165,7 @@ router.get('/times', [
 router.get('/fasting', [
   query('latitude').isFloat({ min: -90, max: 90 }),
   query('longitude').isFloat({ min: -180, max: 180 }),
-], async (req, res) => {
+], async (req: Request, res: Response) => {
     try {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
@@ -184,13 +184,13 @@ router.get('/fasting', [
             throw new Error(`Aladhan API error: ${response.status}`);
         }
         
-        const apiData = await response.json();
+        const apiData: any = await response.json();
         
         console.log('Fasting API Response received successfully');
         
         if (apiData.code === 200 && apiData.data) {
             const data = apiData.data;
-            res.json({
+            return res.json({
                 status: 'success',
                 data: {
                     sahur: data.timings.Imsak,
@@ -205,7 +205,7 @@ router.get('/fasting', [
         }
     } catch (error: any) {
         console.error('Fasting API error:', error.message);
-        res.status(500).json({ status: 'error', message: 'Failed to fetch fasting times', details: error.message });
+        return res.status(500).json({ status: 'error', message: 'Failed to fetch fasting times', details: error.message });
     }
 });
 
@@ -217,7 +217,7 @@ router.get('/fasting', [
 router.get('/weather', [
     query('latitude').isFloat({ min: -90, max: 90 }),
     query('longitude').isFloat({ min: -180, max: 180 }),
-  ], async (req, res) => {
+  ], async (req: Request, res: Response) => {
       try {
           const errors = validationResult(req);
           if (!errors.isEmpty()) {
@@ -238,13 +238,13 @@ router.get('/weather', [
           
           const data = await response.json();
           
-          res.json({
+          return res.json({
                status: 'success',
                data: data
           });
       } catch (error: any) {
           console.error('Weather API error:', error.message);
-          res.status(500).json({ status: 'error', message: 'Failed to fetch weather info' });
+          return res.status(500).json({ status: 'error', message: 'Failed to fetch weather info' });
       }
   });
 
@@ -256,7 +256,7 @@ router.get('/weather', [
 router.get('/qibla', [
   query('latitude').isFloat(),
   query('longitude').isFloat(),
-], async (req, res) => {
+], async (req: Request, res: Response) => {
     try {
         const { latitude, longitude } = req.query as { latitude: string, longitude: string };
         

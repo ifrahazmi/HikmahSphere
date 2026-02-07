@@ -9,15 +9,15 @@
 
 <div align="center">
 
-[![GitHub Stars](https://img.shields.io/github/stars/yani2298/MuslimHub?style=for-the-badge&logo=github&color=gold)](https://github.com/yani2298/MuslimHub/stargazers)
-[![GitHub Forks](https://img.shields.io/github/forks/yani2298/MuslimHub?style=for-the-badge&logo=github&color=blue)](https://github.com/yani2298/MuslimHub/network)
-[![GitHub Issues](https://img.shields.io/github/issues/yani2298/MuslimHub?style=for-the-badge&logo=github&color=red)](https://github.com/yani2298/MuslimHub/issues)
-[![GitHub Pull Requests](https://img.shields.io/github/issues-pr/yani2298/MuslimHub?style=for-the-badge&logo=github&color=orange)](https://github.com/yani2298/MuslimHub/pulls)
+[![GitHub Stars](https://img.shields.io/github/stars/yani2298/HikmahSphere?style=for-the-badge&logo=github&color=gold)](https://github.com/yani2298/HikmahSphere/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/yani2298/HikmahSphere?style=for-the-badge&logo=github&color=blue)](https://github.com/yani2298/HikmahSphere/network)
+[![GitHub Issues](https://img.shields.io/github/issues/yani2298/HikmahSphere?style=for-the-badge&logo=github&color=red)](https://github.com/yani2298/HikmahSphere/issues)
+[![GitHub Pull Requests](https://img.shields.io/github/issues-pr/yani2298/HikmahSphere?style=for-the-badge&logo=github&color=orange)](https://github.com/yani2298/HikmahSphere/pulls)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge&logo=opensource)](https://opensource.org/licenses/MIT)
-[![Build Status](https://img.shields.io/badge/Build-Beta-yellow?style=for-the-badge&logo=github-actions)](https://github.com/yani2298/MuslimHub)
+[![Build Status](https://img.shields.io/badge/Build-Beta-yellow?style=for-the-badge&logo=github-actions)](https://github.com/yani2298/HikmahSphere)
 [![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen?style=for-the-badge&logo=pull-request)](http://makeapullrequest.com)
-[![Contributors](https://img.shields.io/badge/Contributors-Welcome-purple?style=for-the-badge&logo=contributors)](https://github.com/yani2298/MuslimHub/graphs/contributors)
+[![Contributors](https://img.shields.io/badge/Contributors-Welcome-purple?style=for-the-badge&logo=contributors)](https://github.com/yani2298/HikmahSphere/graphs/contributors)
 
 [![React](https://img.shields.io/badge/React-18.x-61DAFB?style=for-the-badge&logo=react&logoColor=white)](https://reactjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-100%25-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -25,10 +25,10 @@
 [![MongoDB](https://img.shields.io/badge/MongoDB-6.x-47A248?style=for-the-badge&logo=mongodb&logoColor=white)](https://www.mongodb.com/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
 
-[![Islamic](https://img.shields.io/badge/Islamic-Platform-00A86B?style=for-the-badge&logo=mosque)](https://github.com/yani2298/MuslimHub)
-[![Community](https://img.shields.io/badge/Community-Driven-FF6B35?style=for-the-badge&logo=community)](https://github.com/yani2298/MuslimHub)
+[![Islamic](https://img.shields.io/badge/Islamic-Platform-00A86B?style=for-the-badge&logo=mosque)](https://github.com/yani2298/HikmahSphere)
+[![Community](https://img.shields.io/badge/Community-Driven-FF6B35?style=for-the-badge&logo=community)](https://github.com/yani2298/HikmahSphere)
 [![PWA](https://img.shields.io/badge/PWA-Ready-5A0FC8?style=for-the-badge&logo=pwa)](https://web.dev/progressive-web-apps/)
-[![API](https://img.shields.io/badge/REST-API-FF6F00?style=for-the-badge&logo=api)](https://github.com/yani2298/MuslimHub)
+[![API](https://img.shields.io/badge/REST-API-FF6F00?style=for-the-badge&logo=api)](https://github.com/yani2298/HikmahSphere)
 
 </div>
 
@@ -39,9 +39,69 @@
 ### 🚀 **Beta Version - Active Development** 
 *Building the future of Islamic digital experience*
 
-**[🌟 Star us on GitHub](https://github.com/yani2298/MuslimHub) • [🐛 Report Issues](https://github.com/yani2298/MuslimHub/issues) • [💬 Join Discussions](https://github.com/yani2298/MuslimHub/discussions) • [🤝 Contribute](CONTRIBUTING.md)**
+**[🌟 Star us on GitHub](https://github.com/yani2298/HikmahSphere) • [🐛 Report Issues](https://github.com/yani2298/HikmahSphere/issues) • [💬 Join Discussions](https://github.com/yani2298/HikmahSphere/discussions) • [🤝 Contribute](CONTRIBUTING.md)**
 
 </div>
+
+---
+
+## 🚀 **Quick Start - One-Click Docker Deployment**
+
+Get HikmahSphere up and running in less than 5 minutes!
+
+### Prerequisites
+- [Docker](https://docs.docker.com/get-docker/) (v20.10+)
+- [Docker Compose](https://docs.docker.com/compose/install/) (v2.0+)
+
+### Installation
+
+**Option 1: Super Quick Start** 🏃‍♂️
+```bash
+git clone https://github.com/yani2298/HikmahSphere.git
+cd HikmahSphere
+./start.sh
+```
+
+**Option 2: Standard Deployment** 🎯
+```bash
+git clone https://github.com/yani2298/HikmahSphere.git
+cd HikmahSphere
+./deploy.sh
+```
+
+**Option 3: Windows (PowerShell)** 🪟
+```powershell
+git clone https://github.com/yani2298/HikmahSphere.git
+cd HikmahSphere
+bash deploy.sh
+```
+
+The deployment script will:
+- ✅ Check Docker installation
+- ✅ Create environment configuration
+- ✅ Build all services
+- ✅ Start the application
+- ✅ Run health checks
+
+### Access Your Application
+
+- 🌐 **Frontend**: http://localhost:3000
+- 🔌 **Backend API**: http://localhost:5000/api
+- 📊 **Health Check**: http://localhost:5000/health
+
+### Default Credentials
+
+```
+Email: admin@hikmah.com
+Password: Admin@123456
+```
+
+⚠️ **Change these after first login!**
+
+### 📖 Full Documentation
+
+For detailed deployment options, troubleshooting, and production setup:
+👉 **[Read DEPLOYMENT.md](DEPLOYMENT.md)**
 
 ---
 
@@ -431,9 +491,9 @@ graph LR
 
 ### ⚡ **Get Up and Running in 3 Minutes**
 
-[![Setup](https://img.shields.io/badge/Setup-Easy-brightgreen?style=for-the-badge&logo=rocket)](https://github.com/yani2298/MuslimHub)
-[![Time](https://img.shields.io/badge/Time-3_Minutes-blue?style=for-the-badge&logo=clock)](https://github.com/yani2298/MuslimHub)
-[![Support](https://img.shields.io/badge/Support-24/7-orange?style=for-the-badge&logo=support)](https://github.com/yani2298/MuslimHub/issues)
+[![Setup](https://img.shields.io/badge/Setup-Easy-brightgreen?style=for-the-badge&logo=rocket)](https://github.com/yani2298/HikmahSphere)
+[![Time](https://img.shields.io/badge/Time-3_Minutes-blue?style=for-the-badge&logo=clock)](https://github.com/yani2298/HikmahSphere)
+[![Support](https://img.shields.io/badge/Support-24/7-orange?style=for-the-badge&logo=support)](https://github.com/yani2298/HikmahSphere/issues)
 
 </div>
 
@@ -682,9 +742,9 @@ GOOGLE_ANALYTICS_ID=your_ga_id
 
 ### 🌐 **Comprehensive API Reference**
 
-[![API](https://img.shields.io/badge/API-RESTful-00D9FF?style=for-the-badge&logo=api)](https://github.com/yani2298/MuslimHub)
-[![Docs](https://img.shields.io/badge/Docs-OpenAPI_3.0-85EA2D?style=for-the-badge&logo=swagger)](https://github.com/yani2298/MuslimHub)
-[![Postman](https://img.shields.io/badge/Postman-Collection-FF6C37?style=for-the-badge&logo=postman)](https://github.com/yani2298/MuslimHub)
+[![API](https://img.shields.io/badge/API-RESTful-00D9FF?style=for-the-badge&logo=api)](https://github.com/yani2298/HikmahSphere)
+[![Docs](https://img.shields.io/badge/Docs-OpenAPI_3.0-85EA2D?style=for-the-badge&logo=swagger)](https://github.com/yani2298/HikmahSphere)
+[![Postman](https://img.shields.io/badge/Postman-Collection-FF6C37?style=for-the-badge&logo=postman)](https://github.com/yani2298/HikmahSphere)
 
 **Base URL:** `http://localhost:5000/api` (Development) • `https://api.HikmahSphere.com/api` (Production)
 
@@ -900,8 +960,8 @@ curl -X GET "http://localhost:5000/api/quran/search?q=patience&translation=en.sa
 ### 🌟 **Join Our Mission - Build for the Ummah**
 
 [![Contributors Welcome](https://img.shields.io/badge/Contributors-Welcome-brightgreen?style=for-the-badge&logo=hand-wave)](CONTRIBUTING.md)
-[![Good First Issues](https://img.shields.io/badge/Good_First-Issues-blue?style=for-the-badge&logo=github)](https://github.com/yani2298/MuslimHub/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
-[![Help Wanted](https://img.shields.io/badge/Help-Wanted-orange?style=for-the-badge&logo=hands-helping)](https://github.com/yani2298/MuslimHub/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22)
+[![Good First Issues](https://img.shields.io/badge/Good_First-Issues-blue?style=for-the-badge&logo=github)](https://github.com/yani2298/HikmahSphere/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+[![Help Wanted](https://img.shields.io/badge/Help-Wanted-orange?style=for-the-badge&logo=hands-helping)](https://github.com/yani2298/HikmahSphere/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22)
 
 **Every contribution matters in building a better digital Islamic experience**
 
@@ -1155,9 +1215,9 @@ timeline
 
 ### 💬 **Get Connected**
 
-[![Discord](https://img.shields.io/badge/Discord-Join_Community-5865F2?style=for-the-badge&logo=discord)](https://discord.gg/muslimhub)
-[![GitHub Discussions](https://img.shields.io/badge/GitHub-Discussions-181717?style=for-the-badge&logo=github)](https://github.com/yani2298/MuslimHub/discussions)
-[![Twitter](https://img.shields.io/badge/Twitter-Follow_Updates-1DA1F2?style=for-the-badge&logo=twitter)](https://twitter.com/MuslimHubApp)
+[![Discord](https://img.shields.io/badge/Discord-Join_Community-5865F2?style=for-the-badge&logo=discord)](https://discord.gg/hikmahsphere)
+[![GitHub Discussions](https://img.shields.io/badge/GitHub-Discussions-181717?style=for-the-badge&logo=github)](https://github.com/yani2298/HikmahSphere/discussions)
+[![Twitter](https://img.shields.io/badge/Twitter-Follow_Updates-1DA1F2?style=for-the-badge&logo=twitter)](https://twitter.com/HikmahSphereApp)
 
 **🕌 Building together for the global Muslim community**
 
@@ -1170,7 +1230,7 @@ timeline
 <td width="33%" align="center">
 
 **🐛 Technical Issues**
-- [GitHub Issues](https://github.com/yani2298/MuslimHub/issues)
+- [GitHub Issues](https://github.com/yani2298/HikmahSphere/issues)
 - Bug reports & feature requests
 - Developer support
 
@@ -1178,7 +1238,7 @@ timeline
 <td width="33%" align="center">
 
 **💬 Community Support**
-- [GitHub Discussions](https://github.com/yani2298/MuslimHub/discussions)
+- [GitHub Discussions](https://github.com/yani2298/HikmahSphere/discussions)
 - General questions & ideas
 - Community help
 
@@ -1235,7 +1295,7 @@ This project is licensed under the [MIT License](LICENSE) - see the LICENSE file
 <tr>
 <td width="25%" align="center">
 
-[![Star](https://img.shields.io/badge/⭐-Star_Project-yellow?style=for-the-badge)](https://github.com/yani2298/MuslimHub/stargazers)
+[![Star](https://img.shields.io/badge/⭐-Star_Project-yellow?style=for-the-badge)](https://github.com/yani2298/HikmahSphere/stargazers)
 
 **Show Support**
 Star our project and help us reach more Muslims worldwide
@@ -1251,7 +1311,7 @@ Help build the future of Islamic technology
 </td>
 <td width="25%" align="center">
 
-[![Issues](https://img.shields.io/badge/🐛-Report_Issue-red?style=for-the-badge)](https://github.com/yani2298/MuslimHub/issues)
+[![Issues](https://img.shields.io/badge/🐛-Report_Issue-red?style=for-the-badge)](https://github.com/yani2298/HikmahSphere/issues)
 
 **Report Bugs**
 Help us improve by reporting issues
@@ -1259,7 +1319,7 @@ Help us improve by reporting issues
 </td>
 <td width="25%" align="center">
 
-[![Discuss](https://img.shields.io/badge/💬-Join_Discussion-blue?style=for-the-badge)](https://github.com/yani2298/MuslimHub/discussions)
+[![Discuss](https://img.shields.io/badge/💬-Join_Discussion-blue?style=for-the-badge)](https://github.com/yani2298/HikmahSphere/discussions)
 
 **Share Ideas**
 Participate in community discussions
@@ -1272,11 +1332,11 @@ Participate in community discussions
 
 ### 📊 **Project Stats**
 
-![GitHub Stars](https://img.shields.io/github/stars/yani2298/MuslimHub?style=social)
-![GitHub Forks](https://img.shields.io/github/forks/yani2298/MuslimHub?style=social)
-![GitHub Issues](https://img.shields.io/github/issues/yani2298/MuslimHub)
-![GitHub Pull Requests](https://img.shields.io/github/issues-pr/yani2298/MuslimHub)
-![Last Commit](https://img.shields.io/github/last-commit/yani2298/MuslimHub)
+![GitHub Stars](https://img.shields.io/github/stars/yani2298/HikmahSphere?style=social)
+![GitHub Forks](https://img.shields.io/github/forks/yani2298/HikmahSphere?style=social)
+![GitHub Issues](https://img.shields.io/github/issues/yani2298/HikmahSphere)
+![GitHub Pull Requests](https://img.shields.io/github/issues-pr/yani2298/HikmahSphere)
+![Last Commit](https://img.shields.io/github/last-commit/yani2298/HikmahSphere)
 
 ---
 
