@@ -64,6 +64,55 @@ const QuranReader: React.FC = () => {
     return bookmarks.some(b => b.surahNumber === surahNum && b.ayahNumber === ayahNum);
   };
 
+  // Get font color class based on settings
+  const getFontColorClass = () => {
+    if (settings.fontColor === 'default') {
+      return settings.theme === 'dark' ? 'text-white' : 'text-gray-800';
+    }
+    const colorMap = {
+      emerald: 'text-emerald-600',
+      blue: 'text-blue-600',
+      amber: 'text-amber-600',
+      rose: 'text-rose-600',
+    };
+    return colorMap[settings.fontColor] || (settings.theme === 'dark' ? 'text-white' : 'text-gray-800');
+  };
+
+  // Get font family class based on settings
+  const getFontFamilyClass = () => {
+    const fontMap: Record<string, string> = {
+      'amiri': 'font-arabic',
+      'scheherazade': 'font-scheherazade',
+      'noto-naskh': 'font-noto-naskh',
+      'cairo': 'font-cairo',
+      'lateef': 'font-lateef',
+    };
+    return fontMap[settings.arabicFont] || 'font-arabic';
+  };
+
+  // Get reader background class based on settings
+  const getReaderBackgroundClass = () => {
+    if (settings.theme === 'dark') {
+      const darkBackgroundMap: Record<string, string> = {
+        'default': 'bg-gradient-to-br from-gray-800 to-gray-700',
+        'white': 'bg-gray-800',
+        'cream': 'bg-amber-950 bg-opacity-40',
+        'blue': 'bg-blue-950 bg-opacity-40',
+        'green': 'bg-emerald-950 bg-opacity-40',
+      };
+      return darkBackgroundMap[settings.readerBackground] || 'bg-gradient-to-br from-gray-800 to-gray-700';
+    }
+    
+    const backgroundMap: Record<string, string> = {
+      'default': 'bg-gradient-to-br from-emerald-50 to-teal-50',
+      'white': 'bg-white',
+      'cream': 'bg-amber-50',
+      'blue': 'bg-blue-50',
+      'green': 'bg-emerald-50',
+    };
+    return backgroundMap[settings.readerBackground] || 'bg-gradient-to-br from-emerald-50 to-teal-50';
+  };
+
   // Remove Bismillah from beginning of ayah text if present
   const removeBismillah = (text: string, surahNum: number, ayahNum: number) => {
     // For surahs 2-114 (except 9), remove Bismillah from first ayah since it's shown separately at top
@@ -213,7 +262,14 @@ const QuranReader: React.FC = () => {
                     Theme
                   </label>
                   <button
-                    onClick={() => updateSettings({ theme: settings.theme === 'light' ? 'dark' : 'light' })}
+                    onClick={() => {
+                      const newTheme = settings.theme === 'light' ? 'dark' : 'light';
+                      updateSettings({ theme: newTheme });
+                      // Dispatch custom event for same-tab navbar update
+                      setTimeout(() => {
+                        window.dispatchEvent(new Event('quranSettingsChanged'));
+                      }, 0);
+                    }}
                     className={`w-full flex items-center justify-between p-2 text-sm rounded-md ${
                       settings.theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
                     }`}
@@ -227,6 +283,136 @@ const QuranReader: React.FC = () => {
                       <MoonIcon className="h-4 w-4 text-blue-400" />
                     )}
                   </button>
+                </div>
+
+                {/* Arabic Font Family */}
+                <div>
+                  <label className={`block text-xs font-medium mb-1.5 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Arabic Font
+                  </label>
+                  <select
+                    value={settings.arabicFont}
+                    onChange={(e) => updateSettings({ arabicFont: e.target.value as any })}
+                    className={`w-full p-2 text-sm rounded-md border ${
+                      settings.theme === 'dark' 
+                        ? 'bg-gray-700 border-gray-600 text-white' 
+                        : 'bg-white border-gray-300 text-gray-900'
+                    }`}
+                  >
+                    <option value="amiri">Amiri (Traditional)</option>
+                    <option value="scheherazade">Scheherazade (Classic)</option>
+                    <option value="noto-naskh">Noto Naskh Arabic</option>
+                    <option value="cairo">Cairo (Modern)</option>
+                    <option value="lateef">Lateef (Clean)</option>
+                  </select>
+                </div>
+
+                {/* Font Color */}
+                <div>
+                  <label className={`block text-xs font-medium mb-1.5 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Font Color
+                  </label>
+                  <div className="grid grid-cols-5 gap-2">
+                    <button
+                      onClick={() => updateSettings({ fontColor: 'default' })}
+                      className={`h-10 rounded-md border-2 flex items-center justify-center ${
+                        settings.fontColor === 'default' ? 'border-emerald-500' : 'border-gray-300'
+                      } ${settings.theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-white text-gray-800'}`}
+                      title="Default"
+                    >
+                      <span className="text-xs font-bold">Aa</span>
+                    </button>
+                    <button
+                      onClick={() => updateSettings({ fontColor: 'emerald' })}
+                      className={`h-10 rounded-md border-2 ${
+                        settings.fontColor === 'emerald' ? 'border-emerald-500 border-4' : 'border-gray-300'
+                      } bg-white flex items-center justify-center`}
+                      title="Emerald"
+                    >
+                      <span className="text-xs font-bold text-emerald-600">Aa</span>
+                    </button>
+                    <button
+                      onClick={() => updateSettings({ fontColor: 'blue' })}
+                      className={`h-10 rounded-md border-2 ${
+                        settings.fontColor === 'blue' ? 'border-emerald-500 border-4' : 'border-gray-300'
+                      } bg-white flex items-center justify-center`}
+                      title="Blue"
+                    >
+                      <span className="text-xs font-bold text-blue-600">Aa</span>
+                    </button>
+                    <button
+                      onClick={() => updateSettings({ fontColor: 'amber' })}
+                      className={`h-10 rounded-md border-2 ${
+                        settings.fontColor === 'amber' ? 'border-emerald-500 border-4' : 'border-gray-300'
+                      } bg-white flex items-center justify-center`}
+                      title="Amber"
+                    >
+                      <span className="text-xs font-bold text-amber-600">Aa</span>
+                    </button>
+                    <button
+                      onClick={() => updateSettings({ fontColor: 'rose' })}
+                      className={`h-10 rounded-md border-2 ${
+                        settings.fontColor === 'rose' ? 'border-emerald-500 border-4' : 'border-gray-300'
+                      } bg-white flex items-center justify-center`}
+                      title="Rose"
+                    >
+                      <span className="text-xs font-bold text-rose-600">Aa</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Reader Background */}
+                <div>
+                  <label className={`block text-xs font-medium mb-1.5 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Reader Background
+                  </label>
+                  <div className="grid grid-cols-5 gap-2">
+                    <button
+                      onClick={() => updateSettings({ readerBackground: 'default' })}
+                      className={`h-10 rounded-md border-2 ${
+                        settings.readerBackground === 'default' ? 'border-emerald-500 border-4' : 'border-gray-300'
+                      } bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center`}
+                      title="Default Gradient"
+                    >
+                      <span className="text-xs font-bold text-gray-700">●</span>
+                    </button>
+                    <button
+                      onClick={() => updateSettings({ readerBackground: 'white' })}
+                      className={`h-10 rounded-md border-2 ${
+                        settings.readerBackground === 'white' ? 'border-emerald-500 border-4' : 'border-gray-300'
+                      } bg-white flex items-center justify-center`}
+                      title="White"
+                    >
+                      <span className="text-xs font-bold text-gray-700">●</span>
+                    </button>
+                    <button
+                      onClick={() => updateSettings({ readerBackground: 'cream' })}
+                      className={`h-10 rounded-md border-2 ${
+                        settings.readerBackground === 'cream' ? 'border-emerald-500 border-4' : 'border-gray-300'
+                      } bg-amber-50 flex items-center justify-center`}
+                      title="Cream"
+                    >
+                      <span className="text-xs font-bold text-gray-700">●</span>
+                    </button>
+                    <button
+                      onClick={() => updateSettings({ readerBackground: 'blue' })}
+                      className={`h-10 rounded-md border-2 ${
+                        settings.readerBackground === 'blue' ? 'border-emerald-500 border-4' : 'border-gray-300'
+                      } bg-blue-50 flex items-center justify-center`}
+                      title="Light Blue"
+                    >
+                      <span className="text-xs font-bold text-gray-700">●</span>
+                    </button>
+                    <button
+                      onClick={() => updateSettings({ readerBackground: 'green' })}
+                      className={`h-10 rounded-md border-2 ${
+                        settings.readerBackground === 'green' ? 'border-emerald-500 border-4' : 'border-gray-300'
+                      } bg-emerald-50 flex items-center justify-center`}
+                      title="Soft Green"
+                    >
+                      <span className="text-xs font-bold text-gray-700">●</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Transliteration Toggle - only show if not in Arabic-only mode */}
@@ -351,7 +537,7 @@ const QuranReader: React.FC = () => {
                 {/* Surah Header */}
                 <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-200">
                   <div>
-                    <h2 className={`text-xl font-bold font-arabic mb-1 ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                    <h2 className={`text-xl font-bold ${getFontFamilyClass()} mb-1 ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
                       {surahData.name}
                     </h2>
                     <p className={`text-xs ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
@@ -391,7 +577,7 @@ const QuranReader: React.FC = () => {
                 {/* Bismillah (except for Surah 9) */}
                 {surahData.number !== 9 && (
                   <div className="text-center mb-4 py-3">
-                    <p className="text-2xl font-arabic text-emerald-600 leading-loose">
+                    <p className={`text-2xl ${getFontFamilyClass()} text-emerald-600 leading-loose`}>
                       بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
                     </p>
                   </div>
@@ -400,11 +586,9 @@ const QuranReader: React.FC = () => {
                 {/* Ayahs */}
                 {settings.arabicOnlyMode ? (
                   /* Continuous Arabic text in Arabic-only mode */
-                  <div className={`p-3 rounded-lg ${
-                    settings.theme === 'dark' ? 'bg-gray-700' : 'bg-gradient-to-br from-emerald-50 to-teal-50'
-                  }`}>
+                  <div className={`p-3 rounded-lg ${getReaderBackgroundClass()}`}>
                     <p
-                      className={`font-arabic leading-loose text-right ${settings.theme === 'dark' ? 'text-white' : 'text-gray-800'}`}
+                      className={`${getFontFamilyClass()} leading-loose text-right ${getFontColorClass()}`}
                       style={{ fontSize: `${settings.fontSize}px`, lineHeight: settings.lineSpacing }}
                       dir="rtl"
                     >
@@ -443,12 +627,10 @@ const QuranReader: React.FC = () => {
                       >
                         {/* Arabic Text with inline ayah number */}
                         <div 
-                          className={`mb-2 p-3 rounded-lg ${
-                            settings.theme === 'dark' ? 'bg-gray-700' : 'bg-gradient-to-br from-emerald-50 to-teal-50'
-                          }`}
+                          className={`mb-2 p-3 rounded-lg ${getReaderBackgroundClass()}`}
                         >
                           <p
-                            className={`font-arabic leading-loose text-right ${settings.theme === 'dark' ? 'text-white' : 'text-gray-800'}`}
+                            className={`${getFontFamilyClass()} leading-loose text-right ${getFontColorClass()}`}
                             style={{ fontSize: `${settings.fontSize}px`, lineHeight: settings.lineSpacing }}
                             dir="rtl"
                           >
@@ -557,7 +739,7 @@ const QuranReader: React.FC = () => {
                           }`}>
                             {surah.number}
                           </span>
-                          <p className="font-medium font-arabic text-base">{surah.name}</p>
+                          <p className={`font-medium ${getFontFamilyClass()} text-base`}>{surah.name}</p>
                         </div>
                         <p className={`text-xs ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
                           {surah.englishName}
