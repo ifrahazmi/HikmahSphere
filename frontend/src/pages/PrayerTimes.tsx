@@ -154,6 +154,36 @@ const PrayerTimes: React.FC = () => {
     
     const school = selectedMadhab === 'hanafi' ? 1 : 0;
     
+    // Helper function to calculate Qibla direction (bearing to Mecca)
+    const calculateQiblaDirection = (userLat: number, userLon: number): number => {
+      const MECCA_LAT = 21.4225;
+      const MECCA_LON = 39.8262;
+      const lat1 = userLat * Math.PI / 180;
+      const lat2 = MECCA_LAT * Math.PI / 180;
+      const dLon = (MECCA_LON - userLon) * Math.PI / 180;
+      
+      const y = Math.sin(dLon) * Math.cos(lat2);
+      const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+      const bearing = Math.atan2(y, x) * 180 / Math.PI;
+      
+      // Normalize to 0-360
+      return (bearing + 360) % 360;
+    };
+    
+    // Helper function to calculate distance to Mecca using Haversine formula
+    const calculateDistanceToMecca = (userLat: number, userLon: number): number => {
+      const MECCA_LAT = 21.4225;
+      const MECCA_LON = 39.8262;
+      const R = 6371; // Earth's radius in kilometers
+      const dLat = (MECCA_LAT - userLat) * Math.PI / 180;
+      const dLon = (MECCA_LON - userLon) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(userLat * Math.PI / 180) * Math.cos(MECCA_LAT * Math.PI / 180) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c; // Distance in kilometers
+    };
+    
     try {
       // Fetch monthly calendar from Aladhan API
       const response = await fetch(
@@ -166,6 +196,9 @@ const PrayerTimes: React.FC = () => {
         // Set first day as current prayer data for display
         if (data.data.length > 0) {
           const firstDay = data.data[0];
+          const qiblaDegrees = calculateQiblaDirection(lat, lon);
+          const distanceToMecca = calculateDistanceToMecca(lat, lon);
+          
           setPrayerData({
             times: {
               Fajr: firstDay.timings.Fajr,
@@ -177,7 +210,10 @@ const PrayerTimes: React.FC = () => {
               Imsak: firstDay.timings.Imsak
             },
             date: firstDay.date,
-            qibla: { direction: { degrees: parseFloat(firstDay.meta.qibla || '0') } },
+            qibla: { 
+              direction: { degrees: qiblaDegrees },
+              distance: { value: distanceToMecca }
+            },
             meta: firstDay.meta
           });
         }
