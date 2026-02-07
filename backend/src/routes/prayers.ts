@@ -8,11 +8,41 @@ const router = express.Router();
 const API_BASE_URL = 'https://api.aladhan.com/v1/timings';
 const CALENDAR_API_URL = 'https://api.aladhan.com/v1/calendar'; 
 
+// Mecca/Kaaba coordinates
+const MECCA_LAT = 21.4225;
+const MECCA_LON = 39.8262;
+
 // Helper function to get compass direction
 function getCompassDirection(bearing: number): string {
   const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
   const index = Math.round(bearing / 22.5) % 16;
-  return directions[index];
+  return directions[index] || 'N';
+}
+
+// Helper function to calculate distance to Mecca using Haversine formula
+function calculateDistanceToMecca(lat: number, lon: number): number {
+  const R = 6371; // Earth's radius in kilometers
+  const dLat = (MECCA_LAT - lat) * Math.PI / 180;
+  const dLon = (MECCA_LON - lon) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat * Math.PI / 180) * Math.cos(MECCA_LAT * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c; // Distance in kilometers
+}
+
+// Helper function to calculate Qibla direction (bearing to Mecca)
+function calculateQiblaDirection(lat: number, lon: number): number {
+  const lat1 = lat * Math.PI / 180;
+  const lat2 = MECCA_LAT * Math.PI / 180;
+  const dLon = (MECCA_LON - lon) * Math.PI / 180;
+  
+  const y = Math.sin(dLon) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+  const bearing = Math.atan2(y, x) * 180 / Math.PI;
+  
+  // Normalize to 0-360
+  return (bearing + 360) % 360;
 }
 
 /**
@@ -75,6 +105,9 @@ router.get('/times', [
 
     if (apiData.code === 200 && apiData.data) {
         const data = apiData.data;
+        const qiblaDegrees = calculateQiblaDirection(parseFloat(latitude), parseFloat(longitude));
+        const distanceToMecca = calculateDistanceToMecca(parseFloat(latitude), parseFloat(longitude));
+        
         res.json({
             status: 'success',
             data: {
@@ -96,7 +129,10 @@ router.get('/times', [
                 },
                 qibla: {
                     direction: {
-                        degrees: parseFloat(data.meta.qibla || '0')
+                        degrees: qiblaDegrees
+                    },
+                    distance: {
+                        value: distanceToMecca
                     }
                 },
                 meta: data.meta,
@@ -223,36 +259,25 @@ router.get('/qibla', [
 ], async (req, res) => {
     try {
         const { latitude, longitude } = req.query as { latitude: string, longitude: string };
-        const timestamp = Math.floor(Date.now() / 1000);
-        const apiUrl = `${API_BASE_URL}/${timestamp}?latitude=${latitude}&longitude=${longitude}&method=3`;
         
-        console.log(`Fetching Qibla direction from Aladhan: ${apiUrl}`);
+        const qiblaDegrees = calculateQiblaDirection(parseFloat(latitude), parseFloat(longitude));
+        const distanceToMecca = calculateDistanceToMecca(parseFloat(latitude), parseFloat(longitude));
         
-        const apiResponse = await fetch(apiUrl);
-        
-        if (!apiResponse.ok) {
-            throw new Error(`Aladhan API error: ${apiResponse.status}`);
-        }
-        
-        const apiData = await apiResponse.json();
-        
-        if (apiData.code === 200 && apiData.data && apiData.data.meta) {
-            const qiblaDegrees = parseFloat(apiData.data.meta.qibla || '0');
-             res.json({
-                status: 'success',
-                data: {
-                    location: { latitude, longitude },
-                    qibla: {
-                        direction: {
-                            degrees: qiblaDegrees
-                        }
+        res.json({
+            status: 'success',
+            data: {
+                location: { latitude, longitude },
+                qibla: {
+                    direction: {
+                        degrees: qiblaDegrees
                     },
-                    compass: getCompassDirection(qiblaDegrees)
-                }
-            });
-        } else {
-            throw new Error("Qibla data missing from API response");
-        }
+                    distance: {
+                        value: distanceToMecca
+                    }
+                },
+                compass: getCompassDirection(qiblaDegrees)
+            }
+        });
 
     } catch (error: any) {
         console.error('Qibla API error:', error.message);
