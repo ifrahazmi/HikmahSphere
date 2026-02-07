@@ -236,13 +236,53 @@ router.get('/profile', authMiddleware, async (req, res) => {
  */
 router.put('/profile', authMiddleware, [
     body('firstName').optional().trim().notEmpty(),
-    // ... other validations
-], async (req, res) => {
+    body('lastName').optional().trim().notEmpty(),
+    body('phoneNumber').optional().trim(),
+    body('gender').optional().isIn(['male', 'female']),
+], async (req: any, res: any) => {
     try {
-        // ... (Keep existing update logic)
-        const user = await User.findByIdAndUpdate(req.user.userId, { $set: req.body }, { new: true });
-        res.json({ status: 'success', data: { user }, message: 'Profile updated' });
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ status: 'error', errors: errors.array() });
+        }
+
+        const { firstName, lastName, phoneNumber, gender, madhab, street, city, country, bio, avatar } = req.body;
+        
+        const updateData: any = {};
+        
+        // Update root level fields
+        if (firstName) updateData.firstName = firstName;
+        if (lastName) updateData.lastName = lastName;
+        if (phoneNumber) updateData.phoneNumber = phoneNumber;
+        if (gender) updateData.gender = gender;
+        
+        // Update nested preferences
+        if (madhab) updateData['preferences.madhab'] = madhab;
+        
+        // Update nested address
+        if (street || city || country) {
+            if (street) updateData['address.street'] = street;
+            if (city) updateData['address.city'] = city;
+            if (country) updateData['address.country'] = country;
+        }
+        
+        // Update nested profile
+        if (bio !== undefined) updateData['profile.bio'] = bio;
+        if (avatar !== undefined) updateData['profile.avatar'] = avatar;
+        
+        const user = await User.findByIdAndUpdate(
+            req.user.userId, 
+            { $set: updateData }, 
+            { new: true, runValidators: true }
+        );
+        
+        if (!user) {
+            return res.status(404).json({ status: 'error', message: 'User not found' });
+        }
+        
+        res.json({ status: 'success', data: { user }, message: 'Profile updated successfully' });
     } catch (error) {
+        console.error('Profile update error:', error);
         res.status(500).json({ status: 'error', message: 'Server error' });
     }
 });

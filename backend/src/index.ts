@@ -20,7 +20,7 @@ import communityRoutes from './routes/community';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = parseInt(process.env.PORT || '5000', 10);
 
 // Trust Proxy for IDX/Cloud environments
 app.set('trust proxy', 1);
@@ -64,11 +64,29 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Root endpoint
+app.get('/', (req, res) => {
+  res.status(200).json({
+    status: 'success',
+    message: '🕌 Welcome to HikmahSphere API',
+    version: '1.0.0',
+    endpoints: {
+      health: '/health',
+      auth: '/api/auth',
+      prayers: '/api/prayers',
+      quran: '/api/quran',
+      zakat: '/api/zakat',
+      community: '/api/community'
+    },
+    documentation: `http://localhost:${process.env.PORT || 5000}/docs`
+  });
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'success',
-    message: 'MuslimHub API is running! 🕌',
+    message: 'HikmahSphere API is running! 🕌',
     timestamp: new Date().toISOString(),
     version: '1.0.0',
   });
@@ -238,28 +256,10 @@ const seedAdminUser = async () => {
 // MongoDB connection
 const connectDB = async () => {
   try {
-    let mongoURI = process.env.MONGODB_URI;
-
-    if (!mongoURI || mongoURI.includes('localhost')) {
-        console.log('Using in-memory MongoDB');
-        // Manually specify binary path for IDX environment
-        process.env.MONGOMS_SYSTEM_BINARY = '/nix/store/3kiyshdi9snbb2xhhw7v3rffrbqwbcpb-mongodb-6.0.11/bin/mongod';
-        
-        try {
-           // We can skip binary download by setting version or path directly if using system binary
-           const mongod = await MongoMemoryServer.create({
-            binary: {
-                systemBinary: '/nix/store/3kiyshdi9snbb2xhhw7v3rffrbqwbcpb-mongodb-6.0.11/bin/mongod',
-            }
-           });
-           mongoURI = mongod.getUri();
-        } catch (e) {
-             console.log("Failed to start in-memory mongo:", e);
-             // Fallback to what was in env if in-memory fails, though it likely won't work if localhost is down
-             mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/muslimhub';
-        }
-
-    }
+    // Use Docker MongoDB or provided URI
+    const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/hikmahsphere';
+    
+    console.log('Connecting to MongoDB at:', mongoURI.replace(/\/\/([^:]+):([^@]+)@/, '//$1:****@'));
     
     await mongoose.connect(mongoURI, {
       // Modern MongoDB connection options
@@ -280,7 +280,7 @@ const startServer = async () => {
     await connectDB();
     
     app.listen(PORT, '0.0.0.0', () => {
-      console.log(`🚀 MuslimHub API Server running on port ${PORT}`);
+      console.log(`🚀 HikmahSphere API Server running on port ${PORT}`);
       console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`📚 API Documentation: http://localhost:${PORT}/docs`);
     });
