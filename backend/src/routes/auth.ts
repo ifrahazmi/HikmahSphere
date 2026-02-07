@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import jwt from 'jsonwebtoken';
 import User from '../models/User';
@@ -7,20 +7,20 @@ import { authMiddleware } from '../middleware/auth';
 const router = express.Router();
 
 // Generate JWT Token
-const generateToken = (userId: string) => {
+const generateToken = (userId: string): string => {
   return jwt.sign(
     { userId },
     process.env.JWT_SECRET || 'your_jwt_secret',
-    { expiresIn: process.env.JWT_EXPIRE || '30d' }
+    { expiresIn: process.env.JWT_EXPIRE || '30d' } as jwt.SignOptions
   );
 };
 
 // Generate Refresh Token
-const generateRefreshToken = (userId: string) => {
+const generateRefreshToken = (userId: string): string => {
   return jwt.sign(
     { userId },
     process.env.REFRESH_TOKEN_SECRET || 'your_refresh_token_secret',
-    { expiresIn: process.env.REFRESH_TOKEN_EXPIRE || '7d' }
+    { expiresIn: process.env.REFRESH_TOKEN_EXPIRE || '7d' } as jwt.SignOptions
   );
 };
 
@@ -64,7 +64,7 @@ router.post('/register', [
   body('password').isLength({ min: 6 }),
   body('firstName').notEmpty(),
   body('lastName').notEmpty(),
-], async (req, res) => {
+], async (req: Request, res: Response) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -92,7 +92,7 @@ router.post('/register', [
     const accessToken = generateToken(user._id);
     const refreshToken = generateRefreshToken(user._id);
 
-    res.status(201).json({
+    return res.status(201).json({
       status: 'success',
       token: accessToken,
       refreshToken,
@@ -105,7 +105,7 @@ router.post('/register', [
       },
     });
   } catch (error) {
-    res.status(500).json({ status: 'error', message: 'Server error' });
+    return res.status(500).json({ status: 'error', message: 'Server error' });
   }
 });
 
@@ -116,7 +116,7 @@ router.post('/register', [
 router.post('/login', [
   body('email').isEmail(),
   body('password').exists(),
-], async (req, res) => {
+], async (req: Request, res: Response) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -159,7 +159,7 @@ router.post('/login', [
         });
     }
 
-    res.json({
+    return res.json({
       status: 'success',
       token: accessToken,
       refreshToken,
@@ -175,7 +175,7 @@ router.post('/login', [
     });
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ status: 'error', message: 'Server error' });
+    return res.status(500).json({ status: 'error', message: 'Server error' });
   }
 });
 
@@ -218,15 +218,15 @@ router.post('/change-password', authMiddleware, [
  * @route   GET /api/auth/profile
  * @desc    Get current user profile
  */
-router.get('/profile', authMiddleware, async (req, res) => {
+router.get('/profile', authMiddleware, async (req: any, res: Response) => {
   try {
     const user = await User.findById(req.user.userId);
     if (!user) {
       return res.status(404).json({ status: 'error', message: 'User not found' });
     }
-    res.json({ status: 'success', data: { user } });
+    return res.json({ status: 'success', data: { user } });
   } catch (error) {
-    res.status(500).json({ status: 'error', message: 'Server error' });
+    return res.status(500).json({ status: 'error', message: 'Server error' });
   }
 });
 

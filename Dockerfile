@@ -34,27 +34,27 @@ FROM node:20-alpine AS production
 
 # Create app user
 RUN addgroup -g 1001 -S nodejs && \
-    adduser -S muslimhub -u 1001
+    adduser -S hikmahsphere -u 1001
 
 # Set working directory
 WORKDIR /app
 
 # Copy built backend
-COPY --from=backend-build --chown=muslimhub:nodejs /app/backend/dist ./backend/dist
-COPY --from=backend-build --chown=muslimhub:nodejs /app/backend/node_modules ./backend/node_modules
-COPY --from=backend-build --chown=muslimhub:nodejs /app/backend/package.json ./backend/
+COPY --from=backend-build --chown=hikmahsphere:nodejs /app/backend/dist ./backend/dist
+COPY --from=backend-build --chown=hikmahsphere:nodejs /app/backend/node_modules ./backend/node_modules
+COPY --from=backend-build --chown=hikmahsphere:nodejs /app/backend/package.json ./backend/
 
 # Copy built frontend
-COPY --from=frontend-build --chown=muslimhub:nodejs /app/frontend/build ./frontend/build
+COPY --from=frontend-build --chown=hikmahsphere:nodejs /app/frontend/build ./frontend/build
 
 # Install serve for static files
 RUN npm install -g serve
 
 # Create logs directory
-RUN mkdir -p /app/logs && chown muslimhub:nodejs /app/logs
+RUN mkdir -p /app/logs && chown hikmahsphere:nodejs /app/logs
 
 # Switch to app user
-USER muslimhub
+USER hikmahsphere
 
 # Expose ports
 EXPOSE 5000 3000

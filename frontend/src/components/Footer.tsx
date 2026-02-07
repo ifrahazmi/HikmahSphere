@@ -37,7 +37,7 @@ const Footer: React.FC = () => {
             <ul className="space-y-3">
               <li><a href="https://discord.gg/hikmahsphere" target="_blank" rel="noopener noreferrer" className="text-gray-300 hover:text-emerald-400">Discord</a></li>
               <li><a href="https://twitter.com/HikmahSphere" target="_blank" rel="noopener noreferrer" className="text-gray-300 hover:text-emerald-400">Twitter</a></li>
-              <li><a href="https://github.com/yani2298/MuslimHub" target="_blank" rel="noopener noreferrer" className="text-gray-300 hover:text-emerald-400">GitHub</a></li>
+              <li><a href="https://github.com/yani2298/HikmahSphere" target="_blank" rel="noopener noreferrer" className="text-gray-300 hover:text-emerald-400">GitHub</a></li>
             </ul>
           </div>
         </div>
