@@ -15,6 +15,7 @@ import { useAuth } from '../hooks/useAuth';
 import LoadingSpinner from '../components/LoadingSpinner';
 import IslamicCalendar from '../components/IslamicCalendar';
 import { API_URL } from '../config';
+import { IslamicReminder, getCurrentPrayerWindow, selectReminder } from '../data/islamicReminders';
 
 const PrayerTimes: React.FC = () => {
   const { user } = useAuth();
@@ -41,7 +42,8 @@ const PrayerTimes: React.FC = () => {
   const [fastingData, setFastingData] = useState<any>(null);
   const [weatherData, setWeatherData] = useState<any>(null);
   const [monthlyData, setMonthlyData] = useState<any>(null);
-  const [islamicEvents, setIslamicEvents] = useState<any[]>([]); 
+  const [islamicEvents, setIslamicEvents] = useState<any[]>([]);
+  const [currentReminder, setCurrentReminder] = useState<IslamicReminder | null>(null); 
 
   useEffect(() => {
     setLoading(true); // Ensure loading starts immediately on mount
@@ -189,6 +191,29 @@ const PrayerTimes: React.FC = () => {
       setLoading(false);
     }
   }, [selectedMadhab, calculationMethod, highLatitudeRule]);
+
+  // Update reminder based on prayer times, Islamic events, and current time
+  useEffect(() => {
+    const updateReminder = () => {
+      if (!prayerData?.times) return;
+      
+      const now = new Date();
+      const prayerWindow = getCurrentPrayerWindow(prayerData.times);
+      const dayOfWeek = now.getDay();
+      // Use hour as seed for consistent rotation within same hour
+      const seed = now.getHours() + now.getDate();
+      
+      const reminder = selectReminder(prayerWindow, islamicEvents, dayOfWeek, seed);
+      setCurrentReminder(reminder);
+    };
+    
+    updateReminder();
+    
+    // Update every minute to catch prayer time transitions
+    const interval = setInterval(updateReminder, 60000);
+    
+    return () => clearInterval(interval);
+  }, [prayerData, islamicEvents]);
 
   const handleCitySearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -740,8 +765,8 @@ const PrayerTimes: React.FC = () => {
         )}
 
         {/* Qibla & Info Section */}
-        <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="bg-white rounded-lg shadow-md p-6 md:col-span-1">
                 <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
                     <GlobeAltIcon className="h-6 w-6 text-teal-600 mr-2" />
                     Qibla Direction
@@ -757,17 +782,55 @@ const PrayerTimes: React.FC = () => {
                 </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow-md p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">Daily Reminder</h2>
-                <div className="text-center py-4">
-                    <p className="text-lg font-arabic text-gray-700 mb-2">
-                    "إِنَّ الصَّلَاةَ كَانَتْ عَلَى الْمُؤْمِنِينَ كِتَابًا مَّوْقُوتًا"
+            <div className="bg-white rounded-lg shadow-md p-6 md:col-span-2">
+                <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+                  <MoonIcon className="h-6 w-6 text-emerald-600 mr-2" />
+                  {currentReminder?.title || 'Daily Reminder'}
+                </h2>
+                {currentReminder ? (
+                  <div className="space-y-3">
+                    {/* Arabic Text */}
+                    <div className="text-center py-2 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-lg">
+                      <p className="text-xl md:text-2xl font-arabic leading-relaxed text-gray-800 px-4" dir="rtl">
+                        {currentReminder.arabic}
+                      </p>
+                    </div>
+                    
+                    {/* Transliteration & Translation in two columns on larger screens */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                      <div className="text-center lg:text-left lg:border-r lg:border-gray-100 lg:pr-3">
+                        <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Transliteration</p>
+                        <p className="text-sm italic text-gray-600 leading-relaxed">
+                          "{currentReminder.transliteration}"
+                        </p>
+                      </div>
+                      
+                      <div className="text-center lg:text-left">
+                        <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Translation</p>
+                        <p className="text-sm text-gray-700 leading-relaxed">
+                          "{currentReminder.translation}"
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {/* Source */}
+                    <div className="text-center border-t border-gray-100 pt-2">
+                      <p className="text-xs text-gray-500 font-medium">
+                        — {currentReminder.source}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-4">
+                    <p className="text-lg font-arabic text-gray-700 mb-2" dir="rtl">
+                      "إِنَّ الصَّلَاةَ كَانَتْ عَلَى الْمُؤْمِنِينَ كِتَابًا مَّوْقُوتًا"
                     </p>
                     <p className="text-sm text-gray-500 italic">
-                    "Indeed, prayer has been decreed upon the believers a decree of specified times."
+                      "Indeed, prayer has been decreed upon the believers a decree of specified times."
                     </p>
-                    <p className="text-xs text-gray-400 mt-2">- Quran 4:103</p>
-                </div>
+                    <p className="text-xs text-gray-400 mt-2">— Quran 4:103</p>
+                  </div>
+                )}
             </div>
         </div>
       </div>
