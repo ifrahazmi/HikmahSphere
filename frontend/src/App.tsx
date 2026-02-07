@@ -23,6 +23,9 @@ import Profile from './pages/Profile';
 // Hooks
 import { useAuth, AuthProvider } from './hooks/useAuth';
 
+// Contexts
+import { QuranProvider } from './contexts/QuranContext';
+
 // Styles
 import './App.css';
 
@@ -58,7 +61,11 @@ const AppContent: React.FC = () => {
           <Route path="/" element={<Home />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/prayers" element={<PrayerTimes />} />
-          <Route path="/quran" element={<QuranReader />} />
+          <Route path="/quran" element={
+            <QuranProvider>
+              <QuranReader />
+            </QuranProvider>
+          } />
           <Route path="/zakat" element={<ZakatCalculator />} />
           <Route path="/community" element={<Community />} />
           
