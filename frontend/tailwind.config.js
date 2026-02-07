@@ -22,6 +22,10 @@ module.exports = {
       },
       fontFamily: {
         arabic: ['Amiri', 'serif'],
+        scheherazade: ['Scheherazade New', 'serif'],
+        'noto-naskh': ['Noto Naskh Arabic', 'serif'],
+        cairo: ['Cairo', 'sans-serif'],
+        lateef: ['Lateef', 'serif'],
       },
     },
   },
