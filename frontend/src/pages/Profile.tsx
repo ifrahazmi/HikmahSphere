@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UserIcon, Cog6ToothIcon, ChartBarIcon, BookOpenIcon, XMarkIcon, PhotoIcon, PencilIcon } from '@heroicons/react/24/outline';
+import { UserIcon, ChartBarIcon, BookOpenIcon, XMarkIcon, PhotoIcon, PencilIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../hooks/useAuth';
 import toast from 'react-hot-toast';
 import { API_URL } from '../config';
