@@ -52,7 +52,7 @@ const Footer: React.FC = () => {
             
             <div className="text-center md:text-right">
               <p className="text-gray-400 text-sm">© {currentYear} HikmahSphere. All rights reserved.</p>
-              <p className="text-gray-500 text-xs mt-1 font-arabic">"وَاعْتَصِمُوا بِحَبْلِ اللَّهِ جَمِيعًا وَلَا تَفَرَّقُوا"</p>
+              <p className="text-gray-500 text-xs mt-1 font-scheherazade">"وَاعْتَصِمُوا بِحَبْلِ اللَّهِ جَمِيعًا وَلَا تَفَرَّقُوا"</p>
             </div>
           </div>
         </div>
