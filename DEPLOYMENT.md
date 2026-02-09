@@ -31,13 +31,13 @@ cd HikmahSphere
 
 **Linux/macOS:**
 ```bash
-chmod +x deploy.sh
-./deploy.sh
+chmod +x deploy/deploy.sh
+./deploy/deploy.sh
 ```
 
 **Windows (PowerShell):**
 ```powershell
-bash deploy.sh
+bash deploy/deploy.sh
 ```
 
 ### Step 3: Follow the Prompts
@@ -58,7 +58,7 @@ The script will:
 - **Warning**: ⚠️ This will delete existing database data!
 
 ```bash
-./deploy.sh
+./deploy/deploy.sh
 # Select option: 1
 ```
 
@@ -68,7 +68,7 @@ The script will:
 - **Safe**: ✅ Preserves your database
 
 ```bash
-./deploy.sh
+./deploy/deploy.sh
 # Select option: 2
 ```
 
@@ -78,7 +78,7 @@ The script will:
 - **Features**: Live code reloading
 
 ```bash
-./deploy.sh
+./deploy/deploy.sh
 # Select option: 3
 ```
 

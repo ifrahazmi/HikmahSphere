@@ -53,12 +53,12 @@ cd HikmahSphere
 
 **Windows:**
 ```powershell
-bash start.sh
+bash deploy/start.sh
 ```
 
 **macOS/Linux:**
 ```bash
-./start.sh
+./deploy/start.sh
 ```
 
 ### Step 4: Choose Deployment Type
@@ -113,7 +113,7 @@ docker-compose logs -f
 
 **Stop services:**
 ```bash
-./stop.sh
+./deploy/stop.sh
 # or
 docker-compose stop
 ```
