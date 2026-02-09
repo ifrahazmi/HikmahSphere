@@ -9,10 +9,10 @@ HikmahSphere is now fully configured for **one-click Docker deployment**! This s
 ## 📦 What's Included
 
 ### Deployment Files
-- ✅ **deploy.sh** - Automated deployment script with health checks
-- ✅ **start.sh** - Quick start wrapper script
-- ✅ **stop.sh** - Stop all services
-- ✅ **verify.sh** - Verify installation health
+- ✅ **deploy/deploy.sh** - Automated deployment script with health checks
+- ✅ **deploy/start.sh** - Quick start wrapper script
+- ✅ **deploy/stop.sh** - Stop all services
+- ✅ **deploy/verify.sh** - Verify installation health
 - ✅ **.env.example** - Environment configuration template
 - ✅ **docker-compose.yml** - Main Docker configuration
 - ✅ **docker-compose.dev.yml** - Development mode overrides
@@ -49,7 +49,7 @@ git clone https://github.com/yourusername/HikmahSphere.git
 cd HikmahSphere
 
 # Run one-click installer
-./start.sh
+./deploy/start.sh
 ```
 
 That's it! The script handles everything automatically.
@@ -60,7 +60,7 @@ That's it! The script handles everything automatically.
 
 ### Option 1: Super Quick Start (Recommended)
 ```bash
-./start.sh
+./deploy/start.sh
 ```
 - Runs all checks
 - Creates configuration
@@ -69,7 +69,7 @@ That's it! The script handles everything automatically.
 
 ### Option 2: Full Control
 ```bash
-./deploy.sh
+./deploy/deploy.sh
 ```
 Choose from:
 1. **Fresh Installation** - Clean start (removes existing data)
@@ -94,10 +94,10 @@ docker-compose up -d --build
 
 | Script | Purpose | Usage |
 |--------|---------|-------|
-| `start.sh` | Quick start deployment | `./start.sh` |
-| `deploy.sh` | Full deployment with options | `./deploy.sh` |
-| `stop.sh` | Stop all services | `./stop.sh` |
-| `verify.sh` | Verify installation | `./verify.sh` |
+| `deploy/start.sh` | Quick start deployment | `./deploy/start.sh` |
+| `deploy/deploy.sh` | Full deployment with options | `./deploy/deploy.sh` |
+| `deploy/stop.sh` | Stop all services | `./deploy/stop.sh` |
+| `deploy/verify.sh` | Verify installation | `./deploy/verify.sh` |
 
 ---
 
@@ -179,7 +179,7 @@ docker-compose restart backend
 
 ### Stop Services
 ```bash
-./stop.sh
+./deploy/stop.sh
 # or
 docker-compose stop
 ```
@@ -198,7 +198,7 @@ docker-compose up -d --build
 
 ### Verify Installation
 ```bash
-./verify.sh
+./deploy/verify.sh
 ```
 
 ### Complete Removal
@@ -408,10 +408,11 @@ HikmahSphere/
 ├── .env                 # Your configuration
 ├── docker-compose.yml   # Docker configuration
 ├── Dockerfile           # Multi-stage build
-├── deploy.sh           # Deployment script
-├── start.sh            # Quick start
-├── stop.sh             # Stop services
-├── verify.sh           # Health check
+├── deploy/             # Deployment scripts
+│   ├── deploy.sh       # Deployment script
+│   ├── start.sh        # Quick start
+│   ├── stop.sh         # Stop services
+│   └── verify.sh       # Health check
 ├── DEPLOYMENT.md       # Full guide
 ├── INSTALL.md          # Installation guide
 └── DOCKER-SETUP.md     # This file
@@ -421,7 +422,7 @@ HikmahSphere/
 
 ## 🎓 Next Steps
 
-1. ✅ Run `./verify.sh` to check installation
+1. ✅ Run `./deploy/verify.sh` to check installation
 2. ✅ Access http://localhost:3000
 3. ✅ Login with default credentials
 4. ✅ Change admin password

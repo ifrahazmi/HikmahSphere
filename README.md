@@ -59,21 +59,21 @@ Get HikmahSphere up and running in less than 5 minutes!
 ```bash
 git clone https://github.com/yani2298/HikmahSphere.git
 cd HikmahSphere
-./start.sh
+./deploy/start.sh
 ```
 
 **Option 2: Standard Deployment** 🎯
 ```bash
 git clone https://github.com/yani2298/HikmahSphere.git
 cd HikmahSphere
-./deploy.sh
+./deploy/deploy.sh
 ```
 
 **Option 3: Windows (PowerShell)** 🪟
 ```powershell
 git clone https://github.com/yani2298/HikmahSphere.git
 cd HikmahSphere
-bash deploy.sh
+bash deploy/deploy.sh
 ```
 
 The deployment script will:
@@ -185,10 +185,10 @@ Password: Admin@123456
 - 🛠️ **[CONTRIBUTING.md](CONTRIBUTING.md)** - Contribution guidelines
 
 **⚡ Quick Deploy Scripts:**
-- `./deploy.sh` - Interactive deployment with 3 modes (fresh/update/dev)
-- `./start.sh` - Quick start wrapper
-- `./stop.sh` - Stop all services
-- `./verify.sh` - Health check verification
+- `./deploy/deploy.sh` - Interactive deployment with 3 modes (fresh/update/dev)
+- `./deploy/start.sh` - Quick start wrapper
+- `./deploy/stop.sh` - Stop all services
+- `./deploy/verify.sh` - Health check verification
 
 ---
 
@@ -705,8 +705,8 @@ npm run dev
 
 ```bash
 # 🚀 One-click deployment with automated setup
-chmod +x deploy.sh
-./deploy.sh
+chmod +x deploy/deploy.sh
+./deploy/deploy.sh
 
 # Choose from:
 # 1) Fresh installation (clean start)
