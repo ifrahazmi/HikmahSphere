@@ -47,7 +47,7 @@ const Footer: React.FC = () => {
             <div className="flex items-center space-x-2 text-gray-300 mb-4 md:mb-0">
               <span>Made with</span>
               <HeartIcon className="h-5 w-5 text-emerald-500" />
-              <span>for the Ummah worldwide © By Ifrah Azmi</span>
+              <span>for the Ummah © By Ifrah Azmi</span>
             </div>
             
             <div className="text-center md:text-right">

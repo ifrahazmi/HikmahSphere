@@ -15,6 +15,9 @@ import prayerRoutes from './routes/prayers';
 import quranRoutes from './routes/quran';
 import zakatRoutes from './routes/zakat';
 import communityRoutes from './routes/community';
+import donorRoutes from './routes/donors';
+import donationRoutes from './routes/donations';
+import installmentRoutes from './routes/installments';
 
 // Load environment variables
 dotenv.config();
@@ -116,6 +119,9 @@ app.use('/api/prayers', prayerRoutes);
 app.use('/api/quran', quranRoutes);
 app.use('/api/zakat', zakatRoutes);
 app.use('/api/community', communityRoutes);
+app.use('/api/zakat/donors', donorRoutes);
+app.use('/api/zakat/donations', donationRoutes);
+app.use('/api/zakat/installments', installmentRoutes);
 
 // Admin Routes for User Management (Restricted to Super Admin)
 // Get All Users

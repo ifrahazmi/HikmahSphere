@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  UserIcon, 
   TrashIcon, 
   NoSymbolIcon, 
   CheckCircleIcon,
@@ -9,8 +8,7 @@ import {
   XMarkIcon,
   PencilIcon,
   ArrowUpIcon,
-  ArrowDownIcon,
-  PlusIcon
+  ArrowDownIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../hooks/useAuth';
 import { API_URL } from '../config';
@@ -38,7 +36,6 @@ const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
   const [users, setUsers] = useState<any[]>([]);
-  const [loadingUsers, setLoadingUsers] = useState(false);
   
   // Overview Stats
   const [totalUsers, setTotalUsers] = useState(0);
@@ -62,7 +59,6 @@ const Dashboard: React.FC = () => {
 
   // Admin: Fetch all users
   const fetchUsers = async () => {
-      setLoadingUsers(true);
       try {
           const token = localStorage.getItem('token');
           const response = await fetch(`${API_URL}/admin/users`, {
@@ -83,8 +79,6 @@ const Dashboard: React.FC = () => {
           }
       } catch (error) {
           console.error('Failed to fetch users', error);
-      } finally {
-          setLoadingUsers(false);
       }
   };
 
@@ -213,7 +207,7 @@ const Dashboard: React.FC = () => {
           fetchUsers();
           fetchZakatData(); 
       }
-  }, [user]);
+  }, [user, hasRole]);
 
   // Only Super Admin can access Dashboard
   if (!hasRole(['superadmin'])) {
