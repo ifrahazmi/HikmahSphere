@@ -95,18 +95,26 @@ const Home: React.FC = () => {
     {
       icon: SparklesIcon,
       title: 'AI Assistant',
-      description: 'Islamic AI assistant for religious questions and spiritual guidance',
-      color: 'text-indigo-600',
-      bgColor: 'bg-indigo-50',
+      description: 'Islamic AI assistant for religious questions and guidance',
+      color: 'text-gray-400',
+      bgColor: 'bg-gray-100',
+      disabled: true,
     },
   ];
 
-  const stats = [
-    { label: 'Active Users', value: '2.5M+', description: 'Muslims worldwide' },
-    { label: 'Prayer Times', value: '500M+', description: 'Calculated daily' },
-    { label: 'Quran Searches', value: '10M+', description: 'Monthly searches' },
-    { label: 'Zakat Calculated', value: '₹8B+', description: 'Annual Zakat' },
-  ];
+  const stats = hasManagementAccess
+    ? [
+        { label: 'Active Users', value: '1000+', description: 'Muslims worldwide' },
+        { label: 'Prayer Times', value: '50M+', description: 'Calculated daily' },
+        { label: 'Quran Searches', value: '10M+', description: 'Monthly searches' },
+        { label: 'Zakat Collected', value: '₹8L+', description: 'Managed & Distributed' },
+      ]
+    : [
+        { label: 'Active Users', value: '2.5M+', description: 'Muslims worldwide' },
+        { label: 'Prayer Times', value: '500M+', description: 'Calculated daily' },
+        { label: 'Quran Searches', value: '10M+', description: 'Monthly searches' },
+        { label: 'Zakat Calculated', value: '₹8B+', description: 'Annual Zakat' },
+      ];
 
   const testimonials = [
     {
@@ -215,15 +223,22 @@ const Home: React.FC = () => {
             {features.map((feature, index) => (
               <div
                 key={index}
-                className="bg-white rounded-xl p-8 shadow-lg hover:shadow-xl transform hover:-translate-y-2 transition-all duration-300"
+                className={`bg-white rounded-xl p-8 shadow-lg hover:shadow-xl transform hover:-translate-y-2 transition-all duration-300 ${feature.disabled ? 'opacity-60' : ''}`}
               >
-                <div className={`w-16 h-16 ${feature.bgColor} rounded-lg flex items-center justify-center mb-6`}>
-                  <feature.icon className={`w-8 h-8 ${feature.color}`} />
+                <div className="relative">
+                  <div className={`w-16 h-16 ${feature.bgColor} rounded-lg flex items-center justify-center mb-6`}>
+                    <feature.icon className={`w-8 h-8 ${feature.color}`} />
+                  </div>
+                  {feature.disabled && (
+                    <div className="absolute top-0 right-0 bg-gray-400 text-white text-xs font-semibold px-3 py-1 rounded-full">
+                      Coming Soon
+                    </div>
+                  )}
                 </div>
                 <h3 className="text-xl font-semibold text-gray-900 mb-4">
                   {feature.title}
                 </h3>
-                <p className="text-gray-600 leading-relaxed">
+                <p className={`leading-relaxed ${feature.disabled ? 'text-gray-500' : 'text-gray-600'}`}>
                   {feature.description}
                 </p>
               </div>
@@ -330,7 +345,7 @@ const Home: React.FC = () => {
           <div className="mb-8">
             <span className="text-6xl">📖</span>
           </div>
-          <blockquote className="text-2xl sm:text-3xl font-light italic mb-6 leading-relaxed">
+          <blockquote className="text-2xl sm:text-3xl font-light mb-6 leading-relaxed font-scheherazade">
             "وَاعْتَصِمُوا بِحَبْلِ اللَّهِ جَمِيعًا وَلَا تَفَرَّقُوا"
           </blockquote>
           <p className="text-lg text-gray-300 mb-4">

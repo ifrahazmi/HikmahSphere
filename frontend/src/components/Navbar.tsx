@@ -63,6 +63,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
 
   const navigation = [
     { name: 'Home', href: '/', current: location.pathname === '/' },
+    { name: 'About', href: '/about', current: location.pathname === '/about' },
     { name: 'Prayer Times', href: '/prayers', current: location.pathname === '/prayers' },
     { name: 'Quran', href: '/quran', current: location.pathname === '/quran' },
     { name: 'Zakat', href: '/zakat', current: location.pathname === '/zakat' },

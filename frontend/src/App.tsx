@@ -19,6 +19,7 @@ import QuranReader from './pages/QuranReader';
 import ZakatCalculator from './pages/ZakatCalculator';
 import Community from './pages/Community';
 import Profile from './pages/Profile';
+import About from './pages/About';
 
 // Hooks
 import { useAuth, AuthProvider } from './hooks/useAuth';
@@ -59,6 +60,7 @@ const AppContent: React.FC = () => {
       <main className="pt-16"> {/* Account for fixed navbar */}
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/about" element={<About />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/prayers" element={<PrayerTimes />} />
           <Route path="/quran" element={
