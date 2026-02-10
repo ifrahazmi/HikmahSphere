@@ -23,11 +23,28 @@ WORKDIR /app/backend
 COPY backend/ .
 RUN npm run build
 
+# Backend production stage
+FROM node:20-alpine AS backend
+WORKDIR /app/backend
+COPY --from=backend-build /app/backend/dist ./dist
+COPY --from=backend-build /app/backend/node_modules ./node_modules
+COPY --from=backend-build /app/backend/package.json ./
+EXPOSE 5000
+CMD ["node", "dist/index.js"]
+
 # Build stage for frontend
 FROM base AS frontend-build
 WORKDIR /app/frontend
 COPY frontend/ .
 RUN npm run build
+
+# Frontend production stage
+FROM node:20-alpine AS frontend
+RUN npm install -g serve
+WORKDIR /app
+COPY --from=frontend-build /app/frontend/build ./build
+EXPOSE 3000
+CMD ["serve", "-s", "build", "-l", "3000"]
 
 # Production stage
 FROM node:20-alpine AS production
