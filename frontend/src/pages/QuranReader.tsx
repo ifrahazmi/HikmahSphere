@@ -12,7 +12,6 @@ import {
   MoonIcon,
   SunIcon,
 } from '@heroicons/react/24/outline';
-import { BookmarkIcon as BookmarkSolidIcon } from '@heroicons/react/24/solid';
 import { useQuran } from '../contexts/QuranContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { DEFAULT_TRANSLATIONS } from '../types/quran';
@@ -134,7 +133,6 @@ const QuranReader: React.FC = () => {
   const handleAyahClick = (e: React.MouseEvent, surahNum: number, ayahNum: number) => {
     e.preventDefault();
     e.stopPropagation();
-    const rect = (e.target as HTMLElement).getBoundingClientRect();
     setBookmarkConfirm({
       surahNum,
       ayahNum,

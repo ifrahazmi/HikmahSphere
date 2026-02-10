@@ -41,5 +41,8 @@
     "concurrently": "^9.2.0",
     "create-react-app": "^1.2.1",
     "typescript": "^5.8.3"
+  },
+  "devDependencies": {
+    "@types/three": "^0.182.0"
   }
 }

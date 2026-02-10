@@ -1,19 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  CurrencyRupeeIcon, 
-  CalculatorIcon, 
-  InformationCircleIcon, 
-  PlusIcon, 
-  DocumentTextIcon,
+import {
+  CurrencyRupeeIcon,
+  CalculatorIcon,
+  InformationCircleIcon,
+  PlusIcon,
   ArrowDownIcon,
-  ArrowUpIcon,
-  PencilIcon,
-  UserGroupIcon
+  PencilIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../hooks/useAuth';
 import toast from 'react-hot-toast';
 import { API_URL } from '../config';
-import { useNavigate } from 'react-router-dom';
 
 interface ZakatTransaction {
   _id: string;
@@ -33,7 +29,6 @@ interface ZakatTransaction {
 
 const ZakatCalculator: React.FC = () => {
   const { user } = useAuth();
-  const navigate = useNavigate();
   // Role Check: Super Admin OR Manager OR Legacy Admin
   const hasAccess = user && (user.role === 'superadmin' || user.role === 'manager' || user.isAdmin);
 
@@ -63,7 +58,6 @@ const ZakatCalculator: React.FC = () => {
 
   // Management State
   const [transactions, setTransactions] = useState<ZakatTransaction[]>([]);
-  const [stats, setStats] = useState({ totalCollected: 0, totalSpent: 0, currentBalance: 0 });
   const [showTransactionModal, setShowTransactionModal] = useState(false);
   const [transactionType, setTransactionType] = useState<'Credit' | 'Debit'>('Credit');
   const [selectedPayment, setSelectedPayment] = useState<ZakatTransaction | null>(null);
@@ -114,15 +108,13 @@ const ZakatCalculator: React.FC = () => {
   const fetchZakatData = async () => {
       try {
           const token = localStorage.getItem('token');
-          const [statsRes, transRes] = await Promise.all([
+          const [, transRes] = await Promise.all([
               fetch(`${API_URL}/zakat/stats`, { headers: { 'Authorization': `Bearer ${token}` } }),
               fetch(`${API_URL}/zakat/payments`, { headers: { 'Authorization': `Bearer ${token}` } })
           ]);
 
-          const statsData = await statsRes.json();
           const transData = await transRes.json();
 
-          if (statsData.status === 'success') setStats(statsData.data);
           if (transData.status === 'success') setTransactions(transData.data.payments);
 
       } catch (error) {
