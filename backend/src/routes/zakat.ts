@@ -117,9 +117,9 @@ interface ZakatCalculation {
 
 const calculateNisab = (metalType: 'gold' | 'silver' = 'gold'): number => {
   if (metalType === 'gold') {
-    return NISAB_GOLD * CURRENT_PRICES.gold;
+    return ZAKAT_RATES.NISAB_GOLD * CURRENT_PRICES.gold;
   }
-  return NISAB_SILVER * CURRENT_PRICES.silver;
+  return ZAKAT_RATES.NISAB_SILVER * CURRENT_PRICES.silver;
 };
 
 const calculateZakat = (wealth: any): ZakatCalculation => {
@@ -176,7 +176,7 @@ const calculateZakat = (wealth: any): ZakatCalculation => {
 
 router.post('/calculate', [
   body('cash').optional().isFloat({ min: 0 }),
-], optionalAuthMiddleware, async (req, res) => {
+], optionalAuthMiddleware, async (req: any, res: any) => {
   try {
     const calculation = calculateZakat(req.body);
     res.json({

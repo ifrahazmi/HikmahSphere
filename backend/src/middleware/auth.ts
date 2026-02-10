@@ -22,11 +22,11 @@ export const authMiddleware = (req: AuthRequest, res: Response, next: NextFuncti
       token,
       process.env.JWT_SECRET || 'your_jwt_secret'
     );
-    
+
     req.user = decoded;
-    next();
+    return next();
   } catch (err) {
-    res.status(401).json({
+    return res.status(401).json({
       status: 'error',
       message: 'Token is not valid',
     });
@@ -46,10 +46,10 @@ export const optionalAuthMiddleware = (req: AuthRequest, res: Response, next: Ne
       process.env.JWT_SECRET || 'your_jwt_secret'
     );
     req.user = decoded;
-    next();
+    return next();
   } catch (err) {
     // If token is invalid, just proceed without user
-    next();
+    return next();
   }
 };
 
@@ -62,13 +62,13 @@ export const adminMiddleware = async (req: AuthRequest, res: Response, next: Nex
         const user = await User.findById(req.user.userId);
         // Allow Super Admin, Manager, or legacy Admin
         if (user && (user.role === 'superadmin' || user.role === 'manager' || user.isAdmin)) {
-            req.user.role = user.role; 
-            next();
+            req.user.role = user.role;
+            return next();
         } else {
-            res.status(403).json({ status: 'error', message: 'Access denied. Authorized personnel only.' });
+            return res.status(403).json({ status: 'error', message: 'Access denied. Authorized personnel only.' });
         }
     } catch (error) {
-        res.status(500).json({ status: 'error', message: 'Server error checking admin status.' });
+        return res.status(500).json({ status: 'error', message: 'Server error checking admin status.' });
     }
 };
 
@@ -81,11 +81,11 @@ export const superAdminMiddleware = async (req: AuthRequest, res: Response, next
         const user = await User.findById(req.user.userId);
         // Strict check for Super Admin
         if (user && (user.role === 'superadmin' || (user.isAdmin && user.role !== 'manager'))) {
-             next();
+             return next();
         } else {
-             res.status(403).json({ status: 'error', message: 'Access denied. Super Admin only.' });
+             return res.status(403).json({ status: 'error', message: 'Access denied. Super Admin only.' });
         }
     } catch (error) {
-        res.status(500).json({ status: 'error', message: 'Server error checking superadmin status.' });
+        return res.status(500).json({ status: 'error', message: 'Server error checking superadmin status.' });
     }
 };

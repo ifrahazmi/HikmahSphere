@@ -19,35 +19,32 @@ const FeatureShowcase: React.FC<FeatureShowcaseProps> = ({ features }) => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {features.map((feature) => {
+          {features.map((feature, index) => {
             const Icon = feature.icon;
-            const bgColorClass = feature.color.replace('text-', 'bg-') + '-50';
+            const bgColorClass = feature.color ? feature.color.replace('text-', 'bg-') + '-50' : 'bg-emerald-50';
+            const textColorClass = feature.color || 'text-emerald-600';
 
             return (
               <div
-                key={feature.id}
-                className={`bg-white rounded-xl p-8 shadow-lg hover:shadow-xl transform hover:-translate-y-2 transition-all duration-300 ${
-                  feature.id === 'ai-assistant' ? 'opacity-60' : ''
-                }`}
+                key={index}
+                className="bg-white rounded-xl p-8 shadow-lg hover:shadow-xl transform hover:-translate-y-2 transition-all duration-300"
               >
                 <div className="relative">
                   <div className={`w-16 h-16 ${bgColorClass} rounded-lg flex items-center justify-center mb-6`}>
-                    <Icon className={`w-8 h-8 ${feature.color}`} />
+                    {typeof Icon === 'string' ? (
+                      <span className="text-3xl">{Icon}</span>
+                    ) : (
+                      <Icon className={`w-8 h-8 ${textColorClass}`} />
+                    )}
                   </div>
-
-                  {feature.id === 'ai-assistant' && (
-                    <div className="absolute top-0 right-0 bg-gray-400 text-white text-xs font-semibold px-3 py-1 rounded-full">
-                      Coming Soon
-                    </div>
-                  )}
                 </div>
 
                 <h3 className="text-xl font-semibold text-gray-900 mb-4">
-                  {feature.name}
+                  {feature.title}
                 </h3>
 
-                <p className={`leading-relaxed ${feature.id === 'ai-assistant' ? 'text-gray-500' : 'text-gray-600'}`}>
-                  {feature.spiritualPurpose}
+                <p className="leading-relaxed text-gray-600">
+                  {feature.description}
                 </p>
               </div>
             );

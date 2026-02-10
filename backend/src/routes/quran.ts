@@ -12,10 +12,10 @@ const QURAN_API_BASE = 'https://api.alquran.cloud/v1';
  * @desc    Get list of all 114 surahs
  * @access  Public
  */
-router.get('/surahs', optionalAuthMiddleware, async (req, res) => {
+router.get('/surahs', optionalAuthMiddleware, async (req: any, res: any) => {
   try {
     const response = await fetch(`${QURAN_API_BASE}/surah`);
-    const data = await response.json();
+    const data: any = await response.json();
     
     if (data.code === 200 && data.data) {
       res.json({
@@ -42,7 +42,7 @@ router.get('/surahs', optionalAuthMiddleware, async (req, res) => {
  */
 router.get('/surah/:number', [
   query('edition').optional().isString().withMessage('Edition must be a string'),
-], optionalAuthMiddleware, async (req, res) => {
+], optionalAuthMiddleware, async (req: any, res: any) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -55,7 +55,7 @@ router.get('/surah/:number', [
 
     const { number } = req.params;
     const edition = req.query.edition || 'ar.alafasy'; // Default Arabic
-    
+
     // Validate surah number
     const surahNum = parseInt(number);
     if (isNaN(surahNum) || surahNum < 1 || surahNum > 114) {
@@ -66,7 +66,7 @@ router.get('/surah/:number', [
     }
 
     const response = await fetch(`${QURAN_API_BASE}/surah/${surahNum}/${edition}`);
-    const data = await response.json();
+    const data: any = await response.json();
     
     if (data.code === 200 && data.data) {
       res.json({
@@ -93,7 +93,7 @@ router.get('/surah/:number', [
  */
 router.get('/surah/:number/editions', [
   query('editions').isString().withMessage('Editions must be comma-separated string'),
-], optionalAuthMiddleware, async (req, res) => {
+], optionalAuthMiddleware, async (req: any, res: any) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -117,7 +117,7 @@ router.get('/surah/:number/editions', [
     }
 
     const response = await fetch(`${QURAN_API_BASE}/surah/${surahNum}/editions/${editions}`);
-    const data = await response.json();
+    const data: any = await response.json();
     
     if (data.code === 200 && data.data) {
       res.json({
@@ -144,13 +144,13 @@ router.get('/surah/:number/editions', [
  */
 router.get('/ayah/:reference', [
   query('edition').optional().isString(),
-], optionalAuthMiddleware, async (req, res) => {
+], optionalAuthMiddleware, async (req: any, res: any) => {
   try {
     const { reference } = req.params;
     const edition = req.query.edition || 'ar.alafasy';
-    
+
     const response = await fetch(`${QURAN_API_BASE}/ayah/${reference}/${edition}`);
-    const data = await response.json();
+    const data: any = await response.json();
     
     if (data.code === 200 && data.data) {
       res.json({
@@ -178,7 +178,7 @@ router.get('/ayah/:reference', [
 router.get('/search', [
   query('q').notEmpty().withMessage('Search query is required'),
   query('surah').optional().isInt({ min: 1, max: 114 }),
-], optionalAuthMiddleware, async (req, res) => {
+], optionalAuthMiddleware, async (req: any, res: any) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -195,9 +195,9 @@ router.get('/search', [
     if (surah) {
       searchUrl = `${QURAN_API_BASE}/search/${q}/${surah}/en`;
     }
-    
+
     const response = await fetch(searchUrl);
-    const data = await response.json();
+    const data: any = await response.json();
     
     if (data.code === 200 && data.data) {
       res.json({

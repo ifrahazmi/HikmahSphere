@@ -68,7 +68,7 @@ router.get('/forums', [
     .optional()
     .isInt({ min: 1, max: 50 })
     .withMessage('Limit must be between 1 and 50'),
-], optionalAuthMiddleware, async (req, res) => {
+], optionalAuthMiddleware, async (req: any, res: any) => {
   try {
     const { category, limit = 20 } = req.query;
 
@@ -120,7 +120,7 @@ router.get('/events', [
     .optional()
     .isBoolean()
     .withMessage('Online must be boolean'),
-], optionalAuthMiddleware, async (req, res) => {
+], optionalAuthMiddleware, async (req: any, res: any) => {
   try {
     const { type, location, online } = req.query;
 
@@ -177,7 +177,7 @@ router.post('/posts', [
     .optional()
     .isArray()
     .withMessage('Tags must be an array'),
-], async (req, res) => {
+], async (req: any, res: any) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -254,7 +254,7 @@ router.get('/posts', [
     .optional()
     .isIn(['newest', 'oldest', 'popular', 'trending'])
     .withMessage('Invalid sort option'),
-], optionalAuthMiddleware, async (req, res) => {
+], optionalAuthMiddleware, async (req: any, res: any) => {
   try {
     const { forumId, limit = 20, sortBy = 'newest' } = req.query;
 
@@ -337,7 +337,7 @@ router.post('/events', [
   body('location')
     .isObject()
     .withMessage('Location object required'),
-], async (req, res) => {
+], async (req: any, res: any) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -392,7 +392,7 @@ router.post('/events', [
  * @desc    Join an event
  * @access  Private
  */
-router.post('/events/:eventId/join', authMiddleware, async (req, res) => {
+router.post('/events/:eventId/join', authMiddleware, async (req: any, res: any) => {
   try {
     const { eventId } = req.params;
     const userId = req.user?.userId;
@@ -449,7 +449,7 @@ router.get('/nearby', [
     .optional()
     .isInt({ min: 1, max: 50 })
     .withMessage('Radius must be between 1 and 50 km'),
-], async (req, res) => {
+], async (req: any, res: any) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
