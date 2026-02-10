@@ -152,7 +152,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                 </button>
 
                 {isProfileOpen && (
-                  <div className={`absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 z-50 animate-fade-in-down ${
+                  <div className={`absolute right-0 mt-2 w-56 rounded-md shadow-lg py-1 z-50 animate-fade-in-down ${
                     isDark ? 'bg-gray-700' : 'bg-white'
                   }`}>
                     <Link
@@ -167,29 +167,79 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                       <UserIcon className="h-4 w-4 mr-2" />
                       Profile
                     </Link>
-                    
-                    {/* Dashboard only for Super Admin */}
-                    {isSuperAdmin && (
+
+                    {/* Donation Features */}
+                    <div className={`px-4 py-2 text-xs font-bold uppercase tracking-wide ${
+                      isDark ? 'text-gray-400' : 'text-gray-500'
+                    }`}>
+                      Donations
+                    </div>
+                    <Link
+                      to="/donations"
+                      className={`flex items-center px-4 py-2 text-sm ${
+                        isDark
+                          ? 'text-gray-300 hover:bg-gray-600'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                      onClick={() => setIsProfileOpen(false)}
+                    >
+                      <span className="mr-2">💰</span>
+                      New Donation
+                    </Link>
+
+                    {/* Admin Features */}
+                    {(isSuperAdmin || hasRole?.(['admin', 'superadmin'])) && (
+                      <>
+                        <div className={`px-4 py-2 text-xs font-bold uppercase tracking-wide border-t ${
+                          isDark ? 'text-gray-400 border-gray-600' : 'text-gray-500 border-gray-200'
+                        }`}>
+                          Admin Panel
+                        </div>
                         <Link
-                        to="/dashboard"
-                        className={`flex items-center px-4 py-2 text-sm ${
-                          isDark
-                            ? 'text-gray-300 hover:bg-gray-600'
-                            : 'text-gray-700 hover:bg-gray-100'
-                        }`}
-                        onClick={() => setIsProfileOpen(false)}
+                          to="/admin/analytics"
+                          className={`flex items-center px-4 py-2 text-sm ${
+                            isDark
+                              ? 'text-gray-300 hover:bg-gray-600'
+                              : 'text-gray-700 hover:bg-gray-100'
+                          }`}
+                          onClick={() => setIsProfileOpen(false)}
                         >
-                        <Cog6ToothIcon className="h-4 w-4 mr-2" />
-                        Dashboard
+                          <span className="mr-2">📊</span>
+                          Analytics Dashboard
                         </Link>
+                        <Link
+                          to="/dashboard"
+                          className={`flex items-center px-4 py-2 text-sm ${
+                            isDark
+                              ? 'text-gray-300 hover:bg-gray-600'
+                              : 'text-gray-700 hover:bg-gray-100'
+                          }`}
+                          onClick={() => setIsProfileOpen(false)}
+                        >
+                          <Cog6ToothIcon className="h-4 w-4 mr-2" />
+                          Donor Management
+                        </Link>
+                        <Link
+                          to="/dashboard"
+                          className={`flex items-center px-4 py-2 text-sm ${
+                            isDark
+                              ? 'text-gray-300 hover:bg-gray-600'
+                              : 'text-gray-700 hover:bg-gray-100'
+                          }`}
+                          onClick={() => setIsProfileOpen(false)}
+                        >
+                          <span className="mr-2">📋</span>
+                          Audit Logs
+                        </Link>
+                      </>
                     )}
                     
                     <button
                       onClick={handleLogout}
-                      className={`flex items-center w-full px-4 py-2 text-sm ${
+                      className={`flex items-center w-full px-4 py-2 text-sm border-t ${
                         isDark
-                          ? 'text-gray-300 hover:bg-gray-600'
-                          : 'text-gray-700 hover:bg-gray-100'
+                          ? 'text-gray-300 hover:bg-gray-600 border-gray-600'
+                          : 'text-gray-700 hover:bg-gray-100 border-gray-200'
                       }`}
                     >
                       <ArrowRightOnRectangleIcon className="h-4 w-4 mr-2" />
@@ -275,25 +325,89 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                   >
                     Profile
                   </Link>
-                  {isSuperAdmin && (
-                    <Link
-                        to="/dashboard"
-                        className={`block px-3 py-2 text-base font-medium transition-colors duration-200 ${
+
+                  {/* Donation Features */}
+                  <div className={`px-3 py-2 text-xs font-bold uppercase tracking-wide ${
+                    isDark ? 'text-gray-400' : 'text-gray-500'
+                  }`}>
+                    Donations
+                  </div>
+                  <Link
+                    to="/donations"
+                    className={`block px-3 py-2 text-sm font-medium transition-colors duration-200 ${
+                      isDark
+                        ? 'text-gray-300 hover:text-emerald-400 hover:bg-gray-700'
+                        : 'text-gray-700 hover:text-emerald-600 hover:bg-emerald-50'
+                    }`}
+                    onClick={() => setIsOpen(false)}
+                  >
+                    💰 New Donation
+                  </Link>
+
+                  {/* Admin Features */}
+                  {(isSuperAdmin || hasRole?.(['admin', 'superadmin'])) && (
+                    <>
+                      <div className={`px-3 py-2 text-xs font-bold uppercase tracking-wide border-t ${
+                        isDark ? 'text-gray-400 border-gray-700' : 'text-gray-500 border-gray-200'
+                      }`}>
+                        Admin Panel
+                      </div>
+                      <Link
+                        to="/admin/analytics"
+                        className={`block px-3 py-2 text-sm font-medium transition-colors duration-200 ${
                           isDark
                             ? 'text-gray-300 hover:text-emerald-400 hover:bg-gray-700'
                             : 'text-gray-700 hover:text-emerald-600 hover:bg-emerald-50'
                         }`}
                         onClick={() => setIsOpen(false)}
+                      >
+                        📊 Analytics Dashboard
+                      </Link>
+                      <Link
+                        to="/dashboard"
+                        className={`block px-3 py-2 text-sm font-medium transition-colors duration-200 ${
+                          isDark
+                            ? 'text-gray-300 hover:text-emerald-400 hover:bg-gray-700'
+                            : 'text-gray-700 hover:text-emerald-600 hover:bg-emerald-50'
+                        }`}
+                        onClick={() => setIsOpen(false)}
+                      >
+                        👥 Donor Management
+                      </Link>
+                      <Link
+                        to="/dashboard"
+                        className={`block px-3 py-2 text-sm font-medium transition-colors duration-200 ${
+                          isDark
+                            ? 'text-gray-300 hover:text-emerald-400 hover:bg-gray-700'
+                            : 'text-gray-700 hover:text-emerald-600 hover:bg-emerald-50'
+                        }`}
+                        onClick={() => setIsOpen(false)}
+                      >
+                        📋 Audit Logs
+                      </Link>
+                    </>
+                  )}
+                  
+                  {isSuperAdmin && (
+                    <Link
+                        to="/dashboard"
+                        className={`block px-3 py-2 text-base font-medium transition-colors duration-200 border-t ${
+                          isDark
+                            ? 'text-gray-300 hover:text-emerald-400 hover:bg-gray-700 border-gray-700'
+                            : 'text-gray-700 hover:text-emerald-600 hover:bg-emerald-50 border-gray-200'
+                        }`}
+                        onClick={() => setIsOpen(false)}
                     >
-                        Dashboard
+                        Admin Dashboard
                     </Link>
                   )}
+
                   <button
                     onClick={handleLogout}
-                    className={`block w-full text-left px-3 py-2 text-base font-medium transition-colors duration-200 ${
+                    className={`block w-full text-left px-3 py-2 text-base font-medium transition-colors duration-200 border-t ${
                       isDark
-                        ? 'text-gray-300 hover:text-emerald-400 hover:bg-gray-700'
-                        : 'text-gray-700 hover:text-emerald-600 hover:bg-emerald-50'
+                        ? 'text-gray-300 hover:text-emerald-400 hover:bg-gray-700 border-gray-700'
+                        : 'text-gray-700 hover:text-emerald-600 hover:bg-emerald-50 border-gray-200'
                     }`}
                   >
                     Sign out

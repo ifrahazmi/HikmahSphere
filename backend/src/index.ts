@@ -18,6 +18,7 @@ import communityRoutes from './routes/community';
 import donorRoutes from './routes/donors';
 import donationRoutes from './routes/donations';
 import installmentRoutes from './routes/installments';
+import DonorLog from './models/DonorLog';
 
 // Load environment variables
 dotenv.config();
@@ -122,6 +123,68 @@ app.use('/api/community', communityRoutes);
 app.use('/api/zakat/donors', donorRoutes);
 app.use('/api/zakat/donations', donationRoutes);
 app.use('/api/zakat/installments', installmentRoutes);
+
+// Zakat Statistics Endpoint for Dashboard
+app.get('/api/zakat/stats', authMiddleware, async (req: any, res: any) => {
+    try {
+        const Donation = mongoose.model('Donation');
+        const Donor = mongoose.model('Donor');
+        
+        const donations = await Donation.find().lean();
+        const donors = await Donor.find({ status: 'Active' }).lean();
+        
+        const stats = {
+            totalCollected: donations.reduce((sum: number, d: any) => sum + (d.amountPaid || 0), 0),
+            totalSpent: 0, // Can be extended with spending tracking
+            currentBalance: donations.reduce((sum: number, d: any) => sum + (d.amountPaid || 0), 0),
+            totalDonations: donations.length,
+            totalDonors: donors.length,
+            completedDonations: donations.filter((d: any) => d.status === 'Completed').length,
+            pendingDonations: donations.filter((d: any) => d.status === 'Pending' || d.status === 'Pledged').length,
+        };
+        
+        res.json({ status: 'success', data: stats });
+    } catch (error: any) {
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+});
+
+// Audit Logs Endpoint
+app.get('/api/zakat/audit-logs', authMiddleware, async (req: any, res: any) => {
+    try {
+        const { page = 1, limit = 50, action, targetType, startDate, endDate } = req.query;
+        
+        const query: any = {};
+        if (action) query.action = { $regex: action, $options: 'i' };
+        if (targetType) query.targetType = targetType;
+        if (startDate || endDate) {
+            query.createdAt = {};
+            if (startDate) query.createdAt.$gte = new Date(startDate as string);
+            if (endDate) query.createdAt.$lte = new Date(endDate as string);
+        }
+        
+        const logs = await DonorLog.find(query)
+            .sort({ createdAt: -1 })
+            .skip((parseInt(page as string) - 1) * parseInt(limit as string))
+            .limit(parseInt(limit as string))
+            .lean();
+            
+        const total = await DonorLog.countDocuments(query);
+        
+        res.json({
+            status: 'success',
+            data: logs,
+            pagination: {
+                page: parseInt(page as string),
+                limit: parseInt(limit as string),
+                total,
+                pages: Math.ceil(total / parseInt(limit as string))
+            }
+        });
+    } catch (error: any) {
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+});
 
 // Admin Routes for User Management (Restricted to Super Admin)
 // Get All Users

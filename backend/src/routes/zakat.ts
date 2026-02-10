@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import { body, query, validationResult } from 'express-validator';
 import { authMiddleware, optionalAuthMiddleware, adminMiddleware } from '../middleware/auth';
 import ZakatPayment from '../models/ZakatPayment';
@@ -117,9 +117,9 @@ interface ZakatCalculation {
 
 const calculateNisab = (metalType: 'gold' | 'silver' = 'gold'): number => {
   if (metalType === 'gold') {
-    return NISAB_GOLD * CURRENT_PRICES.gold;
+    return ZAKAT_RATES.NISAB_GOLD * CURRENT_PRICES.gold;
   }
-  return NISAB_SILVER * CURRENT_PRICES.silver;
+  return ZAKAT_RATES.NISAB_SILVER * CURRENT_PRICES.silver;
 };
 
 const calculateZakat = (wealth: any): ZakatCalculation => {
@@ -176,7 +176,7 @@ const calculateZakat = (wealth: any): ZakatCalculation => {
 
 router.post('/calculate', [
   body('cash').optional().isFloat({ min: 0 }),
-], optionalAuthMiddleware, async (req, res) => {
+], optionalAuthMiddleware, async (req: Request, res: Response) => {
   try {
     const calculation = calculateZakat(req.body);
     res.json({

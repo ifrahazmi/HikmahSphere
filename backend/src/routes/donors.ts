@@ -12,7 +12,7 @@ const getClientInfo = (req: Request) => ({
 });
 
 // Middleware to get admin email (from auth context)
-const getAdminEmail = (req: Request) => {
+const getAdminEmail = (req: Request): string => {
   return (req as any).user?.email || 'system@hikmahsphere.com';
 };
 
@@ -83,14 +83,44 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // ============================================================
-// GET /api/zakat/donors/:id - Get single donor by ID
+// GET /api/zakat/donors/phone/:phone - Check if donor exists
 // ============================================================
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/phone/:phone', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { phone } = req.params;
+
+    if (!phone) {
+      res.status(400).json({ success: false, error: 'Phone number is required' });
+      return;
+    }
+
+    const donor = await Donor.findOne({ phone }).lean();
+
+    if (!donor) {
+      res.status(404).json({ success: false, error: 'Donor not found' });
+      return;
+    }
+
+    res.json({ success: true, data: donor });
+  } catch (error) {
+    console.error('Error checking donor:', error);
+    res.status(500).json({ success: false, error: 'Failed to check donor' });
+  }
+});
+
+// ============================================================
+// GET /api/zakat/donors/:id - Get single donor
+// ============================================================
+router.get('/:id', async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    
-    // Check if ID is a valid MongoDB ObjectId or donorId
-    const query = mongoose.Types.ObjectId.isValid(id)
+
+    if (!id) {
+      res.status(400).json({ success: false, error: 'ID is required' });
+      return;
+    }
+
+    const query = mongoose.Types.ObjectId.isValid(id as string)
       ? { _id: id }
       : { donorId: id };
 
@@ -99,7 +129,8 @@ router.get('/:id', async (req: Request, res: Response) => {
       .lean();
 
     if (!donor) {
-      return res.status(404).json({ success: false, error: 'Donor not found' });
+      res.status(404).json({ success: false, error: 'Donor not found' });
+      return;
     }
 
     res.json({ success: true, data: donor });
@@ -112,80 +143,96 @@ router.get('/:id', async (req: Request, res: Response) => {
 // ============================================================
 // POST /api/zakat/donors - Create new donor
 // ============================================================
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const {
       fullName,
       email,
       phone,
       donorType,
+      address,
       city,
       state,
-      panNumber,
-      aadharNumber,
-      communicationPreferences,
+      country,
+      pincode,
+      idType,
+      idNumber,
+      notes,
     } = req.body;
 
-    // Validate required fields
+    // Validation
     if (!fullName || !phone) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Full name and phone are required',
       });
+      return;
     }
 
-    // Check for duplicate phone
+    // Check if donor with same phone exists
     const existingDonor = await Donor.findOne({ phone });
     if (existingDonor) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Donor with this phone number already exists',
       });
+      return;
     }
 
-    // Create new donor
-    const newDonor = new Donor({
+    // Check if email exists (if provided)
+    if (email) {
+      const existingEmail = await Donor.findOne({ email });
+      if (existingEmail) {
+        res.status(400).json({
+          success: false,
+          error: 'Donor with this email already exists',
+        });
+        return;
+      }
+    }
+
+    // Create donor
+    const donor = new Donor({
       fullName,
-      email: email || undefined,
+      email,
       phone,
       donorType: donorType || 'Individual',
-      city: city || undefined,
-      state: state || undefined,
-      panNumber: panNumber || undefined,
-      aadharNumber: aadharNumber || undefined,
-      communicationPreferences: communicationPreferences || {
-        sms: true,
-        email: true,
-        whatsapp: false,
-      },
+      address,
+      city,
+      state,
+      country,
+      pincode,
+      idType,
+      idNumber,
+      notes,
+      status: 'Active',
+      totalDonations: 0,
+      totalAmount: 0,
     });
 
-    const savedDonor = await newDonor.save();
+    await donor.save();
 
     // Log the action
-    const { ip, userAgent } = getClientInfo(req);
-    await DonorLog.createLog(
+    const clientInfo = getClientInfo(req);
+    await (DonorLog as any).createLog(
       getAdminEmail(req),
       'DONOR_CREATED',
       'Donor',
-      savedDonor._id,
+      donor._id,
       {
-        newData: {
-          donorId: savedDonor.donorId,
-          fullName: savedDonor.fullName,
-          phone: savedDonor.phone,
-          email: savedDonor.email,
-          donorType: savedDonor.donorType,
-        },
+        donorId: donor.donorId,
+        fullName,
+        phone,
+        donorType: donor.donorType,
       },
-      ip,
-      userAgent
+      clientInfo.ip,
+      clientInfo.userAgent
     );
 
     res.status(201).json({
       success: true,
       message: 'Donor created successfully',
-      data: savedDonor,
+      data: donor,
     });
   } catch (error) {
     console.error('Error creating donor:', error);
@@ -196,48 +243,69 @@ router.post('/', async (req: Request, res: Response) => {
 // ============================================================
 // PUT /api/zakat/donors/:id - Update donor
 // ============================================================
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
     const updates = req.body;
 
+    if (!id) {
+      res.status(400).json({ success: false, error: 'ID is required' });
+      return;
+    }
+
     // Don't allow updating certain fields
     delete updates._id;
     delete updates.donorId;
+    delete updates.createdAt;
     delete updates.totalDonations;
     delete updates.totalAmount;
-    delete updates.createdAt;
 
-    // Find donor
-    const query = mongoose.Types.ObjectId.isValid(id)
+    const query = mongoose.Types.ObjectId.isValid(id as string)
       ? { _id: id }
       : { donorId: id };
 
     const oldDonor = await Donor.findOne(query);
     if (!oldDonor) {
-      return res.status(404).json({ success: false, error: 'Donor not found' });
+      res.status(404).json({ success: false, error: 'Donor not found' });
+      return;
     }
 
-    // Check for duplicate phone if phone is being updated
+    // Check if phone is being updated and if it already exists
     if (updates.phone && updates.phone !== oldDonor.phone) {
-      const duplicate = await Donor.findOne({ phone: updates.phone });
-      if (duplicate) {
-        return res.status(400).json({
+      const existingPhone = await Donor.findOne({ phone: updates.phone });
+      if (existingPhone) {
+        res.status(400).json({
           success: false,
-          error: 'Phone number already exists',
+          error: 'Another donor with this phone number already exists',
         });
+        return;
       }
     }
 
-    // Update donor
-    const updatedDonor = await Donor.findOneAndUpdate(query, updates, {
-      new: true,
-      runValidators: true,
-    });
+    // Check if email is being updated and if it already exists
+    if (updates.email && updates.email !== oldDonor.email) {
+      const existingEmail = await Donor.findOne({ email: updates.email });
+      if (existingEmail) {
+        res.status(400).json({
+          success: false,
+          error: 'Another donor with this email already exists',
+        });
+        return;
+      }
+    }
+
+    const updatedDonor = await Donor.findOneAndUpdate(
+      query,
+      updates,
+      {
+        new: true,
+        runValidators: true,
+      }
+    );
 
     // Log the action
-    const { ip, userAgent } = getClientInfo(req);
-    await DonorLog.createLog(
+    const clientInfo2 = getClientInfo(req);
+    await (DonorLog as any).createLog(
       getAdminEmail(req),
       'DONOR_UPDATED',
       'Donor',
@@ -246,8 +314,8 @@ router.put('/:id', async (req: Request, res: Response) => {
         oldData: oldDonor.toObject(),
         newData: updatedDonor?.toObject(),
       },
-      ip,
-      userAgent
+      clientInfo2.ip,
+      clientInfo2.userAgent
     );
 
     res.json({
@@ -264,18 +332,32 @@ router.put('/:id', async (req: Request, res: Response) => {
 // ============================================================
 // PUT /api/zakat/donors/:id/disable - Disable donor
 // ============================================================
-router.put('/:id/disable', async (req: Request, res: Response) => {
+router.put('/:id/disable', async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
     const { reason } = req.body;
 
-    const query = mongoose.Types.ObjectId.isValid(id)
+    if (!id) {
+      res.status(400).json({ success: false, error: 'ID is required' });
+      return;
+    }
+
+    const query = mongoose.Types.ObjectId.isValid(id as string)
       ? { _id: id }
       : { donorId: id };
 
     const oldDonor = await Donor.findOne(query);
     if (!oldDonor) {
-      return res.status(404).json({ success: false, error: 'Donor not found' });
+      res.status(404).json({ success: false, error: 'Donor not found' });
+      return;
+    }
+
+    if (oldDonor.status === 'Disabled') {
+      res.status(400).json({
+        success: false,
+        error: 'Donor is already disabled',
+      });
+      return;
     }
 
     // Disable donor
@@ -286,8 +368,8 @@ router.put('/:id/disable', async (req: Request, res: Response) => {
     );
 
     // Log the action
-    const { ip, userAgent } = getClientInfo(req);
-    await DonorLog.createLog(
+    const clientInfo3 = getClientInfo(req);
+    await (DonorLog as any).createLog(
       getAdminEmail(req),
       'DONOR_DISABLED',
       'Donor',
@@ -295,10 +377,9 @@ router.put('/:id/disable', async (req: Request, res: Response) => {
       {
         reason: reason || 'No reason provided',
         oldStatus: oldDonor.status,
-        newStatus: 'Disabled',
       },
-      ip,
-      userAgent
+      clientInfo3.ip,
+      clientInfo3.userAgent
     );
 
     res.json({
@@ -315,17 +396,23 @@ router.put('/:id/disable', async (req: Request, res: Response) => {
 // ============================================================
 // PUT /api/zakat/donors/:id/enable - Re-enable donor
 // ============================================================
-router.put('/:id/enable', async (req: Request, res: Response) => {
+router.put('/:id/enable', async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
 
-    const query = mongoose.Types.ObjectId.isValid(id)
+    if (!id) {
+      res.status(400).json({ success: false, error: 'ID is required' });
+      return;
+    }
+
+    const query = mongoose.Types.ObjectId.isValid(id as string)
       ? { _id: id }
       : { donorId: id };
 
     const oldDonor = await Donor.findOne(query);
     if (!oldDonor) {
-      return res.status(404).json({ success: false, error: 'Donor not found' });
+      res.status(404).json({ success: false, error: 'Donor not found' });
+      return;
     }
 
     // Enable donor
@@ -336,8 +423,8 @@ router.put('/:id/enable', async (req: Request, res: Response) => {
     );
 
     // Log the action
-    const { ip, userAgent } = getClientInfo(req);
-    await DonorLog.createLog(
+    const clientInfo4 = getClientInfo(req);
+    await (DonorLog as any).createLog(
       getAdminEmail(req),
       'DONOR_RESTORED',
       'Donor',
@@ -346,8 +433,8 @@ router.put('/:id/enable', async (req: Request, res: Response) => {
         oldStatus: oldDonor.status,
         newStatus: 'Active',
       },
-      ip,
-      userAgent
+      clientInfo4.ip,
+      clientInfo4.userAgent
     );
 
     res.json({
@@ -364,18 +451,24 @@ router.put('/:id/enable', async (req: Request, res: Response) => {
 // ============================================================
 // GET /api/zakat/donors/:id/donations - Get donor's donations
 // ============================================================
-router.get('/:id/donations', async (req: Request, res: Response) => {
+router.get('/:id/donations', async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
     const Donation = mongoose.model('Donation');
 
-    const query = mongoose.Types.ObjectId.isValid(id)
+    if (!id) {
+      res.status(400).json({ success: false, error: 'ID is required' });
+      return;
+    }
+
+    const query = mongoose.Types.ObjectId.isValid(id as string)
       ? { _id: id }
       : { donorId: id };
 
     const donor = await Donor.findOne(query);
     if (!donor) {
-      return res.status(404).json({ success: false, error: 'Donor not found' });
+      res.status(404).json({ success: false, error: 'Donor not found' });
+      return;
     }
 
     const donations = await Donation.find({ donorId: donor._id })
@@ -390,36 +483,6 @@ router.get('/:id/donations', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error fetching donor donations:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch donations' });
-  }
-});
-
-// ============================================================
-// GET /api/zakat/donors/phone/:phone - Check if donor exists
-// ============================================================
-router.get('/phone/:phone', async (req: Request, res: Response) => {
-  try {
-    const { phone } = req.params;
-
-    const donor = await Donor.findOne({ phone, status: 'Active' })
-      .select('-password')
-      .lean();
-
-    if (donor) {
-      res.json({
-        success: true,
-        exists: true,
-        data: donor,
-      });
-    } else {
-      res.json({
-        success: true,
-        exists: false,
-        data: null,
-      });
-    }
-  } catch (error) {
-    console.error('Error checking donor:', error);
-    res.status(500).json({ success: false, error: 'Failed to check donor' });
   }
 });
 

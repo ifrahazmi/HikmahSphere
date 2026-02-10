@@ -2,19 +2,20 @@ import jwt from 'jsonwebtoken';
 import { Request, Response, NextFunction } from 'express';
 import User from '../models/User';
 
-interface AuthRequest extends Request {
+export interface AuthRequest extends Request {
   user?: any;
 }
 
-export const authMiddleware = (req: AuthRequest, res: Response, next: NextFunction) => {
+export const authMiddleware = (req: AuthRequest, res: Response, next: NextFunction): void => {
   // Get token from header
   const token = req.header('Authorization')?.replace('Bearer ', '');
 
   if (!token) {
-    return res.status(401).json({
+    res.status(401).json({
       status: 'error',
       message: 'No token, authorization denied',
     });
+    return;
   }
 
   try {
@@ -53,10 +54,11 @@ export const optionalAuthMiddleware = (req: AuthRequest, res: Response, next: Ne
   }
 };
 
-export const adminMiddleware = async (req: AuthRequest, res: Response, next: NextFunction) => {
+export const adminMiddleware = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
         if (!req.user || !req.user.userId) {
-             return res.status(401).json({ status: 'error', message: 'User not authenticated' });
+             res.status(401).json({ status: 'error', message: 'User not authenticated' });
+             return;
         }
         
         const user = await User.findById(req.user.userId);
@@ -72,10 +74,11 @@ export const adminMiddleware = async (req: AuthRequest, res: Response, next: Nex
     }
 };
 
-export const superAdminMiddleware = async (req: AuthRequest, res: Response, next: NextFunction) => {
+export const superAdminMiddleware = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
         if (!req.user || !req.user.userId) {
-             return res.status(401).json({ status: 'error', message: 'User not authenticated' });
+             res.status(401).json({ status: 'error', message: 'User not authenticated' });
+             return;
         }
 
         const user = await User.findById(req.user.userId);

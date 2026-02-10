@@ -19,6 +19,8 @@ import QuranReader from './pages/QuranReader';
 import ZakatCalculator from './pages/ZakatCalculator';
 import Community from './pages/Community';
 import Profile from './pages/Profile';
+import AdminAnalyticsDashboard from './pages/AdminAnalyticsDashboard';
+import EnhancedDonationForm from './pages/EnhancedDonationForm';
 
 // Hooks
 import { useAuth, AuthProvider } from './hooks/useAuth';
@@ -83,6 +85,22 @@ const AppContent: React.FC = () => {
             element={
               <ProtectedRoute>
                 <Profile />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/donations" 
+            element={
+              <ProtectedRoute>
+                <EnhancedDonationForm />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/admin/analytics" 
+            element={
+              <ProtectedRoute>
+                <AdminAnalyticsDashboard />
               </ProtectedRoute>
             } 
           />

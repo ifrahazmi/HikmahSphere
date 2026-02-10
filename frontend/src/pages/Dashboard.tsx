@@ -6,7 +6,6 @@ import {
   CurrencyRupeeIcon,
   UserPlusIcon,
   XMarkIcon,
-  PencilIcon,
   ArrowUpIcon,
   ArrowDownIcon
 } from '@heroicons/react/24/outline';
@@ -14,22 +13,8 @@ import { useAuth } from '../hooks/useAuth';
 import { API_URL } from '../config';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
-
-interface ZakatTransaction {
-  _id: string;
-  type: 'Credit' | 'Debit';
-  donorName?: string;
-  donorType?: string;
-  recipientName?: string;
-  recipientType?: string;
-  amount: number;
-  paymentDate: string;
-  paymentMethod: string;
-  paymentId: string;
-  upiId?: string;
-  notes?: string;
-  createdAt: string;
-}
+import AdminDonorManagement from '../components/AdminDonorManagement';
+import AdminAuditLogs from '../components/AdminAuditLogs';
 
 const Dashboard: React.FC = () => {
   const { user, hasRole } = useAuth();
@@ -51,11 +36,8 @@ const Dashboard: React.FC = () => {
       role: 'user'
   });
 
-  // Zakat Admin Stats & State
+  // Zakat Stats
   const [zakatStats, setZakatStats] = useState({ totalCollected: 0, totalSpent: 0, currentBalance: 0 });
-  const [zakatTransactions, setZakatTransactions] = useState<ZakatTransaction[]>([]);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editingTransaction, setEditingTransaction] = useState<ZakatTransaction | null>(null);
 
   // Admin: Fetch all users
   const fetchUsers = async () => {
@@ -85,17 +67,20 @@ const Dashboard: React.FC = () => {
   const fetchZakatData = async () => {
       try {
           const token = localStorage.getItem('token');
-          const [statsRes, transRes] = await Promise.all([
-              fetch(`${API_URL}/zakat/stats`, { headers: { 'Authorization': `Bearer ${token}` } }),
-              fetch(`${API_URL}/zakat/payments`, { headers: { 'Authorization': `Bearer ${token}` } })
-          ]);
-
+          
+          // Fetch stats from the correct endpoint
+          const statsRes = await fetch(`${API_URL}/zakat/stats`, { 
+              headers: { 'Authorization': `Bearer ${token}` } 
+          });
           const statsData = await statsRes.json();
-          const transData = await transRes.json();
 
-          if (statsData.status === 'success') setZakatStats(statsData.data);
-          if (transData.status === 'success') setZakatTransactions(transData.data.payments);
-
+          if (statsData.status === 'success') {
+              setZakatStats({
+                  totalCollected: statsData.data.totalCollected || 0,
+                  totalSpent: statsData.data.totalSpent || 0,
+                  currentBalance: statsData.data.currentBalance || 0
+              });
+          }
       } catch (error) {
           console.error(error);
           toast.error('Failed to load Zakat data');
@@ -125,33 +110,6 @@ const Dashboard: React.FC = () => {
           }
       } catch (error) {
           toast.error('Error creating user');
-      }
-  };
-
-  const handleUpdateTransaction = async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!editingTransaction) return;
-
-      try {
-          const token = localStorage.getItem('token');
-          const response = await fetch(`${API_URL}/zakat/payment/${editingTransaction._id}`, {
-              method: 'PUT',
-              headers: { 
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${token}` 
-              },
-              body: JSON.stringify(editingTransaction)
-          });
-          const data = await response.json();
-          if (data.status === 'success') {
-              toast.success('Transaction updated');
-              setShowEditModal(false);
-              fetchZakatData();
-          } else {
-              toast.error(data.message || 'Update failed');
-          }
-      } catch (error) {
-          toast.error('Update failed');
       }
   };
 
@@ -231,24 +189,48 @@ const Dashboard: React.FC = () => {
         <h1 className="text-3xl font-bold text-gray-900 mb-8">Super Admin Dashboard</h1>
         
         <div className="bg-white rounded-lg shadow mb-8">
-            <nav className="flex border-b border-gray-200">
+            <nav className="flex border-b border-gray-200 overflow-x-auto">
                 <button
                     onClick={() => setActiveTab('overview')}
-                    className={`px-6 py-4 text-sm font-medium ${activeTab === 'overview' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
+                    className={`px-6 py-4 text-sm font-medium whitespace-nowrap ${activeTab === 'overview' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
                 >
-                    Overview
+                    📊 Overview
                 </button>
                 <button
                     onClick={() => setActiveTab('users')}
-                    className={`px-6 py-4 text-sm font-medium ${activeTab === 'users' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
+                    className={`px-6 py-4 text-sm font-medium whitespace-nowrap ${activeTab === 'users' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
                 >
-                    User Management
+                    👥 Users
+                </button>
+                <button
+                    onClick={() => setActiveTab('donors')}
+                    className={`px-6 py-4 text-sm font-medium whitespace-nowrap ${activeTab === 'donors' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                    💝 Donors
                 </button>
                 <button
                     onClick={() => setActiveTab('zakat')}
-                    className={`px-6 py-4 text-sm font-medium ${activeTab === 'zakat' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
+                    className={`px-6 py-4 text-sm font-medium whitespace-nowrap ${activeTab === 'zakat' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
                 >
-                    Zakat Management
+                    💰 Zakat Stats
+                </button>
+                <button
+                    onClick={() => setActiveTab('audit')}
+                    className={`px-6 py-4 text-sm font-medium whitespace-nowrap ${activeTab === 'audit' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                    📋 Audit Logs
+                </button>
+                <button
+                    onClick={() => navigate('/admin/analytics')}
+                    className={`px-6 py-4 text-sm font-medium whitespace-nowrap text-blue-600 hover:text-blue-800`}
+                >
+                    📈 Analytics Dashboard →
+                </button>
+                <button
+                    onClick={() => navigate('/donations')}
+                    className={`px-6 py-4 text-sm font-medium whitespace-nowrap text-blue-600 hover:text-blue-800`}
+                >
+                    🕌 New Donation →
                 </button>
             </nav>
         </div>
@@ -305,169 +287,32 @@ const Dashboard: React.FC = () => {
                     </div>
                 </div>
 
-                {/* All Transactions Table with Edit */}
-                <div className="bg-white shadow rounded-lg overflow-hidden">
-                    <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                        <h3 className="text-lg font-medium text-gray-900">All Transactions Database</h3>
-                        <span className="text-xs text-gray-500">Showing {zakatTransactions.length} records</span>
-                    </div>
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Party</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Method</th>
-                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Edit</th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                                {zakatTransactions.map((t) => (
-                                    <tr key={t._id} className="hover:bg-gray-50">
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            {new Date(t.paymentDate).toLocaleDateString()}
-                                            <div className="text-xs text-gray-400">Rec: {t.createdAt ? new Date(t.createdAt).toLocaleDateString() : '-'}</div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                                t.type === 'Credit' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                                            }`}>
-                                                {t.type === 'Credit' ? 'Collection' : 'Spending'}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                            {t.type === 'Credit' ? t.donorName : t.recipientName}
-                                            <div className="text-xs text-gray-500">
-                                                {t.type === 'Credit' ? t.donorType : t.recipientType}
-                                            </div>
-                                        </td>
-                                        <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold ${
-                                            t.type === 'Credit' ? 'text-green-600' : 'text-red-600'
-                                        }`}>
-                                            ₹{t.amount.toLocaleString('en-IN')}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            {t.paymentMethod}
-                                            {t.paymentMethod === 'UPI Transfer' && t.upiId && (
-                                                <div className="text-xs text-gray-400">UPI: {t.upiId}</div>
-                                            )}
-                                            <div className="text-xs text-gray-400">ID: {t.paymentId}</div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                            <button
-                                                onClick={() => { setEditingTransaction(t); setShowEditModal(true); }}
-                                                className="text-indigo-600 hover:text-indigo-900"
-                                            >
-                                                <PencilIcon className="h-5 w-5" />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                {/* Info about transactions */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+                    <h3 className="text-lg font-semibold text-blue-800 mb-2">💰 Zakat Statistics</h3>
+                    <p className="text-blue-700">
+                        Detailed transaction management is available in the <strong>Admin Analytics Dashboard</strong>. 
+                        Click the button in the navigation above to access comprehensive donation tracking, 
+                        installment management, and detailed reports.
+                    </p>
+                    <button
+                        onClick={() => navigate('/admin/analytics')}
+                        className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                        📊 View Full Analytics Dashboard
+                    </button>
                 </div>
             </div>
         )}
 
-        {/* Edit Transaction Modal (Super Admin) */}
-        {showEditModal && editingTransaction && (
-            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
-                <div className="bg-white rounded-lg max-w-md w-full p-6">
-                    <h3 className="text-lg font-medium text-gray-900 mb-4">Edit Transaction (Super Admin)</h3>
-                    <form onSubmit={handleUpdateTransaction}>
-                        <div className="space-y-4">
-                            {editingTransaction.type === 'Credit' ? (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Donor Name</label>
-                                    <input
-                                        type="text"
-                                        className="mt-1 block w-full border rounded-md p-2"
-                                        value={editingTransaction.donorName}
-                                        onChange={e => setEditingTransaction({...editingTransaction, donorName: e.target.value})}
-                                    />
-                                </div>
-                            ) : (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Recipient Name</label>
-                                    <input
-                                        type="text"
-                                        className="mt-1 block w-full border rounded-md p-2"
-                                        value={editingTransaction.recipientName}
-                                        onChange={e => setEditingTransaction({...editingTransaction, recipientName: e.target.value})}
-                                    />
-                                </div>
-                            )}
-                            
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700">Amount</label>
-                                <input
-                                    type="number"
-                                    className="mt-1 block w-full border rounded-md p-2"
-                                    value={editingTransaction.amount}
-                                    onChange={e => setEditingTransaction({...editingTransaction, amount: parseFloat(e.target.value)})}
-                                    min="0"
-                                />
-                            </div>
+        {/* Donor Management Tab */}
+        {activeTab === 'donors' && (
+            <AdminDonorManagement />
+        )}
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700">Payment Method</label>
-                                <select 
-                                    className="mt-1 block w-full border rounded-md p-2"
-                                    value={editingTransaction.paymentMethod}
-                                    onChange={e => setEditingTransaction({...editingTransaction, paymentMethod: e.target.value})}
-                                >
-                                    <option>Bank Transfer</option>
-                                    <option>UPI Transfer</option>
-                                    <option>Cash</option>
-                                    <option>Cheque</option>
-                                    <option>QR Scanner</option>
-                                    <option>Other</option>
-                                </select>
-                            </div>
-
-                            {editingTransaction.paymentMethod === 'UPI Transfer' && (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">UPI ID</label>
-                                    <input
-                                        type="text"
-                                        className="mt-1 block w-full border rounded-md p-2"
-                                        value={editingTransaction.upiId || ''}
-                                        onChange={e => setEditingTransaction({...editingTransaction, upiId: e.target.value})}
-                                    />
-                                </div>
-                            )}
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700">Transaction ID</label>
-                                <input
-                                    type="text"
-                                    className="mt-1 block w-full border rounded-md p-2"
-                                    value={editingTransaction.paymentId}
-                                    onChange={e => setEditingTransaction({...editingTransaction, paymentId: e.target.value})}
-                                />
-                            </div>
-                        </div>
-                        <div className="mt-6 flex justify-end gap-3">
-                            <button
-                                type="button"
-                                onClick={() => setShowEditModal(false)}
-                                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="submit"
-                                className="px-4 py-2 text-white bg-emerald-600 rounded-md hover:bg-emerald-700"
-                            >
-                                Save Changes
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
+        {/* Audit Logs Tab */}
+        {activeTab === 'audit' && (
+            <AdminAuditLogs />
         )}
 
         {activeTab === 'users' && (

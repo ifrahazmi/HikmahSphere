@@ -1,6 +1,6 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import { body, query, validationResult } from 'express-validator';
-import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth';
+import { authMiddleware, optionalAuthMiddleware, AuthRequest } from '../middleware/auth';
 
 const router = express.Router();
 
@@ -68,7 +68,7 @@ router.get('/forums', [
     .optional()
     .isInt({ min: 1, max: 50 })
     .withMessage('Limit must be between 1 and 50'),
-], optionalAuthMiddleware, async (req, res) => {
+], optionalAuthMiddleware, async (req: Request, res: Response) => {
   try {
     const { category, limit = 20 } = req.query;
 
@@ -120,7 +120,7 @@ router.get('/events', [
     .optional()
     .isBoolean()
     .withMessage('Online must be boolean'),
-], optionalAuthMiddleware, async (req, res) => {
+], optionalAuthMiddleware, async (req: Request, res: Response) => {
   try {
     const { type, location, online } = req.query;
 
@@ -177,15 +177,16 @@ router.post('/posts', [
     .optional()
     .isArray()
     .withMessage('Tags must be an array'),
-], async (req, res) => {
+], async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({
+      res.status(400).json({
         status: 'error',
         message: 'Validation failed',
         errors: errors.array(),
       });
+      return;
     }
 
     const { title, content, forumId, tags = [] } = req.body;
@@ -194,10 +195,11 @@ router.post('/posts', [
     // Check if forum exists
     const forum = MOCK_FORUMS.find(f => f.id === forumId);
     if (!forum) {
-      return res.status(404).json({
+      res.status(404).json({
         status: 'error',
         message: 'Forum not found',
       });
+      return;
     }
 
     const newPost = {
@@ -254,7 +256,7 @@ router.get('/posts', [
     .optional()
     .isIn(['newest', 'oldest', 'popular', 'trending'])
     .withMessage('Invalid sort option'),
-], optionalAuthMiddleware, async (req, res) => {
+], optionalAuthMiddleware, async (req: Request, res: Response) => {
   try {
     const { forumId, limit = 20, sortBy = 'newest' } = req.query;
 
@@ -337,15 +339,16 @@ router.post('/events', [
   body('location')
     .isObject()
     .withMessage('Location object required'),
-], async (req, res) => {
+], async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({
+      res.status(400).json({
         status: 'error',
         message: 'Validation failed',
         errors: errors.array(),
       });
+      return;
     }
 
     const { title, description, type, date, location, maxCapacity, isOnline = false } = req.body;
@@ -392,26 +395,28 @@ router.post('/events', [
  * @desc    Join an event
  * @access  Private
  */
-router.post('/events/:eventId/join', authMiddleware, async (req, res) => {
+router.post('/events/:eventId/join', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { eventId } = req.params;
-    const userId = req.user?.userId;
+    const userId = (req as any).user?.userId;
 
-    // Find event (mock)
+    // Check if event exists
     const event = MOCK_EVENTS.find(e => e.id === eventId);
     if (!event) {
-      return res.status(404).json({
+      res.status(404).json({
         status: 'error',
         message: 'Event not found',
       });
+      return;
     }
 
     // Check capacity
-    if (event.maxCapacity && event.attendees >= event.maxCapacity) {
-      return res.status(400).json({
+    if (event.attendees >= event.maxCapacity) {
+      res.status(400).json({
         status: 'error',
         message: 'Event is at full capacity',
       });
+      return;
     }
 
     res.json({
@@ -433,6 +438,7 @@ router.post('/events/:eventId/join', authMiddleware, async (req, res) => {
   }
 });
 
+
 /**
  * @route   GET /api/community/nearby
  * @desc    Get nearby mosques and Islamic centers
@@ -449,15 +455,16 @@ router.get('/nearby', [
     .optional()
     .isInt({ min: 1, max: 50 })
     .withMessage('Radius must be between 1 and 50 km'),
-], async (req, res) => {
+], async (req: Request, res: Response): Promise<void> => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({
+      res.status(400).json({
         status: 'error',
         message: 'Validation failed',
         errors: errors.array(),
       });
+      return;
     }
 
     const { latitude, longitude, radius = 10 } = req.query;

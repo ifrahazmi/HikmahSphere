@@ -13,7 +13,7 @@ const getClientInfo = (req: Request) => ({
 });
 
 // Middleware to get admin email (from auth context)
-const getAdminEmail = (req: Request) => {
+const getAdminEmail = (req: Request): string => {
   return (req as any).user?.email || 'system@hikmahsphere.com';
 };
 
@@ -86,34 +86,39 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // ============================================================
-// GET /api/zakat/installments/:id - Get single installment
+// GET /api/zakat/installments/stats/overview - Get installment statistics
 // ============================================================
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/stats/overview', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const installments = await Installment.find().lean();
 
-    const query = mongoose.Types.ObjectId.isValid(id)
-      ? { _id: id }
-      : { installmentId: id };
+    const stats = {
+      total: installments.length,
+      byStatus: {
+        pending: installments.filter((i) => i.status === 'Pending').length,
+        paid: installments.filter((i) => i.status === 'Paid').length,
+        overdue: installments.filter((i) => i.status === 'Overdue').length,
+        cancelled: installments.filter((i) => i.status === 'Cancelled').length,
+        defaulted: installments.filter((i) => i.status === 'Defaulted').length,
+      },
+      totalAmount: installments.reduce((sum, i) => sum + (i.amount || 0), 0),
+      paidAmount: installments
+        .filter((i) => i.status === 'Paid')
+        .reduce((sum, i) => sum + (i.amount || 0), 0),
+      pendingAmount: installments
+        .filter((i) => i.status === 'Pending')
+        .reduce((sum, i) => sum + (i.amount || 0), 0),
+      overdueAmount: installments
+        .filter((i) => i.status === 'Overdue')
+        .reduce((sum, i) => sum + (i.amount || 0), 0),
+    };
 
-    const installment = await Installment.findOne(query)
-      .populate('donorId', 'fullName phone email')
-      .populate('donationId')
-      .lean();
-
-    if (!installment) {
-      return res.status(404).json({
-        success: false,
-        error: 'Installment not found',
-      });
-    }
-
-    res.json({ success: true, data: installment });
+    res.json({ success: true, data: stats });
   } catch (error) {
-    console.error('Error fetching installment:', error);
+    console.error('Error fetching installment stats:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch installment',
+      error: 'Failed to fetch stats',
     });
   }
 });
@@ -121,21 +126,27 @@ router.get('/:id', async (req: Request, res: Response) => {
 // ============================================================
 // GET /api/zakat/installments/donation/:donationId - Get all installments for a donation
 // ============================================================
-router.get('/donation/:donationId', async (req: Request, res: Response) => {
+router.get('/donation/:donationId', async (req: Request, res: Response): Promise<void> => {
   try {
     const { donationId } = req.params;
 
-    const objectId = mongoose.Types.ObjectId.isValid(donationId)
+    if (!donationId) {
+      res.status(400).json({ success: false, error: 'Donation ID is required' });
+      return;
+    }
+
+    const objectId = mongoose.Types.ObjectId.isValid(donationId!)
       ? donationId
       : (
-          await Donation.findOne({ donationId }).select('_id')
-        )?._id.toHexString();
+          (await Donation.findOne({ donationId }).select('_id')) as any
+        )?._id?.toString();
 
     if (!objectId) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         error: 'Donation not found',
       });
+      return;
     }
 
     const installments = await Installment.find({
@@ -160,9 +171,48 @@ router.get('/donation/:donationId', async (req: Request, res: Response) => {
 });
 
 // ============================================================
+// GET /api/zakat/installments/:id - Get single installment
+// ============================================================
+router.get('/:id', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      res.status(400).json({ success: false, error: 'ID is required' });
+      return;
+    }
+
+    const query = mongoose.Types.ObjectId.isValid(id!)
+      ? { _id: id }
+      : { installmentId: id };
+
+    const installment = await Installment.findOne(query)
+      .populate('donorId', 'fullName phone email')
+      .populate('donationId')
+      .lean();
+
+    if (!installment) {
+      res.status(404).json({
+        success: false,
+        error: 'Installment not found',
+      });
+      return;
+    }
+
+    res.json({ success: true, data: installment });
+  } catch (error) {
+    console.error('Error fetching installment:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch installment',
+    });
+  }
+});
+
+// ============================================================
 // POST /api/zakat/installments - Create installments for a donation
 // ============================================================
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const {
       donationId,
@@ -173,26 +223,29 @@ router.post('/', async (req: Request, res: Response) => {
     } = req.body;
 
     if (!donationId || !totalInstallments || totalInstallments < 2) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Donation ID and valid number of installments (2-12) are required',
       });
+      return;
     }
 
     // Verify donation exists
     const donation = await Donation.findById(donationId);
     if (!donation) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         error: 'Donation not found',
       });
+      return;
     }
 
     if (donation.paymentMode !== 'Installment') {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Donation must have payment mode set to Installment',
       });
+      return;
     }
 
     // Delete existing installments if any
@@ -233,8 +286,8 @@ router.post('/', async (req: Request, res: Response) => {
     const savedInstallments = await Installment.insertMany(installments);
 
     // Log the action
-    const { ip, userAgent } = getClientInfo(req);
-    await DonorLog.createLog(
+    const clientInfo4 = getClientInfo(req);
+    await (DonorLog as any).createLog(
       getAdminEmail(req),
       'INSTALLMENT_CREATED',
       'Donation',
@@ -246,8 +299,8 @@ router.post('/', async (req: Request, res: Response) => {
         amountPerInstallment,
         startDate: baseDate,
       },
-      ip,
-      userAgent
+      clientInfo4.ip,
+      clientInfo4.userAgent
     );
 
     res.status(201).json({
@@ -265,30 +318,38 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // ============================================================
-// PUT /api/zakat/installments/:id/paid - Mark installment as paid
+// PUT /api/zakat/installments/:id/mark-paid - Mark installment as paid
 // ============================================================
-router.put('/:id/mark-paid', async (req: Request, res: Response) => {
+router.put('/:id/mark-paid', async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+
+    if (!id) {
+      res.status(400).json({ success: false, error: 'ID is required' });
+      return;
+    }
+
     const { paymentDate, transactionId, receiptId } = req.body;
 
-    const query = mongoose.Types.ObjectId.isValid(id)
+    const query = mongoose.Types.ObjectId.isValid(id!)
       ? { _id: id }
       : { installmentId: id };
 
     const oldInstallment = await Installment.findOne(query);
     if (!oldInstallment) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         error: 'Installment not found',
       });
+      return;
     }
 
     if (oldInstallment.status === 'Paid') {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Installment is already marked as paid',
       });
+      return;
     }
 
     // Mark as paid
@@ -305,28 +366,43 @@ router.put('/:id/mark-paid', async (req: Request, res: Response) => {
 
     // Update donation amounts
     const donation = await Donation.findById(oldInstallment.donationId);
-    if (donation) {
-      const newAmountPaid = (donation.amountPaid || 0) + oldInstallment.amount;
-      const newPendingAmount = donation.totalAmount - newAmountPaid;
-      let newStatus = donation.status;
-
-      if (newAmountPaid > 0 && newAmountPaid < donation.totalAmount) {
-        newStatus = 'Partial';
-      } else if (newAmountPaid >= donation.totalAmount) {
-        newStatus = 'Completed';
-      }
-
-      await Donation.findByIdAndUpdate(donation._id, {
-        amountPaid: newAmountPaid,
-        pendingAmount: newPendingAmount,
-        status: newStatus,
-        lastPaymentDate: new Date(),
+    if (!donation) {
+      res.status(404).json({
+        success: false,
+        error: 'Associated donation not found',
       });
+      return;
     }
 
+    const newAmountPaid = (donation.amountPaid || 0) + oldInstallment.amount;
+    const newPendingAmount = donation.totalAmount - newAmountPaid;
+    let newStatus = donation.status;
+
+    if (newAmountPaid > 0 && newAmountPaid < donation.totalAmount) {
+      newStatus = 'Partial';
+    } else if (newAmountPaid >= donation.totalAmount) {
+      newStatus = 'Completed';
+    }
+
+    // Validate payment doesn't exceed total
+    if (newAmountPaid > donation.totalAmount) {
+      res.status(400).json({
+        success: false,
+        error: `Payment would exceed donation total. Maximum allowed: ${donation.totalAmount - (donation.amountPaid || 0)}`,
+      });
+      return;
+    }
+
+    await Donation.findByIdAndUpdate(donation._id, {
+      amountPaid: newAmountPaid,
+      pendingAmount: newPendingAmount,
+      status: newStatus,
+      lastPaymentDate: new Date(),
+    });
+
     // Log the action
-    const { ip, userAgent } = getClientInfo(req);
-    await DonorLog.createLog(
+    const clientInfo = getClientInfo(req);
+    await (DonorLog as any).createLog(
       getAdminEmail(req),
       'INSTALLMENT_MARKED_PAID',
       'Installment',
@@ -337,8 +413,8 @@ router.put('/:id/mark-paid', async (req: Request, res: Response) => {
         paidDate: paymentDate || new Date(),
         transactionId,
       },
-      ip,
-      userAgent
+      clientInfo.ip,
+      clientInfo.userAgent
     );
 
     res.json({
@@ -358,21 +434,28 @@ router.put('/:id/mark-paid', async (req: Request, res: Response) => {
 // ============================================================
 // PUT /api/zakat/installments/:id/cancel - Cancel installment
 // ============================================================
-router.put('/:id/cancel', async (req: Request, res: Response) => {
+router.put('/:id/cancel', async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+
+    if (!id) {
+      res.status(400).json({ success: false, error: 'ID is required' });
+      return;
+    }
+
     const { reason } = req.body;
 
-    const query = mongoose.Types.ObjectId.isValid(id)
+    const query = mongoose.Types.ObjectId.isValid(id!)
       ? { _id: id }
       : { installmentId: id };
 
     const oldInstallment = await Installment.findOne(query);
     if (!oldInstallment) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         error: 'Installment not found',
       });
+      return;
     }
 
     // Cancel installment
@@ -386,8 +469,8 @@ router.put('/:id/cancel', async (req: Request, res: Response) => {
     );
 
     // Log the action
-    const { ip, userAgent } = getClientInfo(req);
-    await DonorLog.createLog(
+    const clientInfo2 = getClientInfo(req);
+    await (DonorLog as any).createLog(
       getAdminEmail(req),
       'INSTALLMENT_CANCELLED',
       'Installment',
@@ -397,8 +480,8 @@ router.put('/:id/cancel', async (req: Request, res: Response) => {
         installmentNumber: oldInstallment.installmentNumber,
         amount: oldInstallment.amount,
       },
-      ip,
-      userAgent
+      clientInfo2.ip,
+      clientInfo2.userAgent
     );
 
     res.json({
@@ -416,49 +499,17 @@ router.put('/:id/cancel', async (req: Request, res: Response) => {
 });
 
 // ============================================================
-// GET /api/zakat/installments/stats - Get installment statistics
-// ============================================================
-router.get('/stats/overview', async (req: Request, res: Response) => {
-  try {
-    const installments = await Installment.find().lean();
-
-    const stats = {
-      total: installments.length,
-      byStatus: {
-        pending: installments.filter((i) => i.status === 'Pending').length,
-        paid: installments.filter((i) => i.status === 'Paid').length,
-        overdue: installments.filter((i) => i.status === 'Overdue').length,
-        cancelled: installments.filter((i) => i.status === 'Cancelled').length,
-        defaulted: installments.filter((i) => i.status === 'Defaulted').length,
-      },
-      totalAmount: installments.reduce((sum, i) => sum + (i.amount || 0), 0),
-      paidAmount: installments
-        .filter((i) => i.status === 'Paid')
-        .reduce((sum, i) => sum + (i.amount || 0), 0),
-      pendingAmount: installments
-        .filter((i) => i.status === 'Pending')
-        .reduce((sum, i) => sum + (i.amount || 0), 0),
-      overdueAmount: installments
-        .filter((i) => i.status === 'Overdue')
-        .reduce((sum, i) => sum + (i.amount || 0), 0),
-    };
-
-    res.json({ success: true, data: stats });
-  } catch (error) {
-    console.error('Error fetching installment stats:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch stats',
-    });
-  }
-});
-
-// ============================================================
 // PUT /api/zakat/installments/:id - Update installment
 // ============================================================
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+
+    if (!id) {
+      res.status(400).json({ success: false, error: 'ID is required' });
+      return;
+    }
+
     const updates = req.body;
 
     // Don't allow updating certain fields
@@ -468,16 +519,17 @@ router.put('/:id', async (req: Request, res: Response) => {
     delete updates.donationId;
     delete updates.donorId;
 
-    const query = mongoose.Types.ObjectId.isValid(id)
+    const query = mongoose.Types.ObjectId.isValid(id!)
       ? { _id: id }
       : { installmentId: id };
 
     const oldInstallment = await Installment.findOne(query);
     if (!oldInstallment) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         error: 'Installment not found',
       });
+      return;
     }
 
     const updatedInstallment = await Installment.findOneAndUpdate(
@@ -490,8 +542,8 @@ router.put('/:id', async (req: Request, res: Response) => {
     );
 
     // Log the action
-    const { ip, userAgent } = getClientInfo(req);
-    await DonorLog.createLog(
+    const clientInfo3 = getClientInfo(req);
+    await (DonorLog as any).createLog(
       getAdminEmail(req),
       'INSTALLMENT_UPDATED',
       'Installment',
@@ -500,8 +552,8 @@ router.put('/:id', async (req: Request, res: Response) => {
         oldData: oldInstallment.toObject(),
         newData: updatedInstallment?.toObject(),
       },
-      ip,
-      userAgent
+      clientInfo3.ip,
+      clientInfo3.userAgent
     );
 
     res.json({

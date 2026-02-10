@@ -135,7 +135,7 @@ donorLogSchema.statics.createLog = async function(
   details: Record<string, any>,
   ipAddress: string,
   userAgent?: string
-) {
+): Promise<IDonorLog | void> {
   try {
     const newLog = new this({
       adminEmail,

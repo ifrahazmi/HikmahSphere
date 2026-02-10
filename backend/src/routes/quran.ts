@@ -1,8 +1,14 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import { query, validationResult } from 'express-validator';
 import { optionalAuthMiddleware } from '../middleware/auth';
 
 const router = express.Router();
+
+// Interface for Quran API response
+interface QuranApiResponse {
+  code: number;
+  data: any;
+}
 
 // Al-Quran Cloud API Configuration
 const QURAN_API_BASE = 'https://api.alquran.cloud/v1';
@@ -12,10 +18,10 @@ const QURAN_API_BASE = 'https://api.alquran.cloud/v1';
  * @desc    Get list of all 114 surahs
  * @access  Public
  */
-router.get('/surahs', optionalAuthMiddleware, async (req, res) => {
+router.get('/surahs', optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
     const response = await fetch(`${QURAN_API_BASE}/surah`);
-    const data = await response.json();
+    const data = await response.json() as QuranApiResponse;
     
     if (data.code === 200 && data.data) {
       res.json({
@@ -42,31 +48,33 @@ router.get('/surahs', optionalAuthMiddleware, async (req, res) => {
  */
 router.get('/surah/:number', [
   query('edition').optional().isString().withMessage('Edition must be a string'),
-], optionalAuthMiddleware, async (req, res) => {
+], optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({
+      res.status(400).json({
         status: 'error',
         message: 'Validation failed',
         errors: errors.array()
       });
+      return;
     }
 
     const { number } = req.params;
-    const edition = req.query.edition || 'ar.alafasy'; // Default Arabic
+    const edition = (req.query.edition as string) || 'ar.alafasy'; // Default Arabic
     
     // Validate surah number
-    const surahNum = parseInt(number);
+    const surahNum = parseInt(number as string);
     if (isNaN(surahNum) || surahNum < 1 || surahNum > 114) {
-      return res.status(400).json({
+      res.status(400).json({
         status: 'error',
         message: 'Invalid surah number. Must be between 1 and 114'
       });
+      return;
     }
 
     const response = await fetch(`${QURAN_API_BASE}/surah/${surahNum}/${edition}`);
-    const data = await response.json();
+    const data = await response.json() as QuranApiResponse;
     
     if (data.code === 200 && data.data) {
       res.json({
@@ -93,31 +101,33 @@ router.get('/surah/:number', [
  */
 router.get('/surah/:number/editions', [
   query('editions').isString().withMessage('Editions must be comma-separated string'),
-], optionalAuthMiddleware, async (req, res) => {
+], optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({
+      res.status(400).json({
         status: 'error',
         message: 'Validation failed',
         errors: errors.array()
       });
+      return;
     }
 
     const { number } = req.params;
     const editions = req.query.editions as string;
     
     // Validate surah number
-    const surahNum = parseInt(number);
+    const surahNum = parseInt(number as string);
     if (isNaN(surahNum) || surahNum < 1 || surahNum > 114) {
-      return res.status(400).json({
+      res.status(400).json({
         status: 'error',
         message: 'Invalid surah number. Must be between 1 and 114'
       });
+      return;
     }
 
     const response = await fetch(`${QURAN_API_BASE}/surah/${surahNum}/editions/${editions}`);
-    const data = await response.json();
+    const data = await response.json() as QuranApiResponse;
     
     if (data.code === 200 && data.data) {
       res.json({
@@ -144,13 +154,13 @@ router.get('/surah/:number/editions', [
  */
 router.get('/ayah/:reference', [
   query('edition').optional().isString(),
-], optionalAuthMiddleware, async (req, res) => {
+], optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
     const { reference } = req.params;
-    const edition = req.query.edition || 'ar.alafasy';
+    const edition = (req.query.edition as string) || 'ar.alafasy';
     
     const response = await fetch(`${QURAN_API_BASE}/ayah/${reference}/${edition}`);
-    const data = await response.json();
+    const data = await response.json() as QuranApiResponse;
     
     if (data.code === 200 && data.data) {
       res.json({
@@ -178,15 +188,16 @@ router.get('/ayah/:reference', [
 router.get('/search', [
   query('q').notEmpty().withMessage('Search query is required'),
   query('surah').optional().isInt({ min: 1, max: 114 }),
-], optionalAuthMiddleware, async (req, res) => {
+], optionalAuthMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({
+      res.status(400).json({
         status: 'error',
         message: 'Validation failed',
         errors: errors.array()
       });
+      return;
     }
 
     const { q, surah } = req.query;
@@ -197,7 +208,7 @@ router.get('/search', [
     }
     
     const response = await fetch(searchUrl);
-    const data = await response.json();
+    const data = await response.json() as QuranApiResponse;
     
     if (data.code === 200 && data.data) {
       res.json({

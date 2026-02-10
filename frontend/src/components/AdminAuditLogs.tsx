@@ -14,7 +14,7 @@ interface AuditLog {
   adminEmail: string;
   action: string;
   targetType: 'Donor' | 'Donation' | 'Installment';
-  targetId: string;
+  targetId: any;
   details: Record<string, any>;
   ipAddress: string;
   createdAt: string;
@@ -45,22 +45,28 @@ const AdminAuditLogs: React.FC = () => {
     try {
       const token = localStorage.getItem('token');
       
-      // In a real app, you'd pass filters to the API
-      // For now, we'll fetch all and filter client-side
-      const response = await fetch(`${API_URL}/zakat/donors`, {
+      // Fetch from the audit logs endpoint
+      const response = await fetch(`${API_URL}/zakat/audit-logs`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
       const data = await response.json();
 
-      if (data.success) {
-        // This is a placeholder - in production, you'd have a dedicated logs endpoint
+      if (data.status === 'success') {
+        setLogs(data.data || []);
+        setFilteredLogs(data.data || []);
+        if (data.data?.length === 0) {
+          toast.loading('No audit logs found yet', { duration: 2000 });
+        }
+      } else {
         setLogs([]);
-        toast.loading('Audit logs feature - API endpoint being set up', { duration: 2000 });
+        setFilteredLogs([]);
       }
     } catch (error) {
       console.error(error);
       toast.error('Error fetching audit logs');
+      setLogs([]);
+      setFilteredLogs([]);
     } finally {
       setLoading(false);
     }
