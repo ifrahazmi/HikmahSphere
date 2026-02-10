@@ -12,10 +12,10 @@ COPY package*.json ./
 COPY backend/package*.json ./backend/
 COPY frontend/package*.json ./frontend/
 
-# Install dependencies
-RUN npm ci --only=production && \
-    cd backend && npm ci --only=production && \
-    cd ../frontend && npm ci --only=production
+# Install all dependencies (including devDependencies for build)
+RUN npm ci && \
+    cd backend && npm ci && \
+    cd ../frontend && npm ci
 
 # Build stage for backend
 FROM base AS backend-build

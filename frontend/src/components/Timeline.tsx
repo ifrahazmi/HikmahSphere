@@ -49,7 +49,7 @@ const Timeline: React.FC<TimelineProps> = ({ phases }) => {
                         </p>
 
                         <div className="space-y-2">
-                          {phase.features.map((feature, featureIndex) => (
+                          {phase.features?.map((feature, featureIndex) => (
                             <div
                               key={featureIndex}
                               className="flex items-start gap-2 text-sm text-gray-600"
@@ -99,7 +99,7 @@ const Timeline: React.FC<TimelineProps> = ({ phases }) => {
                     </p>
 
                     <div className="space-y-2">
-                      {phase.features.map((feature, featureIndex) => (
+                      {phase.features?.map((feature, featureIndex) => (
                         <div
                           key={featureIndex}
                           className="flex items-start gap-2 text-sm text-gray-600"
