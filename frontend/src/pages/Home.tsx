@@ -1,12 +1,6 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { 
-  ClockIcon, 
-  BookOpenIcon, 
-  CurrencyDollarIcon, 
-  UserGroupIcon,
-  GlobeAltIcon,
-  SparklesIcon,
+import {
   HeartIcon,
   CheckCircleIcon
 } from '@heroicons/react/24/outline';
@@ -55,21 +49,21 @@ const Home: React.FC = () => {
 
   const features = [
     {
-      icon: ClockIcon,
+      icon: '/Smart-Prayer-Times.png',
       title: 'Smart Prayer Times',
       description: 'Ultra-precise prayer calculations with geolocation and astronomical corrections',
       color: 'text-emerald-600',
       bgColor: 'bg-emerald-50',
     },
     {
-      icon: BookOpenIcon,
+      icon: '/Quran-Reader.png',
       title: 'Quran Reader',
       description: 'AI-powered semantic search across 50+ translations with audio recitations',
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
     },
     {
-      icon: CurrencyDollarIcon,
+      icon: '/Zakat.png',
       // Conditional Title/Desc for Admin/Manager
       title: hasManagementAccess ? 'Zakat Management' : 'Zakat Calculator',
       description: hasManagementAccess
@@ -79,21 +73,21 @@ const Home: React.FC = () => {
       bgColor: 'bg-yellow-50',
     },
     {
-      icon: UserGroupIcon,
+      icon: '/Global-Community.png',
       title: 'Global Community',
       description: 'Connect with Muslims worldwide through forums, events, and local groups',
       color: 'text-purple-600',
       bgColor: 'bg-purple-50',
     },
     {
-      icon: GlobeAltIcon,
+      icon: '/Qibla-Finder-AR.png',
       title: 'Qibla Finder AR',
       description: 'Augmented reality Qibla direction with 3D compass and precise calculations',
       color: 'text-teal-600',
       bgColor: 'bg-teal-50',
     },
     {
-      icon: SparklesIcon,
+      icon: '/AI-Scholar-Assistant.png',
       title: 'AI Assistant',
       description: 'Islamic AI assistant for religious questions and guidance',
       color: 'text-gray-400',
@@ -226,8 +220,14 @@ const Home: React.FC = () => {
                 className={`bg-white rounded-xl p-8 shadow-lg hover:shadow-xl transform hover:-translate-y-2 transition-all duration-300 ${feature.disabled ? 'opacity-60' : ''}`}
               >
                 <div className="relative">
-                  <div className={`w-16 h-16 ${feature.bgColor} rounded-lg flex items-center justify-center mb-6`}>
-                    <feature.icon className={`w-8 h-8 ${feature.color}`} />
+                  <div className={`w-16 h-16 ${feature.bgColor} rounded-lg flex items-center justify-center mb-6 overflow-hidden`}>
+                    {typeof feature.icon === 'string' && (feature.icon.includes('.png') || feature.icon.includes('.jpg') || feature.icon.includes('.svg')) ? (
+                      <img src={feature.icon} alt={feature.title} className="w-14 h-14 object-contain" />
+                    ) : typeof feature.icon === 'string' ? (
+                      <span className="text-3xl">{feature.icon}</span>
+                    ) : (
+                      React.createElement(feature.icon as any, { className: `w-8 h-8 ${feature.color}` })
+                    )}
                   </div>
                   {feature.disabled && (
                     <div className="absolute top-0 right-0 bg-gray-400 text-white text-xs font-semibold px-3 py-1 rounded-full">

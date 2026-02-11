@@ -306,6 +306,11 @@ const About: React.FC = () => {
                     className="w-full h-full object-cover"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
+                  {dev.id === 'hiring' && (
+                    <div className="absolute top-4 right-4 bg-emerald-500 text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg">
+                      We're Hiring
+                    </div>
+                  )}
                 </div>
 
                 {/* Developer Info */}
@@ -417,7 +422,11 @@ const About: React.FC = () => {
                   key={index}
                   className="bg-white/10 backdrop-blur-sm rounded-xl p-8 border border-white/20 hover:border-white/40 hover:bg-white/15 transition-all duration-300"
                 >
-                  <Icon className="w-12 h-12 text-white mb-4" />
+                  {typeof Icon === 'string' && (Icon.includes('.png') || Icon.includes('.jpg') || Icon.includes('.svg')) ? (
+                    <img src={Icon} alt={option.title} className="w-16 h-16 mb-4 object-contain filter brightness-0 invert" />
+                  ) : (
+                    <Icon className="w-12 h-12 text-white mb-4" />
+                  )}
                   <h3 className="text-2xl font-bold mb-3">
                     {option.title}
                   </h3>

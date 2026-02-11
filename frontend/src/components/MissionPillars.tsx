@@ -36,8 +36,12 @@ const MissionPillars: React.FC<MissionPillarsProps> = ({
                 className="bg-white rounded-xl p-8 shadow-lg hover:shadow-xl transform hover:-translate-y-2 transition-all duration-300 border border-emerald-100"
               >
                 <div className="flex items-start gap-4">
-                  <div className="w-16 h-16 bg-emerald-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <span className="text-3xl">{pillar.icon}</span>
+                  <div className="w-16 h-16 bg-emerald-50 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
+                    {typeof pillar.icon === 'string' && (pillar.icon.includes('.png') || pillar.icon.includes('.jpg') || pillar.icon.includes('.svg')) ? (
+                      <img src={pillar.icon} alt={pillar.title} className="w-14 h-14 object-contain" />
+                    ) : (
+                      <span className="text-3xl">{pillar.icon}</span>
+                    )}
                   </div>
                   <div className="flex-1">
                     <h3 className="text-xl font-semibold text-gray-900 mb-3">
