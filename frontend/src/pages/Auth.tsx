@@ -100,7 +100,7 @@ const Auth: React.FC = () => {
       <div className="max-w-md w-full space-y-8">
         <div>
           <div className="mx-auto h-24 w-24 flex items-center justify-center rounded-full bg-white shadow-md overflow-hidden p-2">
-             <img src="/nav_logo.jpeg" alt="HikmahSphere Logo" className="h-full w-full object-cover" />
+             <img src="/logo.png" alt="HikmahSphere Logo" className="h-full w-full object-cover" />
           </div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
             {showPasswordChange ? 'Change Password' : (isLogin ? 'Sign in to your account' : 'Create your account')}

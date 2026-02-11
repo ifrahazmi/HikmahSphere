@@ -1,7 +1,6 @@
 import React from 'react';
 import { HeartIcon } from '@heroicons/react/24/solid';
 import { Link } from 'react-router-dom';
-import logo from '../logo-bgremov.png';
 
 const Footer: React.FC = () => {
   const currentYear = new Date().getFullYear();
@@ -13,7 +12,7 @@ const Footer: React.FC = () => {
           <div className="col-span-1 md:col-span-2">
             <div className="flex items-center mb-4">
               <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center">
-                <img src={logo} alt="HikmahSphere Logo" className="w-48 h-48 object-contain" />
+                <img src="/logo.png" alt="HikmahSphere Logo" className="w-48 h-48 object-contain" />
               </div>
               <span className="ml-3 text-xl font-bold text-emerald-400">HikmahSphere</span>
             </div>

@@ -148,7 +148,7 @@ const Home: React.FC = () => {
           <div className="text-center">
             <div className="flex justify-center mb-8">
               <div className="p-4 bg-white rounded-full shadow-lg">
-                <img src="/logo-home_big.png" alt="HikmahSphere Logo" className="w-48 h-48 object-contain" />
+                <img src="/logo.png" alt="HikmahSphere Logo" className="w-48 h-48 object-contain" />
               </div>
             </div>
             

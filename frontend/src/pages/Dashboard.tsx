@@ -228,7 +228,12 @@ const Dashboard: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 pt-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">Super Admin Dashboard</h1>
+        <div className="flex items-center mb-8">
+          <div className="w-12 h-12 flex items-center justify-center overflow-hidden rounded-full bg-white shadow-md mr-4">
+            <img src="/logo.png" alt="HikmahSphere Logo" className="w-full h-full object-cover" />
+          </div>
+          <h1 className="text-3xl font-bold text-gray-900">Super Admin Dashboard</h1>
+        </div>
         
         <div className="bg-white rounded-lg shadow mb-8">
             <nav className="flex border-b border-gray-200">

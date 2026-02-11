@@ -8,6 +8,7 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import path from 'path';
 import User from './models/User';
 import { authMiddleware, superAdminMiddleware } from './middleware/auth';
+import { requestLogger, errorLogger, logStartup, logDatabaseConnection } from './middleware/logger';
 
 // Import routes
 import authRoutes from './routes/auth';
@@ -17,6 +18,10 @@ import zakatRoutes from './routes/zakat';
 import communityRoutes from './routes/community';
 
 // Load environment variables
+// Try to load from root .env for local development, fallback to Docker env vars
+const envPath = path.join(process.cwd(), '../.env');
+dotenv.config({ path: envPath });
+// Also try current directory as fallback
 dotenv.config();
 
 const app = express();
@@ -63,6 +68,9 @@ app.use(cors({
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Request logging middleware
+app.use(requestLogger);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -204,10 +212,13 @@ app.use((req, res) => {
   });
 });
 
+// Error logging middleware
+app.use(errorLogger);
+
 // Global error handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error(err.stack);
-  
+
   res.status(err.status || 500).json({
     status: 'error',
     message: err.message || 'Internal Server Error',
@@ -256,16 +267,14 @@ const seedAdminUser = async () => {
 // MongoDB connection
 const connectDB = async () => {
   try {
-    // Use Docker MongoDB or provided URI
-    const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/hikmahsphere';
-    
-    console.log('Connecting to MongoDB at:', mongoURI.replace(/\/\/([^:]+):([^@]+)@/, '//$1:****@'));
-    
+    // Use MONGODB_URI_LOCAL for local dev, MONGODB_URI for Docker, or default
+    const mongoURI = process.env.MONGODB_URI_LOCAL || process.env.MONGODB_URI || 'mongodb://localhost:27017/hikmahsphere';
+
     await mongoose.connect(mongoURI, {
       // Modern MongoDB connection options
     });
-    
-    console.log('🚀 MongoDB connected successfully!');
+
+    logDatabaseConnection(mongoURI);
     await seedAdminUser();
 
   } catch (error) {
@@ -278,11 +287,9 @@ const connectDB = async () => {
 const startServer = async () => {
   try {
     await connectDB();
-    
+
     app.listen(PORT, '0.0.0.0', () => {
-      console.log(`🚀 HikmahSphere API Server running on port ${PORT}`);
-      console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`📚 API Documentation: http://localhost:${PORT}/docs`);
+      logStartup(PORT);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);

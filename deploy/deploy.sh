@@ -111,19 +111,19 @@ case $DEPLOY_TYPE in
         fi
         
         print_message "Stopping and removing existing containers..."
-        docker-compose down -v 2>/dev/null || true
-        
+        docker compose down -v 2>/dev/null || true
+
         print_message "Building and starting services..."
-        docker-compose up -d --build
+        docker compose up -d --build
         ;;
     2)
         print_message "Updating deployment (keeping data)..."
-        docker-compose down
-        docker-compose up -d --build
+        docker compose down
+        docker compose up -d --build
         ;;
     3)
         print_message "Starting in development mode..."
-        docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+        docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
         ;;
     *)
         print_error "Invalid choice. Exiting."
@@ -139,14 +139,14 @@ sleep 10
 print_message "Checking service health..."
 
 # Check MongoDB
-if docker-compose exec -T mongodb mongosh --eval "db.adminCommand('ping')" &> /dev/null; then
+if docker compose exec -T mongodb mongosh --eval "db.adminCommand('ping')" &> /dev/null; then
     print_message "✓ MongoDB is healthy"
 else
     print_warning "⚠ MongoDB health check failed (might still be starting)"
 fi
 
 # Check Redis
-if docker-compose exec -T redis redis-cli ping &> /dev/null; then
+if docker compose exec -T redis redis-cli ping &> /dev/null; then
     print_message "✓ Redis is healthy"
 else
     print_warning "⚠ Redis health check failed (might still be starting)"
@@ -180,12 +180,12 @@ echo "   MongoDB: mongodb://localhost:27017"
 echo "   Redis: localhost:6379"
 echo ""
 print_info "📋 Useful commands:"
-echo "   View logs:        docker-compose logs -f"
-echo "   Stop services:    docker-compose stop"
-echo "   Start services:   docker-compose start"
-echo "   Restart services: docker-compose restart"
-echo "   Remove all:       docker-compose down -v"
-echo "   View status:      docker-compose ps"
+echo "   View logs:        docker compose logs -f"
+echo "   Stop services:    docker compose stop"
+echo "   Start services:   docker compose start"
+echo "   Restart services: docker compose restart"
+echo "   Remove all:       docker compose down -v"
+echo "   View status:      docker compose ps"
 echo ""
 print_info "📊 Admin credentials (default):"
 echo "   Email: admin@hikmah.com"

@@ -109,11 +109,20 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
           <div className="flex items-center">
             <Link to="/" className="flex-shrink-0 flex items-center">
               <div className="w-10 h-10 flex items-center justify-center overflow-hidden rounded-full bg-white">
-                <img src="/nav_logo.jpeg" alt="HikmahSphere Logo" className="h-full w-full object-cover" />
+                <img src="/logo.png" alt="HikmahSphere Logo" className="h-full w-full object-cover" />
               </div>
-              <span className={`ml-3 text-xl font-bold ${
-                isDark ? 'text-white' : 'text-gray-900'
-              }`}>HikmahSphere</span>
+              <div className="ml-3 flex items-baseline">
+                <span className={`text-xl font-bold ${
+                  isDark ? 'text-white' : 'text-gray-900'
+                }`}>HikmahSphere</span>
+                <span className={`ml-2 text-xs font-semibold px-2 py-1 rounded-full ${
+                  isDark
+                    ? 'bg-emerald-900 text-emerald-300'
+                    : 'bg-emerald-100 text-emerald-700'
+                } -translate-y-1`}>
+                  v1.0 Beta
+                </span>
+              </div>
             </Link>
           </div>
 

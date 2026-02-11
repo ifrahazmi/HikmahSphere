@@ -1,0 +1,29 @@
+The fix: Made both ports public:
+
+gh codespace ports visibility 5000:public
+gh codespace ports visibility 3000:public
+
+
+The issue is the backend is listening on IPv6 but the healthcheck is trying IPv4. Let me test with 127.0.0.1:
+
+Found it! The issue is IPv6 vs IPv4:
+
+localhost resolves to [::1] (IPv6) inside the container
+Backend only listens on 127.0.0.1 (IPv4)
+Connection to [::1] gets refused
+Fix: Change the healthcheck to use 127.0.0.1 instead of localhost:
+
+
+Supported version
+@tasneemfatima-agent ➜ /workspaces/HikmahSphere (main) $ npm --version
+11.6.2
+@tasneemfatima-agent ➜ /workspaces/HikmahSphere (main) $ node --version
+v24.11.1
+
+
+
+Share the download link to Codespaces
+
+# In Codespaces, create a temporary share link
+cd /workspaces/HikmahSphere
+python3 -m http.server 8000 & echo "Download from: https://your-codespace-name-8000.app.github.dev/Hikmahsphere-Build-v1.0-Beta.tar.gz"

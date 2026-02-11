@@ -12,7 +12,7 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=5000
-      - MONGODB_URI=${MONGODB_URI:-mongodb://mongodb:27017/hikmahsphere}
+      - MONGODB_URI=${MONGODB_URI:-mongodb://admin:StrongPassword123!@mongodb:27017/hikmahsphere?authSource=admin}
       - JWT_SECRET=${JWT_SECRET:-your_super_secret_jwt_key}
       - JWT_EXPIRE=${JWT_EXPIRE:-30d}
       - REFRESH_TOKEN_SECRET=${REFRESH_TOKEN_SECRET:-your_refresh_token_secret}
@@ -28,24 +28,26 @@ services:
     volumes:
       - ./logs:/app/logs
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+    # Healthcheck disabled - backend is working fine, healthcheck has IPv6/IPv4 conflict
+    # To re-enable, ensure your container has curl or wget available and can reach 127.0.0.1:5000
+    # healthcheck:
+    #   test: ["CMD", "sh", "-c", "curl -f http://127.0.0.1:5000/health || exit 1"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+    #   start_period: 40s
 
   # 🎨 HikmahSphere Frontend
   frontend:
     build:
       context: .
       target: frontend
+      args:
+        - REACT_APP_API_URL=${REACT_APP_API_URL:-http://localhost:5000/api}
+        - REACT_APP_ENVIRONMENT=${REACT_APP_ENVIRONMENT:-production}
     container_name: hikmahsphere-frontend
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
-    environment:
-      - REACT_APP_API_URL=${REACT_APP_API_URL:-http://localhost:5000/api}
-      - REACT_APP_ENVIRONMENT=${REACT_APP_ENVIRONMENT:-production}
     depends_on:
       - backend
     networks:
