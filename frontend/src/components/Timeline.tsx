@@ -6,6 +6,21 @@ interface TimelineProps {
 }
 
 const Timeline: React.FC<TimelineProps> = ({ phases }) => {
+  const safePhases = Array.isArray(phases) ? phases : [];
+
+  const renderPhaseIcon = (icon: any, fallback: string = '🧭') => {
+    if (typeof icon === 'function') {
+      return React.createElement(icon, { className: 'w-6 h-6 text-emerald-600' });
+    }
+    if (typeof icon === 'string') {
+      if (icon.includes('.png') || icon.includes('.jpg') || icon.includes('.svg')) {
+        return <img src={icon} alt="Timeline icon" className="w-6 h-6 object-contain" />;
+      }
+      return <span className="text-base leading-none">{icon}</span>;
+    }
+    return <span className="text-base leading-none">{fallback}</span>;
+  };
+
   return (
     <section className="py-20 bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -26,13 +41,12 @@ const Timeline: React.FC<TimelineProps> = ({ phases }) => {
 
             {/* Timeline Cards */}
             <div className="grid grid-cols-3 gap-6 relative z-10">
-              {phases.map((phase, index) => {
-                const Icon = phase.icon;
+              {safePhases.map((phase, index) => {
                 return (
                   <div key={index} className="flex flex-col items-center">
                     {/* Circle Node */}
                     <div className="w-12 h-12 bg-white border-4 border-emerald-600 rounded-full flex items-center justify-center mb-8 shadow-lg">
-                      <Icon className="w-6 h-6 text-emerald-600" />
+                      {renderPhaseIcon(phase.icon)}
                     </div>
 
                     {/* Card */}
@@ -42,7 +56,7 @@ const Timeline: React.FC<TimelineProps> = ({ phases }) => {
                           {phase.title}
                         </h3>
                         <p className="text-emerald-600 font-semibold mb-4">
-                          {phase.period}
+                          {phase.period || phase.phase}
                         </p>
                         <p className="text-gray-700 mb-6 leading-relaxed">
                           {phase.description}
@@ -70,12 +84,11 @@ const Timeline: React.FC<TimelineProps> = ({ phases }) => {
 
         {/* Mobile Timeline - Vertical */}
         <div className="lg:hidden space-y-8">
-          {phases.map((phase, index) => {
-            const Icon = phase.icon;
+          {safePhases.map((phase, index) => {
             return (
               <div key={index} className="relative">
                 {/* Vertical Line */}
-                {index < phases.length - 1 && (
+                {index < safePhases.length - 1 && (
                   <div className="absolute left-6 top-20 bottom-0 w-1 bg-gradient-to-b from-emerald-400 to-teal-400"></div>
                 )}
 
@@ -83,7 +96,7 @@ const Timeline: React.FC<TimelineProps> = ({ phases }) => {
                 <div className="flex gap-4">
                   {/* Circle Node */}
                   <div className="w-12 h-12 bg-white border-4 border-emerald-600 rounded-full flex items-center justify-center flex-shrink-0 shadow-lg relative z-10">
-                    <Icon className="w-6 h-6 text-emerald-600" />
+                    {renderPhaseIcon(phase.icon)}
                   </div>
 
                   {/* Card */}
@@ -92,7 +105,7 @@ const Timeline: React.FC<TimelineProps> = ({ phases }) => {
                       {phase.title}
                     </h3>
                     <p className="text-emerald-600 font-semibold mb-3">
-                      {phase.period}
+                      {phase.period || phase.phase}
                     </p>
                     <p className="text-gray-700 mb-4 leading-relaxed">
                       {phase.description}

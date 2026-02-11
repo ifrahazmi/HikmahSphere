@@ -35,8 +35,16 @@ const About: React.FC = () => {
   const isManager = user && user.role === 'manager';
   const hasManagementAccess = isAdmin || isManager;
 
+  const safeSpiritualFeatures = Array.isArray(spiritualFeatures) ? spiritualFeatures : [];
+  const storyParagraphs = Array.isArray(storyContent?.originStory) ? storyContent.originStory : [];
+  const safePromises = Array.isArray(promises) ? promises : [];
+  const safeDevelopers = Array.isArray(developers) ? developers : [];
+  const safeJourneyOptions = Array.isArray(journeyOptions) ? journeyOptions : [];
+  const isComponentIcon = (icon: unknown): icon is React.ElementType =>
+    typeof icon === 'function' || (typeof icon === 'object' && icon !== null && '$$typeof' in icon);
+
   // Create features list with conditional Zakat description
-  const featuresWithConditionalZakat: SpiritualFeature[] = spiritualFeatures.map((feature) => {
+  const featuresWithConditionalZakat: SpiritualFeature[] = safeSpiritualFeatures.map((feature) => {
     if (feature.id === 'zakat') {
       return {
         ...feature,
@@ -54,6 +62,9 @@ const About: React.FC = () => {
   }, []);
 
   const handleNavigate = (path: string) => {
+    if (!path) {
+      return;
+    }
     if (path.startsWith('http')) {
       window.open(path, '_blank');
     } else {
@@ -144,7 +155,7 @@ const About: React.FC = () => {
                 {storyContent.problemStatement}
               </p>
 
-              {storyContent.originStory.map((paragraph, index) => (
+              {storyParagraphs.map((paragraph, index) => (
                 <p key={index} className="text-gray-700 leading-relaxed">
                   {paragraph}
                 </p>
@@ -249,23 +260,30 @@ const About: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {promises.map((promise) => {
-              const Icon = promise.icon;
-              const bgClass = promise.color.replace('text-', 'bg-') + '-50';
+            {safePromises.map((promise, index) => {
+              const colorClass = promise.color || 'text-emerald-600';
+              const bgClass = colorClass.replace('text-', 'bg-') + '-50';
+              const description = promise.description || promise.text || '';
+              const icon = promise.icon;
+              const key = promise.id || promise.title || `promise-${index}`;
 
               return (
                 <div
-                  key={promise.id}
+                  key={key}
                   className="bg-gradient-to-br from-white to-gray-50 rounded-xl p-8 border border-gray-200 shadow-lg hover:shadow-xl transition-all duration-300"
                 >
                   <div className={`w-16 h-16 ${bgClass} rounded-lg flex items-center justify-center mb-6`}>
-                    <Icon className={`w-8 h-8 ${promise.color}`} />
+                    {isComponentIcon(icon) ? (
+                      React.createElement(icon, { className: `w-8 h-8 ${colorClass}` })
+                    ) : (
+                      <span className="text-3xl leading-none">{icon || '✅'}</span>
+                    )}
                   </div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-3">
                     {promise.title}
                   </h3>
                   <p className="text-gray-600">
-                    {promise.description}
+                    {description}
                   </p>
                 </div>
               );
@@ -293,18 +311,24 @@ const About: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 lg:max-w-3xl mx-auto">
-            {developers.map((dev) => (
+            {safeDevelopers.map((dev, devIndex) => (
               <div
-                key={dev.id}
+                key={dev.id || dev.name || `developer-${devIndex}`}
                 className="bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden transform hover:-translate-y-1 w-full"
               >
                 {/* Developer Image */}
                 <div className="relative h-96 overflow-hidden bg-gradient-to-br from-emerald-400 to-teal-500">
-                  <img
-                    src={dev.image}
-                    alt={dev.name}
-                    className="w-full h-full object-cover"
-                  />
+                  {dev.image ? (
+                    <img
+                      src={dev.image}
+                      alt={dev.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-white text-3xl font-bold">
+                      {(dev.name || 'HS').slice(0, 2).toUpperCase()}
+                    </div>
+                  )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
                   {dev.id === 'hiring' && (
                     <div className="absolute top-4 right-4 bg-emerald-500 text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg">
@@ -332,7 +356,7 @@ const About: React.FC = () => {
                       Expertise
                     </h4>
                     <div className="flex flex-wrap gap-2">
-                      {dev.expertise.map((skill, index) => (
+                      {(Array.isArray(dev.expertise) ? dev.expertise : []).map((skill, index) => (
                         <span
                           key={index}
                           className="inline-block bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-xs font-semibold"
@@ -414,30 +438,38 @@ const About: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {journeyOptions.map((option, index) => {
-              const Icon = option.icon;
+            {safeJourneyOptions.map((option, index) => {
+              const icon = option.icon;
+              const actionPath = option.buttonAction || option.path || '/';
+              const buttonLabel = option.buttonText || 'Get Started';
+              const title = option.title || 'Journey Option';
+              const description = option.description || '';
 
               return (
                 <div
                   key={index}
                   className="bg-white/10 backdrop-blur-sm rounded-xl p-8 border border-white/20 hover:border-white/40 hover:bg-white/15 transition-all duration-300"
                 >
-                  {typeof Icon === 'string' && (Icon.includes('.png') || Icon.includes('.jpg') || Icon.includes('.svg')) ? (
-                    <img src={Icon} alt={option.title} className="w-16 h-16 mb-4 object-contain filter brightness-0 invert" />
+                  {isComponentIcon(icon) ? (
+                    React.createElement(icon, { className: 'w-12 h-12 text-white mb-4' })
+                  ) : typeof icon === 'string' && (icon.includes('.png') || icon.includes('.jpg') || icon.includes('.svg')) ? (
+                    <img src={icon} alt={title} className="w-16 h-16 mb-4 object-contain filter brightness-0 invert" />
+                  ) : typeof icon === 'string' ? (
+                    <span className="block text-4xl mb-4 leading-none">{icon}</span>
                   ) : (
-                    <Icon className="w-12 h-12 text-white mb-4" />
+                    <span className="block text-4xl mb-4 leading-none">🌟</span>
                   )}
                   <h3 className="text-2xl font-bold mb-3">
-                    {option.title}
+                    {title}
                   </h3>
                   <p className="text-emerald-100 mb-6 leading-relaxed">
-                    {option.description}
+                    {description}
                   </p>
                   <button
-                    onClick={() => handleNavigate(option.buttonAction)}
+                    onClick={() => handleNavigate(actionPath)}
                     className="w-full px-6 py-3 bg-white text-emerald-600 font-semibold rounded-lg hover:bg-emerald-50 transform hover:scale-105 transition-all duration-200 cursor-pointer"
                   >
-                    {option.buttonText}
+                    {buttonLabel}
                   </button>
                 </div>
               );
