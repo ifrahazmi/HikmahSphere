@@ -9,6 +9,7 @@ import path from 'path';
 import User from './models/User';
 import { authMiddleware, superAdminMiddleware } from './middleware/auth';
 import { requestLogger, errorLogger, logStartup, logDatabaseConnection } from './middleware/logger';
+import redisClient from './config/redis'; // Import Redis client
 
 // Import routes
 import authRoutes from './routes/auth';
@@ -91,14 +92,61 @@ app.get('/', (req, res) => {
 });
 
 // Health check endpoint
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
+  let redisStatus = 'disconnected';
+  try {
+      if (redisClient.isOpen) {
+          await redisClient.ping();
+          redisStatus = 'connected';
+      }
+  } catch (error) {
+      redisStatus = 'error';
+  }
+
   res.status(200).json({
     status: 'success',
     message: 'HikmahSphere API is running! 🕌',
     timestamp: new Date().toISOString(),
     version: '1.0.0',
+    services: {
+        database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+        redis: redisStatus
+    }
   });
 });
+
+// --- REDIS TEST ROUTE START ---
+app.get('/api/test/redis', async (req, res) => {
+    try {
+        if (!redisClient.isOpen) {
+            res.status(503).json({ status: 'error', message: 'Redis not connected' });
+            return;
+        }
+
+        // Increment a simple counter
+        const count = await redisClient.incr('test_counter');
+        
+        // Store a test object
+        await redisClient.hSet('test_hash', {
+            last_visit: new Date().toISOString(),
+            status: 'working'
+        });
+
+        const hash = await redisClient.hGetAll('test_hash');
+
+        res.json({
+            status: 'success',
+            message: 'Redis is working perfectly! 🚀',
+            data: {
+                visit_count: count,
+                stored_data: hash
+            }
+        });
+    } catch (error: any) {
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+});
+// --- REDIS TEST ROUTE END ---
 
 // Helper tool to view users in database
 app.get('/api/tools/users', async (req, res) => {
@@ -286,6 +334,18 @@ const connectDB = async () => {
 // Start server
 const startServer = async () => {
   try {
+    // Check Redis connection
+    if (redisClient.isOpen) {
+        console.log('✅ Redis connection confirmed.');
+    } else {
+        console.log('⚠️ Redis not yet connected, attempting...');
+        try {
+            await redisClient.connect();
+        } catch (e) {
+            console.error('⚠️ Could not connect to Redis at startup (non-fatal for now)');
+        }
+    }
+
     await connectDB();
 
     app.listen(PORT, '0.0.0.0', () => {
@@ -313,7 +373,10 @@ process.on('uncaughtException', (err: Error) => {
 process.on('SIGTERM', async () => {
   console.log('👋 SIGTERM received. Shutting down gracefully...');
   await mongoose.connection.close();
-  console.log('🔒 MongoDB connection closed.');
+  if (redisClient.isOpen) {
+      await redisClient.quit();
+  }
+  console.log('🔒 MongoDB and Redis connections closed.');
   process.exit(0);
 });
 
