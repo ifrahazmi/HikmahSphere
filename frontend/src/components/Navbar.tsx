@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import NotificationBell from './Notifications/NotificationBell'; // Import the new NotificationBell
 import { 
   Bars3Icon, 
   XMarkIcon,
@@ -148,66 +149,71 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
 
           <div className="hidden md:flex items-center space-x-4">
             {user ? (
-              <div className="relative" ref={profileMenuRef}>
-                <button
-                  onClick={() => setIsProfileOpen(!isProfileOpen)}
-                  className={`flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 rounded-md p-2 transition-colors duration-200 ${
-                    isDark
-                      ? 'text-gray-300 hover:text-emerald-400'
-                      : 'text-gray-700 hover:text-emerald-600'
-                  }`}
-                >
-                  <UserIcon className="h-6 w-6" />
-                  <span className="text-sm font-medium">{user.name}</span>
-                </button>
+              <>
+                {/* Notification Bell */}
+                <NotificationBell />
 
-                {isProfileOpen && (
-                  <div className={`absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 z-50 animate-fade-in-down ${
-                    isDark ? 'bg-gray-700' : 'bg-white'
-                  }`}>
-                    <Link
-                      to="/profile"
-                      className={`flex items-center px-4 py-2 text-sm ${
-                        isDark
-                          ? 'text-gray-300 hover:bg-gray-600'
-                          : 'text-gray-700 hover:bg-gray-100'
-                      }`}
-                      onClick={() => setIsProfileOpen(false)}
-                    >
-                      <UserIcon className="h-4 w-4 mr-2" />
-                      Profile
-                    </Link>
-                    
-                    {/* Dashboard only for Super Admin */}
-                    {isSuperAdmin && (
-                        <Link
-                        to="/dashboard"
+                <div className="relative" ref={profileMenuRef}>
+                  <button
+                    onClick={() => setIsProfileOpen(!isProfileOpen)}
+                    className={`flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 rounded-md p-2 transition-colors duration-200 ${
+                      isDark
+                        ? 'text-gray-300 hover:text-emerald-400'
+                        : 'text-gray-700 hover:text-emerald-600'
+                    }`}
+                  >
+                    <UserIcon className="h-6 w-6" />
+                    <span className="text-sm font-medium">{user.name}</span>
+                  </button>
+
+                  {isProfileOpen && (
+                    <div className={`absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 z-50 animate-fade-in-down ${
+                      isDark ? 'bg-gray-700' : 'bg-white'
+                    }`}>
+                      <Link
+                        to="/profile"
                         className={`flex items-center px-4 py-2 text-sm ${
                           isDark
                             ? 'text-gray-300 hover:bg-gray-600'
                             : 'text-gray-700 hover:bg-gray-100'
                         }`}
                         onClick={() => setIsProfileOpen(false)}
-                        >
-                        <Cog6ToothIcon className="h-4 w-4 mr-2" />
-                        Dashboard
-                        </Link>
-                    )}
-                    
-                    <button
-                      onClick={handleLogout}
-                      className={`flex items-center w-full px-4 py-2 text-sm ${
-                        isDark
-                          ? 'text-gray-300 hover:bg-gray-600'
-                          : 'text-gray-700 hover:bg-gray-100'
-                      }`}
-                    >
-                      <ArrowRightOnRectangleIcon className="h-4 w-4 mr-2" />
-                      Sign out
-                    </button>
-                  </div>
-                )}
-              </div>
+                      >
+                        <UserIcon className="h-4 w-4 mr-2" />
+                        Profile
+                      </Link>
+                      
+                      {/* Dashboard only for Super Admin */}
+                      {isSuperAdmin && (
+                          <Link
+                          to="/dashboard"
+                          className={`flex items-center px-4 py-2 text-sm ${
+                            isDark
+                              ? 'text-gray-300 hover:bg-gray-600'
+                              : 'text-gray-700 hover:bg-gray-100'
+                          }`}
+                          onClick={() => setIsProfileOpen(false)}
+                          >
+                          <Cog6ToothIcon className="h-4 w-4 mr-2" />
+                          Dashboard
+                          </Link>
+                      )}
+                      
+                      <button
+                        onClick={handleLogout}
+                        className={`flex items-center w-full px-4 py-2 text-sm ${
+                          isDark
+                            ? 'text-gray-300 hover:bg-gray-600'
+                            : 'text-gray-700 hover:bg-gray-100'
+                        }`}
+                      >
+                        <ArrowRightOnRectangleIcon className="h-4 w-4 mr-2" />
+                        Sign out
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
             ) : (
               <Link
                 to="/auth"
@@ -218,7 +224,10 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
             )}
           </div>
 
-          <div className="md:hidden flex items-center">
+          <div className="md:hidden flex items-center gap-2">
+            {/* Mobile Notification Bell */}
+            {user && <NotificationBell />}
+            
             <button
               onClick={() => setIsOpen(!isOpen)}
               className={`focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 rounded-md p-2 transition-colors duration-200 ${

@@ -14,6 +14,7 @@ import { useAuth } from '../hooks/useAuth';
 import { API_URL } from '../config';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
+import AdminNotificationPanel from '../components/Notifications/AdminNotificationPanel'; // Import Notification Panel
 
 interface ZakatTransaction {
   _id: string;
@@ -236,24 +237,30 @@ const Dashboard: React.FC = () => {
         </div>
         
         <div className="bg-white rounded-lg shadow mb-8">
-            <nav className="flex border-b border-gray-200">
+            <nav className="flex border-b border-gray-200 overflow-x-auto">
                 <button
                     onClick={() => setActiveTab('overview')}
-                    className={`px-6 py-4 text-sm font-medium ${activeTab === 'overview' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
+                    className={`px-6 py-4 text-sm font-medium whitespace-nowrap ${activeTab === 'overview' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
                 >
                     Overview
                 </button>
                 <button
                     onClick={() => setActiveTab('users')}
-                    className={`px-6 py-4 text-sm font-medium ${activeTab === 'users' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
+                    className={`px-6 py-4 text-sm font-medium whitespace-nowrap ${activeTab === 'users' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
                 >
                     User Management
                 </button>
                 <button
                     onClick={() => setActiveTab('zakat')}
-                    className={`px-6 py-4 text-sm font-medium ${activeTab === 'zakat' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
+                    className={`px-6 py-4 text-sm font-medium whitespace-nowrap ${activeTab === 'zakat' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
                 >
                     Zakat Management
+                </button>
+                <button
+                    onClick={() => setActiveTab('notifications')}
+                    className={`px-6 py-4 text-sm font-medium whitespace-nowrap ${activeTab === 'notifications' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                    Notifications
                 </button>
             </nav>
         </div>
@@ -272,6 +279,15 @@ const Dashboard: React.FC = () => {
                 <div className="bg-white p-6 rounded-lg shadow border-l-4 border-purple-500">
                     <h3 className="text-gray-500 text-sm font-medium">Current Balance</h3>
                     <p className="text-2xl font-bold text-emerald-600 mt-2">₹{zakatStats.currentBalance.toLocaleString('en-IN')}</p>
+                </div>
+            </div>
+        )}
+
+        {/* Notifications Tab */}
+        {activeTab === 'notifications' && (
+            <div className="space-y-8">
+                <div className="max-w-4xl mx-auto">
+                    <AdminNotificationPanel />
                 </div>
             </div>
         )}
