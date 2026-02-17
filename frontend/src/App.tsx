@@ -2,8 +2,8 @@ import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
-import { Toaster, toast } from 'react-hot-toast';
-import { requestForToken, onMessageListener } from './firebase';
+import { Toaster } from 'react-hot-toast';
+import { requestForToken } from './firebase';
 import axios from 'axios'; // Import axios
 
 // Components
@@ -28,6 +28,7 @@ import { useAuth, AuthProvider } from './hooks/useAuth';
 
 // Contexts
 import { QuranProvider } from './contexts/QuranContext';
+import { NotificationProvider } from './contexts/NotificationContext'; // Import NotificationProvider
 
 // Styles
 import './App.css';
@@ -80,54 +81,6 @@ const AppContent: React.FC = () => {
 
     registerToken();
 
-    // 2. Listen for Incoming Messages (Foreground)
-    const unsubscribe = onMessageListener((payload: any) => {
-        console.log('Received foreground message: ', payload);
-        
-        // Play a sound (optional)
-        // const audio = new Audio('/notification.mp3');
-        // audio.play().catch(e => console.log('Audio play failed', e));
-
-        toast.custom((t) => (
-          <div
-            className={`${
-              t.visible ? 'animate-enter' : 'animate-leave'
-            } max-w-md w-full bg-white shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-black ring-opacity-5`}
-          >
-            <div className="flex-1 w-0 p-4">
-              <div className="flex items-start">
-                <div className="flex-shrink-0 pt-0.5">
-                  <img
-                    className="h-10 w-10 rounded-full"
-                    src="/logo192.png" 
-                    alt="App Logo"
-                  />
-                </div>
-                <div className="ml-3 flex-1">
-                  <p className="text-sm font-medium text-gray-900">
-                    {payload?.notification?.title || 'New Notification'}
-                  </p>
-                  <p className="mt-1 text-sm text-gray-500">
-                    {payload?.notification?.body}
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="flex border-l border-gray-200">
-              <button
-                onClick={() => toast.dismiss(t.id)}
-                className="w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-medium text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        ), { duration: 5000 });
-    });
-
-    return () => {
-        if (unsubscribe) unsubscribe();
-    };
   }, [user]); 
 
   if (loading) {
@@ -187,9 +140,11 @@ const App: React.FC = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <Router>
-          <AppContent />
-        </Router>
+        <NotificationProvider> {/* Wrap with NotificationProvider */}
+          <Router>
+            <AppContent />
+          </Router>
+        </NotificationProvider>
       </AuthProvider>
 
       {/* React Query Devtools (development only) */}

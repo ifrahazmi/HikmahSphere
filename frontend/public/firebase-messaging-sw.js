@@ -29,8 +29,37 @@ messaging.onBackgroundMessage((payload) => {
   const notificationTitle = payload.notification.title;
   const notificationOptions = {
     body: payload.notification.body,
-    icon: '/logo192.png' // Replace with your app logo
+    icon: '/logo192.png', // Replace with your app logo
+    vibrate: [200, 100, 200],
+    data: {
+        url: payload.data?.url || '/'
+    }
   };
 
   self.registration.showNotification(notificationTitle, notificationOptions);
+});
+
+// Add notification click handler
+self.addEventListener('notificationclick', function(event) {
+  console.log('[firebase-messaging-sw.js] Notification click Received.', event);
+  
+  event.notification.close();
+
+  // This looks to see if the current is already open and
+  // focuses if it is
+  event.waitUntil(
+    clients.matchAll({
+      type: "window"
+    })
+    .then(function(clientList) {
+      for (var i = 0; i < clientList.length; i++) {
+        var client = clientList[i];
+        if (client.url === '/' && 'focus' in client)
+          return client.focus();
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(event.notification.data.url || '/');
+      }
+    })
+  );
 });

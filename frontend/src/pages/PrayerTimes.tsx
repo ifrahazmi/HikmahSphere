@@ -34,7 +34,7 @@ const PrayerTimes: React.FC = () => {
   
   // Calculation method settings
   const [selectedMadhab, setSelectedMadhab] = useState<string>(user?.madhab || 'shafi');
-  const [calculationMethod, setCalculationMethod] = useState(3); // Default: Muslim World League
+  const [calculationMethod, setCalculationMethod] = useState(4); // Default: Umm al-Qura (Saudi Arabia
   const [highLatitudeRule, setHighLatitudeRule] = useState(1); // Default: Middle of Night
   
   // Data states
