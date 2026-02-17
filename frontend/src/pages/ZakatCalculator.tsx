@@ -75,6 +75,9 @@ const ZakatCalculator: React.FC = () => {
       upiId: '',
       notes: ''
   });
+  
+  const [donorSuggestions, setDonorSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   // Calculate Donor Stats (Client-side Aggregation)
   const donorStats = useMemo(() => {
@@ -94,6 +97,14 @@ const ZakatCalculator: React.FC = () => {
           name,
           ...data
       })).sort((a, b) => b.total - a.total);
+  }, [transactions]);
+  
+  // Extract unique donor names for suggestions
+  const allDonorNames = useMemo(() => {
+      return Array.from(new Set(transactions
+          .filter(t => t.type === 'Credit' && t.donorName)
+          .map(t => t.donorName!)
+      ));
   }, [transactions]);
 
   useEffect(() => {
@@ -155,18 +166,47 @@ const ZakatCalculator: React.FC = () => {
       isEligible
     });
   };
+  
+  // Donor Name Input Handler with Suggestions
+  const handleDonorNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value;
+      setFormData({ ...formData, donorName: value });
+      
+      if (value.length > 0) {
+          const filtered = allDonorNames.filter(name => 
+              name.toLowerCase().includes(value.toLowerCase()) && name !== value
+          );
+          setDonorSuggestions(filtered);
+          setShowSuggestions(true);
+      } else {
+          setShowSuggestions(false);
+      }
+  };
+  
+  const selectDonorSuggestion = (name: string) => {
+      setFormData({ ...formData, donorName: name });
+      setShowSuggestions(false);
+  };
 
   // Management Logic
   const handleTransactionSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
       try {
           const token = localStorage.getItem('token');
+          
+          // Validation for Payment ID depending on method
+          if (formData.paymentMethod !== 'Cash' && !formData.paymentId) {
+             const idLabel = formData.paymentMethod === 'Cheque' ? 'Cheque Number' : 'Transaction ID';
+             toast.error(`Please enter ${idLabel}`);
+             return;
+          }
+
           const payload = {
               type: transactionType,
               amount: parseFloat(formData.amount),
               paymentDate: formData.paymentDate,
               paymentMethod: formData.paymentMethod,
-              paymentId: formData.paymentId,
+              paymentId: formData.paymentMethod === 'Cash' ? `CASH-${Date.now()}` : formData.paymentId,
               upiId: formData.upiId,
               notes: formData.notes,
               // Conditional fields
@@ -222,6 +262,7 @@ const ZakatCalculator: React.FC = () => {
           upiId: '',
           notes: ''
       });
+      setShowSuggestions(false);
   };
 
   const openEditModal = (transaction: ZakatTransaction) => {
@@ -234,7 +275,7 @@ const ZakatCalculator: React.FC = () => {
           amount: transaction.amount.toString(),
           paymentDate: new Date(transaction.paymentDate).toISOString().split('T')[0],
           paymentMethod: transaction.paymentMethod,
-          paymentId: transaction.paymentId,
+          paymentId: transaction.paymentMethod.startsWith('CASH-') ? '' : transaction.paymentId,
           upiId: transaction.upiId || '',
           notes: transaction.notes || ''
       });
@@ -429,9 +470,9 @@ const ZakatCalculator: React.FC = () => {
         {/* Management View (Transactions) */}
         {hasAccess && activeTab === 'management' && (
             <div className="space-y-6">
-                <div className="flex justify-between items-center">
+                <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                     <h2 className="text-xl font-bold text-gray-900">Transaction History</h2>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                         <button
                             onClick={() => { setTransactionType('Credit'); resetForm(); setShowTransactionModal(true); }}
                             className="bg-emerald-600 text-white px-4 py-2 rounded-md hover:bg-emerald-700 flex items-center gap-2"
@@ -500,7 +541,12 @@ const ZakatCalculator: React.FC = () => {
                                                     {t.paymentMethod === 'UPI Transfer' && t.upiId && (
                                                         <span className="text-xs text-gray-400">UPI: {t.upiId}</span>
                                                     )}
-                                                    <span className="text-xs text-gray-400">ID: {t.paymentId}</span>
+                                                    {t.paymentMethod !== 'Cash' && t.paymentId && !t.paymentId.startsWith('CASH-') && (
+                                                        <span className="text-xs text-gray-400">
+                                                            {t.paymentMethod === 'Cheque' ? 'Chq: ' : 'ID: '} 
+                                                            {t.paymentId}
+                                                        </span>
+                                                    )}
                                                     {t.notes && <span className="text-xs italic text-gray-400 truncate max-w-xs">{t.notes}</span>}
                                                 </div>
                                             </td>
@@ -574,10 +620,29 @@ const ZakatCalculator: React.FC = () => {
                     <form onSubmit={handleTransactionSubmit} className="space-y-4">
                         {transactionType === 'Credit' ? (
                             <>
-                                <div>
+                                <div className="relative">
                                     <label className="block text-sm font-medium text-gray-700">Donor Name *</label>
-                                    <input type="text" required className="mt-1 block w-full border rounded-md p-2"
-                                        value={formData.donorName} onChange={e => setFormData({...formData, donorName: e.target.value})} />
+                                    <input 
+                                        type="text" 
+                                        required 
+                                        className="mt-1 block w-full border rounded-md p-2"
+                                        value={formData.donorName} 
+                                        onChange={handleDonorNameChange}
+                                        autoComplete="off"
+                                    />
+                                    {showSuggestions && donorSuggestions.length > 0 && (
+                                        <ul className="absolute z-10 w-full bg-white border border-gray-300 rounded-b-md shadow-lg max-h-40 overflow-auto mt-0.5">
+                                            {donorSuggestions.map((name, i) => (
+                                                <li 
+                                                    key={i} 
+                                                    onClick={() => selectDonorSuggestion(name)}
+                                                    className="px-4 py-2 hover:bg-emerald-50 cursor-pointer text-sm text-gray-700"
+                                                >
+                                                    {name}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700">Donor Type</label>
@@ -586,7 +651,6 @@ const ZakatCalculator: React.FC = () => {
                                         <option>Individual</option>
                                         <option>Organization</option>
                                         <option>Charity</option>
-                                        <option>Other</option>
                                     </select>
                                 </div>
                             </>
@@ -606,7 +670,6 @@ const ZakatCalculator: React.FC = () => {
                                         <option>Mosque</option>
                                         <option>Madrasa</option>
                                         <option>NGO</option>
-                                        <option>Other</option>
                                     </select>
                                 </div>
                             </>
@@ -633,7 +696,6 @@ const ZakatCalculator: React.FC = () => {
                                 <option>Cash</option>
                                 <option>Cheque</option>
                                 <option>QR Scanner</option>
-                                <option>Other</option>
                             </select>
                         </div>
 
@@ -645,11 +707,20 @@ const ZakatCalculator: React.FC = () => {
                             </div>
                         )}
 
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Transaction/Ref ID *</label>
-                            <input type="text" required className="mt-1 block w-full border rounded-md p-2"
-                                value={formData.paymentId} onChange={e => setFormData({...formData, paymentId: e.target.value})} />
-                        </div>
+                        {formData.paymentMethod !== 'Cash' && (
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700">
+                                    {formData.paymentMethod === 'Cheque' ? 'Cheque Number' : 'Transaction/Ref ID'} *
+                                </label>
+                                <input 
+                                    type="text" 
+                                    required 
+                                    className="mt-1 block w-full border rounded-md p-2"
+                                    value={formData.paymentId} 
+                                    onChange={e => setFormData({...formData, paymentId: e.target.value})} 
+                                />
+                            </div>
+                        )}
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700">Notes / Purpose</label>

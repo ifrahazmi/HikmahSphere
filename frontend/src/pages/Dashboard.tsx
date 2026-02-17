@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   TrashIcon,
   NoSymbolIcon,
@@ -8,7 +8,8 @@ import {
   XMarkIcon,
   PencilIcon,
   ArrowUpIcon,
-  ArrowDownIcon
+  ArrowDownIcon,
+  DocumentArrowDownIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../hooks/useAuth';
 import { API_URL } from '../config';
@@ -57,6 +58,21 @@ const Dashboard: React.FC = () => {
   const [zakatTransactions, setZakatTransactions] = useState<ZakatTransaction[]>([]);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<ZakatTransaction | null>(null);
+
+  // Export State
+  const [showExportOptions, setShowExportOptions] = useState(false);
+  const exportDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close export dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+        if (exportDropdownRef.current && !exportDropdownRef.current.contains(event.target as Node)) {
+            setShowExportOptions(false);
+        }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Admin: Fetch all users
   const fetchUsers = async () => {
@@ -202,6 +218,46 @@ const Dashboard: React.FC = () => {
           fetchUsers();
       }
   };
+  
+    // Export Functions
+    const exportToCSV = () => {
+        const headers = ['Date', 'Type', 'Party Name', 'Party Type', 'Amount', 'Method', 'Reference ID', 'Notes'];
+        const csvContent = [
+            headers.join(','),
+            ...zakatTransactions.map(t => {
+                const partyName = t.type === 'Credit' ? t.donorName : t.recipientName;
+                const partyType = t.type === 'Credit' ? t.donorType : t.recipientType;
+                return [
+                    new Date(t.paymentDate).toLocaleDateString(),
+                    t.type,
+                    `"${partyName || ''}"`,
+                    partyType,
+                    t.amount,
+                    t.paymentMethod,
+                    t.paymentId,
+                    `"${t.notes || ''}"`
+                ].join(',');
+            })
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `zakat_transactions_${new Date().toISOString().split('T')[0]}.csv`;
+        link.click();
+        setShowExportOptions(false);
+    };
+
+    const exportToJSON = () => {
+        const dataStr = JSON.stringify(zakatTransactions, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `zakat_transactions_${new Date().toISOString().split('T')[0]}.json`;
+        link.click();
+        setShowExportOptions(false);
+    };
+
 
   useEffect(() => {
       if (hasRole(['superadmin'])) {
@@ -330,7 +386,41 @@ const Dashboard: React.FC = () => {
                 <div className="bg-white shadow rounded-lg overflow-hidden">
                     <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
                         <h3 className="text-lg font-medium text-gray-900">All Transactions Database</h3>
-                        <span className="text-xs text-gray-500">Showing {zakatTransactions.length} records</span>
+                        
+                        <div className="flex items-center gap-4">
+                            {/* Export Dropdown */}
+                            <div className="relative" ref={exportDropdownRef}>
+                                <button
+                                    onClick={() => setShowExportOptions(!showExportOptions)}
+                                    className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50 flex items-center gap-2 transition-colors"
+                                >
+                                    <DocumentArrowDownIcon className="h-5 w-5" />
+                                    Export
+                                </button>
+                                
+                                {showExportOptions && (
+                                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-20 ring-1 ring-black ring-opacity-5 animate-in fade-in zoom-in-95 duration-100">
+                                        <div className="py-1">
+                                            <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">Export As</div>
+                                            <button
+                                                onClick={exportToCSV}
+                                                className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-emerald-600"
+                                            >
+                                                CSV (Excel)
+                                            </button>
+                                            <button
+                                                onClick={exportToJSON}
+                                                className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-emerald-600"
+                                            >
+                                                JSON Data
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <span className="text-xs text-gray-500">Showing {zakatTransactions.length} records</span>
+                        </div>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-gray-200">
