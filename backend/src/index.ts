@@ -72,9 +72,11 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Serve static files for uploaded proofs (Restricted via middleware in real implementation ideally, but for now public with hard to guess names)
-// Ideally, serve this through a protected route that checks for admin privileges
-app.use('/src/uploads', express.static(path.join(__dirname, 'uploads')));
+// Serve static files for uploaded proofs
+// Using process.cwd() to correctly resolve path in both CJS and ESM environments (dev/prod)
+// This assumes the server is started from the 'backend' directory
+const uploadsPath = path.join(process.cwd(), 'src', 'uploads');
+app.use('/src/uploads', express.static(uploadsPath));
 
 // Request logging middleware
 app.use(requestLogger);
@@ -360,6 +362,7 @@ const startServer = async () => {
 
     await connectDB();
 
+    // Listen on 0.0.0.0 to allow access from other interfaces (required for VMs/external access)
     app.listen(PORT, '0.0.0.0', () => {
       logStartup(PORT);
     });
