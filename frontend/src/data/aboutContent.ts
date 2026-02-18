@@ -2,10 +2,9 @@ import {
   ShieldCheckIcon,
   HeartIcon,
   LockClosedIcon,
-  CheckCircleIcon,
-  ClockIcon,
   SparklesIcon
 } from '@heroicons/react/24/outline';
+import { BookOpen, Bot, Globe } from 'lucide-react';
 
 // About Page Content Data
 
@@ -93,7 +92,7 @@ export const timeline: TimelineItem[] = [
     title: "The Foundation (Current)",
     description: "Essential tools accompanying you from Fajr to Isha. Your daily Islamic companion.",
     status: "completed",
-    icon: CheckCircleIcon,
+    icon: BookOpen,
     period: "Q1 2026",
     features: [
       "Accurate Prayer Times with Notifications",
@@ -108,7 +107,7 @@ export const timeline: TimelineItem[] = [
     title: "The Assistant (Coming)",
     description: "AI Scholar assistant providing instant access to reliable Islamic guidance and fatwa.",
     status: "in-progress",
-    icon: ClockIcon,
+    icon: Bot,
     period: "Q2 2026",
     features: [
       "AI-Powered Fatwa Assistant",
@@ -123,7 +122,7 @@ export const timeline: TimelineItem[] = [
     title: "The Vision (Future)",
     description: "Complete Islamic lifecycle support - from daily practice to major milestones.",
     status: "planned",
-    icon: SparklesIcon,
+    icon: Globe,
     period: "Q3 2026+",
     features: [
       "Virtual Hajj Preparation Course",

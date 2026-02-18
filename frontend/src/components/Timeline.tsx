@@ -8,16 +8,23 @@ interface TimelineProps {
 const Timeline: React.FC<TimelineProps> = ({ phases }) => {
   const safePhases = Array.isArray(phases) ? phases : [];
 
-  const renderPhaseIcon = (icon: any, fallback: string = '🧭') => {
-    if (typeof icon === 'function') {
-      return React.createElement(icon, { className: 'w-6 h-6 text-emerald-600' });
+  const renderPhaseIcon = (icon: any, fallback: React.ReactNode = null) => {
+    // Handle React Components (Functional, Class, Memo, ForwardRef)
+    if (typeof icon === 'function' || (typeof icon === 'object' && icon !== null && !Array.isArray(icon))) {
+        // If it's a valid React component, render it
+        const IconComponent = icon;
+        return <IconComponent className="w-6 h-6 text-emerald-600" />;
     }
+    
+    // Handle String (Image URL or Emoji/Text)
     if (typeof icon === 'string') {
       if (icon.includes('.png') || icon.includes('.jpg') || icon.includes('.svg')) {
         return <img src={icon} alt="Timeline icon" className="w-6 h-6 object-contain" />;
       }
       return <span className="text-base leading-none">{icon}</span>;
     }
+    
+    // Fallback (e.g., null or passed element)
     return <span className="text-base leading-none">{fallback}</span>;
   };
 
