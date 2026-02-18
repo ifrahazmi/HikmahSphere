@@ -325,9 +325,14 @@ const connectDB = async () => {
     // Use MONGODB_URI_LOCAL for local dev, MONGODB_URI for Docker, or default
     const mongoURI = process.env.MONGODB_URI_LOCAL || process.env.MONGODB_URI || 'mongodb://localhost:27017/hikmahsphere';
 
-    await mongoose.connect(mongoURI, {
-      // Modern MongoDB connection options
-    });
+    const connectOptions: mongoose.ConnectOptions = {
+        authSource: "admin",
+    };
+
+    if (process.env.MONGO_USER) connectOptions.user = process.env.MONGO_USER;
+    if (process.env.MONGO_PASS) connectOptions.pass = process.env.MONGO_PASS;
+
+    await mongoose.connect(mongoURI, connectOptions);
 
     logDatabaseConnection(mongoURI);
     await seedAdminUser();
