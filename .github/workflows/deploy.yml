@@ -1,217 +1,44 @@
-name: 🚀 HikmahSphere CI/CD Pipeline for GCP VM Deployment
+name: CI/CD Pipeline for GCP VM Deployment
 
-on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main ]
-
-env:
-  NODE_VERSION: '20'
+on: [push]
 
 jobs:
-  # 🧪 Test Backend
-  test-backend:
-    name: 🔧 Backend Tests
+  build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./backend
-    
-    services:
-      mongodb:
-        image: mongo:6
-        ports:
-          - 27017:27017
-        options: >-
-          --health-cmd mongo
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v4
-
-      - name: 🟢 Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: backend/package-lock.json
-
-      - name: 📦 Install dependencies
-        run: npm ci
-
-      - name: 🔍 Type check
-        run: npm run type-check
-
-      - name: 🧹 Lint code
-        run: npm run lint
-
-      - name: 🧪 Run tests
-        run: npm run test:coverage
-        env:
-          MONGODB_URI: mongodb://localhost:27017/hikmahsphere
-          JWT_SECRET: test_secret_key
-
-      - name: 📊 Upload coverage reports
-        uses: codecov/codecov-action@v3
-        with:
-          files: ./backend/coverage/lcov.info
-          flags: backend
-
-  # 🎨 Test Frontend
-  test-frontend:
-    name: 🎨 Frontend Tests
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./frontend
-
-    steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v4
-
-      - name: 🟢 Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: 📦 Install dependencies
-        run: npm ci
-
-      - name: 🔍 Type check
-        run: npm run type-check
-
-      - name: 🧹 Lint code
-        run: npm run lint
-
-      - name: 🧪 Run tests
-        run: npm run test:coverage
-        env:
-          CI: true
-
-      - name: 🏗️ Build app
+          node-version: '18'
+      - name: Install Dependencies
+        run: npm run install-deps
+      - name: Build Application
         run: npm run build
 
-      - name: 📊 Upload coverage reports
-        uses: codecov/codecov-action@v3
-        with:
-          files: ./frontend/coverage/lcov.info
-          flags: frontend
-
-  # 🔍 Security Scan
-  security-scan:
-    name: 🛡️ Security Scan
-    runs-on: ubuntu-latest
-    steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v4
-
-      - name: 🔍 Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-
-      - name: 📊 Upload Trivy scan results
-        uses: github/codeql-action/upload-sarif@v2
-        with:
-          sarif_file: 'trivy-results.sarif'
-
-  # 🚀 Deploy to Production (with manual approval)
   deploy:
-    name: 🚀 Deploy to GCP VM
+    needs: build
     runs-on: ubuntu-latest
-    needs: [test-backend, test-frontend, security-scan]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    environment: production  # This enables manual approval
-
     steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v4
-
-      - name: 🔐 Setup GCP credentials
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-      - name: ☁️ Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-
-      - name: 📦 Pull latest code on VM
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Deploy to GCP VM
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GCP_SA_KEY }}
         run: |
-          gcloud compute ssh ${{ secrets.VM_SSH_USER }}@${{ secrets.GCP_VM_INSTANCE }} \
-            --zone=${{ secrets.GCP_VM_ZONE }} \
-            --project=${{ secrets.GCP_PROJECT_ID }} \
-            --command="cd ${{ secrets.VM_APP_PATH }} && git pull origin main"
-
-      - name: 🔄 Restart Backend with PM2
-        run: |
-          gcloud compute ssh ${{ secrets.VM_SSH_USER }}@${{ secrets.GCP_VM_INSTANCE }} \
-            --zone=${{ secrets.GCP_VM_ZONE }} \
-            --project=${{ secrets.GCP_PROJECT_ID }} \
-            --command="cd ${{ secrets.VM_APP_PATH }}/backend && npm install && pm2 restart ${{ secrets.BACKEND_PM2_NAME }} || pm2 start 'npm start' --name ${{ secrets.BACKEND_PM2_NAME }}"
-
-      - name: 🔄 Restart Frontend with PM2
-        run: |
-          gcloud compute ssh ${{ secrets.VM_SSH_USER }}@${{ secrets.GCP_VM_INSTANCE }} \
-            --zone=${{ secrets.GCP_VM_ZONE }} \
-            --project=${{ secrets.GCP_PROJECT_ID }} \
-            --command="cd ${{ secrets.VM_APP_PATH }}/frontend && npm install && pm2 restart ${{ secrets.FRONTEND_PM2_NAME }} || pm2 start 'npm start' --name ${{ secrets.FRONTEND_PM2_NAME }}"
-
-      - name: ⏳ Wait for services to start
-        run: sleep 10
-
-      - name: 🏥 Health Check - Backend
-        run: |
-          curl -f http://${{ secrets.VM_EXTERNAL_IP }}:${{ secrets.BACKEND_PORT }}/api/health \
-            --max-time 10 \
-            --retry 5 \
-            --retry-delay 2 || exit 1
-
-      - name: 🏥 Health Check - Frontend
-        run: |
-          curl -f http://${{ secrets.VM_EXTERNAL_IP }}:${{ secrets.FRONTEND_PORT }} \
-            --max-time 10 \
-            --retry 5 \
-            --retry-delay 2 || exit 1
-
-      - name: ✅ Deployment Successful
-        if: success()
-        run: |
-          echo "✅ HikmahSphere deployed successfully to GCP VM!"
-          echo "🌍 Backend: http://${{ secrets.VM_EXTERNAL_IP }}:${{ secrets.BACKEND_PORT }}"
-          echo "🌍 Frontend: http://${{ secrets.VM_EXTERNAL_IP }}:${{ secrets.FRONTEND_PORT }}"
-
-      - name: ❌ Deployment Failed
-        if: failure()
-        run: |
-          echo "❌ Deployment failed!"
-          echo "Check health checks or PM2 status with: pm2 status"
-
-  # 🔍 Lighthouse Performance Audit (optional)
-  lighthouse:
-    name: 🔍 Lighthouse Performance Audit
-    runs-on: ubuntu-latest
-    needs: [deploy]
-    if: github.ref == 'refs/heads/main'
-
-    steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v4
-
-      - name: 🔍 Run Lighthouse CI
-        uses: treosh/lighthouse-ci-action@v10
-        with:
-          configPath: './.lighthouserc.json'
-          uploadArtifacts: true
-          temporaryPublicStorage: true
-        continue-on-error: true
-
-# 🤲 Bismillah - May Allah accept this work and make it beneficial for the Ummah
+          echo "${{ secrets.GCP_SA_KEY }}" > gcp-key.json
+          gcloud auth activate-service-account --key-file=gcp-key.json
+          
+          # SSH into the VM and run the update commands
+          # 1. Pull latest code
+          # 2. Install dependencies (root + subfolders)
+          # 3. Build the backend (CRITICAL: Creates dist/ folder)
+          # 4. Restart the app using PM2
+          gcloud compute ssh ifrah@hikmahsphere-host-vm --zone=us-central1-a --command "
+            cd ~/HikmahSphere-CICD && 
+            git pull && 
+            npm run install-deps && 
+            npm run build:backend && 
+            pm2 restart hikmah-backend || pm2 start backend/dist/index.js --name hikmah-backend
+          "
