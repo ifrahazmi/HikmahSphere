@@ -2,7 +2,10 @@ name: 🚀 HikmahSphere CI/CD Pipeline for GCP VM Deployment
 
 on:
   push:
-    branches: [ main, develop ]
+    branches:
+      - main
+      - develop
+      - notification
   pull_request:
     branches: [ main ]
 
