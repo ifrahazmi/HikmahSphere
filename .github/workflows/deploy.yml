@@ -137,7 +137,6 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     environment: 
       name: production
-      url: http://${{ secrets.VM_EXTERNAL_IP }}:${{ secrets.FRONTEND_PORT }}
 
     steps:
       - name: 📥 Checkout code
