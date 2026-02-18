@@ -1,11 +1,14 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   CurrencyRupeeIcon,
   CalculatorIcon,
   InformationCircleIcon,
   PlusIcon,
   ArrowDownIcon,
-  PencilIcon
+  PencilIcon,
+  PaperClipIcon,
+  EyeIcon,
+  XMarkIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../hooks/useAuth';
 import toast from 'react-hot-toast';
@@ -24,6 +27,7 @@ interface ZakatTransaction {
   paymentId: string;
   upiId?: string;
   notes?: string;
+  proofOfPayment?: string;
   createdAt: string;
 }
 
@@ -62,6 +66,10 @@ const ZakatCalculator: React.FC = () => {
   const [transactionType, setTransactionType] = useState<'Credit' | 'Debit'>('Credit');
   const [selectedPayment, setSelectedPayment] = useState<ZakatTransaction | null>(null);
   
+  // Proof Viewer State
+  const [showProofModal, setShowProofModal] = useState(false);
+  const [proofUrl, setProofUrl] = useState<string | null>(null);
+
   // Transaction Form State
   const [formData, setFormData] = useState({
       donorName: '',
@@ -76,6 +84,9 @@ const ZakatCalculator: React.FC = () => {
       notes: ''
   });
   
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [donorSuggestions, setDonorSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
@@ -188,6 +199,12 @@ const ZakatCalculator: React.FC = () => {
       setShowSuggestions(false);
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files[0]) {
+          setProofFile(e.target.files[0]);
+      }
+  };
+
   // Management Logic
   const handleTransactionSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -201,23 +218,26 @@ const ZakatCalculator: React.FC = () => {
              return;
           }
 
-          const payload = {
-              type: transactionType,
-              amount: parseFloat(formData.amount),
-              paymentDate: formData.paymentDate,
-              paymentMethod: formData.paymentMethod,
-              paymentId: formData.paymentMethod === 'Cash' ? `CASH-${Date.now()}` : formData.paymentId,
-              upiId: formData.upiId,
-              notes: formData.notes,
-              // Conditional fields
-              ...(transactionType === 'Credit' ? {
-                  donorName: formData.donorName,
-                  donorType: formData.donorType
-              } : {
-                  recipientName: formData.recipientName,
-                  recipientType: formData.recipientType
-              })
-          };
+          const formDataToSend = new FormData();
+          formDataToSend.append('type', transactionType);
+          formDataToSend.append('amount', formData.amount);
+          formDataToSend.append('paymentDate', formData.paymentDate);
+          formDataToSend.append('paymentMethod', formData.paymentMethod);
+          formDataToSend.append('paymentId', formData.paymentMethod === 'Cash' ? `CASH-${Date.now()}` : formData.paymentId);
+          formDataToSend.append('upiId', formData.upiId);
+          formDataToSend.append('notes', formData.notes);
+          
+          if (transactionType === 'Credit') {
+              formDataToSend.append('donorName', formData.donorName);
+              formDataToSend.append('donorType', formData.donorType);
+          } else {
+              formDataToSend.append('recipientName', formData.recipientName);
+              formDataToSend.append('recipientType', formData.recipientType);
+          }
+
+          if (proofFile) {
+              formDataToSend.append('proofOfPayment', proofFile);
+          }
 
           const url = selectedPayment 
             ? `${API_URL}/zakat/payment/${selectedPayment._id}`
@@ -228,10 +248,9 @@ const ZakatCalculator: React.FC = () => {
           const response = await fetch(url, {
               method,
               headers: { 
-                  'Content-Type': 'application/json',
                   'Authorization': `Bearer ${token}` 
               },
-              body: JSON.stringify(payload)
+              body: formDataToSend
           });
 
           const data = await response.json();
@@ -262,6 +281,8 @@ const ZakatCalculator: React.FC = () => {
           upiId: '',
           notes: ''
       });
+      setProofFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
       setShowSuggestions(false);
   };
 
@@ -281,6 +302,16 @@ const ZakatCalculator: React.FC = () => {
       });
       setSelectedPayment(transaction);
       setShowTransactionModal(true);
+  };
+
+  const openProofModal = (url: string) => {
+      // Ensure the URL is correctly formatted for the frontend to access
+      // If it's a relative path from backend storage, prepend the API URL or server base
+      // Assuming backend returns relative path like "src/uploads/..."
+      // and we are serving it statically.
+      const fullUrl = url.startsWith('http') ? url : `${API_URL.replace('/api', '')}/${url}`;
+      setProofUrl(fullUrl);
+      setShowProofModal(true);
   };
 
   const assetFields = [
@@ -499,6 +530,7 @@ const ZakatCalculator: React.FC = () => {
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Party</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Proof</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Info</th>
                                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
                                 </tr>
@@ -506,7 +538,7 @@ const ZakatCalculator: React.FC = () => {
                             <tbody className="bg-white divide-y divide-gray-200">
                                 {transactions.length === 0 ? (
                                     <tr>
-                                        <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
+                                        <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
                                             No transactions found.
                                         </td>
                                     </tr>
@@ -534,6 +566,18 @@ const ZakatCalculator: React.FC = () => {
                                                 t.type === 'Credit' ? 'text-green-600' : 'text-red-600'
                                             }`}>
                                                 {t.type === 'Credit' ? '+' : '-'}₹{t.amount.toLocaleString('en-IN')}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                {t.proofOfPayment ? (
+                                                    <button
+                                                        onClick={() => openProofModal(t.proofOfPayment!)}
+                                                        className="flex items-center text-blue-600 hover:text-blue-800 text-xs gap-1"
+                                                    >
+                                                        <EyeIcon className="w-4 h-4" /> View
+                                                    </button>
+                                                ) : (
+                                                    <span className="text-xs text-gray-400">No Proof</span>
+                                                )}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                                 <div className="flex flex-col">
@@ -617,7 +661,7 @@ const ZakatCalculator: React.FC = () => {
                     <h3 className="text-lg font-medium text-gray-900 mb-4">
                         {selectedPayment ? 'Edit Transaction' : (transactionType === 'Credit' ? 'Record Zakat Collection' : 'Record Zakat Spending')}
                     </h3>
-                    <form onSubmit={handleTransactionSubmit} className="space-y-4">
+                    <form onSubmit={handleTransactionSubmit} className="space-y-4" encType="multipart/form-data">
                         {transactionType === 'Credit' ? (
                             <>
                                 <div className="relative">
@@ -701,7 +745,7 @@ const ZakatCalculator: React.FC = () => {
 
                         {formData.paymentMethod === 'UPI Transfer' && (
                             <div>
-                                <label className="block text-sm font-medium text-gray-700">UPI ID</label>
+                                <label className="block text-sm font-medium text-gray-700">UPI ID (Paid From)</label>
                                 <input type="text" className="mt-1 block w-full border rounded-md p-2"
                                     value={formData.upiId} onChange={e => setFormData({...formData, upiId: e.target.value})} />
                             </div>
@@ -710,7 +754,7 @@ const ZakatCalculator: React.FC = () => {
                         {formData.paymentMethod !== 'Cash' && (
                             <div>
                                 <label className="block text-sm font-medium text-gray-700">
-                                    {formData.paymentMethod === 'Cheque' ? 'Cheque Number' : 'Transaction/Ref ID'} *
+                                    {formData.paymentMethod === 'Cheque' ? 'Cheque Number' : 'Transaction/Ref ID (Last 6-Digit)'} *
                                 </label>
                                 <input 
                                     type="text" 
@@ -721,6 +765,29 @@ const ZakatCalculator: React.FC = () => {
                                 />
                             </div>
                         )}
+                        
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Proof of Payment</label>
+                            <div className="mt-1 flex items-center">
+                                <label className="cursor-pointer bg-white py-2 px-3 border border-gray-300 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-700 hover:bg-gray-50 focus:outline-none">
+                                    <span className="flex items-center gap-2">
+                                        <PaperClipIcon className="w-4 h-4" />
+                                        {proofFile ? proofFile.name : 'Upload Screenshot'}
+                                    </span>
+                                    <input 
+                                        type="file" 
+                                        className="hidden" 
+                                        ref={fileInputRef}
+                                        onChange={handleFileChange} 
+                                        accept="image/png, image/jpeg, application/pdf"
+                                    />
+                                </label>
+                                {selectedPayment?.proofOfPayment && !proofFile && (
+                                    <span className="ml-3 text-xs text-green-600">Existing proof available</span>
+                                )}
+                            </div>
+                            <p className="mt-1 text-xs text-gray-500">PNG, JPG, PDF up to 5MB</p>
+                        </div>
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700">Notes / Purpose</label>
@@ -744,6 +811,37 @@ const ZakatCalculator: React.FC = () => {
                             </button>
                         </div>
                     </form>
+                </div>
+            </div>
+        )}
+
+        {/* Proof Viewer Modal */}
+        {showProofModal && proofUrl && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80 p-4" onClick={() => setShowProofModal(false)}>
+                <div className="relative bg-white rounded-lg shadow-xl max-w-4xl max-h-[90vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+                    <div className="flex justify-between items-center p-4 border-b">
+                        <h3 className="text-lg font-medium text-gray-900">Proof of Payment</h3>
+                        <button onClick={() => setShowProofModal(false)} className="text-gray-500 hover:text-gray-700">
+                            <XMarkIcon className="w-6 h-6" />
+                        </button>
+                    </div>
+                    <div className="flex-1 overflow-auto p-4 bg-gray-100 flex items-center justify-center">
+                        {proofUrl.endsWith('.pdf') ? (
+                            <iframe src={proofUrl} className="w-full h-[60vh] md:h-[70vh]" title="Proof PDF"></iframe>
+                        ) : (
+                            <img src={proofUrl} alt="Proof" className="max-w-full max-h-[70vh] object-contain" />
+                        )}
+                    </div>
+                    <div className="p-4 border-t flex justify-end">
+                        <a 
+                            href={proofUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                        >
+                            Open in New Tab
+                        </a>
+                    </div>
                 </div>
             </div>
         )}

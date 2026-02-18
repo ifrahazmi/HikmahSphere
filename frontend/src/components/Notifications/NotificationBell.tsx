@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Bell, Check, Trash2, MailOpen, X, ArrowLeft, User, Eye, Calendar } from 'lucide-react';
+import { Bell, Check, Trash2, MailOpen, X, ArrowLeft, User, Calendar } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification, Notification } from '../../contexts/NotificationContext';
 import { toast } from 'react-hot-toast';

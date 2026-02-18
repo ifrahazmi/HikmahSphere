@@ -541,7 +541,7 @@ const Dashboard: React.FC = () => {
 
                             {editingTransaction.paymentMethod === 'UPI Transfer' && (
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700">UPI ID</label>
+                                    <label className="block text-sm font-medium text-gray-700">UPI ID (Paid From)</label>
                                     <input
                                         type="text"
                                         className="mt-1 block w-full border rounded-md p-2"

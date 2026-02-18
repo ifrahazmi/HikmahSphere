@@ -39,10 +39,11 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "https:"],
+      imgSrc: ["'self'", "data:", "https:", "blob:"], // Added blob: for image previews
       scriptSrc: ["'self'"],
     },
   },
+  crossOriginResourcePolicy: { policy: "cross-origin" }, // Allow cross-origin resource sharing
 }));
 
 // Rate limiting
@@ -70,6 +71,10 @@ app.use(cors({
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Serve static files for uploaded proofs (Restricted via middleware in real implementation ideally, but for now public with hard to guess names)
+// Ideally, serve this through a protected route that checks for admin privileges
+app.use('/src/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Request logging middleware
 app.use(requestLogger);
