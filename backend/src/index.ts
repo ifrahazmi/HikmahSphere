@@ -18,6 +18,7 @@ import quranRoutes from './routes/quran';
 import zakatRoutes from './routes/zakat';
 import communityRoutes from './routes/community';
 import notificationRoutes from './routes/notifications'; // Import notification routes
+import supportRoutes from './routes/support'; // Import support routes
 
 // Load environment variables
 // Try to load from root .env for local development, fallback to Docker env vars
@@ -181,6 +182,7 @@ app.use('/api/quran', quranRoutes);
 app.use('/api/zakat', zakatRoutes);
 app.use('/api/community', communityRoutes);
 app.use('/api/notifications', notificationRoutes); // Use notification routes
+app.use('/api/support', supportRoutes); // Use support routes
 
 // Admin Routes for User Management (Restricted to Super Admin)
 // Get All Users

@@ -69,6 +69,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
     { name: 'Quran', href: '/quran', current: location.pathname === '/quran' },
     { name: 'Zakat', href: '/zakat', current: location.pathname === '/zakat' },
     { name: 'Community', href: '/community', current: location.pathname === '/community' },
+    { name: 'Contact', href: '/contact', current: location.pathname === '/contact' },
   ];
 
   const handleLogout = () => {

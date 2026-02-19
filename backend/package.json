@@ -54,12 +54,14 @@
     "mongodb-memory-server": "^10.4.3",
     "mongoose": "^8.16.5",
     "multer": "^2.0.2",
+    "nodemailer": "^6.9.16",
     "nodemon": "^3.1.10",
     "redis": "^5.10.0",
     "tsx": "^4.20.3"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",
+    "@types/nodemailer": "^6.4.17",
     "@typescript-eslint/eslint-plugin": "^8.15.0",
     "@typescript-eslint/parser": "^8.15.0",
     "eslint": "^8.57.1",
