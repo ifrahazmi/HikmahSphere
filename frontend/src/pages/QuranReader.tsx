@@ -11,6 +11,7 @@ import {
   MinusIcon,
   MoonIcon,
   SunIcon,
+  ChevronDownIcon,
 } from '@heroicons/react/24/outline';
 import { useQuran } from '../contexts/QuranContext';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -42,6 +43,33 @@ const QuranReader: React.FC = () => {
     x: number;
     y: number;
   } | null>(null);
+  
+  // Mobile settings modal state
+  const [showMobileSettings, setShowMobileSettings] = useState(false);
+  const [showSurahSearch, setShowSurahSearch] = useState(false);
+  const [tempSettings, setTempSettings] = useState(settings);
+
+  // Sync temp settings when settings change
+  useEffect(() => {
+    setTempSettings(settings);
+  }, [settings]);
+
+  // Open mobile settings modal
+  const openMobileSettings = () => {
+    setTempSettings(settings);
+    setShowMobileSettings(true);
+  };
+
+  // Save mobile settings
+  const saveMobileSettings = () => {
+    updateSettings(tempSettings);
+    setShowMobileSettings(false);
+  };
+
+  // Cancel mobile settings
+  const cancelMobileSettings = () => {
+    setShowMobileSettings(false);
+  };
 
   // Filter surahs based on search
   const filteredSurahs = surahs.filter(
@@ -80,13 +108,25 @@ const QuranReader: React.FC = () => {
   // Get font family class based on settings
   const getFontFamilyClass = () => {
     const fontMap: Record<string, string> = {
+      'al-mushaf': 'font-al-mushaf',
       'amiri': 'font-arabic',
       'scheherazade': 'font-scheherazade',
       'noto-naskh': 'font-noto-naskh',
       'cairo': 'font-cairo',
       'lateef': 'font-lateef',
+      'reem-kufi': 'font-reem-kufi',
     };
-    return fontMap[settings.arabicFont] || 'font-arabic';
+    return fontMap[settings.arabicFont] || 'font-al-mushaf';
+  };
+
+  // Get actual font size with multiplier for Al Mushaf
+  const getActualFontSize = () => {
+    const baseFontSize = settings.fontSize;
+    // Al Mushaf font appears smaller, so multiply by 1.35
+    if (settings.arabicFont === 'al-mushaf') {
+      return Math.round(baseFontSize * 1.35);
+    }
+    return baseFontSize;
   };
 
   // Get reader background class based on settings
@@ -174,8 +214,8 @@ const QuranReader: React.FC = () => {
   return (
     <div className={`min-h-screen ${settings.theme === 'dark' ? 'bg-gray-900' : 'bg-gradient-to-br from-emerald-50 via-white to-teal-50'} pt-16`}>
       <div className="w-full px-2 py-2">
-        {/* Header */}
-        <div className="text-center mb-3">
+        {/* Header - Desktop */}
+        <div className="hidden lg:block text-center mb-3">
           <div className="flex items-center justify-center gap-2 mb-1">
             <BookOpenIcon className="h-5 w-5 text-emerald-600" />
             <h1 className={`text-2xl font-bold font-arabic ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
@@ -187,9 +227,181 @@ const QuranReader: React.FC = () => {
           </p>
         </div>
 
+        {/* Mobile Header */}
+        <div className="lg:hidden mb-3">
+          <div className={`${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg p-3`}>
+            {/* Top Bar - Settings Button */}
+            <div className="flex items-center justify-between mb-3">
+              <button
+                onClick={openMobileSettings}
+                className={`p-2.5 rounded-xl ${
+                  settings.theme === 'dark' 
+                    ? 'bg-gray-700 hover:bg-gray-600' 
+                    : 'bg-gray-100 hover:bg-gray-200'
+                } transition-colors`}
+              >
+                <Cog6ToothIcon className="h-5 w-5 text-emerald-600" />
+              </button>
+              <div className="flex items-center gap-2">
+                <BookOpenIcon className="h-5 w-5 text-emerald-600" />
+                <h1 className={`text-lg font-bold font-arabic ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                  Quran
+                </h1>
+              </div>
+              <button
+                onClick={() => setShowSurahSearch(!showSurahSearch)}
+                className={`p-2.5 rounded-xl ${
+                  settings.theme === 'dark' 
+                    ? 'bg-gray-700 hover:bg-gray-600' 
+                    : 'bg-gray-100 hover:bg-gray-200'
+                } transition-colors`}
+              >
+                <MagnifyingGlassIcon className="h-5 w-5 text-emerald-600" />
+              </button>
+            </div>
+            
+            {/* Surah Navigation Bar */}
+            <div className="flex items-center gap-2">
+              {/* Previous Surah Button */}
+              <button
+                onClick={previousSurah}
+                disabled={currentSurah === 1}
+                className={`p-2.5 rounded-xl transition-colors flex-shrink-0 ${
+                  currentSurah === 1
+                    ? 'opacity-50 cursor-not-allowed bg-gray-200 dark:bg-gray-700'
+                    : settings.theme === 'dark'
+                    ? 'bg-emerald-700 hover:bg-emerald-600 text-white'
+                    : 'bg-emerald-100 hover:bg-emerald-200 text-emerald-700'
+                }`}
+              >
+                <ChevronLeftIcon className="h-5 w-5" />
+              </button>
+              
+              {/* Surah Selector Dropdown */}
+              <div className="flex-1 relative">
+                <select
+                  value={currentSurah}
+                  onChange={(e) => goToSurah(parseInt(e.target.value))}
+                  className={`w-full p-3 pr-10 rounded-xl font-semibold appearance-none cursor-pointer ${
+                    settings.theme === 'dark'
+                      ? 'bg-gray-700 text-white border-gray-600'
+                      : 'bg-gray-50 text-gray-900 border-gray-200'
+                  } border-2 focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                >
+                  {surahs.map((surah) => (
+                    <option key={surah.number} value={surah.number}>
+                      {surah.number}. {surah.englishName}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDownIcon className="h-5 w-5 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              </div>
+              
+              {/* Next Surah Button */}
+              <button
+                onClick={nextSurah}
+                disabled={currentSurah === 114}
+                className={`p-2.5 rounded-xl transition-colors flex-shrink-0 ${
+                  currentSurah === 114
+                    ? 'opacity-50 cursor-not-allowed bg-gray-200 dark:bg-gray-700'
+                    : settings.theme === 'dark'
+                    ? 'bg-emerald-700 hover:bg-emerald-600 text-white'
+                    : 'bg-emerald-100 hover:bg-emerald-200 text-emerald-700'
+                }`}
+              >
+                <ChevronRightIcon className="h-5 w-5" />
+              </button>
+            </div>
+            
+            {/* Surah Info */}
+            {surahData && (
+              <div className={`mt-2 text-center text-xs ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                <span className="font-medium">{surahData.englishNameTranslation}</span> • 
+                <span className="ml-1">{surahData.numberOfAyahs} Ayahs</span> • 
+                <span className="ml-1 capitalize">{surahData.revelationType}</span>
+              </div>
+            )}
+          </div>
+          
+          {/* Mobile Surah Search Panel */}
+          {showSurahSearch && (
+            <div className={`mt-2 ${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg p-3`}>
+              <div className="relative mb-3">
+                <MagnifyingGlassIcon className="h-5 w-5 absolute left-3 top-3 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search surah by name..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className={`w-full pl-10 pr-3 py-2.5 text-sm border-2 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+                    settings.theme === 'dark'
+                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                      : 'border-gray-200'
+                  }`}
+                  autoFocus
+                />
+                <button
+                  onClick={() => {
+                    setShowSurahSearch(false);
+                    setSearchTerm('');
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2"
+                >
+                  <XMarkIcon className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                </button>
+              </div>
+              
+              <div className="max-h-60 overflow-y-auto space-y-1">
+                {filteredSurahs.map((surah) => (
+                  <button
+                    key={surah.number}
+                    onClick={() => {
+                      goToSurah(surah.number);
+                      setShowSurahSearch(false);
+                      setSearchTerm('');
+                    }}
+                    className={`w-full text-left p-3 rounded-xl transition-colors ${
+                      currentSurah === surah.number
+                        ? settings.theme === 'dark'
+                          ? 'bg-emerald-900 text-emerald-100'
+                          : 'bg-emerald-100 text-emerald-800'
+                        : settings.theme === 'dark'
+                        ? 'hover:bg-gray-700 text-white'
+                        : 'hover:bg-gray-50 text-gray-900'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-bold px-2 py-1 rounded-lg ${
+                          currentSurah === surah.number
+                            ? 'bg-emerald-600 text-white'
+                            : settings.theme === 'dark'
+                            ? 'bg-gray-600 text-gray-300'
+                            : 'bg-gray-200 text-gray-600'
+                        }`}>
+                          {surah.number}
+                        </span>
+                        <div>
+                          <p className={`font-medium ${getFontFamilyClass()}`}>{surah.name}</p>
+                          <p className={`text-xs ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                            {surah.englishName}
+                          </p>
+                        </div>
+                      </div>
+                      <span className={`text-xs ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-400'}`}>
+                        {surah.numberOfAyahs} ayahs
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-          {/* Left Sidebar - Settings */}
-          <div className="lg:col-span-2">
+          {/* Left Sidebar - Settings (Desktop Only) */}
+          <div className="hidden lg:block lg:col-span-2">
             <div className={`${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow-md p-3 sticky top-16 max-h-[calc(100vh-5rem)] overflow-y-auto`}>
               <h3 className={`text-base font-bold mb-3 flex items-center gap-2 ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
                 <Cog6ToothIcon className="h-4 w-4 text-emerald-600" />
@@ -291,17 +503,19 @@ const QuranReader: React.FC = () => {
                   <select
                     value={settings.arabicFont}
                     onChange={(e) => updateSettings({ arabicFont: e.target.value as any })}
-                    className={`w-full p-2 text-sm rounded-md border ${
-                      settings.theme === 'dark' 
-                        ? 'bg-gray-700 border-gray-600 text-white' 
+                    className={`w-full p-2.5 text-sm rounded-lg border ${
+                      settings.theme === 'dark'
+                        ? 'bg-gray-700 border-gray-600 text-white'
                         : 'bg-white border-gray-300 text-gray-900'
                     }`}
                   >
-                    <option value="amiri">Amiri (Traditional)</option>
-                    <option value="scheherazade">Scheherazade (Classic)</option>
-                    <option value="noto-naskh">Noto Naskh Arabic</option>
-                    <option value="cairo">Cairo (Modern)</option>
-                    <option value="lateef">Lateef (Clean)</option>
+                    <option value="al-mushaf">Al Mushaf - Authentic Quranic Script (Default)</option>
+                    <option value="amiri">Amiri - Traditional Naskh</option>
+                    <option value="scheherazade">Scheherazade - Classic Book Style</option>
+                    <option value="noto-naskh">Noto Naskh - Clear & Readable</option>
+                    <option value="cairo">Cairo - Modern Geometric</option>
+                    <option value="lateef">Lateef - Elegant Cursive</option>
+                    <option value="reem-kufi">Reem Kufi - Beautiful Kufic Style</option>
                   </select>
                 </div>
 
@@ -531,14 +745,14 @@ const QuranReader: React.FC = () => {
                 <LoadingSpinner />
               </div>
             ) : surahData ? (
-              <div className={`${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow-md p-3`}>
-                {/* Surah Header */}
-                <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-200">
+              <div className={`${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow-md p-4`}>
+                {/* Surah Header - Desktop Only */}
+                <div className="hidden lg:flex items-center justify-between mb-4 pb-4 border-b border-gray-200">
                   <div>
-                    <h2 className={`text-xl font-bold ${getFontFamilyClass()} mb-1 ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                    <h2 className={`text-2xl font-bold ${getFontFamilyClass()} mb-1 ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
                       {surahData.name}
                     </h2>
-                    <p className={`text-xs ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                    <p className={`text-sm ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
                       {surahData.englishName} • {surahData.englishNameTranslation} • {surahData.numberOfAyahs} Ayahs • {surahData.revelationType}
                     </p>
                   </div>
@@ -546,7 +760,7 @@ const QuranReader: React.FC = () => {
                     <button
                       onClick={previousSurah}
                       disabled={currentSurah === 1}
-                      className={`p-1.5 rounded-md transition-colors ${
+                      className={`p-2 rounded-lg transition-colors ${
                         currentSurah === 1
                           ? 'opacity-50 cursor-not-allowed'
                           : settings.theme === 'dark'
@@ -554,12 +768,12 @@ const QuranReader: React.FC = () => {
                           : 'bg-gray-100 hover:bg-gray-200'
                       }`}
                     >
-                      <ChevronLeftIcon className="h-4 w-4" />
+                      <ChevronLeftIcon className="h-5 w-5" />
                     </button>
                     <button
                       onClick={nextSurah}
                       disabled={currentSurah === 114}
-                      className={`p-1.5 rounded-md transition-colors ${
+                      className={`p-2 rounded-lg transition-colors ${
                         currentSurah === 114
                           ? 'opacity-50 cursor-not-allowed'
                           : settings.theme === 'dark'
@@ -567,7 +781,7 @@ const QuranReader: React.FC = () => {
                           : 'bg-gray-100 hover:bg-gray-200'
                       }`}
                     >
-                      <ChevronRightIcon className="h-4 w-4" />
+                      <ChevronRightIcon className="h-5 w-5" />
                     </button>
                   </div>
                 </div>
@@ -587,7 +801,7 @@ const QuranReader: React.FC = () => {
                   <div className={`p-3 rounded-lg ${getReaderBackgroundClass()}`}>
                     <p
                       className={`${getFontFamilyClass()} leading-loose text-right ${getFontColorClass()}`}
-                      style={{ fontSize: `${settings.fontSize}px`, lineHeight: settings.lineSpacing }}
+                      style={{ fontSize: `${getActualFontSize()}px`, lineHeight: settings.lineSpacing }}
                       dir="rtl"
                     >
                       {surahData.ayahs
@@ -624,12 +838,12 @@ const QuranReader: React.FC = () => {
                         }`}
                       >
                         {/* Arabic Text with inline ayah number */}
-                        <div 
+                        <div
                           className={`mb-2 p-3 rounded-lg ${getReaderBackgroundClass()}`}
                         >
                           <p
                             className={`${getFontFamilyClass()} leading-loose text-right ${getFontColorClass()}`}
-                            style={{ fontSize: `${settings.fontSize}px`, lineHeight: settings.lineSpacing }}
+                            style={{ fontSize: `${getActualFontSize()}px`, lineHeight: settings.lineSpacing }}
                             dir="rtl"
                           >
                             <span
@@ -685,8 +899,8 @@ const QuranReader: React.FC = () => {
             )}
           </div>
 
-          {/* Right Sidebar - Surah List */}
-          <div className="lg:col-span-2">
+          {/* Right Sidebar - Surah List (Desktop Only) */}
+          <div className="hidden lg:block lg:col-span-2">
             <div className={`${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow-md p-3 sticky top-16 max-h-[calc(100vh-5rem)] overflow-y-auto`}>
               <h3 className={`text-base font-bold mb-3 flex items-center gap-2 ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
                 <BookOpenIcon className="h-4 w-4 text-emerald-600" />
@@ -756,6 +970,388 @@ const QuranReader: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Mobile Settings Modal */}
+      {showMobileSettings && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm"
+            onClick={cancelMobileSettings}
+          ></div>
+          
+          {/* Modal Content - Slide up from bottom */}
+          <div className={`absolute bottom-0 left-0 right-0 ${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'} rounded-t-2xl max-h-[85vh] overflow-hidden flex flex-col animate-slide-up`}>
+            {/* Handle Bar */}
+            <div className="flex items-center justify-center pt-3 pb-2">
+              <div className={`w-12 h-1.5 ${settings.theme === 'dark' ? 'bg-gray-600' : 'bg-gray-300'} rounded-full`}></div>
+            </div>
+            
+            {/* Header */}
+            <div className={`flex items-center justify-between px-4 py-3 border-b ${settings.theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
+              <h3 className={`text-lg font-bold flex items-center gap-2 ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                <Cog6ToothIcon className="h-5 w-5 text-emerald-600" />
+                Settings
+              </h3>
+              <button
+                onClick={cancelMobileSettings}
+                className={`p-2 rounded-lg ${settings.theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
+              >
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+            </div>
+            
+            {/* Scrollable Content */}
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="space-y-4">
+                {/* Arabic Only Mode */}
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Display Mode
+                  </label>
+                  <button
+                    onClick={() => setTempSettings({ ...tempSettings, arabicOnlyMode: !tempSettings.arabicOnlyMode })}
+                    className={`w-full flex items-center justify-between p-3 rounded-lg ${
+                      settings.theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'
+                    }`}
+                  >
+                    <span className={settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}>
+                      {tempSettings.arabicOnlyMode ? 'Arabic Only' : 'With Translations'}
+                    </span>
+                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                      tempSettings.arabicOnlyMode
+                        ? 'bg-emerald-500 border-emerald-500'
+                        : 'border-gray-400'
+                    }`}>
+                      {tempSettings.arabicOnlyMode && (
+                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </div>
+                  </button>
+                </div>
+
+                {/* Font Size */}
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Font Size: {tempSettings.fontSize}px
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setTempSettings({ ...tempSettings, fontSize: Math.max(14, tempSettings.fontSize - 2) })}
+                      className={`p-2 rounded-lg ${settings.theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'}`}
+                    >
+                      <MinusIcon className="h-4 w-4" />
+                    </button>
+                    <input
+                      type="range"
+                      min="14"
+                      max="32"
+                      value={tempSettings.fontSize}
+                      onChange={(e) => setTempSettings({ ...tempSettings, fontSize: parseInt(e.target.value) })}
+                      className="flex-1 h-2"
+                    />
+                    <button
+                      onClick={() => setTempSettings({ ...tempSettings, fontSize: Math.min(32, tempSettings.fontSize + 2) })}
+                      className={`p-2 rounded-lg ${settings.theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'}`}
+                    >
+                      <PlusIcon className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Theme Toggle */}
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Theme
+                  </label>
+                  <button
+                    onClick={() => setTempSettings({ ...tempSettings, theme: tempSettings.theme === 'light' ? 'dark' : 'light' })}
+                    className={`w-full flex items-center justify-between p-3 rounded-lg ${
+                      settings.theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'
+                    }`}
+                  >
+                    <span className={settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}>
+                      {tempSettings.theme === 'light' ? 'Light' : 'Dark'}
+                    </span>
+                    {tempSettings.theme === 'light' ? (
+                      <SunIcon className="h-5 w-5 text-yellow-500" />
+                    ) : (
+                      <MoonIcon className="h-5 w-5 text-blue-400" />
+                    )}
+                  </button>
+                </div>
+
+                {/* Arabic Font Family */}
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Arabic Font
+                  </label>
+                  <select
+                    value={tempSettings.arabicFont}
+                    onChange={(e) => setTempSettings({ ...tempSettings, arabicFont: e.target.value as any })}
+                    className={`w-full p-3 rounded-lg border ${
+                      settings.theme === 'dark'
+                        ? 'bg-gray-700 border-gray-600 text-white'
+                        : 'bg-white border-gray-300 text-gray-900'
+                    }`}
+                  >
+                    <option value="al-mushaf">Al Mushaf - Authentic Quranic Script (Default)</option>
+                    <option value="amiri">Amiri - Traditional Naskh</option>
+                    <option value="scheherazade">Scheherazade - Classic Book Style</option>
+                    <option value="noto-naskh">Noto Naskh - Clear & Readable</option>
+                    <option value="cairo">Cairo - Modern Geometric</option>
+                    <option value="lateef">Lateef - Elegant Cursive</option>
+                    <option value="reem-kufi">Reem Kufi - Beautiful Kufic Style</option>
+                  </select>
+                </div>
+
+                {/* Font Color */}
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Font Color
+                  </label>
+                  <div className="grid grid-cols-5 gap-2">
+                    <button
+                      onClick={() => setTempSettings({ ...tempSettings, fontColor: 'default' })}
+                      className={`h-12 rounded-lg border-2 flex items-center justify-center ${
+                        tempSettings.fontColor === 'default' ? 'border-emerald-500' : 'border-gray-300'
+                      } ${settings.theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-white text-gray-800'}`}
+                      title="Default"
+                    >
+                      <span className="text-sm font-bold">Aa</span>
+                    </button>
+                    <button
+                      onClick={() => setTempSettings({ ...tempSettings, fontColor: 'emerald' })}
+                      className={`h-12 rounded-lg border-2 ${
+                        tempSettings.fontColor === 'emerald' ? 'border-emerald-500 border-4' : 'border-gray-300'
+                      } bg-white flex items-center justify-center`}
+                      title="Emerald"
+                    >
+                      <span className="text-sm font-bold text-emerald-600">Aa</span>
+                    </button>
+                    <button
+                      onClick={() => setTempSettings({ ...tempSettings, fontColor: 'blue' })}
+                      className={`h-12 rounded-lg border-2 ${
+                        tempSettings.fontColor === 'blue' ? 'border-emerald-500 border-4' : 'border-gray-300'
+                      } bg-white flex items-center justify-center`}
+                      title="Blue"
+                    >
+                      <span className="text-sm font-bold text-blue-600">Aa</span>
+                    </button>
+                    <button
+                      onClick={() => setTempSettings({ ...tempSettings, fontColor: 'amber' })}
+                      className={`h-12 rounded-lg border-2 ${
+                        tempSettings.fontColor === 'amber' ? 'border-emerald-500 border-4' : 'border-gray-300'
+                      } bg-white flex items-center justify-center`}
+                      title="Amber"
+                    >
+                      <span className="text-sm font-bold text-amber-600">Aa</span>
+                    </button>
+                    <button
+                      onClick={() => setTempSettings({ ...tempSettings, fontColor: 'rose' })}
+                      className={`h-12 rounded-lg border-2 ${
+                        tempSettings.fontColor === 'rose' ? 'border-emerald-500 border-4' : 'border-gray-300'
+                      } bg-white flex items-center justify-center`}
+                      title="Rose"
+                    >
+                      <span className="text-sm font-bold text-rose-600">Aa</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Reader Background */}
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Reader Background
+                  </label>
+                  <div className="grid grid-cols-5 gap-2">
+                    <button
+                      onClick={() => setTempSettings({ ...tempSettings, readerBackground: 'default' })}
+                      className={`h-12 rounded-lg border-2 ${
+                        tempSettings.readerBackground === 'default' ? 'border-emerald-500 border-4' : 'border-gray-300'
+                      } bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center`}
+                      title="Default Gradient"
+                    >
+                      <span className="text-sm font-bold text-gray-700">●</span>
+                    </button>
+                    <button
+                      onClick={() => setTempSettings({ ...tempSettings, readerBackground: 'white' })}
+                      className={`h-12 rounded-lg border-2 ${
+                        tempSettings.readerBackground === 'white' ? 'border-emerald-500 border-4' : 'border-gray-300'
+                      } bg-white flex items-center justify-center`}
+                      title="White"
+                    >
+                      <span className="text-sm font-bold text-gray-700">●</span>
+                    </button>
+                    <button
+                      onClick={() => setTempSettings({ ...tempSettings, readerBackground: 'cream' })}
+                      className={`h-12 rounded-lg border-2 ${
+                        tempSettings.readerBackground === 'cream' ? 'border-emerald-500 border-4' : 'border-gray-300'
+                      } bg-amber-50 flex items-center justify-center`}
+                      title="Cream"
+                    >
+                      <span className="text-sm font-bold text-gray-700">●</span>
+                    </button>
+                    <button
+                      onClick={() => setTempSettings({ ...tempSettings, readerBackground: 'blue' })}
+                      className={`h-12 rounded-lg border-2 ${
+                        tempSettings.readerBackground === 'blue' ? 'border-emerald-500 border-4' : 'border-gray-300'
+                      } bg-blue-50 flex items-center justify-center`}
+                      title="Light Blue"
+                    >
+                      <span className="text-sm font-bold text-gray-700">●</span>
+                    </button>
+                    <button
+                      onClick={() => setTempSettings({ ...tempSettings, readerBackground: 'green' })}
+                      className={`h-12 rounded-lg border-2 ${
+                        tempSettings.readerBackground === 'green' ? 'border-emerald-500 border-4' : 'border-gray-300'
+                      } bg-emerald-50 flex items-center justify-center`}
+                      title="Soft Green"
+                    >
+                      <span className="text-sm font-bold text-gray-700">●</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Transliteration Toggle */}
+                {!tempSettings.arabicOnlyMode && (
+                  <div>
+                    <label className={`block text-sm font-medium mb-2 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                      Transliteration
+                    </label>
+                    <button
+                      onClick={() => setTempSettings({ ...tempSettings, showTransliteration: !tempSettings.showTransliteration })}
+                      className={`w-full flex items-center justify-between p-3 rounded-lg ${
+                        settings.theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'
+                      }`}
+                    >
+                      <span className={settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}>
+                        {tempSettings.showTransliteration ? 'On' : 'Off'}
+                      </span>
+                      <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                        tempSettings.showTransliteration
+                          ? 'bg-emerald-500 border-emerald-500'
+                          : 'border-gray-400'
+                      }`}>
+                        {tempSettings.showTransliteration && (
+                          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </div>
+                    </button>
+                  </div>
+                )}
+
+                {/* Translations */}
+                {!tempSettings.arabicOnlyMode && (
+                  <div>
+                    <label className={`block text-sm font-medium mb-2 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                      Translations (max 3)
+                    </label>
+                    <div className={`space-y-2 max-h-40 overflow-y-auto rounded-lg p-2 ${settings.theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                      {DEFAULT_TRANSLATIONS.map((trans) => (
+                        <label key={trans.identifier} className="flex items-center text-sm cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={tempSettings.selectedTranslations.includes(trans.identifier)}
+                            onChange={(e) => {
+                              if (e.target.checked && tempSettings.selectedTranslations.length < 3) {
+                                setTempSettings({
+                                  ...tempSettings,
+                                  selectedTranslations: [...tempSettings.selectedTranslations, trans.identifier],
+                                });
+                              } else if (!e.target.checked) {
+                                setTempSettings({
+                                  ...tempSettings,
+                                  selectedTranslations: tempSettings.selectedTranslations.filter((t) => t !== trans.identifier),
+                                });
+                              }
+                            }}
+                            className="mr-2 w-4 h-4"
+                          />
+                          <span className={settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}>
+                            {trans.name}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Bookmarks */}
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <BookmarkIcon className="h-4 w-4 inline mr-1" />
+                    Bookmarks
+                  </label>
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {bookmarks.length > 0 ? (
+                      bookmarks.map((bookmark) => (
+                        <div
+                          key={bookmark.id}
+                          className={`p-3 rounded-lg ${
+                            settings.theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between">
+                            <button
+                              onClick={() => {
+                                goToSurah(bookmark.surahNumber);
+                                cancelMobileSettings();
+                              }}
+                              className="text-left flex-1"
+                            >
+                              <p className={`text-sm font-medium ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                                {bookmark.surahName}
+                              </p>
+                              <p className={`text-xs ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                                Ayah {bookmark.ayahNumber}
+                              </p>
+                            </button>
+                            <button
+                              onClick={() => removeBookmark(bookmark.id)}
+                              className="text-red-500 hover:text-red-700 p-1"
+                            >
+                              <XMarkIcon className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className={`text-center py-3 text-sm ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                        No bookmarks yet
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Footer Buttons */}
+            <div className={`flex gap-3 p-4 border-t ${settings.theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
+              <button
+                onClick={cancelMobileSettings}
+                className={`flex-1 py-3 rounded-lg font-semibold ${
+                  settings.theme === 'dark'
+                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveMobileSettings}
+                className="flex-1 py-3 rounded-lg font-semibold bg-emerald-600 text-white hover:bg-emerald-700"
+              >
+                Save Settings
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Bookmark Confirmation Popup */}
       {bookmarkConfirm && (

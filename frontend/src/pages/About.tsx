@@ -1,19 +1,17 @@
 // @ts-nocheck
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-
-import HeroSphere from '../components/HeroSphere';
-import LiveStatistics from '../components/LiveStatistics';
-import MissionPillars from '../components/MissionPillars';
-import Timeline from '../components/Timeline';
-import FeatureShowcase from '../components/FeatureShowcase';
 import {
-  heroContent,
+  ArrowDownIcon,
+  SparklesIcon,
+  BookOpenIcon,
+  HeartIcon,
+  ShieldCheckIcon,
+} from '@heroicons/react/24/outline';
+import {
   missionStatement,
   pillars,
-  timeline,
-  approachPillars,
   spiritualFeatures,
   promises,
   journeyOptions,
@@ -29,6 +27,7 @@ const About: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [dailyVerse, setDailyVerse] = useState<QuranVerse | null>(null);
+  const [visibleSections, setVisibleSections] = useState<Set<string>>(new Set());
 
   // Check if user is admin or manager
   const isAdmin = user && (user.role === 'superadmin' || user.isAdmin);
@@ -40,17 +39,28 @@ const About: React.FC = () => {
   const safePromises = Array.isArray(promises) ? promises : [];
   const safeDevelopers = Array.isArray(developers) ? developers : [];
   const safeJourneyOptions = Array.isArray(journeyOptions) ? journeyOptions : [];
+
+  // Refs for sections
+  const heroRef = useRef<HTMLDivElement>(null);
+  const storyRef = useRef<HTMLDivElement>(null);
+  const missionRef = useRef<HTMLDivElement>(null);
+  const timelineRef = useRef<HTMLDivElement>(null);
+  const featuresRef = useRef<HTMLDivElement>(null);
+  const promisesRef = useRef<HTMLDivElement>(null);
+  const developersRef = useRef<HTMLDivElement>(null);
+  const journeyRef = useRef<HTMLDivElement>(null);
+
   const isComponentIcon = (icon: unknown): icon is React.ElementType =>
     typeof icon === 'function' || (typeof icon === 'object' && icon !== null && '$$typeof' in icon);
 
-  // Create features list with conditional Zakat description
+  // Create features list with conditional Zakat description based on user role
   const featuresWithConditionalZakat: SpiritualFeature[] = safeSpiritualFeatures.map((feature) => {
-    if (feature.id === 'zakat') {
+    if (feature.id === 'zakat' || feature.title.includes('Zakat')) {
       return {
         ...feature,
-        name: hasManagementAccess ? 'Zakat Management' : 'Zakat Calculator',
-        spiritualPurpose: hasManagementAccess
-          ? 'Purify your wealth, fulfill your obligation, track the impact of your charity.'
+        title: hasManagementAccess ? 'Zakat Management' : 'Zakat Calculator',
+        description: hasManagementAccess
+          ? 'Comprehensive dashboard to manage Zakat collection, distribution, and donor history.'
           : 'Intelligent Zakat calculation supporting all methodologies and cryptocurrencies'
       };
     }
@@ -61,10 +71,47 @@ const About: React.FC = () => {
     setDailyVerse(getRandomVerse());
   }, []);
 
+  // Intersection Observer for scroll animations
+  useEffect(() => {
+    const observerOptions = {
+      root: null,
+      rootMargin: '-100px',
+      threshold: 0.1,
+    };
+
+    const observerCallback: IntersectionObserverCallback = (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          const sectionId = entry.target.getAttribute('data-section');
+          if (sectionId) {
+            setVisibleSections((prev) => new Set(prev).add(sectionId));
+          }
+        }
+      });
+    };
+
+    const observer = new IntersectionObserver(observerCallback, observerOptions);
+
+    const sections = [
+      heroRef.current,
+      storyRef.current,
+      missionRef.current,
+      timelineRef.current,
+      featuresRef.current,
+      promisesRef.current,
+      developersRef.current,
+      journeyRef.current,
+    ];
+
+    sections.forEach((section) => {
+      if (section) observer.observe(section);
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
   const handleNavigate = (path: string) => {
-    if (!path) {
-      return;
-    }
+    if (!path) return;
     if (path.startsWith('http')) {
       window.open(path, '_blank');
     } else {
@@ -72,113 +119,153 @@ const About: React.FC = () => {
     }
   };
 
+  const scrollToSection = (sectionId: string) => {
+    document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const scrollToFeatures = () => {
+    document.getElementById('features-section')?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   return (
-    <div className="min-h-screen pt-16">
-      {/* Hero Section with 3D Rotating Background */}
-      <section className="relative min-h-screen flex items-center justify-center overflow-hidden -mt-16">
-        {/* 3D Rotating Background Sphere */}
-        <div className="absolute inset-0 top-0">
-          <HeroSphere />
+    <div className="min-h-screen">
+      {/* Hero Section */}
+      <section 
+        ref={heroRef}
+        data-section="hero"
+        className="relative min-h-screen flex items-center justify-center overflow-hidden -mt-16 bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-950"
+      >
+        {/* Animated Background Pattern */}
+        <div className="absolute inset-0 opacity-5">
+          <div className="absolute inset-0" style={{
+            backgroundImage: `radial-gradient(circle at 2px 2px, white 1px, transparent 0)`,
+            backgroundSize: '48px 48px'
+          }}></div>
         </div>
+        
+        {/* Floating Gradient Orbs */}
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-teal-500/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+        <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-cyan-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }}></div>
 
-        {/* Overlay Gradients */}
-        <div className="absolute inset-0 bg-gradient-to-br from-emerald-900/90 via-emerald-800/80 to-teal-900/90"></div>
-        <div className="absolute inset-0 bg-gradient-to-r from-emerald-600/30 to-teal-600/30"></div>
-
-        {/* Floating 3D Elements */}
-        <div className="absolute top-20 left-10 w-20 h-20 bg-white/10 rounded-full rotate-3d-slow"></div>
-        <div className="absolute bottom-20 right-10 w-16 h-16 bg-emerald-300/20 rounded-full rotate-3d-medium"></div>
-        <div className="absolute top-1/3 right-16 w-24 h-24 bg-teal-400/10 rounded-full rotate-3d-slow" style={{ animationDelay: '2s' }}></div>
-
-        {/* Content Overlaid on 3D Background */}
-        <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          {/* Daily Wisdom */}
+        {/* Content */}
+        <div className={`relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center transition-all duration-1000 ${visibleSections.has('hero') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+          {/* Daily Wisdom Badge */}
           {dailyVerse && (
-            <div className="mb-12 lg:mb-16 animate-fadeInUp">
-              <span className="text-3xl lg:text-4xl mb-6 block">📖</span>
-              <p className="text-xl lg:text-2xl text-emerald-100 font-scheherazade mb-3 leading-relaxed">
-                "{dailyVerse.verse}"
-              </p>
-              <p className="text-lg text-white italic mb-2 font-light">
+            <div className="mb-8 inline-flex flex-col items-center gap-2 px-6 py-4 bg-white/10 backdrop-blur-sm rounded-2xl border border-white/20">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-3xl">📖</span>
+                <p className="text-2xl lg:text-3xl text-white font-scheherazade leading-loose">
+                  "{dailyVerse.verse}"
+                </p>
+              </div>
+              <p className="text-base text-emerald-100 italic">
                 {dailyVerse.translation}
               </p>
-              <p className="text-xs lg:text-sm text-emerald-200">
+              <p className="text-xs text-emerald-200 font-medium">
                 {dailyVerse.chapter} • {dailyVerse.reference}
               </p>
             </div>
           )}
 
-          {/* Main Headline */}
-          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold mb-6 leading-tight text-white drop-shadow-lg">
-            {heroContent.headline}
+          {/* Main Title */}
+          <h1 className="text-6xl sm:text-7xl lg:text-8xl font-bold mb-6 leading-tight">
+            <span className="block text-white">Guiding the</span>
+            <span className="block bg-gradient-to-r from-emerald-300 via-teal-300 to-cyan-300 bg-clip-text text-transparent">
+              Ummah Digital
+            </span>
           </h1>
 
-          {/* Subheadline */}
-          <p className="text-xl sm:text-2xl lg:text-3xl text-emerald-50 max-w-3xl mx-auto leading-relaxed mb-10 font-light drop-shadow">
-            {heroContent.subheadline}
+          <p className="text-2xl sm:text-3xl text-emerald-100 max-w-3xl mx-auto leading-relaxed mb-12 font-light">
+            Where timeless Islamic wisdom meets intelligent technology
           </p>
 
-          {/* CTA Button */}
-          <button
-            onClick={() => document.getElementById('mission-section')?.scrollIntoView({ behavior: 'smooth' })}
-            className="px-8 py-4 bg-white text-emerald-900 font-semibold rounded-lg hover:bg-emerald-50 transform hover:scale-110 transition-all duration-200 shadow-2xl cursor-pointer text-lg"
-          >
-            {heroContent.cta}
-          </button>
+          {/* CTA Buttons */}
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+            <button
+              onClick={() => scrollToSection('story-section')}
+              className="group px-8 py-4 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold rounded-xl hover:from-emerald-600 hover:to-teal-600 transform hover:scale-105 transition-all duration-300 shadow-2xl cursor-pointer flex items-center gap-2"
+            >
+              Discover Our Story
+              <ArrowDownIcon className="w-5 h-5 group-hover:translate-y-1 transition-transform" />
+            </button>
+            <button
+              onClick={scrollToFeatures}
+              className="px-8 py-4 bg-white/10 backdrop-blur-sm border-2 border-white/30 text-white font-semibold rounded-xl hover:bg-white/20 transform hover:scale-105 transition-all duration-300 cursor-pointer"
+            >
+              Explore Features
+            </button>
+          </div>
 
           {/* Scroll Indicator */}
-          <div className="mt-20 flex justify-center">
-            <div className="animate-bounce">
-              <svg className="w-6 h-6 text-white" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
-                <path d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
-              </svg>
-            </div>
+          <div className="mt-20 animate-bounce">
+            <ArrowDownIcon className="w-6 h-6 text-emerald-300 mx-auto" />
           </div>
         </div>
       </section>
 
-      {/* Live Statistics Section */}
-      <LiveStatistics />
-
       {/* Our Story Section */}
-      <section className="py-20 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">
+      <section 
+        ref={storyRef}
+        data-section="story"
+        id="story-section"
+        className="py-24 bg-white relative overflow-hidden"
+      >
+        {/* Decorative Elements */}
+        <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-100 rounded-full blur-3xl opacity-50"></div>
+        <div className="absolute bottom-0 left-0 w-96 h-96 bg-teal-100 rounded-full blur-3xl opacity-50"></div>
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
+          <div className={`text-center mb-16 transition-all duration-1000 delay-300 ${visibleSections.has('story') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-100 rounded-full mb-6">
+              <SparklesIcon className="w-4 h-4 text-emerald-600" />
+              <span className="text-sm font-semibold text-emerald-700">Our Journey</span>
+            </div>
+            <h2 className="text-5xl font-bold text-gray-900 mb-6">
               {storyContent.headline}
             </h2>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 mb-12">
-            <div className="space-y-6">
-              <p className="text-lg text-gray-700 leading-relaxed italic font-semibold">
-                {storyContent.problemStatement}
-              </p>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+            {/* Left Content */}
+            <div className={`space-y-8 transition-all duration-1000 delay-500 ${visibleSections.has('story') ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-10'}`}>
+              <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-8 border-l-4 border-emerald-500 shadow-lg">
+                <p className="text-xl text-gray-800 leading-relaxed italic font-medium">
+                  {storyContent.problemStatement}
+                </p>
+              </div>
 
               {storyParagraphs.map((paragraph, index) => (
-                <p key={index} className="text-gray-700 leading-relaxed">
+                <p key={index} className="text-lg text-gray-700 leading-relaxed">
                   {paragraph}
                 </p>
               ))}
             </div>
 
-            <div className="space-y-8">
-              <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-8 border border-emerald-100">
-                <h3 className="text-2xl font-bold text-emerald-900 mb-4">
-                  {storyContent.nameExplanation.hikma.title}
-                </h3>
-                <p className="text-gray-700 leading-relaxed">
-                  {storyContent.nameExplanation.hikma.meaning}
-                </p>
+            {/* Right Content - Name Explanation Cards */}
+            <div className={`space-y-6 transition-all duration-1000 delay-700 ${visibleSections.has('story') ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-10'}`}>
+              <div className="group relative bg-gradient-to-br from-emerald-500 to-teal-500 rounded-2xl p-8 shadow-xl hover:shadow-2xl transform hover:-translate-y-2 transition-all duration-300 overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500"></div>
+                <div className="relative">
+                  <h3 className="text-3xl font-bold text-white mb-4 font-scheherazade">
+                    {storyContent.nameExplanation.hikma.title}
+                  </h3>
+                  <p className="text-emerald-50 leading-relaxed text-lg">
+                    {storyContent.nameExplanation.hikma.meaning}
+                  </p>
+                </div>
               </div>
 
-              <div className="bg-gradient-to-br from-teal-50 to-emerald-50 rounded-xl p-8 border border-teal-100">
-                <h3 className="text-2xl font-bold text-teal-900 mb-4">
-                  {storyContent.nameExplanation.sphere.title}
-                </h3>
-                <p className="text-gray-700 leading-relaxed">
-                  {storyContent.nameExplanation.sphere.meaning}
-                </p>
+              <div className="group relative bg-gradient-to-br from-teal-500 to-emerald-500 rounded-2xl p-8 shadow-xl hover:shadow-2xl transform hover:-translate-y-2 transition-all duration-300 overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500"></div>
+                <div className="relative">
+                  <h3 className="text-3xl font-bold text-white mb-4">
+                    {storyContent.nameExplanation.sphere.title}
+                  </h3>
+                  <p className="text-teal-50 leading-relaxed text-lg">
+                    {storyContent.nameExplanation.sphere.meaning}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -186,163 +273,222 @@ const About: React.FC = () => {
       </section>
 
       {/* Mission Section */}
-      <section id="mission-section" className="py-20 bg-gradient-to-br from-emerald-50 via-white to-teal-50">
+      <section 
+        ref={missionRef}
+        data-section="mission"
+        className="py-24 bg-gradient-to-br from-emerald-50 via-white to-teal-50 relative"
+      >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold text-gray-900 mb-6">
-              Our Mission: The Guiding Light
+          <div className={`text-center mb-16 transition-all duration-1000 ${visibleSections.has('mission') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-md mb-6">
+              <HeartIcon className="w-4 h-4 text-emerald-600" />
+              <span className="text-sm font-semibold text-emerald-700">Our Mission</span>
+            </div>
+            <h2 className="text-5xl font-bold text-gray-900 mb-6">
+              The Guiding Light
             </h2>
-            <p className="text-xl text-emerald-700 max-w-3xl mx-auto font-semibold italic">
+            <p className="text-2xl text-emerald-700 max-w-4xl mx-auto font-medium italic leading-relaxed">
               {missionStatement.text}
             </p>
           </div>
 
-          <MissionPillars pillars={pillars} title="" description="" />
+          {/* Mission Pillars */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {pillars.map((pillar, index) => (
+              <div
+                key={index}
+                className={`group relative bg-white rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-2 overflow-hidden ${visibleSections.has('mission') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}
+                style={{ transitionDelay: `${index * 150}ms` }}
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-teal-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                <div className="relative">
+                  <div className="w-20 h-20 bg-gradient-to-br from-emerald-100 to-teal-100 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
+                    {pillar.icon.includes('/') ? (
+                      <img src={pillar.icon} alt={pillar.title} className="w-14 h-14 object-contain" />
+                    ) : (
+                      <span className="text-4xl">{pillar.icon}</span>
+                    )}
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-4 group-hover:text-emerald-600 transition-colors duration-300">
+                    {pillar.title}
+                  </h3>
+                  <p className="text-gray-600 leading-relaxed">
+                    {pillar.description}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* Vision Timeline Section */}
-      <Timeline phases={timeline} />
-
-      {/* Approach to Guidance Section */}
-      <section className="py-20 bg-gradient-to-br from-gray-50 to-white">
+      {/* Features Showcase */}
+      <section
+        id="features-section"
+        ref={featuresRef}
+        data-section="features"
+        className="py-24 bg-white"
+      >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">
-              Our Approach to Guidance
+          <div className={`text-center mb-16 transition-all duration-1000 ${visibleSections.has('features') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-100 rounded-full mb-6">
+              <BookOpenIcon className="w-4 h-4 text-emerald-600" />
+              <span className="text-sm font-semibold text-emerald-700">Spiritual Tools</span>
+            </div>
+            <h2 className="text-5xl font-bold text-gray-900 mb-6">
+              Features for Your Journey
             </h2>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              In an age of confusion, we turn to the sources that have guided the Ummah for 1400 years
+              Comprehensive tools designed to enhance your daily Islamic practice
             </p>
           </div>
 
-          <MissionPillars pillars={approachPillars} title="" description="" />
-
-          <div className="mt-16 bg-emerald-900 text-white rounded-xl p-8 lg:p-12">
-            <h3 className="text-2xl font-bold mb-6">Our Scholarly Foundations</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <div>
-                <h4 className="text-lg font-semibold mb-2 text-emerald-300">Sources</h4>
-                <p className="text-emerald-100">
-                  Every guidance is traced through Quran, Authentic Sunnah, and the methodology of the Righteous Predecessors (Salaf)
-                </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {featuresWithConditionalZakat.map((feature, index) => (
+              <div
+                key={index}
+                className={`group relative bg-gradient-to-br from-gray-50 to-white rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-2 border border-gray-100 overflow-hidden ${
+                  feature.disabled ? 'opacity-50 grayscale' : ''
+                } ${visibleSections.has('features') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}
+                style={{ transitionDelay: `${index * 100}ms` }}
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/0 to-teal-500/0 group-hover:from-emerald-500/5 group-hover:to-teal-500/5 transition-all duration-500"></div>
+                <div className="relative">
+                  <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300 ${
+                    feature.bgColor || 'bg-gradient-to-br from-emerald-100 to-teal-100'
+                  }`}>
+                    {feature.icon.includes('/') ? (
+                      <img src={feature.icon} alt={feature.title} className="w-12 h-12 object-contain" />
+                    ) : (
+                      <span className="text-3xl">{feature.icon}</span>
+                    )}
+                  </div>
+                  <h3 className={`text-xl font-bold mb-3 transition-colors duration-300 ${
+                    feature.disabled ? 'text-gray-500' : 'text-gray-900 group-hover:text-emerald-600'
+                  }`}>
+                    {feature.title}
+                  </h3>
+                  <p className={`leading-relaxed ${feature.disabled ? 'text-gray-500' : 'text-gray-600'}`}>
+                    {feature.description}
+                  </p>
+                  {feature.disabled && (
+                    <div className="mt-4 inline-block px-3 py-1 bg-gray-200 text-gray-600 text-xs font-semibold rounded-full">
+                      Coming Soon
+                    </div>
+                  )}
+                </div>
               </div>
-              <div>
-                <h4 className="text-lg font-semibold mb-2 text-emerald-300">Scholarship</h4>
-                <p className="text-emerald-100">
-                  Partnered with recognized Islamic institutions and qualified Ulama for verification and oversight
-                </p>
-              </div>
-              <div>
-                <h4 className="text-lg font-semibold mb-2 text-emerald-300">Respect</h4>
-                <p className="text-emerald-100">
-                  We acknowledge valid scholarly differences (ikhtilaf) while maintaining Ahl al-Sunnah wal-Jama'ah principles
-                </p>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* Features Section */}
-      <FeatureShowcase features={featuresWithConditionalZakat} />
-
       {/* Trust & Safety Section */}
-      <section className="py-20 bg-white">
+      <section 
+        ref={promisesRef}
+        data-section="promises"
+        className="py-24 bg-gradient-to-br from-gray-50 to-white"
+      >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">
-              Our Promise: Trust & Safety
+          <div className={`text-center mb-16 transition-all duration-1000 ${visibleSections.has('promises') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-md mb-6">
+              <ShieldCheckIcon className="w-4 h-4 text-emerald-600" />
+              <span className="text-sm font-semibold text-emerald-700">Our Commitment</span>
+            </div>
+            <h2 className="text-5xl font-bold text-gray-900 mb-6">
+              Trust & Safety
             </h2>
-            <p className="text-xl text-gray-600">
-              Your trust is sacred to us. Here's what we're committed to.
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+              Your trust is sacred. Here's what we promise.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {safePromises.map((promise, index) => {
               const colorClass = promise.color || 'text-emerald-600';
               const bgClass = colorClass.replace('text-', 'bg-') + '-50';
-              const description = promise.description || promise.text || '';
               const icon = promise.icon;
-              const key = promise.id || promise.title || `promise-${index}`;
 
               return (
                 <div
-                  key={key}
-                  className="bg-gradient-to-br from-white to-gray-50 rounded-xl p-8 border border-gray-200 shadow-lg hover:shadow-xl transition-all duration-300"
+                  key={index}
+                  className={`group bg-white rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-2 ${visibleSections.has('promises') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}
+                  style={{ transitionDelay: `${index * 100}ms` }}
                 >
-                  <div className={`w-16 h-16 ${bgClass} rounded-lg flex items-center justify-center mb-6`}>
+                  <div className={`w-16 h-16 ${bgClass} rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300`}>
                     {isComponentIcon(icon) ? (
                       React.createElement(icon, { className: `w-8 h-8 ${colorClass}` })
                     ) : (
-                      <span className="text-3xl leading-none">{icon || '✅'}</span>
+                      <span className="text-3xl">{icon || '✅'}</span>
                     )}
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                  <h3 className="text-lg font-bold text-gray-900 mb-3">
                     {promise.title}
                   </h3>
-                  <p className="text-gray-600">
-                    {description}
+                  <p className="text-gray-600 text-sm leading-relaxed">
+                    {promise.description}
                   </p>
                 </div>
               );
             })}
           </div>
-
-          <div className="mt-12 text-center">
-            <p className="text-gray-700 italic">
-              These commitments form the ethical foundation of HikmahSphere. We believe technology should serve humanity with integrity.
-            </p>
-          </div>
         </div>
       </section>
 
       {/* Developer Team Section */}
-      <section className="py-20 bg-gradient-to-br from-white via-emerald-50 to-teal-50">
+      <section 
+        ref={developersRef}
+        data-section="developers"
+        className="py-24 bg-gradient-to-br from-white via-emerald-50 to-teal-50"
+      >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">
-              Meet the Team Behind HikmahSphere
+          <div className={`text-center mb-16 transition-all duration-1000 ${visibleSections.has('developers') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-md mb-6">
+              <HeartIcon className="w-4 h-4 text-emerald-600" />
+              <span className="text-sm font-semibold text-emerald-700">Our Team</span>
+            </div>
+            <h2 className="text-5xl font-bold text-gray-900 mb-6">
+              Meet the Team
             </h2>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
               Dedicated professionals united by the mission to bring authentic Islamic knowledge to the digital world
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 lg:max-w-3xl mx-auto">
-            {safeDevelopers.map((dev, devIndex) => (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:max-w-4xl mx-auto">
+            {safeDevelopers.map((dev, index) => (
               <div
-                key={dev.id || dev.name || `developer-${devIndex}`}
-                className="bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden transform hover:-translate-y-1 w-full"
+                key={index}
+                className={`group bg-white rounded-3xl shadow-xl hover:shadow-2xl transition-all duration-500 overflow-hidden transform hover:-translate-y-2 ${visibleSections.has('developers') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}
+                style={{ transitionDelay: `${index * 200}ms` }}
               >
-                {/* Developer Image */}
-                <div className="relative h-96 overflow-hidden bg-gradient-to-br from-emerald-400 to-teal-500">
+                {/* Image Section */}
+                <div className="relative h-[450px] overflow-hidden bg-gradient-to-br from-emerald-400 to-teal-500">
                   {dev.image ? (
                     <img
                       src={dev.image}
                       alt={dev.name}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-white text-3xl font-bold">
+                    <div className="w-full h-full flex items-center justify-center text-white text-4xl font-bold">
                       {(dev.name || 'HS').slice(0, 2).toUpperCase()}
                     </div>
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
                   {dev.id === 'hiring' && (
-                    <div className="absolute top-4 right-4 bg-emerald-500 text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg">
+                    <div className="absolute top-4 right-4 bg-emerald-500 text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg animate-pulse">
                       We're Hiring
                     </div>
                   )}
                 </div>
 
-                {/* Developer Info */}
+                {/* Content Section */}
                 <div className="p-8">
-                  <h3 className="text-2xl font-bold text-gray-900 mb-1">
+                  <h3 className="text-2xl font-bold text-gray-900 mb-2">
                     {dev.name}
                   </h3>
-                  <p className="text-emerald-600 font-semibold mb-4">
+                  <p className="text-emerald-600 font-semibold mb-4 text-sm">
                     {dev.role}
                   </p>
 
@@ -350,16 +496,16 @@ const About: React.FC = () => {
                     {dev.bio}
                   </p>
 
-                  {/* Expertise */}
+                  {/* Expertise Tags */}
                   <div className="mb-6">
                     <h4 className="text-sm font-semibold text-gray-900 mb-3">
                       Expertise
                     </h4>
                     <div className="flex flex-wrap gap-2">
-                      {(Array.isArray(dev.expertise) ? dev.expertise : []).map((skill, index) => (
+                      {(Array.isArray(dev.expertise) ? dev.expertise : []).map((skill, skillIndex) => (
                         <span
-                          key={index}
-                          className="inline-block bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-xs font-semibold"
+                          key={skillIndex}
+                          className="inline-block bg-gradient-to-r from-emerald-100 to-teal-100 text-emerald-700 px-3 py-1.5 rounded-full text-xs font-semibold hover:scale-105 transition-transform duration-200 cursor-default"
                         >
                           {skill}
                         </span>
@@ -369,13 +515,13 @@ const About: React.FC = () => {
 
                   {/* Social Links */}
                   {dev.social && (
-                    <div className="flex gap-4 pt-4 border-t border-gray-200">
+                    <div className="flex gap-3 pt-4 border-t border-gray-200">
                       {dev.social.github && (
                         <a
                           href={dev.social.github}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-gray-600 hover:text-emerald-600 transition-colors"
+                          className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-600 hover:bg-emerald-500 hover:text-white transition-all duration-300"
                           title="GitHub"
                         >
                           <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -388,7 +534,7 @@ const About: React.FC = () => {
                           href={dev.social.linkedin}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-gray-600 hover:text-emerald-600 transition-colors"
+                          className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-600 hover:bg-emerald-500 hover:text-white transition-all duration-300"
                           title="LinkedIn"
                         >
                           <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -401,7 +547,7 @@ const About: React.FC = () => {
                           href={dev.social.twitter}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-gray-600 hover:text-emerald-600 transition-colors"
+                          className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-600 hover:bg-emerald-500 hover:text-white transition-all duration-300"
                           title="Twitter"
                         >
                           <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -415,25 +561,34 @@ const About: React.FC = () => {
               </div>
             ))}
           </div>
-
-          {/* Team Message */}
-          <div className="mt-16 text-center p-8 bg-emerald-900 text-white rounded-xl">
-            <p className="text-lg leading-relaxed">
-              Our team is driven by one shared conviction: that technology must serve humanity with integrity, and that authentic Islamic knowledge deserves a digital home built with care, expertise, and deep respect.
-            </p>
-          </div>
         </div>
       </section>
 
+      {/* Journey Section */}
+      <section 
+        ref={journeyRef}
+        data-section="journey"
+        className="py-24 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 text-white relative overflow-hidden"
+      >
+        {/* Background Pattern */}
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute inset-0" style={{
+            backgroundImage: `radial-gradient(circle at 2px 2px, white 1px, transparent 0)`,
+            backgroundSize: '32px 32px'
+          }}></div>
+        </div>
 
-      <section className="py-20 bg-gradient-to-r from-emerald-600 to-teal-600 text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold mb-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
+          <div className={`text-center mb-16 transition-all duration-1000 ${visibleSections.has('journey') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full mb-6">
+              <SparklesIcon className="w-4 h-4 text-emerald-300" />
+              <span className="text-sm font-medium">Get Involved</span>
+            </div>
+            <h2 className="text-5xl font-bold mb-6">
               Join the Journey
             </h2>
             <p className="text-xl text-emerald-100 max-w-3xl mx-auto">
-              Whether you're a user seeking knowledge, a scholar contributing guidance, or a developer building the future—there's a place for you in HikmahSphere
+              Whether you're a user, scholar, or developer—there's a place for you in HikmahSphere
             </p>
           </div>
 
@@ -441,25 +596,28 @@ const About: React.FC = () => {
             {safeJourneyOptions.map((option, index) => {
               const icon = option.icon;
               const actionPath = option.buttonAction || option.path || '/';
-              const buttonLabel = option.buttonText || 'Get Started';
               const title = option.title || 'Journey Option';
               const description = option.description || '';
+              const buttonLabel = option.buttonText || 'Get Started';
 
               return (
                 <div
                   key={index}
-                  className="bg-white/10 backdrop-blur-sm rounded-xl p-8 border border-white/20 hover:border-white/40 hover:bg-white/15 transition-all duration-300"
+                  className={`group bg-white/10 backdrop-blur-sm rounded-2xl p-8 border border-white/20 hover:border-white/40 hover:bg-white/15 transition-all duration-500 transform hover:-translate-y-2 ${visibleSections.has('journey') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}
+                  style={{ transitionDelay: `${index * 150}ms` }}
                 >
-                  {isComponentIcon(icon) ? (
-                    React.createElement(icon, { className: 'w-12 h-12 text-white mb-4' })
-                  ) : typeof icon === 'string' && (icon.includes('.png') || icon.includes('.jpg') || icon.includes('.svg')) ? (
-                    <img src={icon} alt={title} className="w-16 h-16 mb-4 object-contain filter brightness-0 invert" />
-                  ) : typeof icon === 'string' ? (
-                    <span className="block text-4xl mb-4 leading-none">{icon}</span>
-                  ) : (
-                    <span className="block text-4xl mb-4 leading-none">🌟</span>
-                  )}
-                  <h3 className="text-2xl font-bold mb-3">
+                  <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
+                    {isComponentIcon(icon) ? (
+                      React.createElement(icon, { className: 'w-8 h-8 text-white' })
+                    ) : typeof icon === 'string' && (icon.includes('.png') || icon.includes('.jpg') || icon.includes('.svg')) ? (
+                      <img src={icon} alt={title} className="w-12 h-12 object-contain filter brightness-0 invert" />
+                    ) : typeof icon === 'string' ? (
+                      <span className="text-4xl leading-none">{icon}</span>
+                    ) : (
+                      <span className="text-4xl leading-none">🌟</span>
+                    )}
+                  </div>
+                  <h3 className="text-2xl font-bold mb-4">
                     {title}
                   </h3>
                   <p className="text-emerald-100 mb-6 leading-relaxed">
@@ -467,7 +625,7 @@ const About: React.FC = () => {
                   </p>
                   <button
                     onClick={() => handleNavigate(actionPath)}
-                    className="w-full px-6 py-3 bg-white text-emerald-600 font-semibold rounded-lg hover:bg-emerald-50 transform hover:scale-105 transition-all duration-200 cursor-pointer"
+                    className="w-full px-6 py-4 bg-white text-emerald-600 font-semibold rounded-xl hover:bg-emerald-50 transform hover:scale-105 transition-all duration-300 cursor-pointer"
                   >
                     {buttonLabel}
                   </button>
@@ -478,22 +636,35 @@ const About: React.FC = () => {
         </div>
       </section>
 
-      {/* Footer Quote Section */}
-      <section className="py-16 bg-gray-900 text-white">
-        <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
+      {/* Footer Quote */}
+      <section className="py-20 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white relative overflow-hidden">
+        {/* Islamic Pattern Overlay */}
+        <div className="absolute inset-0 opacity-5">
+          <div className="absolute inset-0" style={{
+            backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 10px, #fff 10px, #fff 11px)`,
+          }}></div>
+        </div>
+
+        <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8 relative">
           <div className="mb-8">
-            <span className="text-6xl">📖</span>
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-2xl shadow-lg">
+              <BookOpenIcon className="w-8 h-8 text-white" />
+            </div>
           </div>
-          <blockquote className="text-2xl sm:text-3xl font-light mb-6 leading-relaxed font-scheherazade">
+          <blockquote className="text-3xl sm:text-4xl font-light mb-8 leading-relaxed font-scheherazade text-emerald-100">
             "{footerQuote.arabic}"
           </blockquote>
-          <p className="text-lg text-gray-300 mb-4">
+          <p className="text-xl text-gray-300 mb-6 max-w-2xl mx-auto leading-relaxed">
             "{footerQuote.translation}"
           </p>
-          <cite className="text-emerald-400 block">
-            — {footerQuote.reference}
-          </cite>
-          <p className="text-sm text-gray-500 mt-4">
+          <div className="flex items-center justify-center gap-4">
+            <div className="w-16 h-px bg-gradient-to-r from-transparent to-emerald-500"></div>
+            <cite className="text-lg font-semibold text-emerald-400">
+              — {footerQuote.reference}
+            </cite>
+            <div className="w-16 h-px bg-gradient-to-l from-transparent to-emerald-500"></div>
+          </div>
+          <p className="text-sm text-gray-500 mt-6">
             {footerQuote.hadith}
           </p>
         </div>

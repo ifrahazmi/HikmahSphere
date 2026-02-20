@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  ClockIcon, 
+import {
+  ClockIcon,
   MapPinIcon,
   SunIcon,
   MoonIcon,
@@ -9,7 +9,9 @@ import {
   CloudIcon,
   BoltIcon,
   Cog6ToothIcon,
-  CalendarDaysIcon
+  CalendarDaysIcon,
+  SparklesIcon,
+  BookOpenIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../hooks/useAuth';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -27,10 +29,12 @@ const PrayerTimes: React.FC = () => {
   const [showSearch, setShowSearch] = useState(false);
   
   // View mode and settings
-  const [viewMode, setViewMode] = useState<'daily' | 'monthly' | 'yearly'>('daily');
+  const [viewMode, setViewMode] = useState<'daily' | 'monthly' | 'ramadan'>('daily');
   const [showSettings, setShowSettings] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [ramadanData, setRamadanData] = useState<any>(null);
+  const [isRamadanMonth, setIsRamadanMonth] = useState(false);
   
   // Calculation method settings
   const [selectedMadhab, setSelectedMadhab] = useState<string>(user?.madhab || 'shafi');
@@ -73,6 +77,8 @@ const PrayerTimes: React.FC = () => {
         fetchData(location.lat, location.lon);
       } else if (viewMode === 'monthly') {
         fetchMonthlyData(location.lat, location.lon, selectedMonth, selectedYear);
+      } else if (viewMode === 'ramadan') {
+        fetchRamadanData(location.lat, location.lon);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -92,17 +98,21 @@ const PrayerTimes: React.FC = () => {
       
       if (prayerJson.status === 'success') {
         setPrayerData(prayerJson.data);
-        
+
         // Extract Islamic events from the response
         const events = [];
         const hijriMonth = prayerJson.data?.date?.hijri?.month?.en;
         const hijriDay = prayerJson.data?.date?.hijri?.day;
-        
-        // Check for special Islamic dates
+
+        // Check if current month is Ramadan
         if (hijriMonth === 'Ramaḍān') {
+          setIsRamadanMonth(true);
           events.push({ name: 'Ramadan', type: 'month', icon: '🌙' });
           if (hijriDay === '27') events.push({ name: 'Laylat al-Qadr (Night of Power)', type: 'special', icon: '✨' });
+        } else {
+          setIsRamadanMonth(false);
         }
+        
         if (hijriMonth === 'Dhū al-Ḥijjah' && hijriDay === '9') {
           events.push({ name: 'Day of Arafah', type: 'special', icon: '🕋' });
         }
@@ -115,19 +125,22 @@ const PrayerTimes: React.FC = () => {
         if (hijriMonth === 'Muḥarram' && hijriDay === '10') {
           events.push({ name: 'Day of Ashura', type: 'special', icon: '🕌' });
         }
-        
+
         setIslamicEvents(events);
       } else {
         console.warn("Prayer API Error:", prayerJson);
         setError('Unable to fetch prayer times.');
       }
 
-      // Fetch Fasting Times
+      // Fetch Fasting Times from Backend API
       const fastingRes = await fetch(`${API_URL}/prayers/fasting?latitude=${lat}&longitude=${lon}&method=${calculationMethod}`);
       const fastingJson = await fastingRes.json();
       
-      if (fastingJson.status === 'success') {
+      console.log("Fasting API Response:", fastingJson);
+
+      if (fastingJson.status === 'success' && fastingJson.data?.fasting?.length > 0) {
           setFastingData(fastingJson.data);
+          console.log("Fasting data set:", fastingJson.data);
       } else {
           console.warn("Fasting API Error:", fastingJson);
       }
@@ -227,6 +240,37 @@ const PrayerTimes: React.FC = () => {
       setLoading(false);
     }
   }, [selectedMadhab, calculationMethod, highLatitudeRule]);
+
+  const fetchRamadanData = useCallback(async (lat: number, lon: number) => {
+    setLoading(true);
+    setError(null);
+
+    const school = selectedMadhab === 'hanafi' ? 2 : 1;
+
+    try {
+      console.log('Fetching Ramadan data from backend...');
+      const response = await fetch(
+        `${API_URL}/prayers/ramadan?latitude=${lat}&longitude=${lon}&method=${calculationMethod}&school=${school}`
+      );
+      const data = await response.json();
+
+      console.log('Ramadan API Response:', data);
+
+      if (data.status === 'success' && data.data?.fasting?.length > 0) {
+        setRamadanData(data.data);
+        setIsRamadanMonth(true);
+      } else {
+        setError('Unable to fetch Ramadan data.');
+        setIsRamadanMonth(false);
+      }
+    } catch (err) {
+      setError('Network error fetching Ramadan data.');
+      console.error(err);
+      setIsRamadanMonth(false);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedMadhab, calculationMethod]);
 
   // Update reminder based on prayer times, Islamic events, and current time
   useEffect(() => {
@@ -386,29 +430,42 @@ const PrayerTimes: React.FC = () => {
           </div>
           
           {/* View Mode Toggle */}
-          <div className="flex justify-center gap-2 mb-4">
+          <div className="flex justify-center gap-3 mb-6">
             <button
               onClick={() => setViewMode('daily')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              className={`px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2 ${
                 viewMode === 'daily'
-                  ? 'bg-emerald-600 text-white'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg scale-105'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 shadow-md'
               }`}
             >
-              <ClockIcon className="h-4 w-4 inline mr-1" />
+              <ClockIcon className="w-5 h-5" />
               Daily
             </button>
             <button
               onClick={() => setViewMode('monthly')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              className={`px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2 ${
                 viewMode === 'monthly'
-                  ? 'bg-emerald-600 text-white'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg scale-105'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 shadow-md'
               }`}
             >
-              <CalendarDaysIcon className="h-4 w-4 inline mr-1" />
+              <CalendarDaysIcon className="w-5 h-5" />
               Monthly
             </button>
+            {isRamadanMonth && (
+              <button
+                onClick={() => setViewMode('ramadan')}
+                className={`px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2 ${
+                  viewMode === 'ramadan'
+                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg scale-105'
+                    : 'bg-white text-gray-700 hover:bg-gray-50 shadow-md'
+                }`}
+              >
+                <MoonIcon className="w-5 h-5" />
+                Ramadan
+              </button>
+            )}
           </div>
           
           {/* Settings Panel */}
@@ -556,14 +613,18 @@ const PrayerTimes: React.FC = () => {
             
             <div className="flex items-center space-x-2 mt-1">
                 <p className="text-sm text-emerald-600 font-medium">
-                    {prayerData?.date?.readable} • {prayerData?.date?.hijri?.day} {prayerData?.date?.hijri?.month?.en} {prayerData?.date?.hijri?.year}
+                    {prayerData?.date?.readable}
                 </p>
-                
+                <span className="text-gray-400">•</span>
+                <p className="text-sm font-arabic text-gray-700">
+                    {fastingData?.fasting?.[0]?.hijri_readable || `${prayerData?.date?.hijri?.day} ${prayerData?.date?.hijri?.month?.en} ${prayerData?.date?.hijri?.year}`}
+                </p>
+
                 {/* Current Weather Display next to date */}
                 {weatherData && (
                     <span className="text-sm text-gray-400 flex items-center">
-                         <span className="mx-2">|</span> 
-                         {weatherData.current.temperature_2m}°C 
+                         <span className="mx-2">|</span>
+                         {weatherData.current.temperature_2m}°C
                          <span className="hidden sm:inline ml-1">({getWeatherStyling(weatherData.current.weather_code, 'Dhuhr').label})</span>
                     </span>
                 )}
@@ -754,16 +815,24 @@ const PrayerTimes: React.FC = () => {
                     <div className="mt-4 flex items-end justify-between border-t border-gray-50 pt-3 min-h-[50px]">
                         {/* Left Side: Fasting Info */}
                         <div className="flex-1">
-                            {prayer.name === 'Fajr' && fastingData && (
-                                <div className="flex flex-col">
-                                    <span className="text-xs font-medium text-gray-500">Sehri Ends</span>
-                                    <span className="text-sm font-bold text-emerald-600">{fastingData.sahur || fastingData.imsak}</span>
+                            {prayer.name === 'Fajr' && fastingData?.fasting?.[0] && (
+                                <div className="flex flex-col gap-1">
+                                    <div>
+                                        <span className="text-xs font-medium text-gray-500">Sehri Ends</span>
+                                        <p className="text-sm font-bold text-emerald-600">{fastingData.fasting[0].time.sahur}</p>
+                                    </div>
                                 </div>
                             )}
-                            {prayer.name === 'Maghrib' && fastingData && (
-                                <div className="flex flex-col">
-                                    <span className="text-xs font-medium text-gray-500">Iftar Time</span>
-                                    <span className="text-sm font-bold text-emerald-600">{fastingData.iftar}</span>
+                            {prayer.name === 'Maghrib' && fastingData?.fasting?.[0] && (
+                                <div className="flex flex-col gap-1">
+                                    <div>
+                                        <span className="text-xs font-medium text-gray-500">Iftar Time</span>
+                                        <p className="text-sm font-bold text-emerald-600">{fastingData.fasting[0].time.iftar}</p>
+                                    </div>
+                                    <div>
+                                        <span className="text-xs font-medium text-gray-500">Fasting Duration</span>
+                                        <p className="text-xs font-semibold text-gray-600">{fastingData.fasting[0].time.duration}</p>
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -798,6 +867,172 @@ const PrayerTimes: React.FC = () => {
             <IslamicCalendar />
           </div>
         </div>
+        )}
+
+        {/* Ramadan View */}
+        {viewMode === 'ramadan' && ramadanData && (
+          <div className="max-w-6xl mx-auto mb-8">
+            {/* Dua Card */}
+            {ramadanData.resource?.dua && (
+              <div className="bg-gradient-to-r from-emerald-500 to-teal-500 rounded-3xl shadow-xl p-8 mb-6 text-white relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
+                <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/10 rounded-full blur-3xl"></div>
+                
+                <div className="relative">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
+                      <SparklesIcon className="w-6 h-6 text-white" />
+                    </div>
+                    <h3 className="text-xl font-bold">Daily Dua - Day {ramadanData.fasting?.length ? Math.ceil(ramadanData.fasting.length / 2) : 15}</h3>
+                  </div>
+                  
+                  <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 mb-4">
+                    <p className="text-2xl font-arabic text-right leading-loose mb-4" dir="rtl">
+                      {ramadanData.resource.dua.arabic}
+                    </p>
+                    <p className="text-sm text-emerald-100 italic mb-2">
+                      {ramadanData.resource.dua.transliteration}
+                    </p>
+                    <p className="text-base text-white">
+                      {ramadanData.resource.dua.translation}
+                    </p>
+                  </div>
+                  
+                  <p className="text-sm text-emerald-200 font-semibold">
+                    — {ramadanData.resource.dua.reference}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Ramadan Timetable - Card Grid */}
+            <div className="mb-6">
+              <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 rounded-3xl shadow-xl px-8 py-6 mb-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
+                      <MoonIcon className="w-8 h-8 text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-3xl font-bold text-white">Ramadan {ramadanData.ramadan_year} Timetable</h2>
+                      <p className="text-emerald-100">Complete 30-Day Fasting Schedule</p>
+                    </div>
+                  </div>
+                  <div className="text-right text-white">
+                    <p className="text-sm text-emerald-100">White Days</p>
+                    <p className="text-lg font-semibold">
+                      {ramadanData.white_days?.days?.['13th'] ? new Date(ramadanData.white_days.days['13th']).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '13th'} • 
+                      {ramadanData.white_days?.days?.['14th'] ? new Date(ramadanData.white_days.days['14th']).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '14th'} • 
+                      {ramadanData.white_days?.days?.['15th'] ? new Date(ramadanData.white_days.days['15th']).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '15th'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {ramadanData.fasting.map((day: any, idx: number) => {
+                  const isToday = new Date(day.date).toDateString() === new Date().toDateString();
+                  const dayNumber = parseInt(day.hijri.split('-')[2]);
+                  const dateObj = new Date(day.date);
+                  
+                  return (
+                    <div
+                      key={idx}
+                      className={`bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 overflow-hidden border-2 ${
+                        isToday 
+                          ? 'border-emerald-500 bg-gradient-to-br from-emerald-50 to-teal-50' 
+                          : 'border-gray-100'
+                      }`}
+                    >
+                      {/* Day Number Badge */}
+                      <div className={`px-4 py-3 ${
+                        isToday 
+                          ? 'bg-gradient-to-r from-emerald-500 to-teal-500' 
+                          : dayNumber <= 10 
+                            ? 'bg-gradient-to-r from-emerald-400 to-emerald-500'
+                            : dayNumber <= 20 
+                              ? 'bg-gradient-to-r from-teal-400 to-teal-500'
+                              : 'bg-gradient-to-r from-cyan-400 to-cyan-500'
+                      }`}>
+                        <div className="flex items-center justify-between">
+                          <span className="text-3xl font-bold text-white">Day {dayNumber}</span>
+                          {isToday && (
+                            <span className="px-2 py-1 bg-white/20 backdrop-blur-sm rounded-lg text-xs font-semibold text-white">
+                              Today
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Card Content */}
+                      <div className="p-4">
+                        {/* Day Name */}
+                        <p className="text-sm font-medium text-gray-500 mb-2">{day.day}</p>
+                        
+                        {/* Gregorian Date */}
+                        <p className="text-base font-semibold text-gray-900 mb-1">
+                          {dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </p>
+                        
+                        {/* Hijri Date */}
+                        <p className="text-sm font-arabic text-emerald-600 mb-4" dir="rtl">
+                          {day.hijri_readable}
+                        </p>
+
+                        {/* Times Grid */}
+                        <div className="grid grid-cols-2 gap-2 mb-3">
+                          <div className="bg-orange-50 rounded-xl p-2 text-center">
+                            <p className="text-xs text-orange-600 font-medium mb-1">Sehri Ends</p>
+                            <p className="text-lg font-bold text-orange-700">{day.time.sahur}</p>
+                          </div>
+                          <div className="bg-emerald-50 rounded-xl p-2 text-center">
+                            <p className="text-xs text-emerald-600 font-medium mb-1">Iftar</p>
+                            <p className="text-lg font-bold text-emerald-700">{day.time.iftar}</p>
+                          </div>
+                        </div>
+
+                        {/* Duration */}
+                        <div className="bg-gray-50 rounded-xl p-2 text-center">
+                          <p className="text-xs text-gray-500 font-medium">Fasting Duration</p>
+                          <p className="text-sm font-bold text-gray-700">{day.time.duration}</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Hadith Card */}
+            {ramadanData.resource?.hadith && (
+              <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-3xl shadow-lg p-8 border-l-4 border-amber-500">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-orange-500 rounded-2xl flex items-center justify-center">
+                    <BookOpenIcon className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900">Hadith of Ramadan</h3>
+                </div>
+                
+                <div className="bg-white rounded-2xl p-6 mb-4">
+                  <p className="text-xl font-arabic text-right leading-loose mb-4 text-gray-800" dir="rtl">
+                    {ramadanData.resource.hadith.arabic}
+                  </p>
+                  <p className="text-base text-gray-700 leading-relaxed">
+                    {ramadanData.resource.hadith.english}
+                  </p>
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-amber-700">
+                    — {ramadanData.resource.hadith.source}
+                  </p>
+                  <span className="text-xs font-medium text-amber-600 bg-amber-100 px-3 py-1 rounded-full">
+                    {ramadanData.resource.hadith.grade}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
         {/* Qibla & Info Section */}

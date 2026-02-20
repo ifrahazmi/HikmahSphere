@@ -86,7 +86,7 @@ export interface QuranSettings {
   arabicOnlyMode: boolean;         // Show only Arabic text
   fontSize: number;                // 14-32px
   theme: 'light' | 'dark';
-  arabicFont: 'amiri' | 'scheherazade' | 'noto-naskh' | 'cairo' | 'lateef';
+  arabicFont: 'al-mushaf' | 'amiri' | 'scheherazade' | 'noto-naskh' | 'cairo' | 'lateef' | 'reem-kufi';
   fontColor: 'default' | 'emerald' | 'blue' | 'amber' | 'rose';
   readerBackground: 'default' | 'white' | 'cream' | 'blue' | 'green';
   lineSpacing: number;             // 1.5-3.0
@@ -177,7 +177,7 @@ export const DEFAULT_QURAN_SETTINGS: QuranSettings = {
   arabicOnlyMode: false,
   fontSize: 20,
   theme: 'light',
-  arabicFont: 'amiri',
+  arabicFont: 'al-mushaf',
   fontColor: 'default',
   readerBackground: 'default',
   lineSpacing: 2.0,

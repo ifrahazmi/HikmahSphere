@@ -159,12 +159,13 @@ router.get('/times', [
 
 /**
  * @route   GET /api/prayers/fasting
- * @desc    Get fasting times (Sahur/Iftar)
+ * @desc    Get fasting times (Sahur/Iftar) from Islamic API
  * @access  Public
  */
 router.get('/fasting', [
   query('latitude').isFloat({ min: -90, max: 90 }),
   query('longitude').isFloat({ min: -180, max: 180 }),
+  query('method').optional().isInt(),
 ], async (req: Request, res: Response) => {
     try {
         const errors = validationResult(req);
@@ -173,39 +174,97 @@ router.get('/fasting', [
         }
 
         const { latitude, longitude, method = '3' } = req.query as any;
-        
-        const timestamp = Math.floor(Date.now() / 1000);
-        const apiUrl = `${API_BASE_URL}/${timestamp}?latitude=${latitude}&longitude=${longitude}&method=${method}`;
-        
-        console.log(`Fetching fasting times from Aladhan: ${apiUrl}`);
+        const islamicApiKey = process.env.ISLAMIC_API_KEY;
+
+        console.log('Fetching fasting times from Islamic API');
+
+        // Use Islamic API for fasting times
+        const apiUrl = `https://islamicapi.com/api/v1/fasting/?lat=${latitude}&lon=${longitude}&method=${method}&api_key=${islamicApiKey}`;
 
         const response = await fetch(apiUrl);
         if (!response.ok) {
-            throw new Error(`Aladhan API error: ${response.status}`);
+            throw new Error(`Islamic API error: ${response.status}`);
         }
-        
+
         const apiData: any = await response.json();
-        
-        console.log('Fasting API Response received successfully');
-        
-        if (apiData.code === 200 && apiData.data) {
-            const data = apiData.data;
+
+        console.log('Islamic Fasting API Response received successfully:', apiData);
+
+        if (apiData.status === 'success' && apiData.data?.fasting?.length > 0) {
+            const fastingData = apiData.data;
             return res.json({
                 status: 'success',
                 data: {
-                    sahur: data.timings.Imsak,
-                    imsak: data.timings.Imsak,
-                    fajr: data.timings.Fajr,
-                    iftar: data.timings.Maghrib,
-                    date: data.date
+                    fasting: fastingData.fasting,
+                    white_days: fastingData.white_days
                 }
             });
         } else {
-            throw new Error('Invalid response from Aladhan API');
+            throw new Error('Invalid response from Islamic API');
         }
     } catch (error: any) {
         console.error('Fasting API error:', error.message);
-        return res.status(500).json({ status: 'error', message: 'Failed to fetch fasting times', details: error.message });
+        return res.status(500).json({ 
+            status: 'error', 
+            message: 'Failed to fetch fasting times', 
+            details: error.message 
+        });
+    }
+});
+
+/**
+ * @route   GET /api/prayers/ramadan
+ * @desc    Get complete Ramadan fasting times (30 days)
+ * @access  Public
+ */
+router.get('/ramadan', [
+  query('latitude').isFloat({ min: -90, max: 90 }),
+  query('longitude').isFloat({ min: -180, max: 180 }),
+  query('method').optional().isInt(),
+], async (req: Request, res: Response) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ status: 'error', errors: errors.array() });
+        }
+
+        const { latitude, longitude, method = '3' } = req.query as any;
+        const islamicApiKey = process.env.ISLAMIC_API_KEY;
+
+        console.log('Fetching Ramadan times from Islamic API');
+
+        // Use Islamic API for Ramadan times
+        const apiUrl = `https://islamicapi.com/api/v1/ramadan/?lat=${latitude}&lon=${longitude}&method=${method}&api_key=${islamicApiKey}`;
+
+        const response = await fetch(apiUrl);
+        if (!response.ok) {
+            throw new Error(`Islamic API error: ${response.status}`);
+        }
+
+        const apiData: any = await response.json();
+
+        console.log('Islamic Ramadan API Response received successfully:', apiData);
+
+        if (apiData.status === 'success' && apiData.data?.fasting?.length > 0) {
+            return res.json({
+                status: 'success',
+                data: {
+                    ramadan_year: apiData.ramadan_year,
+                    fasting: apiData.data.fasting,
+                    white_days: apiData.data.white_days,
+                    resource: apiData.resource
+                }
+            });
+        } else {
+            throw new Error('Invalid response from Islamic API');
+        }
+    } catch (error: any) {
+        console.error('Ramadan API error:', error.message);
+        return res.status(500).json({ 
+            status: 'error', 
+            message: 'Failed to fetch Ramadan times', 
+            details: error.message 
+        });
     }
 });
 

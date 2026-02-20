@@ -14,6 +14,7 @@ export interface SpiritualFeature {
   title: string;
   description: string;
   color?: string;
+  bgColor?: string;
   image?: string;
   disabled?: boolean;
 }
@@ -181,7 +182,7 @@ export const spiritualFeatures: SpiritualFeature[] = [
   {
     icon: "/Zakat.png",
     title: "Zakat Management",
-    description: "Purify your wealth, fulfill your obligation, and track the positive impact of your charity."
+    description: "Comprehensive dashboard to manage Zakat collection, distribution, and donor history."
   },
   {
     icon: "/Global-Community.png",
@@ -195,9 +196,11 @@ export const spiritualFeatures: SpiritualFeature[] = [
   },
   {
     icon: "/AI-Scholar-Assistant.png",
-    title: "AI Scholar Assistant",
-    description: "Instant access to reliable Islamic knowledge when you need guidance most.",
-    disabled: true
+    title: "AI Assistant",
+    description: "Islamic AI assistant for religious questions and guidance",
+    disabled: true,
+    color: "text-gray-400",
+    bgColor: "bg-gray-100"
   }
 ];
 
