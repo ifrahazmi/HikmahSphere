@@ -102,7 +102,7 @@ const Contact: React.FC = () => {
                   <div>
                     <p className="font-medium">Email Us</p>
                     <a href="mailto:ifrahazmi@hikmahsphere.site" className="text-emerald-100 hover:text-white transition-colors">
-                      ifrahazmi@hikmahsphere.site
+                      info@hikmahsphere.site
                     </a>
                   </div>
                 </div>

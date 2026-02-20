@@ -122,7 +122,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                     ? 'bg-emerald-900 text-emerald-300'
                     : 'bg-emerald-100 text-emerald-700'
                 } -translate-y-1`}>
-                  v1.0 Beta
+                  v2.1 Beta
                 </span>
               </div>
             </Link>
