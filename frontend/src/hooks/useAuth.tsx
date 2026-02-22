@@ -64,9 +64,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const token = localStorage.getItem('token');
       const storedUser = localStorage.getItem('user');
-      
-      // First try to get user from stored data
-      if (storedUser) {
+
+      // Only set user from localStorage if we have a token
+      // Otherwise wait for API validation
+      if (token && storedUser) {
         try {
           const parsedUser = JSON.parse(storedUser);
           setUser(mapUser(parsedUser));
@@ -74,7 +75,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           localStorage.removeItem('user');
         }
       }
-      
+
       if (token) {
         try {
             const response = await fetch(`${API_URL}/auth/profile`, {
@@ -104,6 +105,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             localStorage.removeItem('user');
             setUser(null);
         }
+      } else {
+        // No token - clear any stored user data
+        localStorage.removeItem('user');
+        setUser(null);
       }
     } catch (error) {
       console.error('Auth check failed:', error);
@@ -182,6 +187,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const logout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('user');
     setUser(null);
   };
 

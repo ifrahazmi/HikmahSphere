@@ -11,6 +11,7 @@ import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import LoadingSpinner from './components/LoadingSpinner';
 import ProtectedRoute from './components/ProtectedRoute'; // Import ProtectedRoute
+import RamadanElitePopup from './components/RamadanElitePopup'; // Ramadan Popup
 
 // Pages
 import Home from './pages/Home';
@@ -131,6 +132,9 @@ const AppContent: React.FC = () => {
 
       {/* Footer */}
       <Footer />
+
+      {/* Ramadan Elite Popup */}
+      <RamadanElitePopup />
 
       {/* Global Notifications */}
       <Toaster />
