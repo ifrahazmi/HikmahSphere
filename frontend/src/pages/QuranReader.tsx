@@ -71,11 +71,9 @@ const QuranReader: React.FC = () => {
   const [showMobileSettings, setShowMobileSettings] = useState(false);
   const [showSurahSearch, setShowSurahSearch] = useState(false);
   const [tempSettings, setTempSettings] = useState(settings);
-  const [scrollToAyah, setScrollToAyah] = useState<number | null>(null);
 
   // Scroll to specific ayah
   const scrollToAyahNumber = (ayahNumber: number) => {
-    setScrollToAyah(ayahNumber);
     setTimeout(() => {
       const ayahElement = document.getElementById(`ayah-${ayahNumber}`);
       if (ayahElement) {
@@ -86,7 +84,6 @@ const QuranReader: React.FC = () => {
           ayahElement.classList.remove('bg-emerald-200', 'bg-opacity-30');
         }, 2000);
       }
-      setScrollToAyah(null);
     }, 500);
   };
 

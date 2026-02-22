@@ -1516,7 +1516,6 @@ const PrayerTimes: React.FC = () => {
                     <div className="flex justify-center gap-3 flex-wrap">
                       <button
                         onClick={() => {
-                          const modalTitle = document.getElementById('share-modal-title');
                           if (shareType === 'hadith') {
                             shareHadith('whatsapp');
                           } else {
