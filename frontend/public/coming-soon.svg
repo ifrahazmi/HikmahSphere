@@ -1,0 +1,62 @@
+<svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background with gradient -->
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#10b981;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="textGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ecfdf5;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Main background -->
+  <rect width="400" height="400" fill="url(#bgGradient)"/>
+
+  <!-- Decorative circles -->
+  <circle cx="350" cy="50" r="40" fill="#ffffff" opacity="0.1"/>
+  <circle cx="50" cy="350" r="60" fill="#ffffff" opacity="0.1"/>
+  <circle cx="100" cy="100" r="25" fill="#ffffff" opacity="0.08"/>
+
+  <!-- Center circle for icon area -->
+  <circle cx="200" cy="140" r="80" fill="#ffffff" opacity="0.15" stroke="#ffffff" stroke-width="3" opacity="0.2"/>
+
+  <!-- Rocket icon -->
+  <g transform="translate(200, 140)">
+    <!-- Rocket body -->
+    <rect x="-15" y="-35" width="30" height="50" rx="5" fill="#ffffff" opacity="0.9"/>
+    <!-- Rocket window -->
+    <circle cx="0" cy="-20" r="8" fill="#10b981"/>
+    <!-- Rocket flames -->
+    <polygon points="0,15 -12,35 0,25 12,35" fill="#fbbf24" opacity="0.9"/>
+    <polygon points="0,20 -8,32 0,24 8,32" fill="#f97316" opacity="0.8"/>
+  </g>
+
+  <!-- Decorative stars -->
+  <g fill="#ffffff" opacity="0.6">
+    <text x="80" y="120" font-size="24">⭐</text>
+    <text x="300" y="200" font-size="20">✨</text>
+    <text x="70" y="280" font-size="18">⭐</text>
+  </g>
+
+  <!-- "COMING SOON" text -->
+  <text x="200" y="260" font-family="Arial, sans-serif" font-size="36" font-weight="bold" text-anchor="middle" fill="#ffffff" letter-spacing="2">
+    COMING SOON
+  </text>
+
+  <!-- Subtitle -->
+  <text x="200" y="295" font-family="Arial, sans-serif" font-size="16" text-anchor="middle" fill="#ecfdf5" opacity="0.9">
+    Exciting roles opening up!
+  </text>
+
+  <!-- Bottom accent line -->
+  <line x1="80" y1="320" x2="320" y2="320" stroke="#ffffff" stroke-width="2" opacity="0.4"/>
+
+  <!-- Hiring icon group -->
+  <g opacity="0.8">
+    <text x="200" y="365" font-family="Arial, sans-serif" font-size="28" text-anchor="middle" fill="#ffffff">
+      🙌 We're Hiring 🙌
+    </text>
+  </g>
+</svg>

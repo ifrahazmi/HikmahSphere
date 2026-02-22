@@ -3,6 +3,7 @@ import { body, validationResult } from 'express-validator';
 import jwt from 'jsonwebtoken';
 import User from '../models/User';
 import { authMiddleware } from '../middleware/auth';
+import { logAnonymousActivity, logUserActivity } from '../middleware/activityLogger';
 
 const router = express.Router();
 
@@ -92,6 +93,18 @@ router.post('/register', [
     const accessToken = generateToken(user._id);
     const refreshToken = generateRefreshToken(user._id);
 
+    // Log registration activity
+    await logAnonymousActivity(
+      user._id.toString(),
+      `${firstName} ${lastName}`,
+      email,
+      'register',
+      'auth',
+      `New user registered: ${email}`,
+      req,
+      { username, role: user.role }
+    );
+
     return res.status(201).json({
       status: 'success',
       token: accessToken,
@@ -148,6 +161,18 @@ router.post('/login', [
 
     const accessToken = generateToken(user._id);
     const refreshToken = generateRefreshToken(user._id);
+
+    // Log login activity
+    await logAnonymousActivity(
+      user._id.toString(),
+      `${user.firstName} ${user.lastName}`,
+      user.email,
+      'login',
+      'auth',
+      `User logged in: ${user.email}`,
+      req,
+      { username: user.username, role: user.role, isAdmin: user.isAdmin }
+    );
 
     // Check for forced password change
     if (user.requiresPasswordChange) {

@@ -14,7 +14,8 @@ export interface IUser extends Document {
   isAdmin: boolean;
   role: 'superadmin' | 'manager' | 'user';
   isBlocked: boolean;
-  requiresPasswordChange: boolean; // New field
+  requiresPasswordChange: boolean; 
+  fcmTokens?: string[]; // Added FCM Tokens field
   location?: {
     city: string;
     country: string;
@@ -159,6 +160,7 @@ const UserSchema = new Schema<IUser>({
     type: Boolean,
     default: false,
   },
+  fcmTokens: [{ type: String }], // Array of FCM tokens for multi-device support
   dateOfBirth: {
     type: Date,
     validate: {

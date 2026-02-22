@@ -65,7 +65,7 @@ services:
       - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD:-password123}
       - MONGO_INITDB_DATABASE=hikmahsphere
     volumes:
-      - mongodb_data:/data/db
+      - ./db_data:/data/db
       - mongodb_config:/data/configdb
       - ./scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
     networks:
@@ -97,8 +97,6 @@ services:
       retries: 5
 
 volumes:
-  mongodb_data:
-    driver: local
   mongodb_config:
     driver: local
   redis_data:

@@ -17,6 +17,9 @@ import prayerRoutes from './routes/prayers';
 import quranRoutes from './routes/quran';
 import zakatRoutes from './routes/zakat';
 import communityRoutes from './routes/community';
+import notificationRoutes from './routes/notifications'; // Import notification routes
+import supportRoutes from './routes/support'; // Import support routes
+import activityRoutes from './routes/activity'; // Import activity log routes
 
 // Load environment variables
 // Try to load from root .env for local development, fallback to Docker env vars
@@ -38,10 +41,11 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "https:"],
+      imgSrc: ["'self'", "data:", "https:", "blob:"], // Added blob: for image previews
       scriptSrc: ["'self'"],
     },
   },
+  crossOriginResourcePolicy: { policy: "cross-origin" }, // Allow cross-origin resource sharing
 }));
 
 // Rate limiting
@@ -69,6 +73,14 @@ app.use(cors({
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Serve static files for uploaded proofs - Works in both dev and production
+// Using path.resolve for absolute path resolution
+const uploadsPath = path.resolve(process.cwd(), 'src', 'uploads');
+app.use('/uploads', express.static(uploadsPath));
+
+// Also serve from src/uploads for backwards compatibility
+app.use('/src/uploads', express.static(uploadsPath));
 
 // Request logging middleware
 app.use(requestLogger);
@@ -172,6 +184,9 @@ app.use('/api/prayers', prayerRoutes);
 app.use('/api/quran', quranRoutes);
 app.use('/api/zakat', zakatRoutes);
 app.use('/api/community', communityRoutes);
+app.use('/api/notifications', notificationRoutes); // Use notification routes
+app.use('/api/support', supportRoutes); // Use support routes
+app.use('/api/activity', activityRoutes); // Use activity log routes
 
 // Admin Routes for User Management (Restricted to Super Admin)
 // Get All Users
@@ -318,9 +333,14 @@ const connectDB = async () => {
     // Use MONGODB_URI_LOCAL for local dev, MONGODB_URI for Docker, or default
     const mongoURI = process.env.MONGODB_URI_LOCAL || process.env.MONGODB_URI || 'mongodb://localhost:27017/hikmahsphere';
 
-    await mongoose.connect(mongoURI, {
-      // Modern MongoDB connection options
-    });
+    const connectOptions: mongoose.ConnectOptions = {
+        authSource: "admin",
+    };
+
+    if (process.env.MONGO_USER) connectOptions.user = process.env.MONGO_USER;
+    if (process.env.MONGO_PASS) connectOptions.pass = process.env.MONGO_PASS;
+
+    await mongoose.connect(mongoURI, connectOptions);
 
     logDatabaseConnection(mongoURI);
     await seedAdminUser();
@@ -348,6 +368,7 @@ const startServer = async () => {
 
     await connectDB();
 
+    // Listen on 0.0.0.0 to allow access from other interfaces (required for VMs/external access)
     app.listen(PORT, '0.0.0.0', () => {
       logStartup(PORT);
     });

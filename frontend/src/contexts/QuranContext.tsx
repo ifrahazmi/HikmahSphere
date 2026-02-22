@@ -152,10 +152,10 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
   }, [currentSurah, goToSurah]);
 
   // Bookmarks
-  const addBookmark = useCallback((surah: number, ayah: number, note?: string) => {
+  const addBookmark = useCallback((surah: number, ayah: number, note?: string, color?: 'emerald' | 'blue' | 'purple' | 'amber' | 'rose') => {
     const surahInfo = surahs.find(s => s.number === surah);
     if (!surahInfo) return;
-    
+
     const bookmark: Bookmark = {
       id: `${surah}:${ayah}:${Date.now()}`,
       surahNumber: surah,
@@ -163,8 +163,9 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       surahName: surahInfo.name,
       timestamp: new Date(),
       note,
+      color,
     };
-    
+
     setBookmarks(prev => {
       const updated = [...prev, bookmark];
       localStorage.setItem('quranBookmarks', JSON.stringify(updated));

@@ -63,6 +63,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const checkAuthStatus = async () => {
     try {
       const token = localStorage.getItem('token');
+      const storedUser = localStorage.getItem('user');
+      
+      // First try to get user from stored data
+      if (storedUser) {
+        try {
+          const parsedUser = JSON.parse(storedUser);
+          setUser(mapUser(parsedUser));
+        } catch (e) {
+          localStorage.removeItem('user');
+        }
+      }
+      
       if (token) {
         try {
             const response = await fetch(`${API_URL}/auth/profile`, {
@@ -74,23 +86,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                  const data = await response.json();
                  if (data && data.data && data.data.user) {
                      setUser(mapUser(data.data.user));
+                     // Update stored user data
+                     localStorage.setItem('user', JSON.stringify(data.data.user));
                  } else {
                      localStorage.removeItem('token');
+                     localStorage.removeItem('user');
                      setUser(null);
                  }
             } else {
                  localStorage.removeItem('token');
+                 localStorage.removeItem('user');
                  setUser(null);
             }
         } catch (err) {
             console.error("Failed to fetch profile", err);
             localStorage.removeItem('token');
+            localStorage.removeItem('user');
             setUser(null);
         }
       }
     } catch (error) {
       console.error('Auth check failed:', error);
       localStorage.removeItem('token');
+      localStorage.removeItem('user');
     } finally {
       setLoading(false);
     }
@@ -111,35 +129,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       if (response.ok) {
         localStorage.setItem('token', data.token);
-         try {
-            const profileResponse = await fetch(`${API_URL}/auth/profile`, {
-                headers: {
-                    'Authorization': `Bearer ${data.token}`
-                }
-            });
-            const profileData = await profileResponse.json();
-            if (profileData && profileData.data && profileData.data.user) {
-                 setUser(mapUser(profileData.data.user));
-            } else if (data.user) {
-                 setUser({
-                    id: data.user.id,
-                    name: `${data.user.firstName} ${data.user.lastName}`,
-                    email: data.user.email,
-                    role: 'user' // Default fallback
-                 });
-            }
-         } catch(e) {
-             console.error("Failed to fetch full profile after login", e);
-             if (data.user) {
-                 setUser({
-                    id: data.user.id,
-                    name: `${data.user.firstName} ${data.user.lastName}`,
-                    email: data.user.email,
-                    role: 'user'
-                 });
-             }
-         }
-
+        if (data.user) {
+          localStorage.setItem('user', JSON.stringify(data.user));
+          setUser(mapUser(data.user));
+        }
       } else {
         throw new Error(data.message || 'Login failed');
       }
