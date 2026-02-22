@@ -172,27 +172,27 @@ export const spiritualFeatures: SpiritualFeature[] = [
   {
     icon: "/Smart-Prayer-Times.png",
     title: "Smart Prayer Times",
-    description: "Never miss the connection with your Lord. Precision and reverence guide every notification."
+    description: "Never miss the connection with your Lord. Ultra-precise calculations with real-time geolocation, multiple scholarly methods (MWL, ISNA, Umm al-Qura), high latitude corrections, and beautiful shareable prayer cards."
   },
   {
     icon: "/Quran-Reader.png",
     title: "Quran Reader",
-    description: "Understand His words in your language. Let the Quran transform your heart and mind."
+    description: "Understand His words in your language. Complete 114 Surahs with 10+ translations, semantic AI search, audio recitations, bookmarks, Indopak script, and seamless navigation that transforms your reading experience."
   },
   {
     icon: "/Zakat.png",
     title: "Zakat Management",
-    description: "Comprehensive dashboard to manage Zakat collection, distribution, and donor history."
+    description: "Purify your wealth with confidence. Complete dashboard for Zakat collection and distribution, donor tracking, real-time balance, leaderboards, and transparent fund management with export capabilities."
   },
   {
     icon: "/Global-Community.png",
     title: "Global Community",
-    description: "Find your brothers and sisters across continents. Strengthen the bonds of Islamic brotherhood."
+    description: "Find your brothers and sisters across continents. Connect through forums, discover local events, join meaningful discussions, and strengthen the bonds of Islamic brotherhood worldwide."
   },
   {
     icon: "/Qibla-Finder-AR.png",
     title: "Qibla Finder AR",
-    description: "Face the House of Allah with confidence, wherever you are in the world."
+    description: "Face the House of Allah with confidence. Augmented reality guidance, 3D compass, precise geolocation calculations, and visual overlay showing the exact direction to the Kaaba from anywhere on Earth."
   },
   {
     icon: "/AI-Scholar-Assistant.png",

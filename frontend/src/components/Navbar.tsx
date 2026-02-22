@@ -98,6 +98,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
 
   // Check for Super Admin Role
   const isSuperAdmin = hasRole && hasRole(['superadmin']);
+  const isManager = hasRole && hasRole(['manager']);
 
   // Determine if we should use dark mode
   const isDark = isQuranPage && quranTheme === 'dark';

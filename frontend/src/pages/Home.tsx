@@ -58,7 +58,7 @@ const Home: React.FC = () => {
     {
       icon: '/Smart-Prayer-Times.png',
       title: 'Smart Prayer Times',
-      description: 'Ultra-precise prayer calculations with geolocation and astronomical corrections',
+      description: 'Ultra-precise prayer times with real-time geolocation, multiple calculation methods (MWL, ISNA, Umm al-Qura), astronomical corrections for high latitudes, and beautiful shareable prayer cards',
       color: 'text-emerald-600',
       bgColor: 'bg-emerald-50',
       gradient: 'from-emerald-500 to-teal-500',
@@ -66,7 +66,7 @@ const Home: React.FC = () => {
     {
       icon: '/Quran-Reader.png',
       title: 'Quran Reader',
-      description: 'AI-powered semantic search across 10 translations with audio recitations',
+      description: 'Complete 114 Surahs with 10+ translations, semantic AI search, audio recitations, bookmarks, Indopak script, customizable fonts, and seamless navigation between ayahs',
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
       gradient: 'from-blue-500 to-cyan-500',
@@ -75,8 +75,8 @@ const Home: React.FC = () => {
       icon: '/Zakat.png',
       title: hasManagementAccess ? 'Zakat Management' : 'Zakat Calculator',
       description: hasManagementAccess
-        ? 'Comprehensive dashboard to manage Zakat collection, distribution, and donor history.'
-        : 'Intelligent Zakat calculation supporting all methodologies and cryptocurrencies',
+        ? 'Complete Zakat dashboard with donor tracking, collection/spending records, real-time balance, donor leaderboards, and export capabilities for transparent fund management'
+        : 'Intelligent Zakat calculator with live nisab rates, support for gold/silver/assets/crypto, 2.5% calculation, and multiple scholarly methodologies',
       color: 'text-yellow-600',
       bgColor: 'bg-yellow-50',
       gradient: 'from-yellow-500 to-amber-500',
@@ -84,7 +84,7 @@ const Home: React.FC = () => {
     {
       icon: '/Global-Community.png',
       title: 'Global Community',
-      description: 'Connect with Muslims worldwide through forums, events, and local groups',
+      description: 'Connect with Muslims worldwide through community forums, local event discovery, group discussions, and reputation systems fostering meaningful Islamic brotherhood',
       color: 'text-purple-600',
       bgColor: 'bg-purple-50',
       gradient: 'from-purple-500 to-pink-500',
@@ -92,7 +92,7 @@ const Home: React.FC = () => {
     {
       icon: '/Qibla-Finder-AR.png',
       title: 'Qibla Finder AR',
-      description: 'Augmented reality Qibla direction with 3D compass and precise calculations',
+      description: 'Augmented reality Qibla direction with 3D compass, precise geolocation calculations, visual overlay guidance, and accurate Kaaba direction for any location worldwide',
       color: 'text-teal-600',
       bgColor: 'bg-teal-50',
       gradient: 'from-teal-500 to-emerald-500',
@@ -109,30 +109,30 @@ const Home: React.FC = () => {
   ];
 
   const stats = [
-    { 
-      label: 'Accurate Prayer Times', 
-      description: 'Based on your location',
+    {
+      label: 'Accurate Prayer Times',
+      description: 'Real-time geolocation & multiple calculation methods',
       icon: ClockIcon,
       color: 'text-emerald-600',
       bgColor: 'bg-emerald-100',
     },
-    { 
-      label: 'Multi-Language Quran', 
-      description: '10 translations',
+    {
+      label: 'Complete Quran',
+      description: '114 Surahs with 10+ translations & audio',
       icon: BookOpenIcon,
       color: 'text-blue-600',
       bgColor: 'bg-blue-100',
     },
-    { 
-      label: 'Smart Zakat Calculator', 
-      description: 'All methodologies supported',
+    {
+      label: 'Smart Zakat',
+      description: 'Live nisab rates & all asset types supported',
       icon: SparklesIcon,
       color: 'text-yellow-600',
       bgColor: 'bg-yellow-100',
     },
-    { 
-      label: 'Global Qibla Direction', 
-      description: 'Precise calculations',
+    {
+      label: 'Global Qibla',
+      description: 'AR-powered precise direction worldwide',
       icon: GlobeAltIcon,
       color: 'text-purple-600',
       bgColor: 'bg-purple-100',

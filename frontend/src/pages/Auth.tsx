@@ -10,7 +10,7 @@ const Auth: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [passwordChangeToken, setPasswordChangeToken] = useState('');
-  
+
   const { login, register } = useAuth();
   const navigate = useNavigate();
   
@@ -24,13 +24,13 @@ const Auth: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    
+
     try {
         if (showPasswordChange) {
             // Handle Password Change
             const response = await fetch(`${API_URL}/auth/change-password`, {
                 method: 'POST',
-                headers: { 
+                headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${passwordChangeToken}`
                 },
@@ -42,6 +42,7 @@ const Auth: React.FC = () => {
                 setShowPasswordChange(false);
                 setPasswordChangeToken('');
                 setFormData(prev => ({ ...prev, password: '', newPassword: '' }));
+                setIsLogin(true);
             } else {
                 toast.error(data.message || 'Failed to change password');
             }
@@ -56,27 +57,28 @@ const Auth: React.FC = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email: formData.email, password: formData.password })
             });
-            
+
             const data = await response.json();
-            
+
             if (data.status === 'success') {
                 if (data.passwordChangeRequired) {
                     toast.error('You must change your password to proceed.');
                     setPasswordChangeToken(data.token);
                     setShowPasswordChange(true);
                 } else {
+                    // Use the login function from auth context to properly update state
                     await login(formData.email, formData.password);
                     toast.success('Successfully logged in!');
-                    navigate('/profile'); 
+                    navigate('/dashboard');
                 }
             } else {
-                throw new Error(data.message || 'Login failed');
+                toast.error(data.message || 'Login failed. Please check your credentials.');
             }
 
         } else {
             await register(formData.name, formData.email, formData.password);
             toast.success('Account created successfully!');
-            navigate('/profile'); 
+            navigate('/dashboard');
         }
     } catch (error: any) {
         console.error('Authentication error:', error);

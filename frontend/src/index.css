@@ -64,6 +64,33 @@ code {
   line-height: 2.2; /* Better line spacing for larger text */
 }
 
+/* Indopak Nastaleeq Font - Custom Quran Font */
+@font-face {
+  font-family: 'Indopak Nastaleeq';
+  src: url('./data/Al Qalam Quran Majeed 1 Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+.font-indopak-nastaleeq {
+  font-family: 'Indopak Nastaleeq', 'Noto Naskh Arabic', serif;
+}
+
+/* Justified Arabic Text for Better Alignment */
+.arabic-justified {
+  text-align: justify;
+  text-justify: inter-word;
+  display: block;
+  width: 100%;
+}
+
+.arabic-justified::after {
+  content: '';
+  display: inline-block;
+  width: 100%;
+}
+
 /* Scroll Reveal Animations */
 @keyframes fadeInUp {
   from {

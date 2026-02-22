@@ -16,6 +16,7 @@ import {
 import { useQuran } from '../contexts/QuranContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { DEFAULT_TRANSLATIONS } from '../types/quran';
+import { getIndopakQuranData, getIndopakSurah, type IndopakSurah } from '../utils/indopakQuran';
 
 const QuranReader: React.FC = () => {
   const {
@@ -42,12 +43,52 @@ const QuranReader: React.FC = () => {
     ayahNum: number;
     x: number;
     y: number;
+    note?: string;
+    color?: 'emerald' | 'blue' | 'purple' | 'amber' | 'rose';
   } | null>(null);
-  
+
+  // Indopak Quran data state
+  const [indopakData, setIndopakData] = useState<Map<number, IndopakSurah> | null>(null);
+  const [indopakSurah, setIndopakSurah] = useState<IndopakSurah | null>(null);
+
+  // Load Indopak Quran data on mount
+  useEffect(() => {
+    const data = getIndopakQuranData();
+    setIndopakData(data);
+  }, []);
+
+  // Load current Surah from Indopak data when surah or font changes
+  useEffect(() => {
+    if (indopakData && settings.arabicFont === 'indopak-nastaleeq' && currentSurah) {
+      const surah = getIndopakSurah(indopakData, currentSurah);
+      setIndopakSurah(surah || null);
+    } else {
+      setIndopakSurah(null);
+    }
+  }, [indopakData, settings.arabicFont, currentSurah]);
+
   // Mobile settings modal state
   const [showMobileSettings, setShowMobileSettings] = useState(false);
   const [showSurahSearch, setShowSurahSearch] = useState(false);
   const [tempSettings, setTempSettings] = useState(settings);
+  const [scrollToAyah, setScrollToAyah] = useState<number | null>(null);
+
+  // Scroll to specific ayah
+  const scrollToAyahNumber = (ayahNumber: number) => {
+    setScrollToAyah(ayahNumber);
+    setTimeout(() => {
+      const ayahElement = document.getElementById(`ayah-${ayahNumber}`);
+      if (ayahElement) {
+        ayahElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Highlight the ayah temporarily
+        ayahElement.classList.add('bg-emerald-200', 'bg-opacity-30');
+        setTimeout(() => {
+          ayahElement.classList.remove('bg-emerald-200', 'bg-opacity-30');
+        }, 2000);
+      }
+      setScrollToAyah(null);
+    }, 500);
+  };
 
   // Sync temp settings when settings change
   useEffect(() => {
@@ -91,6 +132,38 @@ const QuranReader: React.FC = () => {
     return bookmarks.some(b => b.surahNumber === surahNum && b.ayahNumber === ayahNum);
   };
 
+  // Get bookmark color for a specific ayah
+  const getBookmarkColor = (surahNum: number, ayahNum: number): string | undefined => {
+    const bookmark = bookmarks.find(b => b.surahNumber === surahNum && b.ayahNumber === ayahNum);
+    return bookmark?.color;
+  };
+
+  // Get background class based on bookmark color
+  const getBookmarkBackgroundClass = (color?: string): string => {
+    if (!color) return '';
+    const colorMap = {
+      emerald: 'bg-emerald-200 bg-opacity-30',
+      blue: 'bg-blue-200 bg-opacity-30',
+      purple: 'bg-purple-200 bg-opacity-30',
+      amber: 'bg-amber-200 bg-opacity-30',
+      rose: 'bg-rose-200 bg-opacity-30',
+    };
+    return colorMap[color] || '';
+  };
+
+  // Get border color class based on bookmark color
+  const getBookmarkBorderClass = (color?: string): string => {
+    if (!color) return 'border-emerald-600 text-emerald-600';
+    const colorMap = {
+      emerald: 'border-emerald-600 text-emerald-600',
+      blue: 'border-blue-600 text-blue-600',
+      purple: 'border-purple-600 text-purple-600',
+      amber: 'border-amber-600 text-amber-600',
+      rose: 'border-rose-600 text-rose-600',
+    };
+    return colorMap[color] || 'border-emerald-600 text-emerald-600';
+  };
+
   // Get font color class based on settings
   const getFontColorClass = () => {
     if (settings.fontColor === 'default') {
@@ -109,6 +182,7 @@ const QuranReader: React.FC = () => {
   const getFontFamilyClass = () => {
     const fontMap: Record<string, string> = {
       'al-mushaf': 'font-al-mushaf',
+      'indopak-nastaleeq': 'font-indopak-nastaleeq',
       'amiri': 'font-arabic',
       'scheherazade': 'font-scheherazade',
       'noto-naskh': 'font-noto-naskh',
@@ -190,7 +264,7 @@ const QuranReader: React.FC = () => {
         );
         if (bookmark) removeBookmark(bookmark.id);
       } else {
-        addBookmark(bookmarkConfirm.surahNum, bookmarkConfirm.ayahNum);
+        addBookmark(bookmarkConfirm.surahNum, bookmarkConfirm.ayahNum, bookmarkConfirm.note, bookmarkConfirm.color);
       }
       setBookmarkConfirm(null);
     }
@@ -212,10 +286,10 @@ const QuranReader: React.FC = () => {
   }, [bookmarkConfirm]);
 
   return (
-    <div className={`min-h-screen ${settings.theme === 'dark' ? 'bg-gray-900' : 'bg-gradient-to-br from-emerald-50 via-white to-teal-50'} pt-16`}>
-      <div className="w-full px-2 py-2">
+    <div className={`min-h-screen ${settings.theme === 'dark' ? 'bg-gray-900' : 'bg-gradient-to-br from-emerald-50 via-white to-teal-50'}`}>
+      <div className="w-full">
         {/* Header - Desktop */}
-        <div className="hidden lg:block text-center mb-3">
+        <div className="hidden lg:block text-center mb-3 pt-14">
           <div className="flex items-center justify-center gap-2 mb-1">
             <BookOpenIcon className="h-5 w-5 text-emerald-600" />
             <h1 className={`text-2xl font-bold font-arabic ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
@@ -228,40 +302,40 @@ const QuranReader: React.FC = () => {
         </div>
 
         {/* Mobile Header */}
-        <div className="lg:hidden mb-3">
-          <div className={`${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg p-3`}>
+        <div className="lg:hidden pt-14 px-2 py-2">
+          <div className={`${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg p-2`}>
             {/* Top Bar - Settings Button */}
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-2">
               <button
                 onClick={openMobileSettings}
-                className={`p-2.5 rounded-xl ${
-                  settings.theme === 'dark' 
-                    ? 'bg-gray-700 hover:bg-gray-600' 
+                className={`p-2 rounded-xl ${
+                  settings.theme === 'dark'
+                    ? 'bg-gray-700 hover:bg-gray-600'
                     : 'bg-gray-100 hover:bg-gray-200'
                 } transition-colors`}
               >
                 <Cog6ToothIcon className="h-5 w-5 text-emerald-600" />
               </button>
-              <div className="flex items-center gap-2">
-                <BookOpenIcon className="h-5 w-5 text-emerald-600" />
-                <h1 className={`text-lg font-bold font-arabic ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+              <div className="flex items-center gap-1.5">
+                <BookOpenIcon className="h-4 w-4 text-emerald-600" />
+                <h1 className={`text-base font-bold font-arabic ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
                   Quran
                 </h1>
               </div>
               <button
                 onClick={() => setShowSurahSearch(!showSurahSearch)}
-                className={`p-2.5 rounded-xl ${
-                  settings.theme === 'dark' 
-                    ? 'bg-gray-700 hover:bg-gray-600' 
+                className={`p-2 rounded-xl ${
+                  settings.theme === 'dark'
+                    ? 'bg-gray-700 hover:bg-gray-600'
                     : 'bg-gray-100 hover:bg-gray-200'
                 } transition-colors`}
               >
                 <MagnifyingGlassIcon className="h-5 w-5 text-emerald-600" />
               </button>
             </div>
-            
+
             {/* Surah Navigation Bar */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               {/* Previous Surah Button */}
               <button
                 onClick={previousSurah}
@@ -510,6 +584,7 @@ const QuranReader: React.FC = () => {
                     }`}
                   >
                     <option value="al-mushaf">Al Mushaf - Authentic Quranic Script (Default)</option>
+                    <option value="indopak-nastaleeq">Indopak Nastaleeq - South Asian Style</option>
                     <option value="amiri">Amiri - Traditional Naskh</option>
                     <option value="scheherazade">Scheherazade - Classic Book Style</option>
                     <option value="noto-naskh">Noto Naskh - Clear & Readable</option>
@@ -702,13 +777,21 @@ const QuranReader: React.FC = () => {
                       bookmarks.map((bookmark) => (
                         <div
                           key={bookmark.id}
-                          className={`p-2 rounded-md ${
-                            settings.theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'
+                          className={`p-2 rounded-md border-l-4 ${
+                            bookmark.color === 'emerald' ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20' :
+                            bookmark.color === 'blue' ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' :
+                            bookmark.color === 'purple' ? 'border-purple-600 bg-purple-50 dark:bg-purple-900/20' :
+                            bookmark.color === 'amber' ? 'border-amber-600 bg-amber-50 dark:bg-amber-900/20' :
+                            bookmark.color === 'rose' ? 'border-rose-600 bg-rose-50 dark:bg-rose-900/20' :
+                            settings.theme === 'dark' ? 'border-gray-600 bg-gray-700' : 'border-gray-300 bg-gray-50'
                           }`}
                         >
                           <div className="flex items-start justify-between">
                             <button
-                              onClick={() => goToSurah(bookmark.surahNumber)}
+                              onClick={() => {
+                                goToSurah(bookmark.surahNumber);
+                                setTimeout(() => scrollToAyahNumber(bookmark.ayahNumber), 300);
+                              }}
                               className="text-left flex-1"
                             >
                               <p className={`text-sm font-medium ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
@@ -717,6 +800,11 @@ const QuranReader: React.FC = () => {
                               <p className={`text-xs ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
                                 Ayah {bookmark.ayahNumber}
                               </p>
+                              {bookmark.note && (
+                                <p className={`text-xs mt-1 italic ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                                  "{bookmark.note}"
+                                </p>
+                              )}
                             </button>
                             <button
                               onClick={() => removeBookmark(bookmark.id)}
@@ -795,8 +883,123 @@ const QuranReader: React.FC = () => {
                   </div>
                 )}
 
-                {/* Ayahs */}
-                {settings.arabicOnlyMode ? (
+                {/* Ayahs - Indopak Mode */}
+                {settings.arabicFont === 'indopak-nastaleeq' && indopakSurah ? (
+                  settings.arabicOnlyMode ? (
+                    /* Continuous Indopak Arabic text */
+                    <div className={`p-3 rounded-lg ${getReaderBackgroundClass()}`}>
+                      <p
+                        className={`${getFontFamilyClass()} leading-loose text-right ${getFontColorClass()}`}
+                        style={{ fontSize: `${getActualFontSize()}px`, lineHeight: settings.lineSpacing }}
+                        dir="rtl"
+                      >
+                        {indopakSurah.ayahs.map((ayah, index) => {
+                          const ayahNum = ayah.ayah;
+                          const isFirstAyahFatiha = surahData?.number === 1 && ayahNum === 1;
+                          if (isFirstAyahFatiha) return null;
+                          
+                          const bookmarkColor = getBookmarkColor(surahData.number, ayahNum);
+                          const bgClass = getBookmarkBackgroundClass(bookmarkColor);
+                          const borderClass = getBookmarkBorderClass(bookmarkColor);
+                          
+                          return (
+                            <span key={ayahNum}>
+                              <span
+                                onClick={(e) => handleAyahClick(e, surahData.number, ayahNum)}
+                                className={`cursor-pointer hover:bg-emerald-100 hover:bg-opacity-30 rounded px-1 ${bgClass}`}
+                              >
+                                {ayah.text}
+                              </span>
+                              {' '}
+                              <span
+                                id={`ayah-${ayahNum}`}
+                                className={`inline-flex items-center justify-center w-6 h-6 rounded-full border-2 text-xs font-bold mx-1 ${borderClass}`}
+                              >
+                                {ayahNum}
+                              </span>
+                              {index < indopakSurah.ayahs.filter(a => !(surahData?.number === 1 && a.ayah === 1)).length - 1 && ' '}
+                            </span>
+                          );
+                        })}
+                      </p>
+                    </div>
+                  ) : (
+                    /* Separate Indopak ayahs with translations */
+                    <div className="space-y-4">
+                      {indopakSurah.ayahs.map((ayah, index) => {
+                        const ayahNum = ayah.ayah;
+                        const isFirstAyahFatiha = surahData?.number === 1 && ayahNum === 1;
+                        
+                        return (
+                          <div
+                            key={ayahNum}
+                            id={`ayah-${ayahNum}`}
+                            className={`pb-3 border-b last:border-b-0 ${
+                              settings.theme === 'dark' ? 'border-gray-700' : 'border-gray-100'
+                            }`}
+                          >
+                            {/* Arabic Text */}
+                            <div className={`mb-2 p-3 rounded-lg ${getReaderBackgroundClass()}`}>
+                              <p
+                                className={`${getFontFamilyClass()} leading-loose text-right ${getFontColorClass()}`}
+                                style={{ fontSize: `${getActualFontSize()}px`, lineHeight: settings.lineSpacing }}
+                                dir="rtl"
+                              >
+                                {(() => {
+                                  const bookmarkColor = getBookmarkColor(surahData.number, ayahNum);
+                                  const bgClass = getBookmarkBackgroundClass(bookmarkColor);
+                                  const borderClass = getBookmarkBorderClass(bookmarkColor);
+                                  
+                                  return (
+                                    <>
+                                      <span
+                                        onClick={(e) => handleAyahClick(e, surahData.number, ayahNum)}
+                                        className={`cursor-pointer hover:bg-emerald-100 hover:bg-opacity-30 rounded px-1 ${bgClass}`}
+                                      >
+                                        {ayah.text}
+                                      </span>
+                                      {' '}
+                                      <span
+                                        id={`ayah-${ayahNum}`}
+                                        className={`inline-flex items-center justify-center w-6 h-6 rounded-full border-2 text-xs font-bold mx-1 ${borderClass}`}
+                                      >
+                                        {ayahNum}
+                                      </span>
+                                    </>
+                                  );
+                                })()}
+                              </p>
+                            </div>
+
+                            {/* Transliteration */}
+                            {settings.showTransliteration && transliteration && !isFirstAyahFatiha && (
+                              <div className="mb-2">
+                                <p className={`text-xs font-medium mb-1 ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                                  Transliteration
+                                </p>
+                                <p className={`text-sm italic leading-relaxed ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+                                  {transliteration.ayahs[ayahNum - 1]?.text}
+                                </p>
+                              </div>
+                            )}
+
+                            {/* Translations */}
+                            {translations.map((translation, idx) => (
+                              <div key={idx} className="mb-2">
+                                <p className={`text-xs font-medium mb-1 ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                                  {translation.edition.name}
+                                </p>
+                                <p className={`text-sm leading-relaxed ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                                  {translation.ayahs[ayahNum - 1]?.text}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )
+                ) : settings.arabicOnlyMode ? (
                   /* Continuous Arabic text in Arabic-only mode */
                   <div className={`p-3 rounded-lg ${getReaderBackgroundClass()}`}>
                     <p
@@ -806,23 +1009,30 @@ const QuranReader: React.FC = () => {
                     >
                       {surahData.ayahs
                         .filter(ayah => !(surahData.number === 1 && ayah.numberInSurah === 1))
-                        .map((ayah, index) => (
-                        <span key={ayah.numberInSurah}>
-                          <span
-                            onClick={(e) => handleAyahClick(e, surahData.number, ayah.numberInSurah)}
-                            className={`cursor-pointer hover:bg-emerald-100 hover:bg-opacity-30 rounded px-1 ${
-                              isBookmarked(surahData.number, ayah.numberInSurah) ? 'bg-emerald-200 bg-opacity-20' : ''
-                            }`}
-                          >
-                            {removeBismillah(ayah.text, surahData.number, ayah.numberInSurah)}
-                          </span>
-                          {' '}
-                          <span className="inline-flex items-center justify-center w-6 h-6 rounded-full border-2 border-emerald-600 text-emerald-600 text-xs font-bold mx-1">
-                            {ayah.numberInSurah}
-                          </span>
-                          {index < surahData.ayahs.filter(a => !(surahData.number === 1 && a.numberInSurah === 1)).length - 1 && ' '}
-                        </span>
-                      ))}
+                        .map((ayah, index) => {
+                          const bookmarkColor = getBookmarkColor(surahData.number, ayah.numberInSurah);
+                          const bgClass = getBookmarkBackgroundClass(bookmarkColor);
+                          const borderClass = getBookmarkBorderClass(bookmarkColor);
+                          
+                          return (
+                            <span key={ayah.numberInSurah}>
+                              <span
+                                onClick={(e) => handleAyahClick(e, surahData.number, ayah.numberInSurah)}
+                                className={`cursor-pointer hover:bg-emerald-100 hover:bg-opacity-30 rounded px-1 ${bgClass}`}
+                              >
+                                {removeBismillah(ayah.text, surahData.number, ayah.numberInSurah)}
+                              </span>
+                              {' '}
+                              <span
+                                id={`ayah-${ayah.numberInSurah}`}
+                                className={`inline-flex items-center justify-center w-6 h-6 rounded-full border-2 text-xs font-bold mx-1 ${borderClass}`}
+                              >
+                                {ayah.numberInSurah}
+                              </span>
+                              {index < surahData.ayahs.filter(a => !(surahData.number === 1 && a.numberInSurah === 1)).length - 1 && ' '}
+                            </span>
+                          );
+                        })}
                     </p>
                   </div>
                 ) : (
@@ -846,18 +1056,29 @@ const QuranReader: React.FC = () => {
                             style={{ fontSize: `${getActualFontSize()}px`, lineHeight: settings.lineSpacing }}
                             dir="rtl"
                           >
-                            <span
-                              onClick={(e) => handleAyahClick(e, surahData.number, ayah.numberInSurah)}
-                              className={`cursor-pointer hover:bg-emerald-100 hover:bg-opacity-30 rounded px-1 ${
-                                isBookmarked(surahData.number, ayah.numberInSurah) ? 'bg-emerald-200 bg-opacity-20' : ''
-                              }`}
-                            >
-                              {removeBismillah(ayah.text, surahData.number, ayah.numberInSurah)}
-                            </span>
-                            {' '}
-                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full border-2 border-emerald-600 text-emerald-600 text-xs font-bold mx-1">
-                              {ayah.numberInSurah}
-                            </span>
+                            {(() => {
+                              const bookmarkColor = getBookmarkColor(surahData.number, ayah.numberInSurah);
+                              const bgClass = getBookmarkBackgroundClass(bookmarkColor);
+                              const borderClass = getBookmarkBorderClass(bookmarkColor);
+                              
+                              return (
+                                <>
+                                  <span
+                                    onClick={(e) => handleAyahClick(e, surahData.number, ayah.numberInSurah)}
+                                    className={`cursor-pointer hover:bg-emerald-100 hover:bg-opacity-30 rounded px-1 ${bgClass}`}
+                                  >
+                                    {removeBismillah(ayah.text, surahData.number, ayah.numberInSurah)}
+                                  </span>
+                                  {' '}
+                                  <span
+                                    id={`ayah-${ayah.numberInSurah}`}
+                                    className={`inline-flex items-center justify-center w-6 h-6 rounded-full border-2 text-xs font-bold mx-1 ${borderClass}`}
+                                  >
+                                    {ayah.numberInSurah}
+                                  </span>
+                                </>
+                              );
+                            })()}
                           </p>
                         </div>
 
@@ -1098,6 +1319,7 @@ const QuranReader: React.FC = () => {
                     }`}
                   >
                     <option value="al-mushaf">Al Mushaf - Authentic Quranic Script (Default)</option>
+                    <option value="indopak-nastaleeq">Indopak Nastaleeq - South Asian Style</option>
                     <option value="amiri">Amiri - Traditional Naskh</option>
                     <option value="scheherazade">Scheherazade - Classic Book Style</option>
                     <option value="noto-naskh">Noto Naskh - Clear & Readable</option>
@@ -1292,8 +1514,13 @@ const QuranReader: React.FC = () => {
                       bookmarks.map((bookmark) => (
                         <div
                           key={bookmark.id}
-                          className={`p-3 rounded-lg ${
-                            settings.theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'
+                          className={`p-3 rounded-lg border-l-4 ${
+                            bookmark.color === 'emerald' ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20' :
+                            bookmark.color === 'blue' ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' :
+                            bookmark.color === 'purple' ? 'border-purple-600 bg-purple-50 dark:bg-purple-900/20' :
+                            bookmark.color === 'amber' ? 'border-amber-600 bg-amber-50 dark:bg-amber-900/20' :
+                            bookmark.color === 'rose' ? 'border-rose-600 bg-rose-50 dark:bg-rose-900/20' :
+                            settings.theme === 'dark' ? 'border-gray-600 bg-gray-700' : 'border-gray-300 bg-gray-50'
                           }`}
                         >
                           <div className="flex items-start justify-between">
@@ -1301,6 +1528,7 @@ const QuranReader: React.FC = () => {
                               onClick={() => {
                                 goToSurah(bookmark.surahNumber);
                                 cancelMobileSettings();
+                                setTimeout(() => scrollToAyahNumber(bookmark.ayahNumber), 500);
                               }}
                               className="text-left flex-1"
                             >
@@ -1310,6 +1538,11 @@ const QuranReader: React.FC = () => {
                               <p className={`text-xs ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
                                 Ayah {bookmark.ayahNumber}
                               </p>
+                              {bookmark.note && (
+                                <p className={`text-xs mt-1 italic ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                                  "{bookmark.note}"
+                                </p>
+                              )}
                             </button>
                             <button
                               onClick={() => removeBookmark(bookmark.id)}
@@ -1356,25 +1589,76 @@ const QuranReader: React.FC = () => {
       {/* Bookmark Confirmation Popup */}
       {bookmarkConfirm && (
         <div
-          className={`fixed z-50 rounded-lg shadow-xl border-2 border-emerald-500 p-4 ${
+          className={`fixed z-50 rounded-xl shadow-2xl border-2 border-emerald-500 p-5 ${
             settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'
           }`}
           style={{
             left: `${bookmarkConfirm.x}px`,
             top: `${bookmarkConfirm.y}px`,
             transform: 'translate(-50%, -100%) translateY(-10px)',
+            maxWidth: '320px',
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          <p className={`text-sm mb-3 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-            {isBookmarked(bookmarkConfirm.surahNum, bookmarkConfirm.ayahNum)
-              ? 'Remove this ayah from bookmarks?'
-              : 'Bookmark this ayah?'}
-          </p>
+          {!isBookmarked(bookmarkConfirm.surahNum, bookmarkConfirm.ayahNum) ? (
+            <>
+              <p className={`text-sm font-semibold mb-3 ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                Add Bookmark
+              </p>
+              
+              {/* Note Input */}
+              <div className="mb-3">
+                <label className={`block text-xs font-medium mb-1 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                  Note (optional)
+                </label>
+                <input
+                  type="text"
+                  value={bookmarkConfirm.note || ''}
+                  onChange={(e) => setBookmarkConfirm({ ...bookmarkConfirm, note: e.target.value })}
+                  placeholder="Add a note..."
+                  className={`w-full px-3 py-2 text-sm rounded-lg border focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
+                    settings.theme === 'dark'
+                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                      : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                  }`}
+                />
+              </div>
+              
+              {/* Color Selection */}
+              <div className="mb-4">
+                <label className={`block text-xs font-medium mb-2 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                  Highlight Color
+                </label>
+                <div className="flex gap-2">
+                  {(['emerald', 'blue', 'purple', 'amber', 'rose'] as const).map((color) => (
+                    <button
+                      key={color}
+                      onClick={() => setBookmarkConfirm({ ...bookmarkConfirm, color })}
+                      className={`w-8 h-8 rounded-lg border-2 transition-all transform hover:scale-110 ${
+                        bookmarkConfirm.color === color ? 'border-gray-900 scale-110' : 'border-transparent'
+                      } ${
+                        color === 'emerald' ? 'bg-emerald-600' :
+                        color === 'blue' ? 'bg-blue-600' :
+                        color === 'purple' ? 'bg-purple-600' :
+                        color === 'amber' ? 'bg-amber-600' :
+                        'bg-rose-600'
+                      }`}
+                      title={color}
+                    />
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            <p className={`text-sm mb-3 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+              Remove this ayah from bookmarks?
+            </p>
+          )}
+          
           <div className="flex gap-2 justify-end">
             <button
               onClick={() => setBookmarkConfirm(null)}
-              className={`px-3 py-1.5 text-xs rounded-md ${
+              className={`px-4 py-2 text-xs font-medium rounded-lg ${
                 settings.theme === 'dark'
                   ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -1384,9 +1668,13 @@ const QuranReader: React.FC = () => {
             </button>
             <button
               onClick={confirmBookmark}
-              className="px-3 py-1.5 text-xs rounded-md bg-emerald-600 text-white hover:bg-emerald-700"
+              className={`px-4 py-2 text-xs font-medium rounded-lg ${
+                isBookmarked(bookmarkConfirm.surahNum, bookmarkConfirm.ayahNum)
+                  ? 'bg-red-600 text-white hover:bg-red-700'
+                  : 'bg-emerald-600 text-white hover:bg-emerald-700'
+              }`}
             >
-              {isBookmarked(bookmarkConfirm.surahNum, bookmarkConfirm.ayahNum) ? 'Remove' : 'Bookmark'}
+              {isBookmarked(bookmarkConfirm.surahNum, bookmarkConfirm.ayahNum) ? 'Remove' : 'Save Bookmark'}
             </button>
           </div>
         </div>

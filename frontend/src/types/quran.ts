@@ -86,7 +86,7 @@ export interface QuranSettings {
   arabicOnlyMode: boolean;         // Show only Arabic text
   fontSize: number;                // 14-32px
   theme: 'light' | 'dark';
-  arabicFont: 'al-mushaf' | 'amiri' | 'scheherazade' | 'noto-naskh' | 'cairo' | 'lateef' | 'reem-kufi';
+  arabicFont: 'al-mushaf' | 'indopak-nastaleeq' | 'amiri' | 'scheherazade' | 'noto-naskh' | 'cairo' | 'lateef' | 'reem-kufi';
   fontColor: 'default' | 'emerald' | 'blue' | 'amber' | 'rose';
   readerBackground: 'default' | 'white' | 'cream' | 'blue' | 'green';
   lineSpacing: number;             // 1.5-3.0
@@ -104,6 +104,7 @@ export interface Bookmark {
   surahName: string;
   timestamp: Date;
   note?: string;
+  color?: 'emerald' | 'blue' | 'purple' | 'amber' | 'rose';
 }
 
 export interface LastRead {
@@ -131,10 +132,10 @@ export interface QuranContextType {
   settings: QuranSettings;
   updateSettings: (settings: Partial<QuranSettings>) => void;
   
-  // Reading history  
+  // Reading history
   bookmarks: Bookmark[];
   lastRead: LastRead | null;
-  addBookmark: (surah: number, ayah: number, note?: string) => void;
+  addBookmark: (surah: number, ayah: number, note?: string, color?: 'emerald' | 'blue' | 'purple' | 'amber' | 'rose') => void;
   removeBookmark: (id: string) => void;
   updateLastRead: (surah: number, ayah: number) => void;
   

@@ -150,38 +150,42 @@ const About: React.FC = () => {
 
         {/* Content */}
         <div className={`relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center transition-all duration-1000 ${visibleSections.has('hero') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
-          {/* Daily Wisdom Badge */}
+          {/* Daily Wisdom - Quran Verse */}
           {dailyVerse && (
-            <div className="mb-8 inline-flex flex-col items-center gap-2 px-6 py-4 bg-white/10 backdrop-blur-sm rounded-2xl border border-white/20">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-3xl">📖</span>
-                <p className="text-2xl lg:text-3xl text-white font-scheherazade leading-loose">
-                  "{dailyVerse.verse}"
+            <div className="mb-10 inline-block">
+              <div className="px-6 py-4 bg-white/10 backdrop-blur-sm rounded-2xl border border-white/20 shadow-xl">
+                {/* Arabic Verse */}
+                <p className="text-2xl sm:text-3xl text-white font-scheherazade leading-loose mb-3" dir="rtl">
+                  {dailyVerse.verse}
+                </p>
+                
+                {/* Translation */}
+                <p className="text-sm sm:text-base text-emerald-100 italic mb-2">
+                  {dailyVerse.translation}
+                </p>
+                
+                {/* Reference */}
+                <p className="text-xs text-emerald-200 font-medium">
+                  {dailyVerse.chapter} • {dailyVerse.reference}
                 </p>
               </div>
-              <p className="text-base text-emerald-100 italic">
-                {dailyVerse.translation}
-              </p>
-              <p className="text-xs text-emerald-200 font-medium">
-                {dailyVerse.chapter} • {dailyVerse.reference}
-              </p>
             </div>
           )}
 
           {/* Main Title */}
-          <h1 className="text-6xl sm:text-7xl lg:text-8xl font-bold mb-6 leading-tight">
+          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold mb-6 leading-tight">
             <span className="block text-white">Guiding the</span>
             <span className="block bg-gradient-to-r from-emerald-300 via-teal-300 to-cyan-300 bg-clip-text text-transparent">
-              Ummah Digital
+              Ummah Digitally
             </span>
           </h1>
 
-          <p className="text-2xl sm:text-3xl text-emerald-100 max-w-3xl mx-auto leading-relaxed mb-12 font-light">
+          <p className="text-xl sm:text-2xl text-emerald-100 max-w-3xl mx-auto leading-relaxed mt-8 font-light">
             Where timeless Islamic wisdom meets intelligent technology
           </p>
 
           {/* CTA Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mt-12">
             <button
               onClick={() => scrollToSection('story-section')}
               className="group px-8 py-4 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold rounded-xl hover:from-emerald-600 hover:to-teal-600 transform hover:scale-105 transition-all duration-300 shadow-2xl cursor-pointer flex items-center gap-2"

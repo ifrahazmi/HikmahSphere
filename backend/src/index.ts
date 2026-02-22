@@ -19,6 +19,7 @@ import zakatRoutes from './routes/zakat';
 import communityRoutes from './routes/community';
 import notificationRoutes from './routes/notifications'; // Import notification routes
 import supportRoutes from './routes/support'; // Import support routes
+import activityRoutes from './routes/activity'; // Import activity log routes
 
 // Load environment variables
 // Try to load from root .env for local development, fallback to Docker env vars
@@ -73,10 +74,12 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Serve static files for uploaded proofs
-// Using process.cwd() to correctly resolve path in both CJS and ESM environments (dev/prod)
-// This assumes the server is started from the 'backend' directory
-const uploadsPath = path.join(process.cwd(), 'src', 'uploads');
+// Serve static files for uploaded proofs - Works in both dev and production
+// Using path.resolve for absolute path resolution
+const uploadsPath = path.resolve(process.cwd(), 'src', 'uploads');
+app.use('/uploads', express.static(uploadsPath));
+
+// Also serve from src/uploads for backwards compatibility
 app.use('/src/uploads', express.static(uploadsPath));
 
 // Request logging middleware
@@ -183,6 +186,7 @@ app.use('/api/zakat', zakatRoutes);
 app.use('/api/community', communityRoutes);
 app.use('/api/notifications', notificationRoutes); // Use notification routes
 app.use('/api/support', supportRoutes); // Use support routes
+app.use('/api/activity', activityRoutes); // Use activity log routes
 
 // Admin Routes for User Management (Restricted to Super Admin)
 // Get All Users
