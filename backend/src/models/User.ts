@@ -1,8 +1,8 @@
-import mongoose, { Document, Schema } from 'mongoose';
+import mongoose, { Document, Schema, Types } from 'mongoose';
 import bcrypt from 'bcryptjs';
 
 export interface IUser extends Document {
-  _id: string;
+  _id: Types.ObjectId;
   username: string;
   email: string;
   password: string;
@@ -14,7 +14,7 @@ export interface IUser extends Document {
   isAdmin: boolean;
   role: 'superadmin' | 'manager' | 'user';
   isBlocked: boolean;
-  requiresPasswordChange: boolean; 
+  requiresPasswordChange: boolean;
   fcmTokens?: string[]; // Added FCM Tokens field
   location?: {
     city: string;

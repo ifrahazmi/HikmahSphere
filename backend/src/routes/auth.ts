@@ -90,8 +90,8 @@ router.post('/register', [
 
     await user.save();
 
-    const accessToken = generateToken(user._id);
-    const refreshToken = generateRefreshToken(user._id);
+    const accessToken = generateToken(user._id.toString());
+    const refreshToken = generateRefreshToken(user._id.toString());
 
     // Log registration activity
     await logAnonymousActivity(
@@ -110,7 +110,7 @@ router.post('/register', [
       token: accessToken,
       refreshToken,
       user: {
-        id: user._id,
+        id: user._id.toString(),
         username: user.username,
         email: user.email,
         role: user.role,
@@ -154,13 +154,13 @@ router.post('/login', [
     }
 
     // Reset login attempts
-    await User.updateOne({ _id: user._id }, { 
+    await User.updateOne({ _id: user._id }, {
         $unset: { 'security.lockUntil': 1 },
-        $set: { 'security.loginAttempts': 0, 'security.lastLogin': new Date() } 
+        $set: { 'security.loginAttempts': 0, 'security.lastLogin': new Date() }
     });
 
-    const accessToken = generateToken(user._id);
-    const refreshToken = generateRefreshToken(user._id);
+    const accessToken = generateToken(user._id.toString());
+    const refreshToken = generateRefreshToken(user._id.toString());
 
     // Log login activity
     await logAnonymousActivity(
