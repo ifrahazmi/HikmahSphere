@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   CurrencyRupeeIcon,
   CalculatorIcon,
@@ -107,8 +107,7 @@ const ZakatCalculator: React.FC = () => {
 
   const [result, setResult] = useState<ZakatResult | null>(null);
 
-  // Fetch Nisab data on mount
-  const fetchNisabData = async () => {
+  const fetchNisabDataCallback = useCallback(async () => {
     try {
       const apiKey = 'icgUaIHMO8GWEVLh7XhFcFoTHjQlsfhSBpJtYfrtTUJXY1eI';
       const standard = form.calculationStandard === 'classical' ? 'classical' : 'common';
@@ -134,39 +133,51 @@ const ZakatCalculator: React.FC = () => {
       console.error('Nisab API error:', error);
       toast.error('Unable to fetch live nisab values.');
     }
-  };
+  }, [form.calculationStandard, form.currency]);
 
   useEffect(() => {
-    fetchNisabData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.metalStandard, form.calculationStandard, form.currency]);
+    fetchNisabDataCallback();
+  }, [fetchNisabDataCallback]);
 
   const handleInputChange = (field: keyof ZakatForm, value: string | boolean) => {
     setForm(prev => ({ ...prev, [field]: value }));
+    
+    // Auto-calculate value when weight changes
+    if (field === 'goldWeight' && value !== '' && nisabData?.goldUnitPrice) {
+      const weightInGrams = form.goldWeightUnit === 'oz' ? parseFloat(value as string) * 31.1035 : parseFloat(value as string);
+      const calculatedValue = (weightInGrams * nisabData.goldUnitPrice).toFixed(2);
+      setForm(prev => ({ ...prev, goldValue: calculatedValue }));
+    }
+    
+    if (field === 'silverWeight' && value !== '' && nisabData?.silverUnitPrice) {
+      const weightInGrams = form.silverWeightUnit === 'oz' ? parseFloat(value as string) * 31.1035 : parseFloat(value as string);
+      const calculatedValue = (weightInGrams * nisabData.silverUnitPrice).toFixed(2);
+      setForm(prev => ({ ...prev, silverValue: calculatedValue }));
+    }
+    
+    // Auto-calculate weight when value changes (reverse calculation)
+    if (field === 'goldValue' && value !== '' && nisabData?.goldUnitPrice) {
+      const weightInGrams = parseFloat(value as string) / nisabData.goldUnitPrice;
+      const calculatedWeight = form.goldWeightUnit === 'oz' ? (weightInGrams / 31.1035).toFixed(2) : weightInGrams.toFixed(2);
+      setForm(prev => ({ ...prev, goldWeight: calculatedWeight }));
+    }
+    
+    if (field === 'silverValue' && value !== '' && nisabData?.silverUnitPrice) {
+      const weightInGrams = parseFloat(value as string) / nisabData.silverUnitPrice;
+      const calculatedWeight = form.silverWeightUnit === 'oz' ? (weightInGrams / 31.1035).toFixed(2) : weightInGrams.toFixed(2);
+      setForm(prev => ({ ...prev, silverWeight: calculatedWeight }));
+    }
   };
 
   const calculateZakat = () => {
     // Parse all values
     const cash = parseFloat(form.cash) || 0;
-    
-    // Calculate gold value from weight or use direct value
-    let finalGoldValue = parseFloat(form.goldValue) || 0;
-    const goldWeight = parseFloat(form.goldWeight) || 0;
-    if (goldWeight > 0 && nisabData?.goldUnitPrice) {
-      // Convert weight to grams if in ounce
-      const weightInGrams = form.goldWeightUnit === 'oz' ? goldWeight * 31.1035 : goldWeight;
-      finalGoldValue = weightInGrams * nisabData.goldUnitPrice;
-    }
-    
-    // Calculate silver value from weight or use direct value
-    let finalSilverValue = parseFloat(form.silverValue) || 0;
-    const silverWeight = parseFloat(form.silverWeight) || 0;
-    if (silverWeight > 0 && nisabData?.silverUnitPrice) {
-      // Convert weight to grams if in ounce
-      const weightInGrams = form.silverWeightUnit === 'oz' ? silverWeight * 31.1035 : silverWeight;
-      finalSilverValue = weightInGrams * nisabData.silverUnitPrice;
-    }
-    
+
+    // Gold and silver values are now auto-calculated from weight if weight is provided
+    // The handleInputChange keeps them in sync
+    const finalGoldValue = parseFloat(form.goldValue) || 0;
+    const finalSilverValue = parseFloat(form.silverValue) || 0;
+
     const investments = parseFloat(form.investments) || 0;
     const businessAssets = parseFloat(form.businessAssets) || 0;
     const cryptocurrency = parseFloat(form.cryptocurrency) || 0;
@@ -338,6 +349,21 @@ const ZakatCalculator: React.FC = () => {
             </div>
           </div>
 
+          {/* Important Note */}
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+            <div className="flex items-start gap-3">
+              <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="text-white text-xs font-bold">i</span>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-blue-900 mb-1">Gold Price Calculation</p>
+                <p className="text-sm text-blue-800">
+                  The gold prices used are calculated as an average of 22K and 24K gold market rates to provide a fair and balanced nisab threshold. This ensures accuracy across different gold purities commonly owned by Muslims.
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             {/* Metal Standard */}
             <div>
@@ -458,14 +484,14 @@ const ZakatCalculator: React.FC = () => {
                 placeholder={`Enter gold value in ${currencyNames[form.currency] || form.currency.toUpperCase()}`}
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               />
-              <p className="text-xs text-gray-500 mt-1">Enter direct value if you know the market price</p>
+              <p className="text-xs text-gray-500 mt-1">Enter value directly OR use the Weight Calculator below (auto-syncs)</p>
             </div>
 
             {/* Gold - Weight Input */}
             <div className="md:col-span-2 bg-gradient-to-r from-amber-50 to-yellow-50 rounded-xl p-4 border-2 border-amber-200">
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-lg font-bold text-amber-800">🥇 Gold Weight Calculator</span>
-                <span className="text-xs text-amber-600 bg-amber-100 px-2 py-1 rounded-full">Optional - Auto-calculates value</span>
+                <span className="text-xs text-amber-600 bg-amber-100 px-2 py-1 rounded-full">Auto-syncs with Market Value</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -506,7 +532,7 @@ const ZakatCalculator: React.FC = () => {
                 </div>
               )}
               <p className="text-xs text-amber-700 mt-2">
-                💡 Value will be calculated automatically using live market prices from the API
+                💡 Entering weight here will automatically update the Gold Market Value field above
               </p>
             </div>
 
@@ -522,14 +548,14 @@ const ZakatCalculator: React.FC = () => {
                 placeholder={`Enter silver value in ${currencyNames[form.currency] || form.currency.toUpperCase()}`}
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               />
-              <p className="text-xs text-gray-500 mt-1">Enter direct value if you know the market price</p>
+              <p className="text-xs text-gray-500 mt-1">Enter value directly OR use the Weight Calculator below (auto-syncs)</p>
             </div>
 
             {/* Silver - Weight Input */}
             <div className="md:col-span-2 bg-gradient-to-r from-slate-50 to-gray-50 rounded-xl p-4 border-2 border-slate-200">
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-lg font-bold text-slate-800">🥈 Silver Weight Calculator</span>
-                <span className="text-xs text-slate-600 bg-slate-100 px-2 py-1 rounded-full">Optional - Auto-calculates value</span>
+                <span className="text-xs text-slate-600 bg-slate-100 px-2 py-1 rounded-full">Auto-syncs with Market Value</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -570,7 +596,7 @@ const ZakatCalculator: React.FC = () => {
                 </div>
               )}
               <p className="text-xs text-slate-700 mt-2">
-                💡 Value will be calculated automatically using live market prices from the API
+                💡 Entering weight here will automatically update the Silver Market Value field above
               </p>
             </div>
 

@@ -98,15 +98,16 @@ const QuranReader: React.FC = () => {
     setShowMobileSettings(true);
   };
 
-  // Save mobile settings
-  const saveMobileSettings = () => {
-    updateSettings(tempSettings);
-    setShowMobileSettings(false);
-  };
-
   // Cancel mobile settings
   const cancelMobileSettings = () => {
     setShowMobileSettings(false);
+  };
+
+  // Update single setting immediately (for instant apply)
+  const updateSingleSetting = (key: keyof typeof tempSettings, value: any) => {
+    const updated = { ...tempSettings, [key]: value };
+    setTempSettings(updated);
+    updateSettings(updated);
   };
 
   // Filter surahs based on search
@@ -1228,7 +1229,7 @@ const QuranReader: React.FC = () => {
                     Display Mode
                   </label>
                   <button
-                    onClick={() => setTempSettings({ ...tempSettings, arabicOnlyMode: !tempSettings.arabicOnlyMode })}
+                    onClick={() => updateSingleSetting('arabicOnlyMode', !tempSettings.arabicOnlyMode)}
                     className={`w-full flex items-center justify-between p-3 rounded-lg ${
                       settings.theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'
                     }`}
@@ -1257,7 +1258,7 @@ const QuranReader: React.FC = () => {
                   </label>
                   <div className="flex items-center gap-3">
                     <button
-                      onClick={() => setTempSettings({ ...tempSettings, fontSize: Math.max(14, tempSettings.fontSize - 2) })}
+                      onClick={() => updateSingleSetting('fontSize', Math.max(14, tempSettings.fontSize - 2))}
                       className={`p-2 rounded-lg ${settings.theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'}`}
                     >
                       <MinusIcon className="h-4 w-4" />
@@ -1267,11 +1268,11 @@ const QuranReader: React.FC = () => {
                       min="14"
                       max="32"
                       value={tempSettings.fontSize}
-                      onChange={(e) => setTempSettings({ ...tempSettings, fontSize: parseInt(e.target.value) })}
+                      onChange={(e) => updateSingleSetting('fontSize', parseInt(e.target.value))}
                       className="flex-1 h-2"
                     />
                     <button
-                      onClick={() => setTempSettings({ ...tempSettings, fontSize: Math.min(32, tempSettings.fontSize + 2) })}
+                      onClick={() => updateSingleSetting('fontSize', Math.min(32, tempSettings.fontSize + 2))}
                       className={`p-2 rounded-lg ${settings.theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'}`}
                     >
                       <PlusIcon className="h-4 w-4" />
@@ -1285,7 +1286,7 @@ const QuranReader: React.FC = () => {
                     Theme
                   </label>
                   <button
-                    onClick={() => setTempSettings({ ...tempSettings, theme: tempSettings.theme === 'light' ? 'dark' : 'light' })}
+                    onClick={() => updateSingleSetting('theme', tempSettings.theme === 'light' ? 'dark' : 'light')}
                     className={`w-full flex items-center justify-between p-3 rounded-lg ${
                       settings.theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'
                     }`}
@@ -1308,7 +1309,7 @@ const QuranReader: React.FC = () => {
                   </label>
                   <select
                     value={tempSettings.arabicFont}
-                    onChange={(e) => setTempSettings({ ...tempSettings, arabicFont: e.target.value as any })}
+                    onChange={(e) => updateSingleSetting('arabicFont', e.target.value as any)}
                     className={`w-full p-3 rounded-lg border ${
                       settings.theme === 'dark'
                         ? 'bg-gray-700 border-gray-600 text-white'
@@ -1333,7 +1334,7 @@ const QuranReader: React.FC = () => {
                   </label>
                   <div className="grid grid-cols-5 gap-2">
                     <button
-                      onClick={() => setTempSettings({ ...tempSettings, fontColor: 'default' })}
+                      onClick={() => updateSingleSetting('fontColor', 'default')}
                       className={`h-12 rounded-lg border-2 flex items-center justify-center ${
                         tempSettings.fontColor === 'default' ? 'border-emerald-500' : 'border-gray-300'
                       } ${settings.theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-white text-gray-800'}`}
@@ -1342,7 +1343,7 @@ const QuranReader: React.FC = () => {
                       <span className="text-sm font-bold">Aa</span>
                     </button>
                     <button
-                      onClick={() => setTempSettings({ ...tempSettings, fontColor: 'emerald' })}
+                      onClick={() => updateSingleSetting('fontColor', 'emerald')}
                       className={`h-12 rounded-lg border-2 ${
                         tempSettings.fontColor === 'emerald' ? 'border-emerald-500 border-4' : 'border-gray-300'
                       } bg-white flex items-center justify-center`}
@@ -1351,7 +1352,7 @@ const QuranReader: React.FC = () => {
                       <span className="text-sm font-bold text-emerald-600">Aa</span>
                     </button>
                     <button
-                      onClick={() => setTempSettings({ ...tempSettings, fontColor: 'blue' })}
+                      onClick={() => updateSingleSetting('fontColor', 'blue')}
                       className={`h-12 rounded-lg border-2 ${
                         tempSettings.fontColor === 'blue' ? 'border-emerald-500 border-4' : 'border-gray-300'
                       } bg-white flex items-center justify-center`}
@@ -1360,7 +1361,7 @@ const QuranReader: React.FC = () => {
                       <span className="text-sm font-bold text-blue-600">Aa</span>
                     </button>
                     <button
-                      onClick={() => setTempSettings({ ...tempSettings, fontColor: 'amber' })}
+                      onClick={() => updateSingleSetting('fontColor', 'amber')}
                       className={`h-12 rounded-lg border-2 ${
                         tempSettings.fontColor === 'amber' ? 'border-emerald-500 border-4' : 'border-gray-300'
                       } bg-white flex items-center justify-center`}
@@ -1369,7 +1370,7 @@ const QuranReader: React.FC = () => {
                       <span className="text-sm font-bold text-amber-600">Aa</span>
                     </button>
                     <button
-                      onClick={() => setTempSettings({ ...tempSettings, fontColor: 'rose' })}
+                      onClick={() => updateSingleSetting('fontColor', 'rose')}
                       className={`h-12 rounded-lg border-2 ${
                         tempSettings.fontColor === 'rose' ? 'border-emerald-500 border-4' : 'border-gray-300'
                       } bg-white flex items-center justify-center`}
@@ -1387,7 +1388,7 @@ const QuranReader: React.FC = () => {
                   </label>
                   <div className="grid grid-cols-5 gap-2">
                     <button
-                      onClick={() => setTempSettings({ ...tempSettings, readerBackground: 'default' })}
+                      onClick={() => updateSingleSetting('readerBackground', 'default')}
                       className={`h-12 rounded-lg border-2 ${
                         tempSettings.readerBackground === 'default' ? 'border-emerald-500 border-4' : 'border-gray-300'
                       } bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center`}
@@ -1396,7 +1397,7 @@ const QuranReader: React.FC = () => {
                       <span className="text-sm font-bold text-gray-700">●</span>
                     </button>
                     <button
-                      onClick={() => setTempSettings({ ...tempSettings, readerBackground: 'white' })}
+                      onClick={() => updateSingleSetting('readerBackground', 'white')}
                       className={`h-12 rounded-lg border-2 ${
                         tempSettings.readerBackground === 'white' ? 'border-emerald-500 border-4' : 'border-gray-300'
                       } bg-white flex items-center justify-center`}
@@ -1405,7 +1406,7 @@ const QuranReader: React.FC = () => {
                       <span className="text-sm font-bold text-gray-700">●</span>
                     </button>
                     <button
-                      onClick={() => setTempSettings({ ...tempSettings, readerBackground: 'cream' })}
+                      onClick={() => updateSingleSetting('readerBackground', 'cream')}
                       className={`h-12 rounded-lg border-2 ${
                         tempSettings.readerBackground === 'cream' ? 'border-emerald-500 border-4' : 'border-gray-300'
                       } bg-amber-50 flex items-center justify-center`}
@@ -1560,23 +1561,13 @@ const QuranReader: React.FC = () => {
               </div>
             </div>
             
-            {/* Footer Buttons */}
-            <div className={`flex gap-3 p-4 border-t ${settings.theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
+            {/* Close Button */}
+            <div className={`p-4 border-t ${settings.theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
               <button
                 onClick={cancelMobileSettings}
-                className={`flex-1 py-3 rounded-lg font-semibold ${
-                  settings.theme === 'dark'
-                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
+                className="w-full py-3 rounded-lg font-semibold bg-emerald-600 text-white hover:bg-emerald-700"
               >
-                Cancel
-              </button>
-              <button
-                onClick={saveMobileSettings}
-                className="flex-1 py-3 rounded-lg font-semibold bg-emerald-600 text-white hover:bg-emerald-700"
-              >
-                Save Settings
+                Close
               </button>
             </div>
           </div>

@@ -2,12 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import NotificationBell from './Notifications/NotificationBell'; // Import the new NotificationBell
-import { 
-  Bars3Icon, 
+import {
+  Bars3Icon,
   XMarkIcon,
   UserIcon,
   Cog6ToothIcon,
-  ArrowRightOnRectangleIcon 
+  ArrowRightOnRectangleIcon
 } from '@heroicons/react/24/outline';
 
 interface NavbarProps {
@@ -22,6 +22,11 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to top on route change
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [location.pathname]);
 
   // Check if we're on Quran page and get theme from localStorage
   const [quranTheme, setQuranTheme] = useState<'light' | 'dark'>('light');
