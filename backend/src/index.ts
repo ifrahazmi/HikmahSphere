@@ -22,11 +22,16 @@ import supportRoutes from './routes/support'; // Import support routes
 import activityRoutes from './routes/activity'; // Import activity log routes
 
 // Load environment variables
-// Try to load from root .env for local development, fallback to Docker env vars
-const envPath = path.join(process.cwd(), '../.env');
-dotenv.config({ path: envPath });
-// Also try current directory as fallback
-dotenv.config();
+// Use __dirname to resolve paths correctly regardless of whether running from src/ or dist/
+const rootDir = path.resolve(__dirname, '..');
+const envPaths = [
+  path.join(rootDir, '.env'),           // Root .env (for both dev and production)
+  path.join(process.cwd(), '.env'),     // Fallback to current directory
+];
+
+for (const envPath of envPaths) {
+  dotenv.config({ path: envPath, override: false });
+}
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '5000', 10);
