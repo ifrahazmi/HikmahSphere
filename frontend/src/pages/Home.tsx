@@ -142,24 +142,36 @@ const Home: React.FC = () => {
   const testimonials = [
     {
       name: 'Ahmad Hassan',
-      location: 'London, UK',
-      text: 'HikmahSphere has revolutionized my daily worship. The prayer notifications are incredibly accurate!',
+      location: 'Bangalore, India',
+      text: 'The prayer times feature has transformed my daily Salah routine. The accurate geolocation-based calculations and beautiful prayer cards I can share with family make staying connected to my faith effortless. The notifications are perfectly timed!',
       rating: 5,
-      avatar: '👨‍💼',
+      avatar: '🧔🏽',
+      feature: 'Prayer Times',
     },
     {
-      name: 'Fatima Al-Zahra',
-      location: 'Cairo, Egypt',
-      text: 'The Quran search feature is amazing. I can find any verse instantly in multiple languages.',
+      name: 'Fatima Zahra',
+      location: 'Bangalore, India',
+      text: 'The Zakat calculator is incredibly comprehensive. It calculated my Zakat considering gold, silver, savings, and even my investments. The live nisab rates gave me confidence that my calculation was accurate. Made my annual Zakat so much easier!',
       rating: 5,
-      avatar: '👩‍💼',
+      avatar: '🧕🏼',
+      feature: 'Quran Reader',
     },
     {
-      name: 'Omar Ibrahim',
-      location: 'New York, USA',
-      text: 'The Zakat calculator made my annual calculation so simple and accurate. Highly recommended!',
+      name: 'Zafia Chowdhury',
+      location: 'Bangalore, India',
+      text: 'As someone who reads Quran daily, the multi-translation reader with Indopak script is a blessing. I can compare translations, bookmark my favorite ayahs, and the audio recitations help me improve my Tajweed. The semantic search finds exactly what I need!',
       rating: 5,
-      avatar: '🧔',
+      avatar: '🧕🏽',
+      feature: 'Community',
+    },
+    {
+      name: 'Zeenaat Chowdhury',
+      location: 'Kolkata, India',
+      text: 'As a mother, my heart fills with pride seeing my son create something so beneficial for the Ummah. This platform beautifully combines technology with Islamic values. May Allah accept this sincere effort, bless you abundantly, and grant you the ability to continue serving the Deen. Aameen.',
+      rating: 5,
+      avatar: '🧕🏾',
+      feature: 'Mother\'s Message',
+      special: true,
     },
   ];
 
@@ -377,33 +389,68 @@ const Home: React.FC = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {testimonials.map((testimonial, index) => (
               <div
                 key={index}
-                className="group bg-white rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 border border-emerald-100"
+                className={`group rounded-2xl p-8 transition-all duration-300 transform hover:-translate-y-2 ${
+                  testimonial.special
+                    ? 'bg-gradient-to-br from-emerald-50 to-teal-50 border-2 border-emerald-300 shadow-xl col-span-full max-w-3xl mx-auto'
+                    : 'bg-white rounded-2xl p-8 shadow-lg hover:shadow-2xl border border-emerald-100'
+                }`}
               >
+                {/* Special Badge for Founder's Message */}
+                {testimonial.special && (
+                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-600 text-white text-xs font-semibold rounded-full mb-4">
+                    <HeartIcon className="w-3 h-3" />
+                    Mother's Message
+                  </div>
+                )}
+
                 {/* Rating Stars */}
-                <div className="flex items-center mb-6">
+                <div className="flex items-center mb-4">
                   {[...Array(testimonial.rating)].map((_, i) => (
                     <svg key={i} className="w-5 h-5 text-yellow-400 fill-current" viewBox="0 0 20 20">
                       <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                     </svg>
                   ))}
                 </div>
-                
+
+                {/* Feature Tag */}
+                {!testimonial.special && (
+                  <div className="inline-block px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-medium rounded-full mb-4">
+                    {testimonial.feature}
+                  </div>
+                )}
+
                 {/* Testimonial Text */}
-                <p className="text-gray-700 mb-6 italic leading-relaxed">
-                  "{testimonial.text}"
+                <p className={`mb-6 leading-relaxed ${
+                  testimonial.special 
+                    ? 'text-gray-800 text-lg italic font-medium' 
+                    : 'text-gray-700 italic'
+                }`}>
+                  {testimonial.special ? (
+                    <>
+                      <span className="text-3xl text-emerald-600 mr-2">"</span>
+                      {testimonial.text}
+                      <span className="text-3xl text-emerald-600 ml-2">"</span>
+                    </>
+                  ) : (
+                    `"${testimonial.text}"`
+                  )}
                 </p>
-                
+
                 {/* User Info */}
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-gradient-to-br from-emerald-400 to-teal-400 rounded-full flex items-center justify-center text-2xl">
+                  <div className={`w-14 h-14 rounded-full flex items-center justify-center text-3xl ${
+                    testimonial.special
+                      ? 'bg-gradient-to-br from-emerald-500 to-teal-500 shadow-lg'
+                      : 'bg-gradient-to-br from-emerald-400 to-teal-400'
+                  }`}>
                     {testimonial.avatar}
                   </div>
                   <div>
-                    <div className="font-bold text-gray-900">
+                    <div className="font-bold text-gray-900 text-lg">
                       {testimonial.name}
                     </div>
                     <div className="text-sm text-gray-500 flex items-center gap-1">
