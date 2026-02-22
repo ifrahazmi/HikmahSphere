@@ -9,16 +9,18 @@ dotenv.config();
 let serviceAccount: admin.ServiceAccount | undefined;
 
 // Paths to check for service-account.json
-// Order:
-// 1. Environment Variable
-// 2. backend/config/firebase-credentials/service-account.json (Production structure)
-// 3. backend/service-account.json (Quick dev placement)
 const possibleFilePaths = [
+    // 1. Environment Variable (highest priority)
+    process.env.FIREBASE_SERVICE_ACCOUNT ? 'env' : null,
+    // 2. Production structure
     path.join(process.cwd(), 'config/firebase-credentials/service-account.json'),
+    // 3. Quick dev placement
     path.join(process.cwd(), 'service-account.json'),
-    // In case we are running from dist/
-    path.join(process.cwd(), '../config/firebase-credentials/service-account.json')
-];
+    // 4. Running from dist/
+    path.join(process.cwd(), '../config/firebase-credentials/service-account.json'),
+    // 5. Absolute path for PM2
+    '/home/user/HikmahSphere/backend/config/firebase-credentials/service-account.json'
+].filter(Boolean) as string[];
 
 let credentialsLoaded = false;
 
@@ -32,25 +34,31 @@ try {
         } catch (e) {
             console.error("❌ [Firebase] Failed to parse FIREBASE_SERVICE_ACCOUNT env var");
         }
-    } 
-    
-    // 2. Try local files if not found yet
-    if (!credentialsLoaded) { // Fix: use credentialsLoaded flag
+    }
+
+    // 2. Try local files if not found in env
+    if (!credentialsLoaded) {
+        console.log("🔍 [Firebase] Checking for service-account.json file...");
         for (const filePath of possibleFilePaths) {
+            if (filePath === 'env') continue; // Skip env placeholder
+            
+            console.log(`   Checking: ${filePath}`);
             if (fs.existsSync(filePath)) {
                 try {
                     const fileContent = fs.readFileSync(filePath, 'utf8');
                     serviceAccount = JSON.parse(fileContent);
-                    console.log(`✅ [Firebase] Loaded credentials from file: ${filePath}`);
+                    console.log(`✅ [Firebase] Loaded credentials from: ${filePath}`);
                     credentialsLoaded = true;
-                    break; 
+                    break;
                 } catch (e) {
-                    console.error(`❌ [Firebase] Found file but failed to parse: ${filePath}`, e);
+                    console.error(`❌ [Firebase] Failed to parse: ${filePath}`, e);
                 }
+            } else {
+                console.log(`   ❌ File not found: ${filePath}`);
             }
         }
     }
-    
+
     // Initialize Admin SDK
     if (credentialsLoaded && serviceAccount && !admin.apps.length) {
         admin.initializeApp({
@@ -59,7 +67,10 @@ try {
         console.log("🚀 [Firebase] Admin SDK initialized successfully");
     } else if (!credentialsLoaded) {
         console.warn("⚠️  [Firebase] NOT INITIALIZED: Missing credentials.");
-        console.warn("   To fix, place 'service-account.json' in 'backend/config/firebase-credentials/'");
+        console.warn("   Push notifications will not work.");
+        console.warn("   To fix:");
+        console.warn("   1. Place 'service-account.json' in 'backend/config/firebase-credentials/'");
+        console.warn("   2. Or set FIREBASE_SERVICE_ACCOUNT environment variable");
     }
 
 } catch (error) {
