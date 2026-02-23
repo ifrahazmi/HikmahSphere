@@ -637,39 +637,39 @@ const PrayerTimes: React.FC = () => {
           </div>
           
           {/* View Mode Toggle */}
-          <div className="flex justify-center gap-3 mb-6">
+          <div className="flex flex-wrap justify-center gap-2 sm:gap-3 mb-6">
             <button
               onClick={() => setViewMode('daily')}
-              className={`px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2 ${
+              className={`px-3 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold text-sm sm:text-base transition-all duration-300 flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
                 viewMode === 'daily'
                   ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg scale-105'
                   : 'bg-white text-gray-700 hover:bg-gray-50 shadow-md'
               }`}
             >
-              <ClockIcon className="w-5 h-5" />
+              <ClockIcon className="w-4 h-4 sm:w-5 sm:h-5" />
               Daily
             </button>
             <button
               onClick={() => setViewMode('monthly')}
-              className={`px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2 ${
+              className={`px-3 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold text-sm sm:text-base transition-all duration-300 flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
                 viewMode === 'monthly'
                   ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg scale-105'
                   : 'bg-white text-gray-700 hover:bg-gray-50 shadow-md'
               }`}
             >
-              <CalendarDaysIcon className="w-5 h-5" />
+              <CalendarDaysIcon className="w-4 h-4 sm:w-5 sm:h-5" />
               Monthly
             </button>
             {isRamadanMonth && (
               <button
                 onClick={() => setViewMode('ramadan')}
-                className={`px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2 ${
+                className={`px-3 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold text-sm sm:text-base transition-all duration-300 flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
                   viewMode === 'ramadan'
                     ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg scale-105'
                     : 'bg-white text-gray-700 hover:bg-gray-50 shadow-md'
                 }`}
               >
-                <MoonIcon className="w-5 h-5" />
+                <MoonIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                 Ramadan
               </button>
             )}
@@ -1467,7 +1467,7 @@ const PrayerTimes: React.FC = () => {
                       )}
 
                       {/* Invitation */}
-                      <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 mb-4">
+                      {/* <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 mb-4">
                         <div className="flex flex-wrap gap-3 text-sm">
                           <span className="flex items-center gap-1 bg-white/20 px-3 py-1.5 rounded-full">
                             <span className="text-lg">🕌</span> Prayer Times
@@ -1482,7 +1482,7 @@ const PrayerTimes: React.FC = () => {
                             <span className="text-lg">🌍</span> Global Community
                           </span>
                         </div>
-                      </div>
+                      </div> */}
 
                       {/* Website & Contact */}
                       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white/10 backdrop-blur-sm rounded-2xl p-4">

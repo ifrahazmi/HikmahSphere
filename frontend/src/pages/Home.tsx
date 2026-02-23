@@ -165,7 +165,7 @@ const Home: React.FC = () => {
       feature: 'Community',
     },
     {
-      name: 'Zeenaat Chowdhury',
+      name: 'Zeenat Chowdhury',
       location: 'Kolkata, India',
       text: 'As a mother, my heart fills with pride seeing my son create something so beneficial for the Ummah. This platform beautifully combines technology with Islamic values. May Allah accept this sincere effort, bless you abundantly, and grant you the ability to continue serving the Deen. Aameen.',
       rating: 5,

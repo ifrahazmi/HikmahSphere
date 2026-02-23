@@ -300,7 +300,7 @@ const QuranReader: React.FC = () => {
         </div>
 
         {/* Mobile Header */}
-        <div className="lg:hidden pt-14 px-2 py-2">
+        <div className="lg:hidden pt-4 px-2">
           <div className={`${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg p-2`}>
             {/* Top Bar - Settings Button */}
             <div className="flex items-center justify-between mb-2">

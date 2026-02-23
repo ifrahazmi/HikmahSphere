@@ -123,10 +123,6 @@ const RecordSpending: React.FC<RecordSpendingProps> = ({ currentBalance, onSucce
         toast.error('Bank Name is required for Bank Transfer');
         return false;
       }
-      if (!formData.transactionRefId || !/^\d{6}$/.test(formData.transactionRefId)) {
-        toast.error('Transaction Ref ID must be exactly 6 digits');
-        return false;
-      }
     }
 
     if (formData.paymentMethod === 'UPI Transfer') {
@@ -134,8 +130,12 @@ const RecordSpending: React.FC<RecordSpendingProps> = ({ currentBalance, onSucce
         toast.error('Sender UPI ID is required for UPI Transfer');
         return false;
       }
-      if (!formData.transactionRefId || !/^\d{6}$/.test(formData.transactionRefId)) {
-        toast.error('Transaction Ref ID must be exactly 6 digits');
+      if (!/^\d+@[a-zA-Z]+$/.test(formData.senderUpiId)) {
+        toast.error('UPI ID must be in format: number@bank (e.g., 9876543210@oksbi)');
+        return false;
+      }
+      if (!formData.transactionRefId || !/^\d{6,}$/.test(formData.transactionRefId)) {
+        toast.error('Transaction Ref ID is required (minimum 6 digits)');
         return false;
       }
     }
@@ -145,15 +145,11 @@ const RecordSpending: React.FC<RecordSpendingProps> = ({ currentBalance, onSucce
         toast.error('Cheque Number is required');
         return false;
       }
-      if (!formData.transactionRefId || !/^\d{6}$/.test(formData.transactionRefId)) {
-        toast.error('Transaction Ref ID must be exactly 6 digits');
-        return false;
-      }
     }
 
     if (formData.paymentMethod === 'QR Scanner') {
-      if (!formData.transactionRefId || !/^\d{6}$/.test(formData.transactionRefId)) {
-        toast.error('Transaction Ref ID must be exactly 6 digits');
+      if (!formData.transactionRefId || !/^\d{6,}$/.test(formData.transactionRefId)) {
+        toast.error('Transaction Ref ID is required (minimum 6 digits)');
         return false;
       }
     }
@@ -390,18 +386,17 @@ const RecordSpending: React.FC<RecordSpendingProps> = ({ currentBalance, onSucce
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Transaction Ref ID (Last 6 Digits) <span className="text-red-500">*</span>
+                  Transaction Ref ID (Minimum 6 Digits) <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.transactionRefId}
                   onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, '').slice(0, 6);
+                    const value = e.target.value.replace(/\D/g, '');
                     handleInputChange('transactionRefId', value);
                   }}
-                  placeholder="Enter 6-digit reference"
-                  maxLength={6}
-                  pattern="\d{6}"
+                  placeholder="Enter reference ID (min 6 digits)"
+                  pattern="\d{6,}"
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 font-mono tracking-wider"
                   required
                 />
@@ -419,25 +414,24 @@ const RecordSpending: React.FC<RecordSpendingProps> = ({ currentBalance, onSucce
                   type="text"
                   value={formData.senderUpiId}
                   onChange={(e) => handleInputChange('senderUpiId', e.target.value)}
-                  placeholder="e.g., username@oksbi"
+                  placeholder="e.g., 9876543210@oksbi"
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500"
                   required
                 />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Transaction Ref ID (Last 6 Digits) <span className="text-red-500">*</span>
+                  Transaction Ref ID (Minimum 6 Digits) <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.transactionRefId}
                   onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, '').slice(0, 6);
+                    const value = e.target.value.replace(/\D/g, '');
                     handleInputChange('transactionRefId', value);
                   }}
-                  placeholder="Enter 6-digit reference"
-                  maxLength={6}
-                  pattern="\d{6}"
+                  placeholder="Enter reference ID (min 6 digits)"
+                  pattern="\d{6,}"
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 font-mono tracking-wider"
                   required
                 />
@@ -462,18 +456,17 @@ const RecordSpending: React.FC<RecordSpendingProps> = ({ currentBalance, onSucce
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Transaction Ref ID (Last 6 Digits) <span className="text-red-500">*</span>
+                  Transaction Ref ID (Minimum 6 Digits) <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.transactionRefId}
                   onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, '').slice(0, 6);
+                    const value = e.target.value.replace(/\D/g, '');
                     handleInputChange('transactionRefId', value);
                   }}
-                  placeholder="Enter 6-digit reference"
-                  maxLength={6}
-                  pattern="\d{6}"
+                  placeholder="Enter reference ID (min 6 digits)"
+                  pattern="\d{6,}"
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 font-mono tracking-wider"
                   required
                 />
@@ -484,18 +477,17 @@ const RecordSpending: React.FC<RecordSpendingProps> = ({ currentBalance, onSucce
           {isQRScanner && (
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Transaction Ref ID (Last 6 Digits) <span className="text-red-500">*</span>
+                Transaction Ref ID (Minimum 6 Digits) <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 value={formData.transactionRefId}
                 onChange={(e) => {
-                  const value = e.target.value.replace(/\D/g, '').slice(0, 6);
+                  const value = e.target.value.replace(/\D/g, '');
                   handleInputChange('transactionRefId', value);
                 }}
-                placeholder="Enter 6-digit reference"
-                maxLength={6}
-                pattern="\d{6}"
+                placeholder="Enter reference ID (min 6 digits)"
+                pattern="\d{6,}"
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 font-mono tracking-wider"
                 required
               />
@@ -514,10 +506,10 @@ const RecordSpending: React.FC<RecordSpendingProps> = ({ currentBalance, onSucce
             />
           </div>
 
-          {/* Supporting Document Upload (Optional) */}
+          {/* Proof of Payment Upload (Optional) */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Supporting Document (Optional)
+              Proof of Payment (Optional)
             </label>
             <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:border-red-500 transition-colors">
               <input

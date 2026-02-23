@@ -446,45 +446,47 @@ router.post('/transaction', [
     }
 
     if (paymentMethod === 'UPI Transfer' && (!senderUpiId || senderUpiId.trim() === '')) {
-      return res.status(400).json({ 
-        status: 'error', 
-        message: 'Sender UPI ID is required for UPI Transfer' 
+      return res.status(400).json({
+        status: 'error',
+        message: 'Sender UPI ID is required for UPI Transfer'
       });
+    }
+
+    // Validate UPI ID format (number@any)
+    if (paymentMethod === 'UPI Transfer' && senderUpiId) {
+      if (!/^\d+@[a-zA-Z]+$/.test(senderUpiId)) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'UPI ID must be in format: number@bank (e.g., 9876543210@oksbi)'
+        });
+      }
     }
 
     if (paymentMethod === 'Cheque' && (!chequeNumber || chequeNumber.trim() === '')) {
-      return res.status(400).json({ 
-        status: 'error', 
-        message: 'Cheque Number is required for Cheque payment' 
+      return res.status(400).json({
+        status: 'error',
+        message: 'Cheque Number is required for Cheque payment'
       });
     }
 
-    // Validate transaction ref ID (6 digits) for non-Cash, non-Cheque payments
-    if (paymentMethod !== 'Cash' && paymentMethod !== 'Cheque' && paymentMethod !== 'Bank Transfer') {
-      if (!transactionRefId || !/^\d{6}$/.test(transactionRefId)) {
-        return res.status(400).json({ 
-          status: 'error', 
-          message: 'Transaction Ref ID must be exactly 6 digits' 
+    // Validate transaction ref ID (required, minimum 6 digits) for UPI Transfer and QR Scanner
+    if (paymentMethod === 'UPI Transfer' || paymentMethod === 'QR Scanner') {
+      if (!transactionRefId || !/^\d{6,}$/.test(transactionRefId)) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Transaction Ref ID is required (minimum 6 digits)'
         });
       }
 
       // Check for duplicate ref ID
       const isDuplicate = await ZakatPaymentModel.hasDuplicateRefId(transactionRefId, paymentMethod);
       if (isDuplicate) {
-        return res.status(409).json({ 
-          status: 'error', 
+        return res.status(409).json({
+          status: 'error',
           message: 'Duplicate Transaction Ref ID found for this payment method',
           code: 'DUPLICATE_REF_ID'
         });
       }
-    }
-
-    // Validate proof of payment
-    if (paymentMethod !== 'Cash' && !req.file) {
-      return res.status(400).json({ 
-        status: 'error', 
-        message: 'Proof of payment is required for non-Cash transactions' 
-      });
     }
 
     // Check balance for spending transactions
@@ -732,7 +734,11 @@ router.put('/payment/:id', [
       payment.bankName = updates.bankName;
     }
 
+    // Validate UPI ID format
     if (updates.senderUpiId) {
+      if (!/^\d+@[a-zA-Z]+$/.test(updates.senderUpiId)) {
+        return res.status(400).json({ status: 'error', message: 'UPI ID must be in format: number@bank (e.g., 9876543210@oksbi)' });
+      }
       payment.senderUpiId = updates.senderUpiId;
     }
 
@@ -740,26 +746,24 @@ router.put('/payment/:id', [
       payment.chequeNumber = updates.chequeNumber;
     }
 
-    // Validate transaction ref ID
-    if (updates.transactionRefId || payment.paymentMethod !== 'Cash') {
+    // Validate transaction ref ID (required, minimum 6 digits) for UPI Transfer and QR Scanner
+    const newMethod = updates.paymentMethod || payment.paymentMethod;
+    if (newMethod === 'UPI Transfer' || newMethod === 'QR Scanner') {
       const newRefId = updates.transactionRefId || payment.transactionRefId;
-      const newMethod = updates.paymentMethod || payment.paymentMethod;
       
-      if (newMethod !== 'Cash' && newMethod !== 'Cheque') {
-        if (!newRefId || !/^\d{6}$/.test(newRefId)) {
-          return res.status(400).json({ status: 'error', message: 'Transaction Ref ID must be exactly 6 digits' });
-        }
-
-        const isDuplicate = await ZakatPaymentModel.hasDuplicateRefId(newRefId, newMethod, paymentId);
-        if (isDuplicate) {
-          return res.status(409).json({ 
-            status: 'error', 
-            message: 'Duplicate Transaction Ref ID found for this payment method',
-            code: 'DUPLICATE_REF_ID'
-          });
-        }
-        payment.transactionRefId = newRefId;
+      if (!newRefId || !/^\d{6,}$/.test(newRefId)) {
+        return res.status(400).json({ status: 'error', message: 'Transaction Ref ID is required (minimum 6 digits)' });
       }
+
+      const isDuplicate = await ZakatPaymentModel.hasDuplicateRefId(newRefId, newMethod, paymentId);
+      if (isDuplicate) {
+        return res.status(409).json({
+          status: 'error',
+          message: 'Duplicate Transaction Ref ID found for this payment method',
+          code: 'DUPLICATE_REF_ID'
+        });
+      }
+      payment.transactionRefId = newRefId;
     }
 
     // Update other fields

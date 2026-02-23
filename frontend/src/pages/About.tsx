@@ -130,10 +130,10 @@ const About: React.FC = () => {
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
-      <section 
+      <section
         ref={heroRef}
         data-section="hero"
-        className="relative min-h-screen flex items-center justify-center overflow-hidden -mt-16 bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-950"
+        className="relative min-h-screen flex items-center justify-center overflow-hidden pt-14 sm:pt-16 bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-950"
       >
         {/* Animated Background Pattern */}
         <div className="absolute inset-0 opacity-5">
@@ -152,18 +152,18 @@ const About: React.FC = () => {
         <div className={`relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center transition-all duration-1000 ${visibleSections.has('hero') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
           {/* Daily Wisdom - Quran Verse */}
           {dailyVerse && (
-            <div className="mb-10 inline-block">
-              <div className="px-6 py-4 bg-white/10 backdrop-blur-sm rounded-2xl border border-white/20 shadow-xl">
+            <div className="mb-6 sm:mb-10 inline-block w-full max-w-full">
+              <div className="px-4 sm:px-6 py-3 sm:py-4 bg-white/10 backdrop-blur-sm rounded-2xl border border-white/20 shadow-xl">
                 {/* Arabic Verse */}
-                <p className="text-2xl sm:text-3xl text-white font-scheherazade leading-loose mb-3" dir="rtl">
+                <p className="text-xl sm:text-2xl md:text-3xl text-white font-scheherazade leading-loose mb-2 sm:mb-3" dir="rtl">
                   {dailyVerse.verse}
                 </p>
-                
+
                 {/* Translation */}
-                <p className="text-sm sm:text-base text-emerald-100 italic mb-2">
+                <p className="text-xs sm:text-sm text-emerald-100 italic mb-1.5 sm:mb-2">
                   {dailyVerse.translation}
                 </p>
-                
+
                 {/* Reference */}
                 <p className="text-xs text-emerald-200 font-medium">
                   {dailyVerse.chapter} • {dailyVerse.reference}

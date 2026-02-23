@@ -222,10 +222,6 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
         toast.error('Bank Name is required for Bank Transfer');
         return false;
       }
-      if (!formData.transactionRefId || !/^\d{6}$/.test(formData.transactionRefId)) {
-        toast.error('Transaction Ref ID must be exactly 6 digits');
-        return false;
-      }
     }
 
     if (formData.paymentMethod === 'UPI Transfer') {
@@ -233,8 +229,12 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
         toast.error('Sender UPI ID is required for UPI Transfer');
         return false;
       }
-      if (!formData.transactionRefId || !/^\d{6}$/.test(formData.transactionRefId)) {
-        toast.error('Transaction Ref ID must be exactly 6 digits');
+      if (!/^\d+@[a-zA-Z]+$/.test(formData.senderUpiId)) {
+        toast.error('UPI ID must be in format: number@bank (e.g., 9876543210@oksbi)');
+        return false;
+      }
+      if (!formData.transactionRefId || !/^\d{6,}$/.test(formData.transactionRefId)) {
+        toast.error('Transaction Ref ID is required (minimum 6 digits)');
         return false;
       }
     }
@@ -247,8 +247,8 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
     }
 
     if (formData.paymentMethod === 'QR Scanner') {
-      if (!formData.transactionRefId || !/^\d{6}$/.test(formData.transactionRefId)) {
-        toast.error('Transaction Ref ID must be exactly 6 digits');
+      if (!formData.transactionRefId || !/^\d{6,}$/.test(formData.transactionRefId)) {
+        toast.error('Transaction Ref ID is required (minimum 6 digits)');
         return false;
       }
     }
@@ -283,7 +283,7 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
       if (formData.paymentMethod === 'Cheque') {
         formDataToSend.append('chequeNumber', formData.chequeNumber);
       }
-      if (formData.paymentMethod === 'QR Scanner' || formData.paymentMethod === 'Bank Transfer') {
+      if (formData.paymentMethod === 'QR Scanner' || formData.paymentMethod === 'Bank Transfer' || formData.paymentMethod === 'UPI Transfer') {
         formDataToSend.append('transactionRefId', formData.transactionRefId);
       }
       
@@ -586,18 +586,17 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Transaction Ref ID (Last 6 Digits)
+                  Transaction Ref ID (Minimum 6 Digits)
                 </label>
                 <input
                   type="text"
                   value={formData.transactionRefId}
                   onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, '').slice(0, 6);
+                    const value = e.target.value.replace(/\D/g, '');
                     handleInputChange('transactionRefId', value);
                   }}
-                  placeholder="Enter 6-digit reference"
-                  maxLength={6}
-                  pattern="\d{6}"
+                  placeholder="Enter reference ID (min 6 digits)"
+                  pattern="\d{6,}"
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-mono tracking-wider"
                 />
               </div>
@@ -614,25 +613,24 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
                   type="text"
                   value={formData.senderUpiId}
                   onChange={(e) => handleInputChange('senderUpiId', e.target.value)}
-                  placeholder="e.g., username@oksbi"
+                  placeholder="e.g., 9876543210@oksbi"
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                   required
                 />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Transaction Ref ID (Last 6 Digits) <span className="text-red-500">*</span>
+                  Transaction Ref ID (Minimum 6 Digits) <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.transactionRefId}
                   onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, '').slice(0, 6);
+                    const value = e.target.value.replace(/\D/g, '');
                     handleInputChange('transactionRefId', value);
                   }}
-                  placeholder="Enter 6-digit reference"
-                  maxLength={6}
-                  pattern="\d{6}"
+                  placeholder="Enter reference ID (min 6 digits)"
+                  pattern="\d{6,}"
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-mono tracking-wider"
                   required
                 />
@@ -659,18 +657,17 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
           {isQRScanner && (
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Transaction Ref ID (Last 6 Digits) <span className="text-red-500">*</span>
+                Transaction Ref ID (Minimum 6 Digits) <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 value={formData.transactionRefId}
                 onChange={(e) => {
-                  const value = e.target.value.replace(/\D/g, '').slice(0, 6);
+                  const value = e.target.value.replace(/\D/g, '');
                   handleInputChange('transactionRefId', value);
                 }}
-                placeholder="Enter 6-digit reference"
-                maxLength={6}
-                pattern="\d{6}"
+                placeholder="Enter reference ID (min 6 digits)"
+                pattern="\d{6,}"
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-mono tracking-wider"
                 required
               />
@@ -678,12 +675,11 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
           )}
 
           {/* Proof of Payment Upload (Optional) */}
-          {!isCashPayment && (
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Proof of Payment (Optional)
-              </label>
-              <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:border-emerald-500 transition-colors">
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Proof of Payment (Optional)
+            </label>
+            <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:border-emerald-500 transition-colors">
                 <input
                   type="file"
                   id="proof-upload"
@@ -716,7 +712,6 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
                 </label>
               </div>
             </div>
-          )}
 
           {isCashPayment && (
             <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
