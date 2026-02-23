@@ -29,8 +29,18 @@ const envPaths = [
   path.join(process.cwd(), '.env'),     // Fallback to current directory
 ];
 
+console.log('📝 Attempting to load .env from:', envPaths);
+
 for (const envPath of envPaths) {
   dotenv.config({ path: envPath, override: false });
+}
+
+// Log loaded Islamic API Key (masked)
+const apiKey = process.env.ISLAMIC_API_KEY;
+if (apiKey) {
+    console.log(`🔑 ISLAMIC_API_KEY loaded successfully: ${apiKey.substring(0, 5)}...`);
+} else {
+    console.warn('⚠️ ISLAMIC_API_KEY is missing from environment variables!');
 }
 
 const app = express();

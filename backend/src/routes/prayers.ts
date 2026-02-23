@@ -208,7 +208,19 @@ router.get('/fasting', [
         }
 
         const { latitude, longitude, method = '3' } = req.query as any;
-        const islamicApiKey = process.env.ISLAMIC_API_KEY;
+        let islamicApiKey = process.env.ISLAMIC_API_KEY;
+
+        // Ensure API Key is trimmed and clean
+        if (islamicApiKey) {
+            islamicApiKey = islamicApiKey.trim();
+        }
+
+        // Debug API Key
+        if (!islamicApiKey) {
+            console.error('❌ ISLAMIC_API_KEY is not defined in environment variables!');
+        } else {
+            console.log(`🔑 ISLAMIC_API_KEY loaded: ${islamicApiKey.substring(0, 5)}... (Length: ${islamicApiKey.length})`);
+        }
 
         // Generate cache key
         const cacheKey = `fasting_times:${latitude}:${longitude}:${method}`;
@@ -229,17 +241,32 @@ router.get('/fasting', [
         // Use Islamic API for fasting times
         const apiUrl = `https://islamicapi.com/api/v1/fasting/?lat=${latitude}&lon=${longitude}&method=${method}&api_key=${islamicApiKey}`;
 
-        const response = await fetch(apiUrl);
+        // Add headers to mimic a browser/curl request to avoid 403 blocks
+        const headers = {
+            'User-Agent': 'Mozilla/5.0 (compatible; HikmahSphere/1.0; +https://hikmahsphere.site)',
+            'Accept': 'application/json'
+        };
+
+        const response = await fetch(apiUrl, { headers });
         
         // Handle 403 and other API errors gracefully
         if (!response.ok) {
-            console.warn(`Islamic API returned ${response.status}, using fallback calculation`);
+            const errorText = await response.text();
+            console.warn(`⚠️ Islamic API returned ${response.status}: ${errorText}`);
+            console.warn('Using fallback calculation...');
             
+            // Determine reason for failure
+            let failureReason = `Islamic API error: ${response.status}`;
+            if (!islamicApiKey) failureReason = 'API Key missing';
+            else if (response.status === 403) failureReason = 'API Key invalid/expired';
+
             // Fallback: Calculate fasting times from prayer times
             const prayerTimesUrl = `https://api.aladhan.com/v1/timings?latitude=${latitude}&longitude=${longitude}&method=${method}`;
+            console.log(`Fetching fallback fasting from: ${prayerTimesUrl}`);
             const prayerResponse = await fetch(prayerTimesUrl);
             
             if (!prayerResponse.ok) {
+                console.error(`Fallback Prayer API failed: ${prayerResponse.status}`);
                 throw new Error('Both Islamic API and Aladhan API failed');
             }
             
@@ -247,30 +274,43 @@ router.get('/fasting', [
             
             if (prayerData.code === 200 && prayerData.data?.timings) {
                 const { Fajr, Maghrib } = prayerData.data.timings;
-                
+
                 // Calculate Sahur time (before Fajr)
                 const fajrTime = Fajr;
                 const sahurHour = parseInt(Fajr.split(':')[0]) - 1;
                 const sahurMinute = parseInt(Fajr.split(':')[1]);
                 const sahurTime = `${sahurHour.toString().padStart(2, '0')}:${sahurMinute.toString().padStart(2, '0')}`;
-                
+
                 // Iftar is at Maghrib
                 const iftarTime = Maghrib;
                 
+                // Calculate duration between Fajr and Maghrib
+                const fajrParts = Fajr.split(':').map(Number);
+                const maghribParts = Maghrib.split(':').map(Number);
+                const fajrMinutes = fajrParts[0] * 60 + fajrParts[1];
+                const maghribMinutes = maghribParts[0] * 60 + maghribParts[1];
+                const durationMinutes = maghribMinutes - fajrMinutes;
+                const durationHours = Math.floor(durationMinutes / 60);
+                const durationMins = durationMinutes % 60;
+                const duration = `${durationHours}h ${durationMins}m`;
+
                 const responseData = {
                     status: 'success',
                     data: {
                         fasting: [{
-                            sahur: sahurTime,
-                            iftar: iftarTime,
+                            time: {
+                                sahur: sahurTime,
+                                iftar: iftarTime,
+                                duration: duration
+                            },
                             fajr: fajrTime,
                             maghrib: iftarTime
                         }],
                         white_days: [],
-                        note: 'Calculated from prayer times (Islamic API unavailable)'
+                        note: `Calculated from prayer times (${failureReason})`
                     }
                 };
-                
+
                 return res.json(responseData);
             }
             
@@ -329,7 +369,19 @@ router.get('/ramadan', [
         }
 
         const { latitude, longitude, method = '3' } = req.query as any;
-        const islamicApiKey = process.env.ISLAMIC_API_KEY;
+        let islamicApiKey = process.env.ISLAMIC_API_KEY;
+
+        // Ensure API Key is trimmed
+        if (islamicApiKey) {
+            islamicApiKey = islamicApiKey.trim();
+        }
+
+        // Debug API Key
+        if (!islamicApiKey) {
+            console.error('❌ ISLAMIC_API_KEY is not defined in environment variables!');
+        } else {
+            console.log(`🔑 ISLAMIC_API_KEY loaded: ${islamicApiKey.substring(0, 5)}... (Length: ${islamicApiKey.length})`);
+        }
 
         // Generate cache key
         const cacheKey = `ramadan_times:${latitude}:${longitude}:${method}`;
@@ -350,52 +402,97 @@ router.get('/ramadan', [
         // Use Islamic API for Ramadan times
         const apiUrl = `https://islamicapi.com/api/v1/ramadan/?lat=${latitude}&lon=${longitude}&method=${method}&api_key=${islamicApiKey}`;
 
-        const response = await fetch(apiUrl);
+        // Add headers to mimic a browser/curl request
+        const headers = {
+            'User-Agent': 'Mozilla/5.0 (compatible; HikmahSphere/1.0; +https://hikmahsphere.site)',
+            'Accept': 'application/json'
+        };
+
+        const response = await fetch(apiUrl, { headers });
         
         // Handle 403 and other API errors gracefully
         if (!response.ok) {
-            console.warn(`Islamic API returned ${response.status}, using fallback calculation`);
-            
+            const errorText = await response.text();
+            console.warn(`⚠️ Islamic API returned ${response.status}: ${errorText}`);
+            console.warn('Using fallback calculation...');
+
+            // Determine reason for failure
+            let failureReason = `Islamic API error: ${response.status}`;
+            if (!islamicApiKey) failureReason = 'API Key missing';
+            else if (response.status === 403) failureReason = 'API Key invalid/expired';
+
             // Fallback: Calculate Ramadan fasting times from prayer times calendar
+            // Use Hijri Calendar API to get Ramadan (Month 9)
             const currentYear = new Date().getFullYear();
-            const calendarUrl = `https://api.aladhan.com/v1/calendar/${currentYear}?latitude=${latitude}&longitude=${longitude}&method=${method}`;
-            const calendarResponse = await fetch(calendarUrl);
             
+            // Assume 2026 Ramadan is in 1447, 2025 is 1446
+            // We'll try to guess based on year.
+            let hijriYear = 1447; // Default target
+            if (currentYear === 2025) hijriYear = 1446;
+            if (currentYear === 2024) hijriYear = 1445;
+            
+            // For robustness, try current year first, if it fails, try next.
+            // Aladhan API: /v1/hijriCalendar/:month/:year
+            const calendarUrl = `https://api.aladhan.com/v1/hijriCalendar/9/${hijriYear}?latitude=${latitude}&longitude=${longitude}&method=${method}`;
+            console.log(`Fetching fallback Ramadan calendar from: ${calendarUrl}`);
+            
+            const calendarResponse = await fetch(calendarUrl);
+
             if (!calendarResponse.ok) {
+                console.error(`Fallback Aladhan API failed: ${calendarResponse.status}`);
                 throw new Error('Both Islamic API and Aladhan API failed');
             }
-            
+
             const calendarData: any = await calendarResponse.json();
-            
-            if (calendarData.code === 200 && calendarData.data) {
-                // Find Ramadan dates (month 9)
-                const ramadanDays = calendarData.data.filter((day: any) => {
-                    const date = new Date(day.date.readable);
-                    return date.getMonth() + 1 === 9; // Ramadan is 9th month
+
+            if (calendarData.code === 200 && Array.isArray(calendarData.data) && calendarData.data.length > 0) {
+                const fastingTimes = calendarData.data.map((day: any) => {
+                    const fajrTime = day.timings.Fajr;
+                    const maghribTime = day.timings.Maghrib;
+
+                    // Calculate Sahur time (1 hour before Fajr)
+                    const sahurHour = parseInt(fajrTime.split(':')[0]) - 1;
+                    const sahurMinute = parseInt(fajrTime.split(':')[1]);
+                    const sahurTime = `${sahurHour.toString().padStart(2, '0')}:${sahurMinute.toString().padStart(2, '0')}`;
+
+                    // Calculate duration
+                    const fajrParts = fajrTime.split(':').map(Number);
+                    const maghribParts = maghribTime.split(':').map(Number);
+                    const fajrMinutes = fajrParts[0] * 60 + fajrParts[1];
+                    const maghribMinutes = maghribParts[0] * 60 + maghribParts[1];
+                    const durationMinutes = maghribMinutes - fajrMinutes;
+                    const durationHours = Math.floor(durationMinutes / 60);
+                    const durationMins = durationMinutes % 60;
+                    const duration = `${durationHours}h ${durationMins}m`;
+
+                    return {
+                        time: {
+                            sahur: sahurTime,
+                            iftar: maghribTime,
+                            duration: duration
+                        },
+                        fajr: fajrTime,
+                        maghrib: maghribTime,
+                        date: day.date.readable,
+                        day: day.date.gregorian.weekday.en,
+                        hijri_readable: `${day.date.hijri.day} ${day.date.hijri.month.en} ${day.date.hijri.year}`
+                    };
                 });
-                
-                const fastingTimes = ramadanDays.map((day: any) => ({
-                    sahur: day.timings.Fajr,
-                    iftar: day.timings.Maghrib,
-                    fajr: day.timings.Fajr,
-                    maghrib: day.timings.Maghrib,
-                    date: day.date.readable
-                }));
-                
+
                 const responseData = {
                     status: 'success',
                     data: {
-                        ramadan_year: currentYear,
+                        ramadan_year: hijriYear,
                         fasting: fastingTimes,
                         white_days: [],
-                        resource: 'Aladhan Calendar API',
-                        note: 'Calculated from prayer times (Islamic API unavailable)'
+                        resource: 'Aladhan Calendar API (Fallback)',
+                        note: `Calculated from prayer times (${failureReason})`
                     }
                 };
-                
+
                 return res.json(responseData);
             }
-            
+
             throw new Error(`Islamic API error: ${response.status}`);
         }
 

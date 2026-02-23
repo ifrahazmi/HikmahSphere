@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 
 // Load .env files using __dirname for consistent path resolution
-const rootDir = path.resolve(__dirname, '../../..'); // Go up from dist/config/ or src/config/
+const rootDir = path.resolve(__dirname, '../..'); // Go up from dist/config/ to backend/
 const envPaths = [
   path.join(rootDir, '.env'),
   path.join(process.cwd(), '.env'),
@@ -16,19 +16,19 @@ for (const envPath of envPaths) {
 // Initialize Firebase Admin SDK
 let serviceAccount: admin.ServiceAccount | undefined;
 
+// Get the backend directory (where dist/ and config/ folders are)
+const backendDir = path.resolve(__dirname, '../..');
+
 // Paths to check for service-account.json (using __dirname for reliable resolution)
-const baseDir = path.resolve(__dirname, '../../..'); // Root of backend directory
 const possibleFilePaths = [
     // 1. Environment Variable (highest priority)
     process.env.FIREBASE_SERVICE_ACCOUNT ? 'env' : null,
-    // 2. Production structure - relative to backend root
-    path.join(baseDir, 'config/firebase-credentials/service-account.json'),
+    // 2. Production structure - relative to backend root (works in any VM)
+    path.join(backendDir, 'config/firebase-credentials/service-account.json'),
     // 3. Quick dev placement
     path.join(process.cwd(), 'service-account.json'),
     // 4. Running from dist/ (fallback)
     path.join(process.cwd(), '../config/firebase-credentials/service-account.json'),
-    // 5. Absolute path for PM2
-    '/home/user/HikmahSphere/backend/config/firebase-credentials/service-account.json'
 ].filter(Boolean) as string[];
 
 let credentialsLoaded = false;
