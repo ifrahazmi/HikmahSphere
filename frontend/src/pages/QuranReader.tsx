@@ -65,6 +65,7 @@ const QuranReader: React.FC = () => {
     note?: string;
     color?: 'emerald' | 'blue' | 'purple' | 'amber' | 'rose';
   } | null>(null);
+  const [selectedAyahForBookmark, setSelectedAyahForBookmark] = useState<{surah: number, ayah: number} | null>(null);
 
   // Indopak Quran data state
   const [indopakData, setIndopakData] = useState<Map<number, IndopakSurah> | null>(null);
@@ -273,16 +274,25 @@ const QuranReader: React.FC = () => {
     return text;
   };
 
-  // Handle ayah click for bookmarking
+  // Handle ayah click for bookmarking (double-click to open popup)
   const handleAyahClick = (e: React.MouseEvent, surahNum: number, ayahNum: number) => {
     e.preventDefault();
     e.stopPropagation();
-    setBookmarkConfirm({
-      surahNum,
-      ayahNum,
-      x: e.clientX,
-      y: e.clientY,
-    });
+    
+    // Check if clicking the same ayah
+    if (selectedAyahForBookmark?.surah === surahNum && selectedAyahForBookmark?.ayah === ayahNum) {
+      // Second click - open bookmark popup
+      setBookmarkConfirm({
+        surahNum,
+        ayahNum,
+        x: e.clientX,
+        y: e.clientY,
+      });
+      setSelectedAyahForBookmark(null); // Reset selection
+    } else {
+      // First click - select the ayah
+      setSelectedAyahForBookmark({ surah: surahNum, ayah: ayahNum });
+    }
   };
 
   // Confirm bookmark
@@ -1064,16 +1074,17 @@ const QuranReader: React.FC = () => {
                           const ayahNum = ayah.ayah;
                           const isFirstAyahFatiha = surahData?.number === 1 && ayahNum === 1;
                           if (isFirstAyahFatiha) return null;
-                          
+
                           const bookmarkColor = getBookmarkColor(surahData.number, ayahNum);
                           const bgClass = getBookmarkBackgroundClass(bookmarkColor);
                           const borderClass = getBookmarkBorderClass(bookmarkColor);
-                          
+                          const isSelectedForBookmark = selectedAyahForBookmark?.surah === surahData.number && selectedAyahForBookmark?.ayah === ayahNum;
+
                           return (
                             <span key={ayahNum}>
                               <span
                                 onClick={(e) => handleAyahClick(e, surahData.number, ayahNum)}
-                                className={`cursor-pointer hover:bg-emerald-100 hover:bg-opacity-30 rounded px-1 ${bgClass}`}
+                                className={`cursor-pointer hover:bg-emerald-100 hover:bg-opacity-30 rounded px-1 ${bgClass} ${isSelectedForBookmark ? 'bg-emerald-400 bg-opacity-40 ring-2 ring-emerald-500' : ''}`}
                               >
                                 {ayah.text}
                               </span>
@@ -1211,13 +1222,14 @@ const QuranReader: React.FC = () => {
                           const bookmarkColor = getBookmarkColor(surahData.number, ayah.numberInSurah);
                           const bgClass = getBookmarkBackgroundClass(bookmarkColor);
                           const borderClass = getBookmarkBorderClass(bookmarkColor);
-                          const isSelected = selectedAyahForPlay?.surah === surahData.number && selectedAyahForPlay?.ayah === ayah.numberInSurah;
+                          const isSelectedForPlay = selectedAyahForPlay?.surah === surahData.number && selectedAyahForPlay?.ayah === ayah.numberInSurah;
+                          const isSelectedForBookmark = selectedAyahForBookmark?.surah === surahData.number && selectedAyahForBookmark?.ayah === ayah.numberInSurah;
 
                           return (
                             <span key={ayah.numberInSurah}>
                               <span
                                 onClick={(e) => handleAyahClick(e, surahData.number, ayah.numberInSurah)}
-                                className={`cursor-pointer hover:bg-emerald-100 hover:bg-opacity-30 rounded px-1 ${bgClass}`}
+                                className={`cursor-pointer hover:bg-emerald-100 hover:bg-opacity-30 rounded px-1 ${bgClass} ${isSelectedForBookmark ? 'bg-emerald-400 bg-opacity-40 ring-2 ring-emerald-500' : ''}`}
                               >
                                 {removeBismillah(ayah.text, surahData.number, ayah.numberInSurah)}
                               </span>
@@ -1228,7 +1240,7 @@ const QuranReader: React.FC = () => {
                                   onClick={(e) => {
                                     e.preventDefault();
                                     e.stopPropagation();
-                                    if (isSelected) {
+                                    if (isSelectedForPlay) {
                                       // If already selected, play it
                                       playAyah(currentSurah, ayah.numberInSurah);
                                     } else {
@@ -1237,15 +1249,15 @@ const QuranReader: React.FC = () => {
                                     }
                                   }}
                                   className={`inline-flex items-center justify-center w-6 h-6 rounded-full mx-1 transition-colors ${
-                                    isSelected
+                                    isSelectedForPlay
                                       ? 'bg-emerald-500 text-white'
                                       : settings.theme === 'dark'
                                       ? 'bg-gray-700 text-emerald-400 hover:bg-gray-600'
                                       : 'bg-gray-200 text-emerald-600 hover:bg-gray-300'
                                   }`}
-                                  title={isSelected ? 'Play selected ayah' : 'Select ayah for playback'}
+                                  title={isSelectedForPlay ? 'Play selected ayah' : 'Select ayah for playback'}
                                 >
-                                  {isSelected ? (
+                                  {isSelectedForPlay ? (
                                     <PlayIcon className="h-3 w-3" />
                                   ) : (
                                     <SpeakerWaveIcon className="h-3 w-3" />
@@ -1290,12 +1302,13 @@ const QuranReader: React.FC = () => {
                                 const bookmarkColor = getBookmarkColor(surahData.number, ayah.numberInSurah);
                                 const bgClass = getBookmarkBackgroundClass(bookmarkColor);
                                 const borderClass = getBookmarkBorderClass(bookmarkColor);
+                                const isSelectedForBookmark = selectedAyahForBookmark?.surah === surahData.number && selectedAyahForBookmark?.ayah === ayah.numberInSurah;
 
                                 return (
                                   <>
                                     <span
                                       onClick={(e) => handleAyahClick(e, surahData.number, ayah.numberInSurah)}
-                                      className={`cursor-pointer hover:bg-emerald-100 hover:bg-opacity-30 rounded px-1 ${bgClass}`}
+                                      className={`cursor-pointer hover:bg-emerald-100 hover:bg-opacity-30 rounded px-1 ${bgClass} ${isSelectedForBookmark ? 'bg-emerald-400 bg-opacity-40 ring-2 ring-emerald-500' : ''}`}
                                     >
                                       {removeBismillah(ayah.text, surahData.number, ayah.numberInSurah)}
                                     </span>

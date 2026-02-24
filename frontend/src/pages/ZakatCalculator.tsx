@@ -107,6 +107,11 @@ const ZakatCalculator: React.FC = () => {
 
   const [result, setResult] = useState<ZakatResult | null>(null);
 
+  // Prevent scroll from changing number input values (mobile fix)
+  const handleInputWheel = (e: React.WheelEvent<HTMLInputElement>) => {
+    e.currentTarget.blur();
+  };
+
   const fetchNisabDataCallback = useCallback(async () => {
     try {
       const apiKey = 'icgUaIHMO8GWEVLh7XhFcFoTHjQlsfhSBpJtYfrtTUJXY1eI';
@@ -467,6 +472,7 @@ const ZakatCalculator: React.FC = () => {
                 type="number"
                 value={form.cash}
                 onChange={(e) => handleInputChange('cash', e.target.value)}
+                onWheel={handleInputWheel}
                 placeholder="Enter cash amount"
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               />
@@ -481,6 +487,7 @@ const ZakatCalculator: React.FC = () => {
                 type="number"
                 value={form.goldValue}
                 onChange={(e) => handleInputChange('goldValue', e.target.value)}
+                onWheel={handleInputWheel}
                 placeholder={`Enter gold value in ${currencyNames[form.currency] || form.currency.toUpperCase()}`}
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               />
@@ -502,6 +509,7 @@ const ZakatCalculator: React.FC = () => {
                     type="number"
                     value={form.goldWeight}
                     onChange={(e) => handleInputChange('goldWeight', e.target.value)}
+                    onWheel={handleInputWheel}
                     placeholder="Enter gold weight"
                     className="w-full px-4 py-3 border-2 border-amber-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
                   />
@@ -545,6 +553,7 @@ const ZakatCalculator: React.FC = () => {
                 type="number"
                 value={form.silverValue}
                 onChange={(e) => handleInputChange('silverValue', e.target.value)}
+                onWheel={handleInputWheel}
                 placeholder={`Enter silver value in ${currencyNames[form.currency] || form.currency.toUpperCase()}`}
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               />
@@ -566,6 +575,7 @@ const ZakatCalculator: React.FC = () => {
                     type="number"
                     value={form.silverWeight}
                     onChange={(e) => handleInputChange('silverWeight', e.target.value)}
+                    onWheel={handleInputWheel}
                     placeholder="Enter silver weight"
                     className="w-full px-4 py-3 border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-slate-500 focus:border-slate-500"
                   />
@@ -609,6 +619,7 @@ const ZakatCalculator: React.FC = () => {
                 type="number"
                 value={form.investments}
                 onChange={(e) => handleInputChange('investments', e.target.value)}
+                onWheel={handleInputWheel}
                 placeholder="Enter investment value"
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               />
@@ -621,6 +632,7 @@ const ZakatCalculator: React.FC = () => {
                 type="number"
                 value={form.businessAssets}
                 onChange={(e) => handleInputChange('businessAssets', e.target.value)}
+                onWheel={handleInputWheel}
                 placeholder="Enter business assets value"
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               />
@@ -633,6 +645,7 @@ const ZakatCalculator: React.FC = () => {
                 type="number"
                 value={form.cryptocurrency}
                 onChange={(e) => handleInputChange('cryptocurrency', e.target.value)}
+                onWheel={handleInputWheel}
                 placeholder="Enter crypto value"
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               />
@@ -645,6 +658,7 @@ const ZakatCalculator: React.FC = () => {
                 type="number"
                 value={form.managedZakat}
                 onChange={(e) => handleInputChange('managedZakat', e.target.value)}
+                onWheel={handleInputWheel}
                 placeholder="Enter managed zakat amount"
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               />
@@ -690,6 +704,7 @@ const ZakatCalculator: React.FC = () => {
                 type="number"
                 value={form.personalDebts}
                 onChange={(e) => handleInputChange('personalDebts', e.target.value)}
+                onWheel={handleInputWheel}
                 placeholder="Enter immediate personal debts"
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               />
@@ -702,6 +717,7 @@ const ZakatCalculator: React.FC = () => {
                 type="number"
                 value={form.businessDebts}
                 onChange={(e) => handleInputChange('businessDebts', e.target.value)}
+                onWheel={handleInputWheel}
                 placeholder="Enter immediate business debts"
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               />
@@ -836,9 +852,9 @@ const ZakatCalculator: React.FC = () => {
 
             {/* Zakat Due */}
             {result.isEligible && result.hawlMet && (
-              <div className="bg-white rounded-2xl p-8 text-center">
+              <div className="bg-white rounded-2xl p-6 text-center">
                 <p className="text-gray-600 text-sm mb-2">Total Zakat Due (2.5%)</p>
-                <p className="text-5xl font-bold text-emerald-600 mb-4">
+                <p className="text-3xl sm:text-4xl md:text-5xl font-bold text-emerald-600 mb-4 break-words">
                   ₹{result.zakatDue.toLocaleString('en-IN')}
                 </p>
                 <p className="text-gray-500 text-sm">
