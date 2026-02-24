@@ -508,7 +508,8 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       setIsPlaying(false);
       setIsAudioLoading(false);
     }
-  }, [settings.reciter, playAyah]); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.reciter, playAyah]);
 
   const pauseAyah = useCallback(() => {
     console.log('⏸️ Pausing audio');

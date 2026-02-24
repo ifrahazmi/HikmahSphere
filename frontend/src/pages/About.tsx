@@ -642,58 +642,52 @@ const About: React.FC = () => {
             </div>
 
             <div className="relative">
-              {/* Timeline Line - Better centered for mobile */}
-              <div className="absolute left-12 sm:left-1/2 sm:transform sm:-translate-x-1/2 w-0.5 sm:w-1 h-full bg-gradient-to-b from-emerald-500 via-teal-500 to-cyan-500 rounded-full"></div>
+              {/* Timeline Line - Centered for all screen sizes */}
+              <div className="absolute left-1/2 transform -translate-x-1/2 w-0.5 sm:w-1 h-full bg-gradient-to-b from-emerald-500 via-teal-500 to-cyan-500 rounded-full"></div>
 
               {/* Timeline Items */}
               <div className="space-y-4 sm:space-y-6 md:space-y-8">
+                {/* Phase 1 */}
                 <div className="flex items-center">
-                  <div className="text-right pr-4 sm:pr-8 flex-1 hidden sm:block">
-                    <div className="text-emerald-300 font-semibold text-sm sm:text-base">Phase 1</div>
-                    <div className="text-white font-bold text-sm sm:text-base">Foundation</div>
-                    <div className="text-emerald-200/60 text-xs sm:text-sm">Core architecture</div>
+                  <div className="w-1/2 text-right pr-4">
+                    <div className="text-emerald-300 font-semibold text-xs sm:text-sm">Phase 1</div>
+                    <div className="text-white font-bold text-xs sm:text-base">Foundation</div>
+                    <div className="text-emerald-200/60 text-xs hidden sm:block">Core architecture</div>
                   </div>
-                  <div className="w-3 h-3 sm:w-4 sm:h-4 bg-emerald-500 rounded-full border-2 sm:border-4 border-emerald-300 z-10 ml-2 sm:ml-0"></div>
-                  <div className="flex-1 pl-4 sm:pl-8">
-                    <div className="sm:hidden">
-                      <div className="text-emerald-300 font-semibold text-sm">Phase 1: Foundation</div>
-                      <div className="text-emerald-200/60 text-xs">Core architecture</div>
-                    </div>
+                  <div className="w-3 h-3 sm:w-4 sm:h-4 bg-emerald-500 rounded-full border-2 sm:border-4 border-emerald-300 z-10"></div>
+                  <div className="w-1/2 pl-4"></div>
+                </div>
+
+                {/* Phase 2 */}
+                <div className="flex items-center">
+                  <div className="w-1/2 text-right pr-4"></div>
+                  <div className="w-3 h-3 sm:w-4 sm:h-4 bg-teal-500 rounded-full border-2 sm:border-4 border-teal-300 z-10"></div>
+                  <div className="w-1/2 pl-4">
+                    <div className="text-teal-300 font-semibold text-xs sm:text-sm">Phase 2</div>
+                    <div className="text-white font-bold text-xs sm:text-base">Features</div>
+                    <div className="text-teal-200/60 text-xs hidden sm:block">Prayer times, Quran, Zakat</div>
                   </div>
                 </div>
 
+                {/* Phase 3 */}
                 <div className="flex items-center">
-                  <div className="flex-1 pr-4 sm:pr-8"></div>
-                  <div className="w-3 h-3 sm:w-4 sm:h-4 bg-teal-500 rounded-full border-2 sm:border-4 border-teal-300 z-10 ml-2 sm:ml-0"></div>
-                  <div className="flex-1 pl-4 sm:pl-8">
-                    <div className="text-teal-300 font-semibold text-sm sm:text-base">Phase 2</div>
-                    <div className="text-white font-bold text-sm sm:text-base">Features</div>
-                    <div className="text-teal-200/60 text-xs sm:text-sm">Prayer times, Quran, Zakat</div>
+                  <div className="w-1/2 text-right pr-4">
+                    <div className="text-cyan-300 font-semibold text-xs sm:text-sm">Phase 3</div>
+                    <div className="text-white font-bold text-xs sm:text-base">Expansion</div>
+                    <div className="text-cyan-200/60 text-xs hidden sm:block">Community features</div>
                   </div>
+                  <div className="w-3 h-3 sm:w-4 sm:h-4 bg-cyan-500 rounded-full border-2 sm:border-4 border-cyan-300 z-10"></div>
+                  <div className="w-1/2 pl-4"></div>
                 </div>
 
+                {/* Current */}
                 <div className="flex items-center">
-                  <div className="text-right pr-4 sm:pr-8 flex-1 hidden sm:block">
-                    <div className="text-cyan-300 font-semibold text-sm sm:text-base">Phase 3</div>
-                    <div className="text-white font-bold text-sm sm:text-base">Expansion</div>
-                    <div className="text-cyan-200/60 text-xs sm:text-sm">Community features</div>
-                  </div>
-                  <div className="w-3 h-3 sm:w-4 sm:h-4 bg-cyan-500 rounded-full border-2 sm:border-4 border-cyan-300 z-10 ml-2 sm:ml-0"></div>
-                  <div className="flex-1 pl-4 sm:pl-8">
-                    <div className="sm:hidden">
-                      <div className="text-cyan-300 font-semibold text-sm">Phase 3: Expansion</div>
-                      <div className="text-cyan-200/60 text-xs">Community features</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center">
-                  <div className="flex-1 pr-4 sm:pr-8"></div>
-                  <div className="w-3 h-3 sm:w-4 sm:h-4 bg-white rounded-full border-2 sm:border-4 border-emerald-400 z-10 ml-2 sm:ml-0 animate-pulse"></div>
-                  <div className="flex-1 pl-4 sm:pl-8">
-                    <div className="text-emerald-300 font-semibold text-sm sm:text-base">Current</div>
-                    <div className="text-white font-bold text-sm sm:text-base">Growth</div>
-                    <div className="text-emerald-200/60 text-xs sm:text-sm">Continuous enhancement</div>
+                  <div className="w-1/2 text-right pr-4"></div>
+                  <div className="w-3 h-3 sm:w-4 sm:h-4 bg-white rounded-full border-2 sm:border-4 border-emerald-400 z-10 animate-pulse"></div>
+                  <div className="w-1/2 pl-4">
+                    <div className="text-emerald-300 font-semibold text-xs sm:text-sm">Current</div>
+                    <div className="text-white font-bold text-xs sm:text-base">Growth</div>
+                    <div className="text-emerald-200/60 text-xs hidden sm:block">Continuous enhancement</div>
                   </div>
                 </div>
 
