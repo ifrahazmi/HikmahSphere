@@ -109,7 +109,7 @@ print_success "Backend built successfully"
 
 print_step "Restarting backend with PM2..."
 # Set NODE_ENV to production for correct upload path
-pm2 restart hikmah-backend --env production
+NODE_ENV=production pm2 restart hikmah-backend
 sleep 2
 print_success "Backend restarted"
 
