@@ -108,7 +108,8 @@ npm run build
 print_success "Backend built successfully"
 
 print_step "Restarting backend with PM2..."
-pm2 restart hikmah-backend
+# Set NODE_ENV to production for correct upload path
+pm2 restart hikmah-backend --env production --NODE_ENV=production
 sleep 2
 print_success "Backend restarted"
 
@@ -203,11 +204,13 @@ print_header "🌐 Nginx Configuration"
 
 # Copy nginx config
 print_step "Copying Nginx configuration..."
-if [ -f "nginx-hikmah.conf" ]; then
-    sudo cp nginx-hikmah.conf /etc/nginx/sites-available/hikmahsphere
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "${SCRIPT_DIR}/nginx-hikmah.conf" ]; then
+    sudo cp "${SCRIPT_DIR}/nginx-hikmah.conf" /etc/nginx/sites-available/hikmahsphere
     print_success "Nginx config copied"
 else
-    print_warning "nginx-hikmah.conf not found, skipping..."
+    print_error "nginx-hikmah.conf not found in ${SCRIPT_DIR}"
+    print_warning "Please ensure nginx-hikmah.conf exists in the deploy folder"
 fi
 
 # Enable site

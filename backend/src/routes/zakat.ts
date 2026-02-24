@@ -35,7 +35,13 @@ const DonorModel = Donor as typeof Donor & {
 const router = express.Router();
 
 // Ensure upload directory exists - Use absolute path for production
-const uploadDir = path.resolve(process.cwd(), 'src', 'uploads', 'zakat');
+// In production, save to /var/www/hikmah/uploads/zakat
+// In development, save to backend/src/uploads/zakat
+const isProduction = process.env.NODE_ENV === 'production';
+const uploadDir = isProduction 
+  ? '/var/www/hikmah/uploads/zakat'
+  : path.resolve(process.cwd(), 'src', 'uploads', 'zakat');
+
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }

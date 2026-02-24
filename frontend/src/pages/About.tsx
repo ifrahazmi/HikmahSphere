@@ -75,8 +75,8 @@ const About: React.FC = () => {
   useEffect(() => {
     const observerOptions = {
       root: null,
-      rootMargin: '-100px',
-      threshold: 0.1,
+      rootMargin: '0px',  // Changed from -100px for better mobile support
+      threshold: 0.05,     // Lower threshold for mobile (5% visible triggers animation)
     };
 
     const observerCallback: IntersectionObserverCallback = (entries) => {
@@ -572,7 +572,7 @@ const About: React.FC = () => {
       <section
         ref={timelineRef}
         data-section="timeline"
-        className="py-24 bg-gradient-to-br from-gray-900 via-emerald-950 to-gray-900 text-white relative overflow-hidden"
+        className="py-16 sm:py-24 bg-gradient-to-br from-gray-900 via-emerald-950 to-gray-900 text-white relative overflow-hidden"
       >
         {/* Animated Background */}
         <div className="absolute inset-0 opacity-5">
@@ -585,105 +585,115 @@ const About: React.FC = () => {
         <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-teal-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
 
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-          <div className={`text-center mb-16 transition-all duration-1000 ${visibleSections.has('timeline') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full mb-6">
-              <SparklesIcon className="w-4 h-4 text-emerald-300" />
-              <span className="text-sm font-semibold text-emerald-200">Development Journey</span>
+          <div className={`text-center mb-8 sm:mb-16 transition-all duration-1000 ${visibleSections.has('timeline') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+            <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-white/10 backdrop-blur-sm rounded-full mb-4 sm:mb-6">
+              <SparklesIcon className="w-4 h-4 text-purple-300" />
+              <span className="text-xs sm:text-sm font-semibold text-purple-200">Coming Soon</span>
             </div>
-            <h2 className="text-5xl font-bold mb-6">
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4 sm:mb-6">
               Built with Dedication
             </h2>
-            <p className="text-xl text-emerald-100 max-w-3xl mx-auto">
+            <p className="text-base sm:text-xl text-emerald-100 max-w-3xl mx-auto">
               Countless hours of passionate development for the Ummah
             </p>
           </div>
 
           {/* Time Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-8 sm:mb-12">
             {/* Hours */}
-            <div className={`group bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10 hover:border-emerald-500/50 transition-all duration-500 transform hover:-translate-y-2 ${visibleSections.has('timeline') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`} style={{ transitionDelay: '200ms' }}>
+            <div className={`group bg-white/5 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 border border-white/10 hover:border-emerald-500/50 transition-all duration-500 transform hover:-translate-y-2 ${visibleSections.has('timeline') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`} style={{ transitionDelay: '200ms' }}>
               <div className="text-center">
-                <div className="text-6xl font-bold bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent mb-2">
+                <div className="text-3xl sm:text-4xl md:text-5xl font-bold bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent mb-1 sm:mb-2">
                   2,00+
                 </div>
-                <div className="text-emerald-200 font-semibold text-lg mb-2">Hours Invested</div>
-                <div className="text-emerald-300/60 text-sm">Of dedicated development time</div>
+                <div className="text-emerald-200 font-semibold text-sm sm:text-base md:text-lg mb-1 sm:mb-2">Hours Invested</div>
+                <div className="text-emerald-300/60 text-xs sm:text-sm">Of dedicated development time</div>
               </div>
             </div>
 
             {/* Days */}
-            <div className={`group bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10 hover:border-emerald-500/50 transition-all duration-500 transform hover:-translate-y-2 ${visibleSections.has('timeline') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`} style={{ transitionDelay: '400ms' }}>
+            <div className={`group bg-white/5 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 border border-white/10 hover:border-emerald-500/50 transition-all duration-500 transform hover:-translate-y-2 ${visibleSections.has('timeline') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`} style={{ transitionDelay: '400ms' }}>
               <div className="text-center">
-                <div className="text-6xl font-bold bg-gradient-to-r from-teal-400 to-cyan-400 bg-clip-text text-transparent mb-2">
+                <div className="text-3xl sm:text-4xl md:text-5xl font-bold bg-gradient-to-r from-teal-400 to-cyan-400 bg-clip-text text-transparent mb-1 sm:mb-2">
                   30+
                 </div>
-                <div className="text-teal-200 font-semibold text-lg mb-2">Days of Development</div>
-                <div className="text-teal-300/60 text-sm">Continuous improvement</div>
+                <div className="text-teal-200 font-semibold text-sm sm:text-base md:text-lg mb-1 sm:mb-2">Days of Development</div>
+                <div className="text-teal-300/60 text-xs sm:text-sm">Continuous improvement</div>
               </div>
             </div>
 
             {/* Lines of Code */}
-            <div className={`group bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10 hover:border-emerald-500/50 transition-all duration-500 transform hover:-translate-y-2 ${visibleSections.has('timeline') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`} style={{ transitionDelay: '600ms' }}>
+            <div className={`group bg-white/5 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 border border-white/10 hover:border-emerald-500/50 transition-all duration-500 transform hover:-translate-y-2 ${visibleSections.has('timeline') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`} style={{ transitionDelay: '600ms' }}>
               <div className="text-center">
-                <div className="text-6xl font-bold bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent mb-2">
+                <div className="text-3xl sm:text-4xl md:text-5xl font-bold bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent mb-1 sm:mb-2">
                   20,000+
                 </div>
-                <div className="text-cyan-200 font-semibold text-lg mb-2">Lines of Code</div>
-                <div className="text-cyan-300/60 text-sm">Written with care</div>
+                <div className="text-cyan-200 font-semibold text-sm sm:text-base md:text-lg mb-1 sm:mb-2">Lines of Code</div>
+                <div className="text-cyan-300/60 text-xs sm:text-sm">Written with care</div>
               </div>
             </div>
           </div>
 
           {/* Progress Timeline */}
-          <div className={`bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10 ${visibleSections.has('timeline') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`} style={{ transitionDelay: '800ms' }}>
-            <div className="text-center mb-8">
-              <h3 className="text-2xl font-bold mb-2">Development Progress</h3>
-              <p className="text-emerald-200">From concept to reality</p>
+          <div className={`bg-white/5 backdrop-blur-sm rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 border border-white/10 ${visibleSections.has('timeline') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`} style={{ transitionDelay: '800ms' }}>
+            <div className="text-center mb-6 sm:mb-8">
+              <h3 className="text-xl sm:text-2xl font-bold mb-2">Development Progress</h3>
+              <p className="text-emerald-200 text-sm sm:text-base">From concept to reality</p>
             </div>
-            
+
             <div className="relative">
-              {/* Timeline Line */}
-              <div className="absolute left-1/2 transform -translate-x-1/2 w-1 h-full bg-gradient-to-b from-emerald-500 via-teal-500 to-cyan-500 rounded-full"></div>
-              
+              {/* Timeline Line - Better centered for mobile */}
+              <div className="absolute left-12 sm:left-1/2 sm:transform sm:-translate-x-1/2 w-0.5 sm:w-1 h-full bg-gradient-to-b from-emerald-500 via-teal-500 to-cyan-500 rounded-full"></div>
+
               {/* Timeline Items */}
-              <div className="space-y-8">
-                <div className="flex items-center justify-between">
-                  <div className="text-right pr-8 flex-1">
-                    <div className="text-emerald-300 font-semibold">Phase 1</div>
-                    <div className="text-white font-bold">Foundation</div>
-                    <div className="text-emerald-200/60 text-sm">Core architecture</div>
+              <div className="space-y-4 sm:space-y-6 md:space-y-8">
+                <div className="flex items-center">
+                  <div className="text-right pr-4 sm:pr-8 flex-1 hidden sm:block">
+                    <div className="text-emerald-300 font-semibold text-sm sm:text-base">Phase 1</div>
+                    <div className="text-white font-bold text-sm sm:text-base">Foundation</div>
+                    <div className="text-emerald-200/60 text-xs sm:text-sm">Core architecture</div>
                   </div>
-                  <div className="w-4 h-4 bg-emerald-500 rounded-full border-4 border-emerald-300 z-10"></div>
-                  <div className="flex-1 pl-8"></div>
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <div className="flex-1 pr-8"></div>
-                  <div className="w-4 h-4 bg-teal-500 rounded-full border-4 border-teal-300 z-10"></div>
-                  <div className="text-left pl-8 flex-1">
-                    <div className="text-teal-300 font-semibold">Phase 2</div>
-                    <div className="text-white font-bold">Features</div>
-                    <div className="text-teal-200/60 text-sm">Prayer times, Quran, Zakat Calculator</div>
+                  <div className="w-3 h-3 sm:w-4 sm:h-4 bg-emerald-500 rounded-full border-2 sm:border-4 border-emerald-300 z-10 ml-2 sm:ml-0"></div>
+                  <div className="flex-1 pl-4 sm:pl-8">
+                    <div className="sm:hidden">
+                      <div className="text-emerald-300 font-semibold text-sm">Phase 1: Foundation</div>
+                      <div className="text-emerald-200/60 text-xs">Core architecture</div>
+                    </div>
                   </div>
                 </div>
-                
-                <div className="flex items-center justify-between">
-                  <div className="text-right pr-8 flex-1">
-                    <div className="text-cyan-300 font-semibold">Phase 3</div>
-                    <div className="text-white font-bold">Expansion</div>
-                    <div className="text-cyan-200/60 text-sm">Community features</div>
+
+                <div className="flex items-center">
+                  <div className="flex-1 pr-4 sm:pr-8"></div>
+                  <div className="w-3 h-3 sm:w-4 sm:h-4 bg-teal-500 rounded-full border-2 sm:border-4 border-teal-300 z-10 ml-2 sm:ml-0"></div>
+                  <div className="flex-1 pl-4 sm:pl-8">
+                    <div className="text-teal-300 font-semibold text-sm sm:text-base">Phase 2</div>
+                    <div className="text-white font-bold text-sm sm:text-base">Features</div>
+                    <div className="text-teal-200/60 text-xs sm:text-sm">Prayer times, Quran, Zakat</div>
                   </div>
-                  <div className="w-4 h-4 bg-cyan-500 rounded-full border-4 border-cyan-300 z-10 animate-pulse"></div>
-                  <div className="flex-1 pl-8"></div>
                 </div>
-                
-                <div className="flex items-center justify-between">
-                  <div className="flex-1 pr-8"></div>
-                  <div className="w-4 h-4 bg-white rounded-full border-4 border-emerald-400 z-10 animate-pulse"></div>
-                  <div className="text-left pl-8 flex-1">
-                    <div className="text-emerald-300 font-semibold">Current</div>
-                    <div className="text-white font-bold">Growth</div>
-                    <div className="text-emerald-200/60 text-sm">Continuous enhancement</div>
+
+                <div className="flex items-center">
+                  <div className="text-right pr-4 sm:pr-8 flex-1 hidden sm:block">
+                    <div className="text-cyan-300 font-semibold text-sm sm:text-base">Phase 3</div>
+                    <div className="text-white font-bold text-sm sm:text-base">Expansion</div>
+                    <div className="text-cyan-200/60 text-xs sm:text-sm">Community features</div>
+                  </div>
+                  <div className="w-3 h-3 sm:w-4 sm:h-4 bg-cyan-500 rounded-full border-2 sm:border-4 border-cyan-300 z-10 ml-2 sm:ml-0"></div>
+                  <div className="flex-1 pl-4 sm:pl-8">
+                    <div className="sm:hidden">
+                      <div className="text-cyan-300 font-semibold text-sm">Phase 3: Expansion</div>
+                      <div className="text-cyan-200/60 text-xs">Community features</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center">
+                  <div className="flex-1 pr-4 sm:pr-8"></div>
+                  <div className="w-3 h-3 sm:w-4 sm:h-4 bg-white rounded-full border-2 sm:border-4 border-emerald-400 z-10 ml-2 sm:ml-0 animate-pulse"></div>
+                  <div className="flex-1 pl-4 sm:pl-8">
+                    <div className="text-emerald-300 font-semibold text-sm sm:text-base">Current</div>
+                    <div className="text-white font-bold text-sm sm:text-base">Growth</div>
+                    <div className="text-emerald-200/60 text-xs sm:text-sm">Continuous enhancement</div>
                   </div>
                 </div>
 

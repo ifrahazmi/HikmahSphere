@@ -508,7 +508,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       setIsPlaying(false);
       setIsAudioLoading(false);
     }
-  }, [settings.reciter, playAyah]);
+  }, [settings.reciter, playAyah]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pauseAyah = useCallback(() => {
     console.log('⏸️ Pausing audio');
@@ -616,6 +616,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
           setAyahAudioQueue(audioQueue);
           ayahAudioQueueRef.current = audioQueue;
           setCurrentQueueIndex(0);
+          currentQueueIndexRef.current = 0;
           
           // Estimate total duration
           const estimatedTotalDuration = ayahs.length * 5;
@@ -650,6 +651,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       console.log('🎵 Playing next ayah:', nextAyahNumber, 'at index:', nextIndex, 'in surah:', surahNum);
       
       setCurrentQueueIndex(nextIndex);
+      currentQueueIndexRef.current = nextIndex;
 
       if (surahNum) {
         await playAyah(surahNum, nextAyahNumber, true);
