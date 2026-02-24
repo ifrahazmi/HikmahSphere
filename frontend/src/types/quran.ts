@@ -95,6 +95,8 @@ export interface QuranSettings {
   autoScroll: boolean;
   reciter: string;                 // Reciter identifier
   autoPlayNext: boolean;
+  audioEnabled: boolean;           // Enable audio playback feature
+  audioMode: 'ayah' | 'surah';     // 'ayah' for ayat-by-ayat, 'surah' for complete surah
 }
 
 export interface Bookmark {
@@ -151,10 +153,23 @@ export interface QuranContextType {
   
   // Audio
   isPlaying: boolean;
+  isPaused: boolean;           // Audio is paused (not stopped)
+  isAudioLoading: boolean;       // Audio buffering state
   currentPlayingAyah: number | null;
-  playAyah: (ayahNumber: number) => void;
+  currentPlayingSurah: number | null;
+  audioProgress: number;           // 0-100 percentage
+  audioDuration: number;           // Duration in seconds (total for surah mode)
+  audioCurrentTime: number;        // Current time in seconds (cumulative for surah mode)
+  currentQueueIndex: number;       // Current ayah index in surah play queue
+  totalSurahDuration: number;      // Total estimated duration for complete surah
+  cumulativeTime: number;          // Cumulative time from previous ayahs
+  playAyah: (surahNumber: number, ayahNumber: number) => void;
   pauseAyah: () => void;
+  resumeAyah: () => void;
   stopAyah: () => void;
+  playSurah: (surahNumber: number) => void;
+  togglePlayPause: () => void;
+  seekAudio: (time: number) => void;
 }
 
 // Default translations configuration
@@ -169,6 +184,20 @@ export const DEFAULT_TRANSLATIONS = [
   { identifier: 'es.cortes', name: 'Julio Cortes', language: 'Spanish' },
   { identifier: 'id.indonesian', name: 'Bahasa Indonesia', language: 'Indonesian' },
   { identifier: 'tr.diyanet', name: 'Diyanet İşleri', language: 'Turkish' },
+];
+
+// Available Reciters for Audio Playback
+export const AVAILABLE_RECITERS = [
+  { identifier: 'ar.alafasy', name: 'Mishary Rashid Alafasy' },
+  { identifier: 'ar.abdulbasitmurattal', name: 'Abdul Basit (Murattal)' },
+  { identifier: 'ar.abdulsamad', name: 'Abdul Samad' },
+  { identifier: 'ar.shaatree', name: 'Abu Bakr al-Shatri' },
+  { identifier: 'ar.husary', name: 'Mahmoud Khalil Al-Husary' },
+  { identifier: 'ar.minshawi', name: 'Mohamed Siddiq al-Minshawi' },
+  { identifier: 'ar.muhammadayyoub', name: 'Muhammad Ayyoub' },
+  { identifier: 'ar.muhammadjibreel', name: 'Muhammad Jibreel' },
+  { identifier: 'ar.saoodshuraym', name: 'Saood bin Ibraaheem Shuraym' },
+  { identifier: 'ar.abdullahbasfar', name: 'Abdullah Basfar' },
 ];
 
 // Default settings
@@ -187,4 +216,6 @@ export const DEFAULT_QURAN_SETTINGS: QuranSettings = {
   autoScroll: false,
   reciter: 'ar.alafasy',
   autoPlayNext: false,
+  audioEnabled: false,
+  audioMode: 'ayah',
 };

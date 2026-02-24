@@ -142,16 +142,40 @@ router.get('/surah/:number/editions', [
  * @desc    Get specific ayah (e.g., 2:255 for Ayat al-Kursi)
  * @access  Public
  */
-router.get('/ayah/:reference', [
-  query('edition').optional().isString(),
-], optionalAuthMiddleware, async (req: any, res: any) => {
+router.get('/ayah/:reference', optionalAuthMiddleware, async (req: any, res: any) => {
   try {
     const { reference } = req.params;
-    const edition = req.query.edition || 'ar.alafasy';
+    const editions = req.query.editions || 'ar.alafasy';
 
-    const response = await fetch(`${QURAN_API_BASE}/ayah/${reference}/${edition}`);
-    const data: any = await response.json();
+    console.log(`🎵 [Quran API] Fetching ayah ${reference} with edition ${editions}`);
+
+    // Validate reference format (should be like "2:255")
+    const parts = reference.split(':');
+    if (parts.length !== 2) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid reference format. Use format like "2:255"'
+      });
+    }
+
+    const surahNum = parseInt(parts[0]);
+    const ayahNum = parseInt(parts[1]);
     
+    if (isNaN(surahNum) || isNaN(ayahNum) || surahNum < 1 || surahNum > 114) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid reference. Surah number must be between 1 and 114'
+      });
+    }
+
+    const apiUrl = `${QURAN_API_BASE}/ayah/${reference}/editions/${editions}`;
+    console.log(`🎵 [Quran API] External API URL: ${apiUrl}`);
+    
+    const response = await fetch(apiUrl);
+    const data: any = await response.json();
+
+    console.log(`🎵 [Quran API] External API response status:`, data.code);
+
     if (data.code === 200 && data.data) {
       res.json({
         status: 'success',
@@ -161,7 +185,7 @@ router.get('/ayah/:reference', [
       throw new Error('Failed to fetch ayah');
     }
   } catch (error: any) {
-    console.error('Quran Ayah API error:', error.message);
+    console.error('❌ [Quran API] Ayah API error:', error.message);
     res.status(500).json({
       status: 'error',
       message: 'Failed to fetch ayah',

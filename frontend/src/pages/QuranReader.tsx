@@ -12,6 +12,9 @@ import {
   MoonIcon,
   SunIcon,
   ChevronDownIcon,
+  PlayIcon,
+  PauseIcon,
+  SpeakerWaveIcon,
 } from '@heroicons/react/24/outline';
 import { useQuran } from '../contexts/QuranContext';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -35,6 +38,22 @@ const QuranReader: React.FC = () => {
     addBookmark,
     removeBookmark,
     updateLastRead,
+    isPlaying,
+    isPaused,
+    isAudioLoading,
+    currentPlayingAyah,
+    currentPlayingSurah,
+    audioProgress,
+    audioDuration,
+    audioCurrentTime,
+    currentQueueIndex,
+    playAyah,
+    pauseAyah,
+    resumeAyah,
+    stopAyah,
+    playSurah,
+    togglePlayPause,
+    seekAudio,
   } = useQuran();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -71,6 +90,7 @@ const QuranReader: React.FC = () => {
   const [showMobileSettings, setShowMobileSettings] = useState(false);
   const [showSurahSearch, setShowSurahSearch] = useState(false);
   const [tempSettings, setTempSettings] = useState(settings);
+  const [selectedAyahForPlay, setSelectedAyahForPlay] = useState<{surah: number, ayah: number} | null>(null);
 
   // Scroll to specific ayah
   const scrollToAyahNumber = (ayahNumber: number) => {
@@ -91,6 +111,18 @@ const QuranReader: React.FC = () => {
   useEffect(() => {
     setTempSettings(settings);
   }, [settings]);
+
+  // Clear selected ayah when switching to Complete Surah mode or when surah changes
+  useEffect(() => {
+    if (settings.audioMode === 'surah') {
+      setSelectedAyahForPlay(null);
+    }
+  }, [settings.audioMode]);
+
+  // Clear selected ayah when surah changes (in ayat mode)
+  useEffect(() => {
+    setSelectedAyahForPlay(null);
+  }, [currentSurah]);
 
   // Open mobile settings modal
   const openMobileSettings = () => {
@@ -140,11 +172,11 @@ const QuranReader: React.FC = () => {
   const getBookmarkBackgroundClass = (color?: string): string => {
     if (!color) return '';
     const colorMap = {
-      emerald: 'bg-emerald-200 bg-opacity-30',
-      blue: 'bg-blue-200 bg-opacity-30',
-      purple: 'bg-purple-200 bg-opacity-30',
-      amber: 'bg-amber-200 bg-opacity-30',
-      rose: 'bg-rose-200 bg-opacity-30',
+      emerald: 'bg-emerald-300 bg-opacity-50',
+      blue: 'bg-blue-300 bg-opacity-50',
+      purple: 'bg-purple-300 bg-opacity-50',
+      amber: 'bg-amber-300 bg-opacity-50',
+      rose: 'bg-rose-300 bg-opacity-50',
     };
     return colorMap[color] || '';
   };
@@ -352,14 +384,20 @@ const QuranReader: React.FC = () => {
               {/* Surah Selector Dropdown */}
               <div className="flex-1 relative">
                 <select
-                  value={currentSurah}
-                  onChange={(e) => goToSurah(parseInt(e.target.value))}
+                  value={currentSurah || ''}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value);
+                    if (value) {
+                      goToSurah(value);
+                    }
+                  }}
                   className={`w-full p-3 pr-10 rounded-xl font-semibold appearance-none cursor-pointer ${
                     settings.theme === 'dark'
                       ? 'bg-gray-700 text-white border-gray-600'
                       : 'bg-gray-50 text-gray-900 border-gray-200'
                   } border-2 focus:outline-none focus:ring-2 focus:ring-emerald-500`}
                 >
+                  <option value="" disabled>Select Surah</option>
                   {surahs.map((surah) => (
                     <option key={surah.number} value={surah.number}>
                       {surah.number}. {surah.englishName}
@@ -388,8 +426,8 @@ const QuranReader: React.FC = () => {
             {/* Surah Info */}
             {surahData && (
               <div className={`mt-2 text-center text-xs ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                <span className="font-medium">{surahData.englishNameTranslation}</span> • 
-                <span className="ml-1">{surahData.numberOfAyahs} Ayahs</span> • 
+                <span className="font-medium">{surahData.englishNameTranslation}</span> •
+                <span className="ml-1">{surahData.numberOfAyahs} Ayahs</span> •
                 <span className="ml-1 capitalize">{surahData.revelationType}</span>
               </div>
             )}
@@ -716,8 +754,8 @@ const QuranReader: React.FC = () => {
                         {settings.showTransliteration ? 'On' : 'Off'}
                       </span>
                       <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
-                        settings.showTransliteration 
-                          ? 'bg-emerald-500 border-emerald-500' 
+                        settings.showTransliteration
+                          ? 'bg-emerald-500 border-emerald-500'
                           : 'border-gray-400'
                       }`}>
                         {settings.showTransliteration && (
@@ -729,6 +767,68 @@ const QuranReader: React.FC = () => {
                     </button>
                   </div>
                 )}
+
+                {/* Audio Settings */}
+                <div>
+                  <label className={`block text-xs font-medium mb-1.5 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Audio Playback
+                  </label>
+                  <button
+                    onClick={() => updateSettings({ audioEnabled: !settings.audioEnabled })}
+                    className={`w-full flex items-center justify-between p-2 text-sm rounded-md ${
+                      settings.theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                    }`}
+                  >
+                    <span className={settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}>
+                      {settings.audioEnabled ? 'Enabled' : 'Disabled'}
+                    </span>
+                    <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
+                      settings.audioEnabled
+                        ? 'bg-emerald-500 border-emerald-500'
+                        : 'border-gray-400'
+                    }`}>
+                      {settings.audioEnabled && (
+                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </div>
+                  </button>
+                  
+                  {settings.audioEnabled && (
+                    <div className="mt-2 space-y-2">
+                      <label className={`block text-xs ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                        Audio Mode
+                      </label>
+                      <div className="grid grid-cols-2 gap-1">
+                        <button
+                          onClick={() => updateSettings({ audioMode: 'ayah' })}
+                          className={`p-1.5 text-xs rounded-md transition-colors ${
+                            settings.audioMode === 'ayah'
+                              ? 'bg-emerald-500 text-white'
+                              : settings.theme === 'dark'
+                              ? 'bg-gray-600 text-gray-300'
+                              : 'bg-gray-200 text-gray-700'
+                          }`}
+                        >
+                          Ayat by Ayat
+                        </button>
+                        <button
+                          onClick={() => updateSettings({ audioMode: 'surah' })}
+                          className={`p-1.5 text-xs rounded-md transition-colors ${
+                            settings.audioMode === 'surah'
+                              ? 'bg-emerald-500 text-white'
+                              : settings.theme === 'dark'
+                              ? 'bg-gray-600 text-gray-300'
+                              : 'bg-gray-200 text-gray-700'
+                          }`}
+                        >
+                          Complete Surah
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 {/* Translations - only show if not in Arabic-only mode */}
                 {!settings.arabicOnlyMode && (
@@ -832,52 +932,121 @@ const QuranReader: React.FC = () => {
               </div>
             ) : surahData ? (
               <div className={`${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow-md p-4`}>
-                {/* Surah Header - Desktop Only */}
-                <div className="hidden lg:flex items-center justify-between mb-4 pb-4 border-b border-gray-200">
-                  <div>
-                    <h2 className={`text-2xl font-bold ${getFontFamilyClass()} mb-1 ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                      {surahData.name}
-                    </h2>
-                    <p className={`text-sm ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-                      {surahData.englishName} • {surahData.englishNameTranslation} • {surahData.numberOfAyahs} Ayahs • {surahData.revelationType}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={previousSurah}
-                      disabled={currentSurah === 1}
-                      className={`p-2 rounded-lg transition-colors ${
-                        currentSurah === 1
-                          ? 'opacity-50 cursor-not-allowed'
-                          : settings.theme === 'dark'
-                          ? 'bg-gray-700 hover:bg-gray-600 text-white'
-                          : 'bg-gray-100 hover:bg-gray-200'
-                      }`}
-                    >
-                      <ChevronLeftIcon className="h-5 w-5" />
-                    </button>
-                    <button
-                      onClick={nextSurah}
-                      disabled={currentSurah === 114}
-                      className={`p-2 rounded-lg transition-colors ${
-                        currentSurah === 114
-                          ? 'opacity-50 cursor-not-allowed'
-                          : settings.theme === 'dark'
-                          ? 'bg-gray-700 hover:bg-gray-600 text-white'
-                          : 'bg-gray-100 hover:bg-gray-200'
-                      }`}
-                    >
-                      <ChevronRightIcon className="h-5 w-5" />
-                    </button>
-                  </div>
-                </div>
-
                 {/* Bismillah (except for Surah 9) */}
                 {surahData.number !== 9 && (
                   <div className="text-center mb-4 py-3">
                     <p className={`text-2xl ${getFontFamilyClass()} text-emerald-600 leading-loose`}>
                       بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
                     </p>
+                  </div>
+                )}
+
+                {/* Desktop Top Audio Player Card - Only visible in Complete Surah mode */}
+                {settings.audioEnabled && settings.audioMode === 'surah' && (
+                  <div className="hidden lg:block mb-6">
+                    <div className={`p-4 rounded-lg ${settings.theme === 'dark' ? 'bg-gray-700' : 'bg-emerald-50'}`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                            isAudioLoading
+                              ? 'bg-blue-500 text-white animate-pulse'
+                              : isPlaying
+                              ? 'bg-emerald-500 text-white'
+                              : isPaused
+                              ? 'bg-amber-500 text-white'
+                              : selectedAyahForPlay
+                              ? 'bg-emerald-600 text-white'
+                              : settings.theme === 'dark'
+                              ? 'bg-gray-600 text-emerald-400'
+                              : 'bg-emerald-200 text-emerald-700'
+                          }`}>
+                            {isAudioLoading ? (
+                              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            ) : isPlaying ? (
+                              <PauseIcon className="h-5 w-5" />
+                            ) : (
+                              <SpeakerWaveIcon className="h-5 w-5" />
+                            )}
+                          </div>
+                          <div>
+                            <h3 className={`text-base font-bold ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                              {currentPlayingSurah && surahs[currentPlayingSurah - 1]
+                                ? `${surahs[currentPlayingSurah - 1].englishName} - Ayah ${currentPlayingAyah || currentQueueIndex + 1}`
+                                : selectedAyahForPlay && surahs[selectedAyahForPlay.surah - 1]
+                                ? `Selected: ${surahs[selectedAyahForPlay.surah - 1].englishName} ${selectedAyahForPlay.ayah}`
+                                : surahData
+                                ? `${surahData.englishName} - ${surahData.name}`
+                                : 'Select a Surah'
+                              }
+                            </h3>
+                            <p className={`text-sm ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                              {surahData && `${surahData.numberOfAyahs} Ayahs • ${surahData.revelationType}`}
+                              {isAudioLoading && <span className="ml-2 text-blue-500">(Loading...)</span>}
+                              {isPaused && <span className="ml-2 text-amber-500">(Paused)</span>}
+                              {selectedAyahForPlay && !isPlaying && !isPaused && <span className="ml-2 text-emerald-500">Ready to play</span>}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {(isPlaying || isPaused) && (
+                            <>
+                              <button
+                                onClick={stopAyah}
+                                className={`p-2 rounded-lg transition-colors ${
+                                  settings.theme === 'dark'
+                                    ? 'bg-gray-600 hover:bg-gray-500 text-white'
+                                    : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                                }`}
+                                title="Stop"
+                              >
+                                <XMarkIcon className="h-5 w-5" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (isPlaying) {
+                                    pauseAyah();
+                                  } else {
+                                    resumeAyah();
+                                  }
+                                }}
+                                className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
+                                  isPlaying
+                                    ? 'bg-amber-500 text-white hover:bg-amber-600'
+                                    : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                                }`}
+                              >
+                                {isPlaying ? 'Pause' : 'Resume'}
+                              </button>
+                            </>
+                          )}
+                          {!isPlaying && !isPaused && !isAudioLoading && (
+                            <button
+                              onClick={() => {
+                                if (selectedAyahForPlay && currentSurah) {
+                                  playAyah(currentSurah, selectedAyahForPlay.ayah);
+                                } else if (settings.audioMode === 'surah' && surahData) {
+                                  playSurah(surahData.number);
+                                }
+                                // In ayat mode without selection, do nothing
+                              }}
+                              className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
+                                selectedAyahForPlay
+                                  ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                                  : settings.audioMode === 'surah'
+                                  ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+                                  : 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                              }`}
+                              disabled={!selectedAyahForPlay && settings.audioMode !== 'surah'}
+                            >
+                              {selectedAyahForPlay ? `Play Ayah ${selectedAyahForPlay.ayah}` : settings.audioMode === 'surah' ? 'Play Surah' : 'Select Ayah to Play'}
+                            </button>
+                          )}
+                          {isAudioLoading && (
+                            <span className="px-4 py-2 text-sm text-blue-500">Loading...</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
 
@@ -938,35 +1107,66 @@ const QuranReader: React.FC = () => {
                           >
                             {/* Arabic Text */}
                             <div className={`mb-2 p-3 rounded-lg ${getReaderBackgroundClass()}`}>
-                              <p
-                                className={`${getFontFamilyClass()} leading-loose text-right ${getFontColorClass()}`}
-                                style={{ fontSize: `${getActualFontSize()}px`, lineHeight: settings.lineSpacing }}
-                                dir="rtl"
-                              >
-                                {(() => {
-                                  const bookmarkColor = getBookmarkColor(surahData.number, ayahNum);
-                                  const bgClass = getBookmarkBackgroundClass(bookmarkColor);
-                                  const borderClass = getBookmarkBorderClass(bookmarkColor);
-                                  
-                                  return (
-                                    <>
-                                      <span
-                                        onClick={(e) => handleAyahClick(e, surahData.number, ayahNum)}
-                                        className={`cursor-pointer hover:bg-emerald-100 hover:bg-opacity-30 rounded px-1 ${bgClass}`}
-                                      >
-                                        {ayah.text}
-                                      </span>
-                                      {' '}
-                                      <span
-                                        id={`ayah-${ayahNum}`}
-                                        className={`inline-flex items-center justify-center w-6 h-6 rounded-full border-2 text-xs font-bold mx-1 ${borderClass}`}
-                                      >
-                                        {ayahNum}
-                                      </span>
-                                    </>
-                                  );
-                                })()}
-                              </p>
+                              <div className="flex items-start justify-between gap-3">
+                                <p
+                                  className={`${getFontFamilyClass()} leading-loose text-right ${getFontColorClass()} flex-1`}
+                                  style={{ fontSize: `${getActualFontSize()}px`, lineHeight: settings.lineSpacing }}
+                                  dir="rtl"
+                                >
+                                  {(() => {
+                                    const bookmarkColor = getBookmarkColor(surahData.number, ayahNum);
+                                    const bgClass = getBookmarkBackgroundClass(bookmarkColor);
+                                    const borderClass = getBookmarkBorderClass(bookmarkColor);
+
+                                    return (
+                                      <>
+                                        <span
+                                          onClick={(e) => handleAyahClick(e, surahData.number, ayahNum)}
+                                          className={`cursor-pointer hover:bg-emerald-100 hover:bg-opacity-30 rounded px-1 ${bgClass}`}
+                                        >
+                                          {ayah.text}
+                                        </span>
+                                        {' '}
+                                        <span
+                                          id={`ayah-${ayahNum}`}
+                                          className={`inline-flex items-center justify-center w-6 h-6 rounded-full border-2 text-xs font-bold mx-1 ${borderClass}`}
+                                        >
+                                          {ayahNum}
+                                        </span>
+                                      </>
+                                    );
+                                  })()}
+                                </p>
+                                
+                                {/* Audio Play Button - only show if audio is enabled and in ayah mode */}
+                                {settings.audioEnabled && settings.audioMode === 'ayah' && currentSurah && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      if (isPlaying && currentPlayingAyah === ayahNum) {
+                                        pauseAyah();
+                                      } else {
+                                        playAyah(currentSurah, ayahNum);
+                                      }
+                                    }}
+                                    className={`p-2 rounded-full transition-colors flex-shrink-0 ${
+                                      isPlaying && currentPlayingAyah === ayahNum
+                                        ? 'bg-emerald-500 text-white'
+                                        : settings.theme === 'dark'
+                                        ? 'bg-gray-700 hover:bg-gray-600 text-emerald-400'
+                                        : 'bg-emerald-100 hover:bg-emerald-200 text-emerald-600'
+                                    }`}
+                                    title={isPlaying && currentPlayingAyah === ayahNum ? 'Pause' : 'Play'}
+                                  >
+                                    {isPlaying && currentPlayingAyah === ayahNum ? (
+                                      <PauseIcon className="h-4 w-4" />
+                                    ) : (
+                                      <PlayIcon className="h-4 w-4" />
+                                    )}
+                                  </button>
+                                )}
+                              </div>
                             </div>
 
                             {/* Transliteration */}
@@ -1011,7 +1211,8 @@ const QuranReader: React.FC = () => {
                           const bookmarkColor = getBookmarkColor(surahData.number, ayah.numberInSurah);
                           const bgClass = getBookmarkBackgroundClass(bookmarkColor);
                           const borderClass = getBookmarkBorderClass(bookmarkColor);
-                          
+                          const isSelected = selectedAyahForPlay?.surah === surahData.number && selectedAyahForPlay?.ayah === ayah.numberInSurah;
+
                           return (
                             <span key={ayah.numberInSurah}>
                               <span
@@ -1021,9 +1222,39 @@ const QuranReader: React.FC = () => {
                                 {removeBismillah(ayah.text, surahData.number, ayah.numberInSurah)}
                               </span>
                               {' '}
+                              {/* Play button for Arabic-only mode - BEFORE ayah number */}
+                              {settings.audioEnabled && settings.audioMode === 'ayah' && currentSurah && (
+                                <button
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    if (isSelected) {
+                                      // If already selected, play it
+                                      playAyah(currentSurah, ayah.numberInSurah);
+                                    } else {
+                                      // Select this ayah
+                                      setSelectedAyahForPlay({ surah: currentSurah, ayah: ayah.numberInSurah });
+                                    }
+                                  }}
+                                  className={`inline-flex items-center justify-center w-6 h-6 rounded-full mx-1 transition-colors ${
+                                    isSelected
+                                      ? 'bg-emerald-500 text-white'
+                                      : settings.theme === 'dark'
+                                      ? 'bg-gray-700 text-emerald-400 hover:bg-gray-600'
+                                      : 'bg-gray-200 text-emerald-600 hover:bg-gray-300'
+                                  }`}
+                                  title={isSelected ? 'Play selected ayah' : 'Select ayah for playback'}
+                                >
+                                  {isSelected ? (
+                                    <PlayIcon className="h-3 w-3" />
+                                  ) : (
+                                    <SpeakerWaveIcon className="h-3 w-3" />
+                                  )}
+                                </button>
+                              )}
                               <span
                                 id={`ayah-${ayah.numberInSurah}`}
-                                className={`inline-flex items-center justify-center w-6 h-6 rounded-full border-2 text-xs font-bold mx-1 ${borderClass}`}
+                                className={`inline-flex items-center justify-center w-6 h-6 rounded-full border-2 text-xs font-bold ${borderClass}`}
                               >
                                 {ayah.numberInSurah}
                               </span>
@@ -1049,35 +1280,68 @@ const QuranReader: React.FC = () => {
                         <div
                           className={`mb-2 p-3 rounded-lg ${getReaderBackgroundClass()}`}
                         >
-                          <p
-                            className={`${getFontFamilyClass()} leading-loose text-right ${getFontColorClass()}`}
-                            style={{ fontSize: `${getActualFontSize()}px`, lineHeight: settings.lineSpacing }}
-                            dir="rtl"
-                          >
-                            {(() => {
-                              const bookmarkColor = getBookmarkColor(surahData.number, ayah.numberInSurah);
-                              const bgClass = getBookmarkBackgroundClass(bookmarkColor);
-                              const borderClass = getBookmarkBorderClass(bookmarkColor);
-                              
-                              return (
-                                <>
-                                  <span
-                                    onClick={(e) => handleAyahClick(e, surahData.number, ayah.numberInSurah)}
-                                    className={`cursor-pointer hover:bg-emerald-100 hover:bg-opacity-30 rounded px-1 ${bgClass}`}
-                                  >
-                                    {removeBismillah(ayah.text, surahData.number, ayah.numberInSurah)}
-                                  </span>
-                                  {' '}
-                                  <span
-                                    id={`ayah-${ayah.numberInSurah}`}
-                                    className={`inline-flex items-center justify-center w-6 h-6 rounded-full border-2 text-xs font-bold mx-1 ${borderClass}`}
-                                  >
-                                    {ayah.numberInSurah}
-                                  </span>
-                                </>
-                              );
-                            })()}
-                          </p>
+                          <div className="flex items-start justify-between gap-3">
+                            <p
+                              className={`${getFontFamilyClass()} leading-loose text-right ${getFontColorClass()} flex-1`}
+                              style={{ fontSize: `${getActualFontSize()}px`, lineHeight: settings.lineSpacing }}
+                              dir="rtl"
+                            >
+                              {(() => {
+                                const bookmarkColor = getBookmarkColor(surahData.number, ayah.numberInSurah);
+                                const bgClass = getBookmarkBackgroundClass(bookmarkColor);
+                                const borderClass = getBookmarkBorderClass(bookmarkColor);
+
+                                return (
+                                  <>
+                                    <span
+                                      onClick={(e) => handleAyahClick(e, surahData.number, ayah.numberInSurah)}
+                                      className={`cursor-pointer hover:bg-emerald-100 hover:bg-opacity-30 rounded px-1 ${bgClass}`}
+                                    >
+                                      {removeBismillah(ayah.text, surahData.number, ayah.numberInSurah)}
+                                    </span>
+                                    {' '}
+                                    <span
+                                      id={`ayah-${ayah.numberInSurah}`}
+                                      className={`inline-flex items-center justify-center w-6 h-6 rounded-full border-2 text-xs font-bold mx-1 ${borderClass}`}
+                                    >
+                                      {ayah.numberInSurah}
+                                    </span>
+                                  </>
+                                );
+                              })()}
+                            </p>
+                            
+                            {/* Audio Play Button - only show if audio is enabled and in ayah mode */}
+                            {settings.audioEnabled && settings.audioMode === 'ayah' && currentSurah && (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    if (isPlaying && currentPlayingAyah === ayah.numberInSurah) {
+                                      pauseAyah();
+                                    } else {
+                                      playAyah(currentSurah, ayah.numberInSurah);
+                                    }
+                                  }}
+                                  className={`p-2 rounded-full transition-colors ${
+                                    isPlaying && currentPlayingAyah === ayah.numberInSurah
+                                      ? 'bg-emerald-500 text-white'
+                                      : settings.theme === 'dark'
+                                      ? 'bg-gray-700 hover:bg-gray-600 text-emerald-400'
+                                      : 'bg-emerald-100 hover:bg-emerald-200 text-emerald-600'
+                                  }`}
+                                  title={isPlaying && currentPlayingAyah === ayah.numberInSurah ? 'Pause' : 'Play Ayah'}
+                                >
+                                  {isPlaying && currentPlayingAyah === ayah.numberInSurah ? (
+                                    <PauseIcon className="h-4 w-4" />
+                                  ) : (
+                                    <PlayIcon className="h-4 w-4" />
+                                  )}
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </div>
 
                         {/* Transliteration - only if not Arabic-only mode */}
@@ -1442,7 +1706,11 @@ const QuranReader: React.FC = () => {
                       Transliteration
                     </label>
                     <button
-                      onClick={() => setTempSettings({ ...tempSettings, showTransliteration: !tempSettings.showTransliteration })}
+                      onClick={() => {
+                        const newValue = !tempSettings.showTransliteration;
+                        setTempSettings({ ...tempSettings, showTransliteration: newValue });
+                        updateSettings({ showTransliteration: newValue });
+                      }}
                       className={`w-full flex items-center justify-between p-3 rounded-lg ${
                         settings.theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'
                       }`}
@@ -1465,6 +1733,72 @@ const QuranReader: React.FC = () => {
                   </div>
                 )}
 
+                {/* Audio Settings */}
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Audio Playback
+                  </label>
+                  <button
+                    onClick={() => {
+                      const newAudioEnabled = !tempSettings.audioEnabled;
+                      setTempSettings({ ...tempSettings, audioEnabled: newAudioEnabled });
+                      updateSettings({ audioEnabled: newAudioEnabled });
+                    }}
+                    className={`w-full flex items-center justify-between p-3 rounded-lg ${
+                      settings.theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'
+                    }`}
+                  >
+                    <span className={settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}>
+                      {tempSettings.audioEnabled ? 'Enabled' : 'Disabled'}
+                    </span>
+                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                      tempSettings.audioEnabled
+                        ? 'bg-emerald-500 border-emerald-500'
+                        : 'border-gray-400'
+                    }`}>
+                      {tempSettings.audioEnabled && (
+                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </div>
+                  </button>
+                  {tempSettings.audioEnabled && (
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => {
+                          setTempSettings({ ...tempSettings, audioMode: 'ayah' });
+                          updateSettings({ audioMode: 'ayah' });
+                        }}
+                        className={`p-2 text-sm rounded-lg transition-colors ${
+                          tempSettings.audioMode === 'ayah'
+                            ? 'bg-emerald-500 text-white'
+                            : settings.theme === 'dark'
+                            ? 'bg-gray-600 text-gray-300'
+                            : 'bg-gray-200 text-gray-700'
+                        }`}
+                      >
+                        Ayat by Ayat
+                      </button>
+                      <button
+                        onClick={() => {
+                          setTempSettings({ ...tempSettings, audioMode: 'surah' });
+                          updateSettings({ audioMode: 'surah' });
+                        }}
+                        className={`p-2 text-sm rounded-lg transition-colors ${
+                          tempSettings.audioMode === 'surah'
+                            ? 'bg-emerald-500 text-white'
+                            : settings.theme === 'dark'
+                            ? 'bg-gray-600 text-gray-300'
+                            : 'bg-gray-200 text-gray-700'
+                        }`}
+                      >
+                        Complete Surah
+                      </button>
+                    </div>
+                  )}
+                </div>
+
                 {/* Translations */}
                 {!tempSettings.arabicOnlyMode && (
                   <div>
@@ -1478,17 +1812,16 @@ const QuranReader: React.FC = () => {
                             type="checkbox"
                             checked={tempSettings.selectedTranslations.includes(trans.identifier)}
                             onChange={(e) => {
+                              let newTranslations;
                               if (e.target.checked && tempSettings.selectedTranslations.length < 3) {
-                                setTempSettings({
-                                  ...tempSettings,
-                                  selectedTranslations: [...tempSettings.selectedTranslations, trans.identifier],
-                                });
+                                newTranslations = [...tempSettings.selectedTranslations, trans.identifier];
                               } else if (!e.target.checked) {
-                                setTempSettings({
-                                  ...tempSettings,
-                                  selectedTranslations: tempSettings.selectedTranslations.filter((t) => t !== trans.identifier),
-                                });
+                                newTranslations = tempSettings.selectedTranslations.filter((t) => t !== trans.identifier);
+                              } else {
+                                return;
                               }
+                              setTempSettings({ ...tempSettings, selectedTranslations: newTranslations });
+                              updateSettings({ selectedTranslations: newTranslations });
                             }}
                             className="mr-2 w-4 h-4"
                           />
@@ -1663,6 +1996,247 @@ const QuranReader: React.FC = () => {
               }`}
             >
               {isBookmarked(bookmarkConfirm.surahNum, bookmarkConfirm.ayahNum) ? 'Remove' : 'Save Bookmark'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Audio Player Control Bar - Mobile: Only show when playing/paused or in surah mode. Desktop: Always show when audio enabled */}
+      {settings.audioEnabled && (
+        <div className={`fixed bottom-0 left-0 right-0 ${
+          settings.theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+        } border-t shadow-lg p-3 z-50 lg:hidden ${
+          // Hide in ayat mode when not playing
+          (!isPlaying && !isPaused && !isAudioLoading && settings.audioMode === 'ayah' && !selectedAyahForPlay) ? 'hidden' : ''
+        }`}>
+          <div className="max-w-6xl mx-auto flex items-center gap-4">
+            {/* Play/Pause/Resume Button */}
+            <button
+              onClick={() => {
+                const currentSurahNum = currentPlayingSurah || surahData?.number;
+                if (isPlaying) {
+                  pauseAyah();
+                } else if (isPaused) {
+                  resumeAyah();
+                } else if (selectedAyahForPlay) {
+                  playAyah(selectedAyahForPlay.surah, selectedAyahForPlay.ayah);
+                } else if (settings.audioMode === 'surah' && currentSurahNum) {
+                  playSurah(currentSurahNum);
+                }
+              }}
+              className={`p-3 rounded-full transition-colors flex-shrink-0 ${
+                isAudioLoading
+                  ? 'bg-blue-500 text-white cursor-wait'
+                  : isPlaying
+                  ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                  : isPaused
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                  : 'bg-emerald-500 hover:bg-emerald-600 text-white'
+              }`}
+            >
+              {isAudioLoading ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : isPlaying ? (
+                <PauseIcon className="h-5 w-5" />
+              ) : (
+                <PlayIcon className="h-5 w-5" />
+              )}
+            </button>
+
+            {/* Audio Info */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <SpeakerWaveIcon className="h-4 w-4 text-emerald-500 flex-shrink-0" />
+                <p className={`text-sm font-medium truncate ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                  {currentPlayingSurah && surahs[currentPlayingSurah - 1]
+                    ? `${surahs[currentPlayingSurah - 1].englishName} - Ayah ${currentPlayingAyah || currentQueueIndex + 1}`
+                    : selectedAyahForPlay && surahs[selectedAyahForPlay.surah - 1]
+                    ? `Selected: ${surahs[selectedAyahForPlay.surah - 1].englishName} ${selectedAyahForPlay.ayah}`
+                    : surahData
+                    ? `${surahData.englishName}`
+                    : isAudioLoading
+                    ? 'Loading audio...'
+                    : isPaused
+                    ? 'Paused'
+                    : 'Select Surah'
+                  }
+                  {isAudioLoading && <span className="ml-2 text-xs">(Buffering)</span>}
+                  {isPaused && <span className="ml-2 text-xs text-amber-500">(Paused)</span>}
+                  {selectedAyahForPlay && !isPlaying && !isPaused && !isAudioLoading && (
+                    <span className="ml-2 text-xs text-emerald-500">Click play to listen</span>
+                  )}
+                  {!isPlaying && !isPaused && !isAudioLoading && currentPlayingSurah && !selectedAyahForPlay && (
+                    <span className="ml-2 text-xs text-emerald-500">Ready to play</span>
+                  )}
+                </p>
+              </div>
+
+              {/* Progress Bar - Only show when playing or paused */}
+              {(isPlaying || isPaused) && (
+                <div className="flex items-center gap-3">
+                  <span className={`text-xs w-10 ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                    {Math.floor(audioCurrentTime / 60)}:{Math.floor(audioCurrentTime % 60).toString().padStart(2, '0')}
+                  </span>
+                  <div
+                    className="flex-1 h-1.5 bg-gray-300 rounded-full overflow-hidden cursor-pointer"
+                    onClick={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const percent = (e.clientX - rect.left) / rect.width;
+                      seekAudio(percent * audioDuration);
+                    }}
+                  >
+                    <div
+                      className="h-full bg-emerald-500 transition-all duration-300"
+                      style={{ width: `${audioProgress}%` }}
+                    />
+                  </div>
+                  <span className={`text-xs w-10 text-right ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                    {Math.floor(audioDuration / 60)}:{Math.floor(audioDuration % 60).toString().padStart(2, '0')}
+                  </span>
+                </div>
+              )}
+              
+              {/* Play Button - Show when not started yet */}
+              {!isPlaying && !isPaused && !isAudioLoading && (
+                <button
+                  onClick={() => {
+                    if (selectedAyahForPlay) {
+                      // Play selected ayah
+                      playAyah(selectedAyahForPlay.surah, selectedAyahForPlay.ayah);
+                    } else if (settings.audioMode === 'surah') {
+                      // Only play surah in surah mode
+                      const currentSurahNum = currentPlayingSurah || surahData?.number;
+                      if (currentSurahNum) {
+                        playSurah(currentSurahNum);
+                      }
+                    }
+                    // In ayat mode without selection, do nothing
+                  }}
+                  className={`mt-2 w-full py-2 text-sm font-semibold rounded-lg transition-colors ${
+                    selectedAyahForPlay
+                      ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                      : settings.audioMode === 'surah'
+                      ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                      : 'bg-gray-400 cursor-not-allowed text-gray-200'
+                  }`}
+                  disabled={!selectedAyahForPlay && settings.audioMode !== 'surah'}
+                >
+                  {selectedAyahForPlay 
+                    ? `Play Ayah ${selectedAyahForPlay.ayah}` 
+                    : settings.audioMode === 'surah'
+                    ? 'Play Surah'
+                    : 'Select Ayah to Play'}
+                </button>
+              )}
+            </div>
+
+            {/* Stop Button */}
+            {(isPlaying || isPaused) && (
+              <button
+                onClick={stopAyah}
+                className={`p-2 rounded-lg transition-colors flex-shrink-0 ${
+                  settings.theme === 'dark'
+                    ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                    : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
+                }`}
+                title="Stop"
+              >
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Desktop Floating Audio Player - Only when playing/paused */}
+      {settings.audioEnabled && (isPlaying || isPaused) && (currentPlayingAyah || currentPlayingSurah) && (
+        <div className={`hidden lg:block fixed bottom-0 left-0 right-0 ${
+          settings.theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+        } border-t shadow-lg p-3 z-50`}>
+          <div className="max-w-6xl mx-auto flex items-center gap-4">
+            {/* Play/Pause/Resume Button */}
+            <button
+              onClick={() => {
+                if (isPlaying) {
+                  pauseAyah();
+                } else if (isPaused) {
+                  resumeAyah();
+                } else {
+                  togglePlayPause();
+                }
+              }}
+              className={`p-3 rounded-full transition-colors flex-shrink-0 ${
+                isAudioLoading
+                  ? 'bg-blue-500 text-white cursor-wait'
+                  : isPlaying
+                  ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                  : isPaused
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                  : 'bg-emerald-500 hover:bg-emerald-600 text-white'
+              }`}
+            >
+              {isAudioLoading ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : isPlaying ? (
+                <PauseIcon className="h-5 w-5" />
+              ) : (
+                <PlayIcon className="h-5 w-5" />
+              )}
+            </button>
+
+            {/* Audio Info */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <SpeakerWaveIcon className="h-4 w-4 text-emerald-500 flex-shrink-0" />
+                <p className={`text-sm font-medium truncate ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                  {currentPlayingSurah && surahs[currentPlayingSurah - 1]
+                    ? `${surahs[currentPlayingSurah - 1].englishName} - Ayah ${currentPlayingAyah || currentQueueIndex + 1}`
+                    : isAudioLoading
+                    ? 'Loading audio...'
+                    : isPaused
+                    ? 'Paused'
+                    : 'Playing...'
+                  }
+                  {isAudioLoading && <span className="ml-2 text-xs">(Buffering)</span>}
+                  {isPaused && <span className="ml-2 text-xs text-amber-500">(Paused)</span>}
+                </p>
+              </div>
+
+              {/* Progress Bar */}
+              <div className="flex items-center gap-3">
+                <span className={`text-xs w-10 ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                  {Math.floor(audioCurrentTime / 60)}:{Math.floor(audioCurrentTime % 60).toString().padStart(2, '0')}
+                </span>
+                <div
+                  className="flex-1 h-1.5 bg-gray-300 rounded-full overflow-hidden cursor-pointer"
+                  onClick={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const percent = (e.clientX - rect.left) / rect.width;
+                    seekAudio(percent * audioDuration);
+                  }}
+                >
+                  <div
+                    className="h-full bg-emerald-500 transition-all duration-300"
+                    style={{ width: `${audioProgress}%` }}
+                  />
+                </div>
+                <span className={`text-xs w-10 text-right ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                  {Math.floor(audioDuration / 60)}:{Math.floor(audioDuration % 60).toString().padStart(2, '0')}
+                </span>
+              </div>
+            </div>
+
+            {/* Stop Button */}
+            <button
+              onClick={stopAyah}
+              className={`p-2 rounded-lg transition-colors flex-shrink-0 ${
+                settings.theme === 'dark'
+                  ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                  : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
+              }`}
+              title="Stop"
+            >
+              <XMarkIcon className="h-5 w-5" />
             </button>
           </div>
         </div>
