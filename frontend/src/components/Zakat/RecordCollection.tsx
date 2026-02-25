@@ -365,26 +365,26 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
   const isQRScanner = formData.paymentMethod === 'QR Scanner';
 
   return (
-    <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-      <div className="bg-white rounded-2xl max-w-2xl w-full my-8 shadow-2xl">
-        <div className="flex justify-between items-center p-6 border-b border-gray-200">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl flex items-center justify-center">
-              <ArrowUpOnSquareIcon className="w-6 h-6 text-white" />
+    <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-3 sm:p-4 z-50 overflow-y-auto">
+      <div className="bg-white rounded-2xl max-w-2xl w-full my-4 sm:my-8 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center p-4 sm:p-6 border-b border-gray-200 sticky top-0 bg-white rounded-t-2xl z-10">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl flex items-center justify-center flex-shrink-0">
+              <ArrowUpOnSquareIcon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
             </div>
-            <div>
-              <h2 className="text-xl font-bold text-gray-900">Record Zakat Collection</h2>
-              <p className="text-sm text-gray-500">Add new zakat payment received</p>
+            <div className="min-w-0">
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900 truncate">Record Zakat Collection</h2>
+              <p className="text-xs sm:text-sm text-gray-500 truncate">Add new zakat payment received</p>
             </div>
           </div>
           {onClose && (
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
-              <XMarkIcon className="w-6 h-6" />
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-lg flex-shrink-0">
+              <XMarkIcon className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
           )}
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 sm:space-y-5">
           {/* Donor Name with Autocomplete */}
           <div className="relative" ref={suggestionsRef}>
             <label className="block text-sm font-semibold text-gray-700 mb-2">

@@ -7,6 +7,7 @@ const router = express.Router();
 
 // Configuration - Using Aladhan API (free, no Cloudflare protection)
 const API_BASE_URL = 'https://api.aladhan.com/v1/timings';
+const TIMINGS_BY_CITY_URL = 'https://api.aladhan.com/v1/timingsByCity';
 const CALENDAR_API_URL = 'https://api.aladhan.com/v1/calendar';
 
 // Cache TTL configuration (in seconds)
@@ -115,9 +116,17 @@ router.get('/times', [
     const timestamp = Math.floor(Date.now() / 1000);
     const apiUrl = `${API_BASE_URL}/${timestamp}?latitude=${latitude}&longitude=${longitude}&method=${method}&school=${school === '2' ? '1' : '0'}`;
 
-    console.log(`Fetching prayer times from Aladhan: ${apiUrl}`);
+    // 🕌 Aladhan API Call Debug Logging
+    console.log('🕌 ========== ALADHAN API CALL ==========');
+    console.log(`📍 Location: ${latitude}, ${longitude}`);
+    console.log(`⚙️  Settings: method=${method}, school=${school === '2' ? '1' : '0'} (${school === '2' ? 'Hanafi' : 'Shafi'})`);
+    console.log(`🔗 API URL: ${apiUrl}`);
+    console.log('⏳ Fetching from Aladhan API...');
 
     const apiResponse = await fetch(apiUrl);
+
+    console.log(`📥 API Response Status: ${apiResponse.status} ${apiResponse.statusText}`);
+    console.log(`📦 Response OK: ${apiResponse.ok}`);
 
     if (!apiResponse.ok) {
         throw new Error(`Aladhan API responded with ${apiResponse.status}`);
@@ -125,7 +134,21 @@ router.get('/times', [
 
     const apiData: any = await apiResponse.json();
 
-    console.log('Prayer API Response received successfully');
+    console.log('✅ Prayer API Response received successfully');
+    console.log(`📊 Response Code: ${apiData.code}`);
+    console.log(`📊 Response Status: ${apiData.status}`);
+    if (apiData.data) {
+        console.log(`📅 Date: ${apiData.data.date?.readable}`);
+        console.log(`🕐 Fajr: ${apiData.data.timings?.Fajr}`);
+        console.log(`🌅 Sunrise: ${apiData.data.timings?.Sunrise}`);
+        console.log(`☀️  Dhuhr: ${apiData.data.timings?.Dhuhr}`);
+        console.log(`🌤️  Asr: ${apiData.data.timings?.Asr}`);
+        console.log(`🌇 Maghrib: ${apiData.data.timings?.Maghrib}`);
+        console.log(`🌙 Isha: ${apiData.data.timings?.Isha}`);
+        console.log(`🕋 Qibla Direction: ${calculateQiblaDirection(parseFloat(latitude), parseFloat(longitude)).toFixed(2)}°`);
+        console.log(`📏 Distance to Mecca: ${calculateDistanceToMecca(parseFloat(latitude), parseFloat(longitude)).toFixed(2)} km`);
+    }
+    console.log('🕌 ======================================');
 
     if (apiData.code === 200 && apiData.data) {
         const data = apiData.data;
@@ -186,6 +209,142 @@ router.get('/times', [
     return res.status(500).json({
       status: 'error',
       message: 'Failed to fetch prayer times',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * @route   GET /api/prayers/timesByCity
+ * @desc    Get prayer times by city name using Aladhan API
+ * @access  Public
+ */
+router.get('/timesByCity', [
+  query('city')
+    .notEmpty()
+    .withMessage('City name is required'),
+  query('country')
+    .notEmpty()
+    .withMessage('Country name is required'),
+  query('method')
+    .optional()
+    .isInt()
+    .withMessage('Method must be an integer'),
+  query('school')
+    .optional()
+    .isInt()
+    .withMessage('School must be an integer'),
+], optionalAuthMiddleware, async (req: Request, res: Response) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Validation failed',
+        errors: errors.array(),
+      });
+    }
+
+    const {
+      city,
+      country,
+      method = '3', // Default: Muslim World League
+      school = '1', // Default: Shafi
+      latitudeAdjustmentMethod = '3' // Default: Angle Based
+    } = req.query as {
+      city: string;
+      country: string;
+      method?: string;
+      school?: string;
+      latitudeAdjustmentMethod?: string;
+    };
+
+    // Generate cache key
+    const cacheKey = `prayer_times_city:${city}:${country}:${method}:${school}`;
+
+    try {
+      const cachedData = await redisClient.get(cacheKey);
+      if (cachedData) {
+        console.log(`✅ Cache hit for city prayer times (${city}, ${country})`);
+        return res.json(JSON.parse(cachedData));
+      }
+    } catch (cacheError) {
+      console.warn('⚠️ Redis cache read error:', cacheError);
+    }
+
+    const timestamp = Math.floor(Date.now() / 1000);
+    const dateStr = `${new Date().getDate()}-${new Date().getMonth() + 1}-${new Date().getFullYear()}`;
+    const apiUrl = `${TIMINGS_BY_CITY_URL}/${dateStr}?city=${encodeURIComponent(city)}&country=${encodeURIComponent(country)}&method=${method}&school=${school === '2' ? '1' : '0'}&latitudeAdjustmentMethod=${latitudeAdjustmentMethod}`;
+
+    // 🕌 Aladhan API Call Debug Logging
+    console.log('🕌 ========== ALADHAN CITY API CALL ==========');
+    console.log(`🏙️  City: ${city}, ${country}`);
+    console.log(`⚙️  Settings: method=${method}, school=${school === '2' ? '1' : '0'} (${school === '2' ? 'Hanafi' : 'Shafi'})`);
+    console.log(`🔗 API URL: ${apiUrl}`);
+    console.log('⏳ Fetching from Aladhan API...');
+
+    const apiResponse = await fetch(apiUrl);
+
+    console.log(`📥 API Response Status: ${apiResponse.status} ${apiResponse.statusText}`);
+    console.log(`📦 Response OK: ${apiResponse.ok}`);
+
+    if (!apiResponse.ok) {
+      throw new Error(`Aladhan API responded with ${apiResponse.status}`);
+    }
+
+    const apiData: any = await apiResponse.json();
+
+    console.log('✅ City Prayer API Response received successfully');
+    console.log(`📊 Response Code: ${apiData.code}`);
+    console.log(`📊 Response Status: ${apiData.status}`);
+    if (apiData.data) {
+      console.log(`📅 Date: ${apiData.data.date?.readable}`);
+      console.log(`🕐 Fajr: ${apiData.data.timings?.Fajr}`);
+      console.log(`🌅 Sunrise: ${apiData.data.timings?.Sunrise}`);
+      console.log(`☀️  Dhuhr: ${apiData.data.timings?.Dhuhr}`);
+      console.log(`🌤️  Asr: ${apiData.data.timings?.Asr}`);
+      console.log(`🌇 Maghrib: ${apiData.data.timings?.Maghrib}`);
+      console.log(`🌙 Isha: ${apiData.data.timings?.Isha}`);
+    }
+    console.log('🕌 ======================================');
+
+    if (apiData.code === 200 && apiData.data) {
+      const data = apiData.data;
+      const responseData = {
+        status: 'success',
+        data: {
+          times: {
+            Fajr: data.timings.Fajr,
+            Sunrise: data.timings.Sunrise,
+            Dhuhr: data.timings.Dhuhr,
+            Asr: data.timings.Asr,
+            Maghrib: data.timings.Maghrib,
+            Isha: data.timings.Isha,
+            Imsak: data.timings.Imsak || data.timings.Fajr
+          },
+          date: data.date,
+          meta: data.meta
+        }
+      };
+
+      // Store in cache
+      try {
+        await redisClient.setEx(cacheKey, CACHE_TTL.PRAYER_TIMES, JSON.stringify(responseData));
+        console.log(`💾 Cached city prayer times for ${CACHE_TTL.PRAYER_TIMES / 60} minutes`);
+      } catch (cacheError) {
+        console.warn('⚠️ Redis cache write error:', cacheError);
+      }
+
+      return res.json(responseData);
+    } else {
+      throw new Error('Invalid response from Aladhan API');
+    }
+
+  } catch (error: any) {
+    console.error('City prayer times API error:', error.message);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch prayer times by city',
       details: error.message
     });
   }

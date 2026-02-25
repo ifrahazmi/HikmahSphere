@@ -153,7 +153,7 @@ const Home: React.FC = () => {
       location: 'Bangalore, India',
       text: 'The Zakat calculator is incredibly comprehensive. It calculated my Zakat considering gold, silver, savings, and even my investments. The live nisab rates gave me confidence that my calculation was accurate. Made my annual Zakat so much easier!',
       rating: 5,
-      avatar: '🧕🏼',
+      avatar: '🧕🏽',
       feature: 'Quran Reader',
     },
     {
@@ -161,7 +161,7 @@ const Home: React.FC = () => {
       location: 'Bangalore, India',
       text: 'As someone who reads Quran daily, the multi-translation reader with Indopak script is a blessing. I can compare translations, bookmark my favorite ayahs, and the audio recitations help me improve my Tajweed. The semantic search finds exactly what I need!',
       rating: 5,
-      avatar: '🧕🏽',
+      avatar: '🧕🏼',
       feature: 'Community',
     },
     {
@@ -169,7 +169,7 @@ const Home: React.FC = () => {
       location: 'Kolkata, India',
       text: 'As a mother, my heart fills with pride seeing my son create something so beneficial for the Ummah. This platform beautifully combines technology with Islamic values. May Allah accept this sincere effort, bless you abundantly, and grant you the ability to continue serving the Deen. Aameen.',
       rating: 5,
-      avatar: '🧕🏾',
+      avatar: '🧕🏼',
       feature: 'Mother\'s Message',
       special: true,
     },

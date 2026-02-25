@@ -211,11 +211,17 @@ print_header "🌐 Nginx Configuration"
 # Copy nginx config
 print_step "Copying Nginx configuration..."
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEPLOY_DIR="${HOME}/HikmahSphere/deploy"
+
+# Try SCRIPT_DIR first, then fall back to DEPLOY_DIR
 if [ -f "${SCRIPT_DIR}/nginx-hikmah.conf" ]; then
     sudo cp "${SCRIPT_DIR}/nginx-hikmah.conf" /etc/nginx/sites-available/hikmahsphere
-    print_success "Nginx config copied"
+    print_success "Nginx config copied from SCRIPT_DIR"
+elif [ -f "${DEPLOY_DIR}/nginx-hikmah.conf" ]; then
+    sudo cp "${DEPLOY_DIR}/nginx-hikmah.conf" /etc/nginx/sites-available/hikmahsphere
+    print_success "Nginx config copied from DEPLOY_DIR"
 else
-    print_error "nginx-hikmah.conf not found in ${SCRIPT_DIR}"
+    print_error "nginx-hikmah.conf not found in ${SCRIPT_DIR} or ${DEPLOY_DIR}"
     print_warning "Please ensure nginx-hikmah.conf exists in the deploy folder"
 fi
 

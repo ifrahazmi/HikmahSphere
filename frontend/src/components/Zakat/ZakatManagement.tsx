@@ -104,6 +104,21 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Listen for export events from Dashboard
+  useEffect(() => {
+    const handleExportCSV = () => exportToCSV();
+    const handleExportJSON = () => exportToJSON();
+
+    window.addEventListener('export-zakat-csv', handleExportCSV);
+    window.addEventListener('export-zakat-json', handleExportJSON);
+
+    return () => {
+      window.removeEventListener('export-zakat-csv', handleExportCSV);
+      window.removeEventListener('export-zakat-json', handleExportJSON);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zakatTransactions]);
+
   const fetchZakatData = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -404,32 +419,32 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
 
       {/* Action Buttons */}
       {isAdmin && showRecordButtons && (
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-col sm:flex-row flex-wrap gap-3">
           <button
             onClick={() => setShowCollectionModal(true)}
-            className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl hover:from-emerald-700 hover:to-teal-700 transition-all font-semibold shadow-md hover:shadow-lg"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl hover:from-emerald-700 hover:to-teal-700 transition-all font-semibold shadow-md hover:shadow-lg active:scale-95"
           >
             <ArrowUpOnSquareIcon className="h-5 w-5" />
-            Record Collection
+            <span>Record Collection</span>
           </button>
-          
+
           <button
             onClick={() => setShowSpendingModal(true)}
-            className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-red-600 to-orange-600 text-white rounded-xl hover:from-red-700 hover:to-orange-700 transition-all font-semibold shadow-md hover:shadow-lg"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-red-600 to-orange-600 text-white rounded-xl hover:from-red-700 hover:to-orange-700 transition-all font-semibold shadow-md hover:shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={zakatStats.currentBalance <= 0}
           >
             <ArrowDownOnSquareIcon className="h-5 w-5" />
-            Record Spending
+            <span>Record Spending</span>
           </button>
 
           <div className="flex-1" />
 
           {/* Filter */}
           {showFilters && (
-          <div className="flex items-center gap-2 bg-white rounded-xl border border-gray-200 p-1">
+          <div className="flex items-center gap-2 bg-white rounded-xl border border-gray-200 p-1 overflow-x-auto">
             <button
               onClick={() => setFilterType('all')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
                 filterType === 'all' ? 'bg-emerald-100 text-emerald-700' : 'text-gray-600 hover:bg-gray-100'
               }`}
             >
@@ -437,7 +452,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
             </button>
             <button
               onClick={() => setFilterType('collection')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
                 filterType === 'collection' ? 'bg-green-100 text-green-700' : 'text-gray-600 hover:bg-gray-100'
               }`}
             >
@@ -445,7 +460,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
             </button>
             <button
               onClick={() => setFilterType('spending')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
                 filterType === 'spending' ? 'bg-red-100 text-red-700' : 'text-gray-600 hover:bg-gray-100'
               }`}
             >
@@ -520,107 +535,204 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Party</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment Details</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredTransactions.map((t) => (
-                  <tr key={t._id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
+          <>
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto rounded-xl border border-gray-200">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Party</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment Details</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredTransactions.map((t) => (
+                    <tr key={t._id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">
+                          {new Date(t.paymentDate).toLocaleDateString('en-IN', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric'
+                          })}
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          Rec: {t.createdAt ? new Date(t.createdAt).toLocaleDateString('en-IN') : '-'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          t.type === 'collection'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {t.type === 'collection' ? 'Collection' : 'Spending'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">
+                          {t.type === 'collection' ? t.donorName : t.recipientName}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {t.type === 'collection' ? t.donorType : t.recipientType}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                        <div className="flex flex-col gap-1">
+                          <span className="font-medium">{t.paymentMethod}</span>
+                          {getPaymentDetails(t) !== t.paymentMethod && (
+                            <span className="text-xs text-gray-500">{getPaymentDetails(t)}</span>
+                          )}
+                          {t.proofFilePath && isAdmin && (
+                            <span
+                              onClick={(e) => handleProofClick(e, t.proofFilePath!)}
+                              className="text-xs text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer inline-flex items-center gap-1 font-medium px-2.5 py-1.5 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors"
+                            >
+                              📎 View Proof
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className={`px-6 py-4 whitespace-nowrap text-right text-sm font-bold ${
+                        t.type === 'collection' ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        {t.type === 'collection' ? '+' : '-'}₹{t.amount.toLocaleString('en-IN')}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => { setViewingTransaction(t); setShowViewModal(true); }}
+                            className="text-blue-600 hover:text-blue-900 p-1 hover:bg-blue-50 rounded transition-colors"
+                            title="View Details"
+                          >
+                            <EyeIcon className="h-5 w-5" />
+                          </button>
+                          {isAdmin && (
+                            <>
+                              <button
+                                onClick={() => { setEditingTransaction(t); setShowEditModal(true); }}
+                                className="text-indigo-600 hover:text-indigo-900 p-1 hover:bg-indigo-50 rounded transition-colors"
+                                title="Edit"
+                              >
+                                <PencilIcon className="h-5 w-5" />
+                              </button>
+                              {canDelete && (
+                                <button
+                                  onClick={() => handleDeleteTransaction(t._id)}
+                                  className="text-red-600 hover:text-red-900 p-1 hover:bg-red-50 rounded transition-colors"
+                                  title="Delete"
+                                >
+                                  <TrashIcon className="h-5 w-5" />
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card View */}
+            <div className="md:hidden space-y-3">
+              {filteredTransactions.map((t) => (
+                <div
+                  key={t._id}
+                  className="bg-white rounded-xl shadow-md border border-gray-200 p-4 hover:shadow-lg transition-shadow"
+                >
+                  {/* Header */}
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <span className={`px-2.5 py-1 inline-flex text-xs font-semibold rounded-full ${
+                        t.type === 'collection'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {t.type === 'collection' ? '💰 Collection' : '💸 Spending'}
+                      </span>
+                      <p className="text-xs text-gray-500 mt-1">
                         {new Date(t.paymentDate).toLocaleDateString('en-IN', {
                           day: 'numeric',
                           month: 'short',
                           year: 'numeric'
                         })}
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        Rec: {t.createdAt ? new Date(t.createdAt).toLocaleDateString('en-IN') : '-'}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        t.type === 'collection' 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {t.type === 'collection' ? 'Collection' : 'Spending'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
-                        {t.type === 'collection' ? t.donorName : t.recipientName}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {t.type === 'collection' ? t.donorType : t.recipientType}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      <div className="flex flex-col gap-1">
-                        <span className="font-medium">{t.paymentMethod}</span>
-                        {getPaymentDetails(t) !== t.paymentMethod && (
-                          <span className="text-xs text-gray-500">{getPaymentDetails(t)}</span>
-                        )}
-                        {t.proofFilePath && isAdmin && (
-                          <span
-                            onClick={(e) => handleProofClick(e, t.proofFilePath!)}
-                            className="text-xs text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer inline-flex items-center gap-1 font-medium px-2.5 py-1.5 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors"
-                          >
-                            📎 View Proof
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className={`px-6 py-4 whitespace-nowrap text-right text-sm font-bold ${
+                      </p>
+                    </div>
+                    <p className={`text-lg font-bold ${
                       t.type === 'collection' ? 'text-green-600' : 'text-red-600'
                     }`}>
                       {t.type === 'collection' ? '+' : '-'}₹{t.amount.toLocaleString('en-IN')}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex justify-end gap-2">
+                    </p>
+                  </div>
+
+                  {/* Party Info */}
+                  <div className="mb-3 pb-3 border-b border-gray-100">
+                    <p className="text-sm font-medium text-gray-900">
+                      {t.type === 'collection' ? t.donorName : t.recipientName}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {t.type === 'collection' ? t.donorType : t.recipientType}
+                    </p>
+                  </div>
+
+                  {/* Payment Details */}
+                  <div className="mb-3 text-sm">
+                    <div className="flex items-center gap-2 text-gray-600 mb-1">
+                      <span className="font-medium">{t.paymentMethod}</span>
+                    </div>
+                    {getPaymentDetails(t) !== t.paymentMethod && (
+                      <p className="text-xs text-gray-500">{getPaymentDetails(t)}</p>
+                    )}
+                    {t.proofFilePath && isAdmin && (
+                      <button
+                        onClick={(e) => handleProofClick(e, t.proofFilePath!)}
+                        className="text-xs text-emerald-600 hover:text-emerald-700 font-medium mt-1 inline-flex items-center gap-1"
+                      >
+                        📎 View Proof
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+                    <button
+                      onClick={() => { setViewingTransaction(t); setShowViewModal(true); }}
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+                    >
+                      <EyeIcon className="h-4 w-4" />
+                      View
+                    </button>
+                    {isAdmin && (
+                      <>
                         <button
-                          onClick={() => { setViewingTransaction(t); setShowViewModal(true); }}
-                          className="text-blue-600 hover:text-blue-900 p-1 hover:bg-blue-50 rounded transition-colors"
-                          title="View Details"
+                          onClick={() => { setEditingTransaction(t); setShowEditModal(true); }}
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors"
                         >
-                          <EyeIcon className="h-5 w-5" />
+                          <PencilIcon className="h-4 w-4" />
+                          Edit
                         </button>
-                        {isAdmin && (
-                          <>
-                            <button
-                              onClick={() => { setEditingTransaction(t); setShowEditModal(true); }}
-                              className="text-indigo-600 hover:text-indigo-900 p-1 hover:bg-indigo-50 rounded transition-colors"
-                              title="Edit"
-                            >
-                              <PencilIcon className="h-5 w-5" />
-                            </button>
-                            {canDelete && (
-                              <button
-                                onClick={() => handleDeleteTransaction(t._id)}
-                                className="text-red-600 hover:text-red-900 p-1 hover:bg-red-50 rounded transition-colors"
-                                title="Delete"
-                              >
-                                <TrashIcon className="h-5 w-5" />
-                              </button>
-                            )}
-                          </>
+                        {canDelete && (
+                          <button
+                            onClick={() => handleDeleteTransaction(t._id)}
+                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
+                          >
+                            <TrashIcon className="h-4 w-4" />
+                            Delete
+                          </button>
                         )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
 

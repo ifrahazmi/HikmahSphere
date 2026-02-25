@@ -25,11 +25,11 @@ const PrayerTimes: React.FC = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [location, setLocation] = useState<{lat: number, lon: number} | null>(null);
+  const [location, setLocation] = useState<{lat: number, lon: number, city?: string, country?: string} | null>(null);
   const [cityQuery, setCityQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [showSearch, setShowSearch] = useState(false);
-  
+
   // View mode and settings
   const [viewMode, setViewMode] = useState<'daily' | 'monthly' | 'ramadan'>('daily');
   const [showSettings, setShowSettings] = useState(false);
@@ -37,12 +37,12 @@ const PrayerTimes: React.FC = () => {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [ramadanData, setRamadanData] = useState<any>(null);
   const [isRamadanMonth, setIsRamadanMonth] = useState(false);
-  
+
   // Calculation method settings
   const [selectedMadhab, setSelectedMadhab] = useState<string>(user?.madhab || 'shafi');
   const [calculationMethod, setCalculationMethod] = useState(1); // Default: University of Islamic Sciences, Karachi
   const [highLatitudeRule, setHighLatitudeRule] = useState(1); // Default: Middle of Night
-  
+
   // Data states
   const [prayerData, setPrayerData] = useState<any>(null);
   const [fastingData, setFastingData] = useState<any>(null);
@@ -59,7 +59,6 @@ const PrayerTimes: React.FC = () => {
   const hadithImageRef = useRef<HTMLDivElement>(null);
 
   // Countdown timer states
-  const [currentTime, setCurrentTime] = useState(new Date());
   const [currentPrayerIndex, setCurrentPrayerIndex] = useState(-1);
   const [nextPrayerIndex, setNextPrayerIndex] = useState(-1);
   const [countdown, setCountdown] = useState({ hours: 0, minutes: 0, seconds: 0 });
@@ -68,7 +67,7 @@ const PrayerTimes: React.FC = () => {
   // Refs for prayer cards to enable auto-scroll
   const prayerCardRefs = useRef<(HTMLDivElement | null)[]>([]);
   const hasScrolledRef = useRef(false);
-  const prayersContainerRef = useRef<HTMLDivElement>(null); 
+  const prayersContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setLoading(true); // Ensure loading starts immediately on mount
@@ -95,7 +94,7 @@ const PrayerTimes: React.FC = () => {
   useEffect(() => {
     if (location) {
       if (viewMode === 'daily') {
-        fetchData(location.lat, location.lon);
+        fetchData(location.lat, location.lon, location.city, location.country);
       } else if (viewMode === 'monthly') {
         fetchMonthlyData(location.lat, location.lon, selectedMonth, selectedYear);
       } else if (viewMode === 'ramadan') {
@@ -105,18 +104,29 @@ const PrayerTimes: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location, selectedMadhab, calculationMethod, highLatitudeRule, viewMode, selectedMonth, selectedYear]);
 
-  const fetchData = useCallback(async (lat: number, lon: number) => {
+  const fetchData = useCallback(async (lat: number, lon: number, city?: string, country?: string) => {
     setLoading(true);
     setError(null);
-    
-    // Convert madhab to school parameter (Aladhan API: 0=Shafi, 1=Hanafi)
-    const school = selectedMadhab === 'hanafi' ? 1 : 0;
-    
+
+    // Convert madhab to school parameter (Backend API: 1=Shafi/Maliki/Hanbali, 2=Hanafi)
+    const school = selectedMadhab === 'hanafi' ? 2 : 1;
+
     try {
-      // Fetch Prayer Times with selected method and high latitude rule
-      const prayerRes = await fetch(`${API_URL}/prayers/times?latitude=${lat}&longitude=${lon}&method=${calculationMethod}&school=${school}&latitudeAdjustmentMethod=${highLatitudeRule}`);
+      // Fetch Prayer Times from Backend API
+      let prayerUrl = '';
+
+      // Use city-based API if city and country are available
+      if (city && country) {
+        prayerUrl = `${API_URL}/prayers/timesByCity?city=${encodeURIComponent(city)}&country=${encodeURIComponent(country)}&method=${calculationMethod}&school=${school}`;
+      } else {
+        // Fallback to coordinates-based API
+        prayerUrl = `${API_URL}/prayers/times?latitude=${lat}&longitude=${lon}&method=${calculationMethod}&school=${school}`;
+      }
+
+      console.log('Fetching prayer times from backend:', prayerUrl);
+      const prayerRes = await fetch(prayerUrl);
       const prayerJson = await prayerRes.json();
-      
+
       if (prayerJson.status === 'success') {
         setPrayerData(prayerJson.data);
 
@@ -133,7 +143,7 @@ const PrayerTimes: React.FC = () => {
         } else {
           setIsRamadanMonth(false);
         }
-        
+
         if (hijriMonth === 'Dhū al-Ḥijjah' && hijriDay === '9') {
           events.push({ name: 'Day of Arafah', type: 'special', icon: '🕋' });
         }
@@ -156,7 +166,7 @@ const PrayerTimes: React.FC = () => {
       // Fetch Fasting Times from Backend API
       const fastingRes = await fetch(`${API_URL}/prayers/fasting?latitude=${lat}&longitude=${lon}&method=${calculationMethod}`);
       const fastingJson = await fastingRes.json();
-      
+
       console.log("Fasting API Response:", fastingJson);
 
       if (fastingJson.status === 'success' && fastingJson.data?.fasting?.length > 0) {
@@ -165,11 +175,11 @@ const PrayerTimes: React.FC = () => {
       } else {
           console.warn("Fasting API Error:", fastingJson);
       }
-      
+
       // Fetch Weather
       const weatherRes = await fetch(`${API_URL}/prayers/weather?latitude=${lat}&longitude=${lon}`);
       const weatherJson = await weatherRes.json();
-      
+
       if (weatherJson.status === 'success') {
           setWeatherData(weatherJson.data);
       }
@@ -180,7 +190,7 @@ const PrayerTimes: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedMadhab, calculationMethod, highLatitudeRule]);
+  }, [selectedMadhab, calculationMethod]);
 
   const fetchMonthlyData = useCallback(async (lat: number, lon: number, month: number, year: number) => {
     setLoading(true);
@@ -536,11 +546,18 @@ const PrayerTimes: React.FC = () => {
   };
 
   const selectLocation = (result: any) => {
+    // Extract city and country from result
+    const displayNameParts = result.display_name.split(',').map((s: string) => s.trim());
+    const city = displayNameParts[0];
+    const country = displayNameParts[displayNameParts.length - 1];
+    
     setLocation({
       lat: parseFloat(result.lat),
-      lon: parseFloat(result.lon)
+      lon: parseFloat(result.lon),
+      city: city,
+      country: country
     });
-    setCityQuery(result.display_name.split(',')[0]); 
+    setCityQuery(city);
     setSearchResults([]);
     setShowSearch(false);
   };
@@ -647,7 +664,6 @@ const PrayerTimes: React.FC = () => {
     if (!prayerData?.times) return;
 
     const now = new Date();
-    setCurrentTime(now);
 
     const prayerNames = ['Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
     const prayerTimes = prayerNames.map(name => parsePrayerTime(prayerData.times[name] || '00:00', now));
@@ -1289,7 +1305,7 @@ const PrayerTimes: React.FC = () => {
                     </div>
 
                     {/* Footer Section: Fasting Info & Weather */}
-                    <div className="mt-4 flex items-end justify-between border-t border-gray-50 pt-3 min-h-[48px] sm:min-h-[50px]">
+                    <div className="mt-4 flex items-end justify-between border-t border-gray-50 pt-3 min-h-[auto] sm:min-h-[auto]">
                         {/* Left Side: Fasting Info or Countdown */}
                         <div className="flex-1 min-w-0">
                             {isNextPrayer && !isCurrentPrayer ? (
@@ -1301,30 +1317,69 @@ const PrayerTimes: React.FC = () => {
                                     {countdownDisplay}
                                   </p>
                                 </div>
+                                {/* Also show fasting time for Fajr and Maghrib */}
+                                {prayer.name === 'Fajr' && fastingData?.fasting?.[0] && (
+                                  <div className="mt-1 pt-1 border-t border-gray-100">
+                                    <span className="text-xs font-medium text-gray-500">Sehri Ends</span>
+                                    <p className="text-sm font-bold text-emerald-600">{fastingData.fasting[0].time.sahur}</p>
+                                  </div>
+                                )}
+                                {prayer.name === 'Maghrib' && fastingData?.fasting?.[0] && (
+                                  <div className="mt-1 pt-1 border-t border-gray-100">
+                                    <span className="text-xs font-medium text-gray-500">Iftar Time</span>
+                                    <p className="text-sm font-bold text-emerald-600">{fastingData.fasting[0].time.iftar}</p>
+                                  </div>
+                                )}
                               </div>
                             ) : prayer.name === 'Fajr' && fastingData?.fasting?.[0] ? (
                                 <div className="flex flex-col gap-1">
-                                    <div>
-                                        <span className="text-xs font-medium text-gray-500">Sehri Ends</span>
-                                        <p className="text-sm font-bold text-emerald-600">{fastingData.fasting[0].time.sahur}</p>
-                                    </div>
+                                    {isCurrentPrayer ? (
+                                      // When Fajr is current, show "Now" above Sehri time
+                                      <>
+                                        <div>
+                                          <span className="text-[10px] sm:text-xs font-medium text-emerald-600 uppercase tracking-wide font-bold">● Now</span>
+                                        </div>
+                                        <div className="mt-1 pt-1 border-t border-gray-100">
+                                          <span className="text-xs font-medium text-gray-500">Sehri Ends</span>
+                                          <p className="text-sm font-bold text-emerald-600">{fastingData.fasting[0].time.sahur}</p>
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <div>
+                                          <span className="text-xs font-medium text-gray-500">Sehri Ends</span>
+                                          <p className="text-sm font-bold text-emerald-600">{fastingData.fasting[0].time.sahur}</p>
+                                      </div>
+                                    )}
                                 </div>
                             ) : prayer.name === 'Maghrib' && fastingData?.fasting?.[0] ? (
                                 <div className="flex flex-col gap-1">
-                                    <div>
-                                        <span className="text-xs font-medium text-gray-500">Iftar Time</span>
-                                        <p className="text-sm font-bold text-emerald-600">{fastingData.fasting[0].time.iftar}</p>
-                                    </div>
-                                    <div>
-                                        <span className="text-xs font-medium text-gray-500">Duration</span>
-                                        <p className="text-xs font-semibold text-gray-600">{fastingData.fasting[0].time.duration}</p>
-                                    </div>
+                                    {isCurrentPrayer ? (
+                                      // When Maghrib is current, show "Now" above Iftar time
+                                      <>
+                                        <div>
+                                          <span className="text-[10px] sm:text-xs font-medium text-emerald-600 uppercase tracking-wide font-bold">● Now</span>
+                                        </div>
+                                        <div className="mt-1 pt-1 border-t border-gray-100">
+                                          <span className="text-xs font-medium text-gray-500">Iftar Time</span>
+                                          <p className="text-sm font-bold text-emerald-600">{fastingData.fasting[0].time.iftar}</p>
+                                          <span className="text-xs font-medium text-gray-500">Duration</span>
+                                          <p className="text-xs font-semibold text-gray-600">{fastingData.fasting[0].time.duration}</p>
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <div>
+                                          <span className="text-xs font-medium text-gray-500">Iftar Time</span>
+                                          <p className="text-sm font-bold text-emerald-600">{fastingData.fasting[0].time.iftar}</p>
+                                          <span className="text-xs font-medium text-gray-500">Duration</span>
+                                          <p className="text-xs font-semibold text-gray-600">{fastingData.fasting[0].time.duration}</p>
+                                      </div>
+                                    )}
                                 </div>
                             ) : isCurrentPrayer ? (
-                              // Show "Prayer Time Now" for current prayer
+                              // Show "Prayer Time Now" for other current prayers (Dhuhr, Asr, Isha)
                               <div className="flex flex-col gap-1">
                                 <div>
-                                  <span className="text-[10px] sm:text-xs font-medium text-emerald-600 uppercase tracking-wide">Now</span>
+                                  <span className="text-[10px] sm:text-xs font-medium text-emerald-600 uppercase tracking-wide font-bold">● Now</span>
                                   <p className="text-sm font-bold text-emerald-700">Prayer Time</p>
                                 </div>
                               </div>

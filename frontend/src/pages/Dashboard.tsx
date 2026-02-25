@@ -8,6 +8,7 @@ import {
   BuildingLibraryIcon,
   ClockIcon,
   UserCircleIcon,
+  DocumentArrowDownIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../hooks/useAuth';
 import { API_URL } from '../config';
@@ -206,7 +207,8 @@ const Dashboard: React.FC = () => {
         </div>
         
         <div className="bg-white rounded-lg shadow mb-8">
-            <nav className="flex border-b border-gray-200 overflow-x-auto">
+            {/* Desktop Tab Navigation */}
+            <nav className="hidden md:flex border-b border-gray-200 overflow-x-auto">
                 <button
                     onClick={() => setActiveTab('overview')}
                     className={`px-6 py-4 text-sm font-medium whitespace-nowrap ${activeTab === 'overview' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
@@ -239,6 +241,57 @@ const Dashboard: React.FC = () => {
                     Notifications
                 </button>
             </nav>
+
+            {/* Mobile Tab Navigation - Scrollable Pills */}
+            <div className="md:hidden p-3 border-b border-gray-200 overflow-x-auto">
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => setActiveTab('overview')}
+                        className={`flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors ${
+                            activeTab === 'overview'
+                                ? 'bg-emerald-500 text-white shadow-md'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                    >
+                        Overview
+                    </button>
+                    {isSuperAdmin && (
+                        <>
+                            <button
+                                onClick={() => setActiveTab('users')}
+                                className={`flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
+                                    activeTab === 'users'
+                                        ? 'bg-emerald-500 text-white shadow-md'
+                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                }`}
+                            >
+                                👥 Users
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('zakat')}
+                                className={`flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                                    activeTab === 'zakat'
+                                        ? 'bg-emerald-500 text-white shadow-md'
+                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                }`}
+                            >
+                                <BuildingLibraryIcon className="w-4 h-4" />
+                                Zakat
+                            </button>
+                        </>
+                    )}
+                    <button
+                        onClick={() => setActiveTab('notifications')}
+                        className={`flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
+                            activeTab === 'notifications'
+                                ? 'bg-emerald-500 text-white shadow-md'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                    >
+                        🔔 Notifications
+                    </button>
+                </div>
+            </div>
         </div>
 
         {activeTab === 'overview' && (
@@ -337,9 +390,33 @@ const Dashboard: React.FC = () => {
         {/* Zakat Management Tab - Admin/Manager Only */}
         {activeTab === 'zakat' && (
             <div className="space-y-6">
-                <ZakatManagement 
+                {/* Export Buttons */}
+                <div className="flex flex-wrap gap-3 justify-end">
+                    <button
+                        onClick={() => {
+                            const event = new CustomEvent('export-zakat-csv');
+                            window.dispatchEvent(event);
+                        }}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium shadow-md"
+                    >
+                        <DocumentArrowDownIcon className="h-5 w-5" />
+                        Export CSV
+                    </button>
+                    <button
+                        onClick={() => {
+                            const event = new CustomEvent('export-zakat-json');
+                            window.dispatchEvent(event);
+                        }}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-md"
+                    >
+                        <DocumentArrowDownIcon className="h-5 w-5" />
+                        Export JSON
+                    </button>
+                </div>
+
+                <ZakatManagement
                     showStats={true}
-                    showExport={true}
+                    showExport={false}
                     showDelete={isSuperAdmin}
                     showDonorSummary={true}
                     showRecordButtons={false}

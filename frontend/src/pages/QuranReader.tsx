@@ -92,6 +92,16 @@ const QuranReader: React.FC = () => {
   const [showSurahSearch, setShowSurahSearch] = useState(false);
   const [tempSettings, setTempSettings] = useState(settings);
   const [selectedAyahForPlay, setSelectedAyahForPlay] = useState<{surah: number, ayah: number} | null>(null);
+  
+  // Enhanced mobile search state
+  const [searchFilter, setSearchFilter] = useState<'all' | 'surah' | 'juz' | 'page'>('all');
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  
+  // Mobile settings tab
+  const [settingsTab, setSettingsTab] = useState<'display' | 'audio' | 'bookmarks'>('display');
+
+  // Auto-hide header on scroll
+  const [showHeader, setShowHeader] = useState(true);
 
   // Scroll to specific ayah
   const scrollToAyahNumber = (ayahNumber: number) => {
@@ -113,6 +123,44 @@ const QuranReader: React.FC = () => {
     setTempSettings(settings);
   }, [settings]);
 
+  // Auto-hide header on scroll - Mobile only
+  useEffect(() => {
+    let ticking = false;
+    const scrollState = { lastScrollY: 0 };
+
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      
+      // Use requestAnimationFrame for smoother updates
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          // Add a threshold to prevent rapid toggling
+          const scrollThreshold = 50;
+          
+          if (currentScrollY > scrollState.lastScrollY && currentScrollY > scrollThreshold) {
+            // Scrolling down - hide header
+            setShowHeader(false);
+          } else if (currentScrollY < scrollState.lastScrollY - scrollThreshold || currentScrollY < scrollThreshold) {
+            // Scrolling up or at top - show header
+            setShowHeader(true);
+          }
+          
+          scrollState.lastScrollY = currentScrollY;
+          ticking = false;
+        });
+        
+        ticking = true;
+      }
+    };
+
+    // Add scroll listener with passive option for better performance
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
   // Clear selected ayah when switching to Complete Surah mode or when surah changes
   useEffect(() => {
     if (settings.audioMode === 'surah') {
@@ -129,11 +177,25 @@ const QuranReader: React.FC = () => {
   const openMobileSettings = () => {
     setTempSettings(settings);
     setShowMobileSettings(true);
+    setSettingsTab('display');
   };
 
   // Cancel mobile settings
   const cancelMobileSettings = () => {
     setShowMobileSettings(false);
+  };
+
+  // Add to recent searches
+  const addToRecentSearches = (term: string) => {
+    setRecentSearches(prev => {
+      const filtered = prev.filter(s => s !== term);
+      return [term, ...filtered].slice(0, 5);
+    });
+  };
+
+  // Clear recent searches
+  const clearRecentSearches = () => {
+    setRecentSearches([]);
   };
 
   // Update single setting immediately (for instant apply)
@@ -341,37 +403,86 @@ const QuranReader: React.FC = () => {
           </p>
         </div>
 
-        {/* Mobile Header */}
-        <div className="lg:hidden pt-4 px-2">
-          <div className={`${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg p-2`}>
-            {/* Top Bar - Settings Button */}
-            <div className="flex items-center justify-between mb-2">
-              <button
-                onClick={openMobileSettings}
-                className={`p-2 rounded-xl ${
-                  settings.theme === 'dark'
-                    ? 'bg-gray-700 hover:bg-gray-600'
-                    : 'bg-gray-100 hover:bg-gray-200'
-                } transition-colors`}
-              >
-                <Cog6ToothIcon className="h-5 w-5 text-emerald-600" />
-              </button>
+        {/* Mobile Header - Enhanced with Smooth Auto-Hide */}
+        <div className={`lg:hidden pt-4 px-2 sticky z-40 transition-all duration-500 ease-out ${
+          showHeader ? 'top-16 opacity-100 scale-100' : '-top-40 opacity-0 scale-95'
+        }`}>
+          <div className={`${settings.theme === 'dark' ? 'bg-gray-800/95' : 'bg-white/95'} backdrop-blur-md rounded-xl shadow-lg p-2.5 border ${settings.theme === 'dark' ? 'border-gray-700' : 'border-gray-100'} transition-shadow duration-300`}>
+            {/* Top Bar - Quick Actions */}
+            <div className="flex items-center justify-between mb-2.5">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={openMobileSettings}
+                  className={`p-2.5 rounded-xl transition-all active:scale-95 ${
+                    settings.theme === 'dark'
+                      ? 'bg-gray-700 hover:bg-gray-600'
+                      : 'bg-gray-100 hover:bg-gray-200'
+                  }`}
+                  aria-label="Settings"
+                >
+                  <Cog6ToothIcon className="h-5 w-5 text-emerald-600" />
+                </button>
+                {/* Theme Toggle Button */}
+                <button
+                  onClick={() => {
+                    const newTheme = settings.theme === 'light' ? 'dark' : 'light';
+                    updateSettings({ ...settings, theme: newTheme });
+                  }}
+                  className={`p-2.5 rounded-xl transition-all active:scale-95 ${
+                    settings.theme === 'dark'
+                      ? 'bg-gray-700 hover:bg-gray-600'
+                      : 'bg-gray-100 hover:bg-gray-200'
+                  }`}
+                  aria-label="Toggle theme"
+                  title={settings.theme === 'light' ? 'Switch to Dark' : 'Switch to Light'}
+                >
+                  {settings.theme === 'light' ? (
+                    <MoonIcon className="h-5 w-5 text-indigo-600" />
+                  ) : (
+                    <SunIcon className="h-5 w-5 text-amber-400" />
+                  )}
+                </button>
+              </div>
+
               <div className="flex items-center gap-1.5">
-                <BookOpenIcon className="h-4 w-4 text-emerald-600" />
+                <BookOpenIcon className="h-5 w-5 text-emerald-600" />
                 <h1 className={`text-base font-bold font-arabic ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                  Quran
+                  Al-Quran
                 </h1>
               </div>
-              <button
-                onClick={() => setShowSurahSearch(!showSurahSearch)}
-                className={`p-2 rounded-xl ${
-                  settings.theme === 'dark'
-                    ? 'bg-gray-700 hover:bg-gray-600'
-                    : 'bg-gray-100 hover:bg-gray-200'
-                } transition-colors`}
-              >
-                <MagnifyingGlassIcon className="h-5 w-5 text-emerald-600" />
-              </button>
+
+              <div className="flex items-center gap-2">
+                {/* Display Mode Toggle */}
+                <button
+                  onClick={() => {
+                    const newArabicOnlyMode = !settings.arabicOnlyMode;
+                    updateSettings({ ...settings, arabicOnlyMode: newArabicOnlyMode });
+                  }}
+                  className={`p-2.5 rounded-xl transition-all active:scale-95 ${
+                    settings.arabicOnlyMode
+                      ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                      : settings.theme === 'dark'
+                      ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                      : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
+                  }`}
+                  aria-label="Toggle display mode"
+                  title={settings.arabicOnlyMode ? 'Show Translation' : 'Arabic Only'}
+                >
+                  <BookOpenIcon className="h-5 w-5" />
+                </button>
+                {/* Search Button */}
+                <button
+                  onClick={() => setShowSurahSearch(!showSurahSearch)}
+                  className={`p-2.5 rounded-xl transition-all active:scale-95 ${
+                    settings.theme === 'dark'
+                      ? 'bg-gray-700 hover:bg-gray-600'
+                      : 'bg-gray-100 hover:bg-gray-200'
+                  }`}
+                  aria-label="Search"
+                >
+                  <MagnifyingGlassIcon className="h-5 w-5 text-emerald-600" />
+                </button>
+              </div>
             </div>
 
             {/* Surah Navigation Bar */}
@@ -380,7 +491,7 @@ const QuranReader: React.FC = () => {
               <button
                 onClick={previousSurah}
                 disabled={currentSurah === 1}
-                className={`p-2.5 rounded-xl transition-colors flex-shrink-0 ${
+                className={`p-2.5 rounded-xl transition-all flex-shrink-0 active:scale-95 ${
                   currentSurah === 1
                     ? 'opacity-50 cursor-not-allowed bg-gray-200 dark:bg-gray-700'
                     : settings.theme === 'dark'
@@ -390,8 +501,8 @@ const QuranReader: React.FC = () => {
               >
                 <ChevronLeftIcon className="h-5 w-5" />
               </button>
-              
-              {/* Surah Selector Dropdown */}
+
+              {/* Surah Selector with Info */}
               <div className="flex-1 relative">
                 <select
                   value={currentSurah || ''}
@@ -401,11 +512,11 @@ const QuranReader: React.FC = () => {
                       goToSurah(value);
                     }
                   }}
-                  className={`w-full p-3 pr-10 rounded-xl font-semibold appearance-none cursor-pointer ${
+                  className={`w-full p-3 pr-10 pl-3 rounded-xl font-semibold appearance-none cursor-pointer text-sm ${
                     settings.theme === 'dark'
                       ? 'bg-gray-700 text-white border-gray-600'
                       : 'bg-gray-50 text-gray-900 border-gray-200'
-                  } border-2 focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                  } border-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 active:scale-[0.98] transition-transform`}
                 >
                   <option value="" disabled>Select Surah</option>
                   {surahs.map((surah) => (
@@ -416,12 +527,12 @@ const QuranReader: React.FC = () => {
                 </select>
                 <ChevronDownIcon className="h-5 w-5 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
               </div>
-              
+
               {/* Next Surah Button */}
               <button
                 onClick={nextSurah}
                 disabled={currentSurah === 114}
-                className={`p-2.5 rounded-xl transition-colors flex-shrink-0 ${
+                className={`p-2.5 rounded-xl transition-all flex-shrink-0 active:scale-95 ${
                   currentSurah === 114
                     ? 'opacity-50 cursor-not-allowed bg-gray-200 dark:bg-gray-700'
                     : settings.theme === 'dark'
@@ -432,7 +543,7 @@ const QuranReader: React.FC = () => {
                 <ChevronRightIcon className="h-5 w-5" />
               </button>
             </div>
-            
+
             {/* Surah Info */}
             {surahData && (
               <div className={`mt-2 text-center text-xs ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
@@ -443,17 +554,28 @@ const QuranReader: React.FC = () => {
             )}
           </div>
           
-          {/* Mobile Surah Search Panel */}
+          {/* Enhanced Mobile Surah Search Panel */}
           {showSurahSearch && (
-            <div className={`mt-2 ${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg p-3`}>
+            <div className={`mt-2 ${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg p-3 border ${settings.theme === 'dark' ? 'border-gray-700' : 'border-gray-100'}`}>
+              {/* Search Bar */}
               <div className="relative mb-3">
                 <MagnifyingGlassIcon className="h-5 w-5 absolute left-3 top-3 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Search surah by name..."
+                  placeholder="Search by surah name or number..."
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className={`w-full pl-10 pr-3 py-2.5 text-sm border-2 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    if (e.target.value.trim()) {
+                      addToRecentSearches(e.target.value);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && searchTerm.trim()) {
+                      addToRecentSearches(searchTerm);
+                    }
+                  }}
+                  className={`w-full pl-10 pr-10 py-3 text-sm border-2 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
                     settings.theme === 'dark'
                       ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
                       : 'border-gray-200'
@@ -465,55 +587,115 @@ const QuranReader: React.FC = () => {
                     setShowSurahSearch(false);
                     setSearchTerm('');
                   }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1"
                 >
                   <XMarkIcon className="h-5 w-5 text-gray-400 hover:text-gray-600" />
                 </button>
               </div>
-              
-              <div className="max-h-60 overflow-y-auto space-y-1">
-                {filteredSurahs.map((surah) => (
+
+              {/* Search Filters */}
+              <div className="flex gap-2 mb-3 overflow-x-auto pb-1">
+                {(['all', 'surah'] as const).map((filter) => (
                   <button
-                    key={surah.number}
-                    onClick={() => {
-                      goToSurah(surah.number);
-                      setShowSurahSearch(false);
-                      setSearchTerm('');
-                    }}
-                    className={`w-full text-left p-3 rounded-xl transition-colors ${
-                      currentSurah === surah.number
-                        ? settings.theme === 'dark'
-                          ? 'bg-emerald-900 text-emerald-100'
-                          : 'bg-emerald-100 text-emerald-800'
+                    key={filter}
+                    onClick={() => setSearchFilter(filter)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+                      searchFilter === filter
+                        ? 'bg-emerald-500 text-white'
                         : settings.theme === 'dark'
-                        ? 'hover:bg-gray-700 text-white'
-                        : 'hover:bg-gray-50 text-gray-900'
+                        ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-xs font-bold px-2 py-1 rounded-lg ${
-                          currentSurah === surah.number
-                            ? 'bg-emerald-600 text-white'
-                            : settings.theme === 'dark'
-                            ? 'bg-gray-600 text-gray-300'
-                            : 'bg-gray-200 text-gray-600'
-                        }`}>
-                          {surah.number}
-                        </span>
-                        <div>
-                          <p className={`font-medium ${getFontFamilyClass()}`}>{surah.name}</p>
-                          <p className={`text-xs ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                            {surah.englishName}
-                          </p>
-                        </div>
-                      </div>
-                      <span className={`text-xs ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-400'}`}>
-                        {surah.numberOfAyahs} ayahs
-                      </span>
-                    </div>
+                    {filter === 'all' ? '📖 All' : '📜 Surah'}
                   </button>
                 ))}
+              </div>
+
+              {/* Recent Searches */}
+              {recentSearches.length > 0 && !searchTerm && (
+                <div className={`mb-3 p-2 rounded-lg ${settings.theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={`text-xs font-medium ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                      Recent Searches
+                    </span>
+                    <button
+                      onClick={clearRecentSearches}
+                      className="text-xs text-emerald-600 hover:text-emerald-700"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {recentSearches.map((term, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setSearchTerm(term)}
+                        className={`px-2.5 py-1 rounded-full text-xs ${
+                          settings.theme === 'dark'
+                            ? 'bg-gray-600 text-gray-300 hover:bg-gray-500'
+                            : 'bg-white text-gray-600 hover:bg-gray-100'
+                        } border ${settings.theme === 'dark' ? 'border-gray-500' : 'border-gray-200'}`}
+                      >
+                        {term}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Search Results */}
+              <div className="max-h-80 overflow-y-auto space-y-1.5">
+                {filteredSurahs.length > 0 ? (
+                  filteredSurahs.map((surah) => (
+                    <button
+                      key={surah.number}
+                      onClick={() => {
+                        goToSurah(surah.number);
+                        setShowSurahSearch(false);
+                        setSearchTerm('');
+                      }}
+                      className={`w-full text-left p-3 rounded-xl transition-all active:scale-[0.98] ${
+                        currentSurah === surah.number
+                          ? settings.theme === 'dark'
+                            ? 'bg-emerald-900 text-emerald-100'
+                            : 'bg-emerald-100 text-emerald-800'
+                          : settings.theme === 'dark'
+                          ? 'hover:bg-gray-700 text-white'
+                          : 'hover:bg-gray-50 text-gray-900'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <span className={`text-xs font-bold px-2 py-1 rounded-lg min-w-[28px] text-center ${
+                            currentSurah === surah.number
+                              ? 'bg-emerald-600 text-white'
+                              : settings.theme === 'dark'
+                              ? 'bg-gray-600 text-gray-300'
+                              : 'bg-gray-200 text-gray-600'
+                          }`}>
+                            {surah.number}
+                          </span>
+                          <div>
+                            <p className={`font-medium text-sm ${getFontFamilyClass()}`}>{surah.name}</p>
+                            <p className={`text-xs ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                              {surah.englishName} • {surah.englishNameTranslation}
+                            </p>
+                          </div>
+                        </div>
+                        <span className={`text-xs ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-400'}`}>
+                          {surah.numberOfAyahs} ayahs
+                        </span>
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <div className={`text-center py-8 ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                    <MagnifyingGlassIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No surahs found</p>
+                    <p className="text-xs mt-1">Try a different search term</p>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -944,10 +1126,26 @@ const QuranReader: React.FC = () => {
               <div className={`${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow-md p-4`}>
                 {/* Bismillah (except for Surah 9) */}
                 {surahData.number !== 9 && (
-                  <div className="text-center mb-4 py-3">
-                    <p className={`text-2xl ${getFontFamilyClass()} text-emerald-600 leading-loose`}>
+                  <div className="text-center mb-6 py-3">
+                    <p className={`text-2xl ${getFontFamilyClass()} text-emerald-600 leading-loose mb-4`}>
                       بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
                     </p>
+                    {/* Beautiful Islamic Divider */}
+                    <div className="flex items-center justify-center gap-3">
+                      <div className="h-px w-16 sm:w-24 bg-gradient-to-r from-transparent via-emerald-400 to-emerald-500"></div>
+                      <div className="flex items-center gap-1.5">
+                        <svg className="w-3 h-3 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                        </svg>
+                        <svg className="w-2 h-2 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
+                        </svg>
+                        <svg className="w-3 h-3 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                        </svg>
+                      </div>
+                      <div className="h-px w-16 sm:w-24 bg-gradient-to-l from-transparent via-emerald-400 to-emerald-500"></div>
+                    </div>
                   </div>
                 )}
 
@@ -1467,39 +1665,69 @@ const QuranReader: React.FC = () => {
         </div>
       </div>
 
-      {/* Mobile Settings Modal */}
+      {/* Mobile Settings Modal - Enhanced with Tabs */}
       {showMobileSettings && (
         <div className="fixed inset-0 z-50 lg:hidden">
           {/* Backdrop */}
-          <div 
+          <div
             className="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm"
             onClick={cancelMobileSettings}
           ></div>
-          
+
           {/* Modal Content - Slide up from bottom */}
           <div className={`absolute bottom-0 left-0 right-0 ${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'} rounded-t-2xl max-h-[85vh] overflow-hidden flex flex-col animate-slide-up`}>
             {/* Handle Bar */}
             <div className="flex items-center justify-center pt-3 pb-2">
               <div className={`w-12 h-1.5 ${settings.theme === 'dark' ? 'bg-gray-600' : 'bg-gray-300'} rounded-full`}></div>
             </div>
-            
-            {/* Header */}
-            <div className={`flex items-center justify-between px-4 py-3 border-b ${settings.theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
-              <h3 className={`text-lg font-bold flex items-center gap-2 ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                <Cog6ToothIcon className="h-5 w-5 text-emerald-600" />
-                Settings
-              </h3>
-              <button
-                onClick={cancelMobileSettings}
-                className={`p-2 rounded-lg ${settings.theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
-              >
-                <XMarkIcon className="h-5 w-5" />
-              </button>
+
+            {/* Header with Tabs */}
+            <div className={`px-4 py-3 border-b ${settings.theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className={`text-lg font-bold flex items-center gap-2 ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                  <Cog6ToothIcon className="h-5 w-5 text-emerald-600" />
+                  Settings
+                </h3>
+                <button
+                  onClick={cancelMobileSettings}
+                  className={`p-2 rounded-lg ${settings.theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
+                  aria-label="Close settings"
+                >
+                  <XMarkIcon className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Tab Navigation */}
+              <div className="flex gap-1.5 overflow-x-auto pb-1">
+                {[
+                  { id: 'display', label: '📱 Display', icon: SunIcon },
+                  { id: 'audio', label: '🔊 Audio', icon: SpeakerWaveIcon },
+                  { id: 'bookmarks', label: '🔖 Bookmarks', icon: BookmarkIcon },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setSettingsTab(tab.id as any)}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+                      settingsTab === tab.id
+                        ? 'bg-emerald-500 text-white'
+                        : settings.theme === 'dark'
+                        ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    <tab.icon className="h-3.5 w-3.5" />
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
             </div>
-            
+
             {/* Scrollable Content */}
             <div className="flex-1 overflow-y-auto p-4">
               <div className="space-y-4">
+                {/* Display Tab Content */}
+                {settingsTab === 'display' && (
+                  <>
                 {/* Arabic Only Mode */}
                 <div>
                   <label className={`block text-sm font-medium mb-2 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -1745,7 +1973,12 @@ const QuranReader: React.FC = () => {
                     </button>
                   </div>
                 )}
+              </>
+            )}
 
+            {/* Audio Tab Content */}
+            {settingsTab === 'audio' && (
+              <>
                 {/* Audio Settings */}
                 <div>
                   <label className={`block text-sm font-medium mb-2 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -1846,7 +2079,12 @@ const QuranReader: React.FC = () => {
                     </div>
                   </div>
                 )}
+              </>
+            )}
 
+            {/* Bookmarks Tab Content */}
+            {settingsTab === 'bookmarks' && (
+              <>
                 {/* Bookmarks */}
                 <div>
                   <label className={`block text-sm font-medium mb-2 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -1898,14 +2136,18 @@ const QuranReader: React.FC = () => {
                         </div>
                       ))
                     ) : (
-                      <p className={`text-center py-3 text-sm ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                        No bookmarks yet
-                      </p>
+                      <div className={`text-center py-8 ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                        <BookmarkIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                        <p className="text-sm">No bookmarks yet</p>
+                        <p className="text-xs mt-1">Double-tap any ayah to bookmark it</p>
+                      </div>
                     )}
                   </div>
                 </div>
-              </div>
-            </div>
+              </>
+            )}
+          </div>
+        </div>
             
             {/* Close Button */}
             <div className={`p-4 border-t ${settings.theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
@@ -1922,96 +2164,202 @@ const QuranReader: React.FC = () => {
 
       {/* Bookmark Confirmation Popup */}
       {bookmarkConfirm && (
-        <div
-          className={`fixed z-50 rounded-xl shadow-2xl border-2 border-emerald-500 p-5 ${
-            settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'
-          }`}
-          style={{
-            left: `${bookmarkConfirm.x}px`,
-            top: `${bookmarkConfirm.y}px`,
-            transform: 'translate(-50%, -100%) translateY(-10px)',
-            maxWidth: '320px',
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {!isBookmarked(bookmarkConfirm.surahNum, bookmarkConfirm.ayahNum) ? (
-            <>
-              <p className={`text-sm font-semibold mb-3 ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                Add Bookmark
-              </p>
-              
-              {/* Note Input */}
-              <div className="mb-3">
-                <label className={`block text-xs font-medium mb-1 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Note (optional)
-                </label>
-                <input
-                  type="text"
-                  value={bookmarkConfirm.note || ''}
-                  onChange={(e) => setBookmarkConfirm({ ...bookmarkConfirm, note: e.target.value })}
-                  placeholder="Add a note..."
-                  className={`w-full px-3 py-2 text-sm rounded-lg border focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
-                    settings.theme === 'dark'
-                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
-                      : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
-                  }`}
-                />
-              </div>
-              
-              {/* Color Selection */}
-              <div className="mb-4">
-                <label className={`block text-xs font-medium mb-2 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Highlight Color
-                </label>
-                <div className="flex gap-2">
-                  {(['emerald', 'blue', 'purple', 'amber', 'rose'] as const).map((color) => (
-                    <button
-                      key={color}
-                      onClick={() => setBookmarkConfirm({ ...bookmarkConfirm, color })}
-                      className={`w-8 h-8 rounded-lg border-2 transition-all transform hover:scale-110 ${
-                        bookmarkConfirm.color === color ? 'border-gray-900 scale-110' : 'border-transparent'
-                      } ${
-                        color === 'emerald' ? 'bg-emerald-600' :
-                        color === 'blue' ? 'bg-blue-600' :
-                        color === 'purple' ? 'bg-purple-600' :
-                        color === 'amber' ? 'bg-amber-600' :
-                        'bg-rose-600'
+        <>
+          {/* Mobile - Centered Modal */}
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50 backdrop-blur-sm lg:hidden"
+            onClick={(e) => {
+              setBookmarkConfirm(null);
+            }}
+          >
+            <div
+              className={`relative w-full max-w-md rounded-xl shadow-2xl border-2 border-emerald-500 p-5 ${
+                settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+              }`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Close button for mobile */}
+              <button
+                onClick={() => setBookmarkConfirm(null)}
+                className="absolute top-3 right-3 p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                aria-label="Close"
+              >
+                <XMarkIcon className="h-5 w-5 text-gray-500" />
+              </button>
+
+              {!isBookmarked(bookmarkConfirm.surahNum, bookmarkConfirm.ayahNum) ? (
+                <>
+                  <p className={`text-sm font-semibold mb-3 ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                    Add Bookmark
+                  </p>
+
+                  {/* Note Input */}
+                  <div className="mb-3">
+                    <label className={`block text-xs font-medium mb-1 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                      Note (optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={bookmarkConfirm.note || ''}
+                      onChange={(e) => setBookmarkConfirm({ ...bookmarkConfirm, note: e.target.value })}
+                      placeholder="Add a note..."
+                      className={`w-full px-3 py-2 text-sm rounded-lg border focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
+                        settings.theme === 'dark'
+                          ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                          : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
                       }`}
-                      title={color}
+                      autoFocus
                     />
-                  ))}
-                </div>
+                  </div>
+
+                  {/* Color Selection */}
+                  <div className="mb-4">
+                    <label className={`block text-xs font-medium mb-2 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                      Highlight Color
+                    </label>
+                    <div className="flex gap-2 flex-wrap">
+                      {(['emerald', 'blue', 'purple', 'amber', 'rose'] as const).map((color) => (
+                        <button
+                          key={color}
+                          onClick={() => setBookmarkConfirm({ ...bookmarkConfirm, color })}
+                          className={`w-10 h-10 rounded-lg border-2 transition-all transform hover:scale-110 ${
+                            bookmarkConfirm.color === color ? 'border-gray-900 scale-110' : 'border-transparent'
+                          } ${
+                            color === 'emerald' ? 'bg-emerald-600' :
+                            color === 'blue' ? 'bg-blue-600' :
+                            color === 'purple' ? 'bg-purple-600' :
+                            color === 'amber' ? 'bg-amber-600' :
+                            'bg-rose-600'
+                          }`}
+                          title={color}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <p className={`text-sm mb-3 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                  Remove this ayah from bookmarks?
+                </p>
+              )}
+
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setBookmarkConfirm(null)}
+                  className={`px-4 py-2 text-xs font-medium rounded-lg ${
+                    settings.theme === 'dark'
+                      ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmBookmark}
+                  className={`px-4 py-2 text-xs font-medium rounded-lg ${
+                    isBookmarked(bookmarkConfirm.surahNum, bookmarkConfirm.ayahNum)
+                      ? 'bg-red-600 text-white hover:bg-red-700'
+                      : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                  }`}
+                >
+                  {isBookmarked(bookmarkConfirm.surahNum, bookmarkConfirm.ayahNum) ? 'Remove' : 'Save Bookmark'}
+                </button>
               </div>
-            </>
-          ) : (
-            <p className={`text-sm mb-3 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-              Remove this ayah from bookmarks?
-            </p>
-          )}
-          
-          <div className="flex gap-2 justify-end">
-            <button
-              onClick={() => setBookmarkConfirm(null)}
-              className={`px-4 py-2 text-xs font-medium rounded-lg ${
-                settings.theme === 'dark'
-                  ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              Cancel
-            </button>
-            <button
-              onClick={confirmBookmark}
-              className={`px-4 py-2 text-xs font-medium rounded-lg ${
-                isBookmarked(bookmarkConfirm.surahNum, bookmarkConfirm.ayahNum)
-                  ? 'bg-red-600 text-white hover:bg-red-700'
-                  : 'bg-emerald-600 text-white hover:bg-emerald-700'
-              }`}
-            >
-              {isBookmarked(bookmarkConfirm.surahNum, bookmarkConfirm.ayahNum) ? 'Remove' : 'Save Bookmark'}
-            </button>
+            </div>
           </div>
-        </div>
+
+          {/* Desktop - Original Position at Click Location */}
+          <div
+            className={`hidden lg:block fixed z-50 rounded-xl shadow-2xl border-2 border-emerald-500 p-5 ${
+              settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+            }`}
+            style={{
+              left: `${bookmarkConfirm.x}px`,
+              top: `${bookmarkConfirm.y}px`,
+              transform: 'translate(-50%, -100%) translateY(-10px)',
+              maxWidth: '320px',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {!isBookmarked(bookmarkConfirm.surahNum, bookmarkConfirm.ayahNum) ? (
+              <>
+                <p className={`text-sm font-semibold mb-3 ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                  Add Bookmark
+                </p>
+
+                {/* Note Input */}
+                <div className="mb-3">
+                  <label className={`block text-xs font-medium mb-1 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Note (optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={bookmarkConfirm.note || ''}
+                    onChange={(e) => setBookmarkConfirm({ ...bookmarkConfirm, note: e.target.value })}
+                    placeholder="Add a note..."
+                    className={`w-full px-3 py-2 text-sm rounded-lg border focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
+                      settings.theme === 'dark'
+                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                        : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                    }`}
+                  />
+                </div>
+
+                {/* Color Selection */}
+                <div className="mb-4">
+                  <label className={`block text-xs font-medium mb-2 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Highlight Color
+                  </label>
+                  <div className="flex gap-2">
+                    {(['emerald', 'blue', 'purple', 'amber', 'rose'] as const).map((color) => (
+                      <button
+                        key={color}
+                        onClick={() => setBookmarkConfirm({ ...bookmarkConfirm, color })}
+                        className={`w-8 h-8 rounded-lg border-2 transition-all transform hover:scale-110 ${
+                          bookmarkConfirm.color === color ? 'border-gray-900 scale-110' : 'border-transparent'
+                        } ${
+                          color === 'emerald' ? 'bg-emerald-600' :
+                          color === 'blue' ? 'bg-blue-600' :
+                          color === 'purple' ? 'bg-purple-600' :
+                          color === 'amber' ? 'bg-amber-600' :
+                          'bg-rose-600'
+                        }`}
+                        title={color}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <p className={`text-sm mb-3 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                Remove this ayah from bookmarks?
+              </p>
+            )}
+
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setBookmarkConfirm(null)}
+                className={`px-4 py-2 text-xs font-medium rounded-lg ${
+                  settings.theme === 'dark'
+                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmBookmark}
+                className={`px-4 py-2 text-xs font-medium rounded-lg ${
+                  isBookmarked(bookmarkConfirm.surahNum, bookmarkConfirm.ayahNum)
+                    ? 'bg-red-600 text-white hover:bg-red-700'
+                    : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                }`}
+              >
+                {isBookmarked(bookmarkConfirm.surahNum, bookmarkConfirm.ayahNum) ? 'Remove' : 'Save Bookmark'}
+              </button>
+            </div>
+          </div>
+        </>
       )}
 
       {/* Floating Audio Player Control Bar - Mobile: Only show when playing/paused or in surah mode. Desktop: Always show when audio enabled */}

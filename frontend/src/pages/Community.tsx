@@ -1,8 +1,18 @@
-import React, { useState } from 'react';
-import { UserGroupIcon, ChatBubbleLeftIcon, CalendarIcon, MapPinIcon } from '@heroicons/react/24/outline';
+import React, { useState, useEffect } from 'react';
+import { UserGroupIcon, ChatBubbleLeftIcon, CalendarIcon, MapPinIcon, XMarkIcon } from '@heroicons/react/24/outline';
 
 const Community: React.FC = () => {
   const [activeTab, setActiveTab] = useState('forums');
+  const [showUnderConstruction, setShowUnderConstruction] = useState(true);
+
+  // Auto-hide popup after 10 seconds
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowUnderConstruction(false);
+    }, 15000);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   const forums = [
     {
@@ -90,6 +100,111 @@ const Community: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 pt-16">
+      {/* Under Construction Popup Modal */}
+      {showUnderConstruction && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          {/* Backdrop with blur */}
+          <div
+            className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm transition-opacity"
+            onClick={() => setShowUnderConstruction(false)}
+          ></div>
+
+          {/* Modal Content */}
+          <div className="flex min-h-full items-center justify-center p-4">
+            <div className="relative bg-white rounded-3xl shadow-2xl max-w-lg w-full p-8 transform transition-all animate-bounce-in">
+              {/* Close Button */}
+              <button
+                onClick={() => setShowUnderConstruction(false)}
+                className="absolute top-4 right-4 p-2 rounded-full hover:bg-gray-100 transition-colors"
+                aria-label="Close"
+              >
+                <XMarkIcon className="h-6 w-6 text-gray-500" />
+              </button>
+
+              {/* Icon Animation */}
+              <div className="flex justify-center mb-6">
+                <div className="relative">
+                  {/* Animated circles */}
+                  <div className="absolute inset-0 bg-emerald-200 rounded-full animate-ping opacity-75"></div>
+                  <div className="relative bg-gradient-to-br from-emerald-500 to-teal-500 rounded-full p-6 shadow-lg">
+                    <svg className="h-16 w-16 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              {/* Title */}
+              <h2 className="text-2xl sm:text-3xl font-bold text-center text-gray-900 mb-3">
+                🚧 Under Construction
+              </h2>
+
+              {/* Subtitle */}
+              <p className="text-center text-gray-600 mb-6">
+                We're building something amazing!
+              </p>
+
+              {/* Description */}
+              <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl p-5 mb-6">
+                <p className="text-sm text-gray-700 text-center leading-relaxed">
+                  Our <span className="font-semibold text-emerald-700">Community</span> page is currently being developed. 
+                  Soon you'll be able to connect with Muslims worldwide, join discussions, attend events, and be part of 
+                  a thriving Islamic community!
+                </p>
+              </div>
+
+              {/* Features Preview */}
+              <div className="grid grid-cols-2 gap-3 mb-6">
+                <div className="bg-emerald-50 rounded-lg p-3 text-center">
+                  <div className="text-2xl mb-1">💬</div>
+                  <p className="text-xs font-medium text-gray-700">Forums</p>
+                </div>
+                <div className="bg-teal-50 rounded-lg p-3 text-center">
+                  <div className="text-2xl mb-1">📅</div>
+                  <p className="text-xs font-medium text-gray-700">Events</p>
+                </div>
+                <div className="bg-emerald-50 rounded-lg p-3 text-center">
+                  <div className="text-2xl mb-1">👥</div>
+                  <p className="text-xs font-medium text-gray-700">Groups</p>
+                </div>
+                <div className="bg-teal-50 rounded-lg p-3 text-center">
+                  <div className="text-2xl mb-1">🎯</div>
+                  <p className="text-xs font-medium text-gray-700">Activities</p>
+                </div>
+              </div>
+
+              {/* Progress Bar */}
+              <div className="mb-6">
+                <div className="flex justify-between text-xs text-gray-600 mb-2">
+                  <span>Development Progress</span>
+                  <span className="font-semibold">65%</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                  <div className="bg-gradient-to-r from-emerald-500 to-teal-500 h-3 rounded-full transition-all duration-1000" style={{ width: '65%' }}></div>
+                </div>
+              </div>
+
+              {/* Notify Me Button */}
+              <button
+                onClick={() => setShowUnderConstruction(false)}
+                className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 text-white py-3 px-6 rounded-xl font-semibold hover:from-emerald-600 hover:to-teal-600 transition-all transform hover:scale-105 shadow-lg"
+              >
+                Got it! I'll Check Back Later
+              </button>
+
+              {/* Coming Soon Badge */}
+              <div className="mt-4 text-center">
+                <span className="inline-flex items-center gap-2 px-4 py-2 bg-amber-100 text-amber-800 rounded-full text-xs font-medium">
+                  <span className="animate-pulse">✨</span>
+                  Coming Soon
+                  <span className="animate-pulse">✨</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Community</h1>
