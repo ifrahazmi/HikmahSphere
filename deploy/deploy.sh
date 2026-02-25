@@ -208,8 +208,44 @@ done
 # ============================================
 print_header "🌐 Nginx Configuration"
 
+# First, ensure main nginx.conf is correct
+print_step "Restoring Nginx main configuration..."
+sudo cat > /etc/nginx/nginx.conf << 'NGINX_MAIN_EOF'
+user www-data;
+worker_processes auto;
+pid /run/nginx.pid;
+
+events {
+    worker_connections 768;
+}
+
+http {
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    keepalive_timeout 65;
+    types_hash_max_size 2048;
+
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+
+    access_log /var/log/nginx/access.log;
+    error_log /var/log/nginx/error.log;
+
+    gzip on;
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_comp_level 6;
+    gzip_types text/plain text/css text/xml text/javascript application/json application/javascript application/xml+rss application/rss+xml font/truetype font/opentype application/vnd.ms-fontobject image/svg+xml;
+
+    include /etc/nginx/conf.d/*.conf;
+    include /etc/nginx/sites-enabled/*;
+}
+NGINX_MAIN_EOF
+print_success "Nginx main configuration restored"
+
 # Copy nginx config
-print_step "Copying Nginx configuration..."
+print_step "Copying Nginx site configuration..."
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEPLOY_DIR="${HOME}/HikmahSphere/deploy"
 
