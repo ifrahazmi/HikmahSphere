@@ -162,7 +162,13 @@ sudo cp -r build/* /var/www/hikmah/
 print_success "Build files copied"
 
 print_step "Setting ownership to ${CURRENT_USER}..."
-sudo chown -R ${CURRENT_USER}:${CURRENT_USER} /var/www/hikmah
+
+#Poor Pratice
+# sudo chown -R ${CURRENT_USER}:${CURRENT_USER} /var/www/hikmah
+
+#Best Pratice
+sudo chown -R www-data:www-data /var/www/hikmah
+
 print_success "Ownership set to ${CURRENT_USER}"
 
 # ============================================

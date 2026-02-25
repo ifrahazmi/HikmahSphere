@@ -1,3 +1,20 @@
-# https://www.robotstxt.org/robotstxt.html
+# ============================================
+# HikmahSphere - Robots.txt
+# Islamic Digital Platform
+# ============================================
+
+# Allow all search engines to crawl
 User-agent: *
-Disallow:
+Allow: /
+
+Disallow: /admin/
+Disallow: /api/
+Disallow: /dashboard
+Disallow: /auth
+
+# Sitemap location
+Sitemap: https://hikmahsphere.site/sitemap.xml
+
+# ============================================
+# End of Robots.txt
+# ============================================
