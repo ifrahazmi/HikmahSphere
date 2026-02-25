@@ -454,24 +454,11 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
         audioRef.current.pause();
         audioRef.current = null;
       }
+      
+      setIsAudioLoading(true);
 
-      // For Surah 9 (At-Tawbah), no Bismillah
-      // For Surah 1 (Al-Fatiha), Bismillah is part of Ayah 1
-      // For other surahs (2-8, 10-114), play Bismillah first
-      const hasBismillah = surahNumber !== 1 && surahNumber !== 9;
-
-      if (hasBismillah) {
-        console.log('🎵 Playing Bismillah first for Surah', surahNumber);
-        // Play Bismillah audio first (using global ayah number 1 for Bismillah)
-        await playBismillah(surahNumber);
-        // After Bismillah finishes, continue with ayah 1
-        return;
-      }
-
-      // Reset Bismillah flag for normal surah playback
-      isBismillahRef.current = false;
-
-      // Fetch the surah with audio
+      // Fetch the surah with audio FIRST (before Bismillah)
+      // This ensures we have the queue ready when Bismillah ends, preventing autoplay blocks
       const response = await fetch(
         `${API_URL}/quran/surah/${surahNumber}/editions?editions=${settings.reciter}`
       );
@@ -491,11 +478,31 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
         totalSurahDurationRef.current = estimatedTotalDuration;
 
         setAyahAudioQueue(audioQueue);
+        // Important: Update ref immediately for handleAudioEnded
+        ayahAudioQueueRef.current = audioQueue;
+        
         setCurrentQueueIndex(0);
+        currentQueueIndexRef.current = 0;
+        
         setCurrentPlayingSurah(surahNumber);
         setCumulativeTime(0);
         cumulativeTimeRef.current = 0;
-        setIsAudioLoading(true);
+
+        // For Surah 9 (At-Tawbah), no Bismillah
+        // For Surah 1 (Al-Fatiha), Bismillah is part of Ayah 1
+        // For other surahs (2-8, 10-114), play Bismillah first
+        const hasBismillah = surahNumber !== 1 && surahNumber !== 9;
+
+        if (hasBismillah) {
+          console.log('🎵 Playing Bismillah first for Surah', surahNumber);
+          // Play Bismillah audio first
+          await playBismillah(surahNumber);
+          // After Bismillah finishes, handleAudioEnded will pick up the queue we just set
+          return;
+        }
+
+        // Reset Bismillah flag for normal surah playback
+        isBismillahRef.current = false;
 
         // Play first ayah
         if (audioQueue.length > 0) {
@@ -509,7 +516,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       setIsAudioLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.reciter, playAyah]);
+  }, [settings.reciter, playAyah, playBismillah]);
 
   const pauseAyah = useCallback(() => {
     console.log('⏸️ Pausing audio');
@@ -601,35 +608,20 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       console.log('🎵 Bismillah finished, continuing to ayah 1 of surah', currentPlayingSurahRef.current);
       isBismillahRef.current = false; // Reset Bismillah flag
       
-      // Fetch the surah to set up the queue
-      try {
-        const surahNum = currentPlayingSurahRef.current;
-        const response = await fetch(
-          `${API_URL}/quran/surah/${surahNum}/editions?editions=${settings.reciter}`
-        );
-        const data = await response.json();
+      const surahNum = currentPlayingSurahRef.current;
+      
+      // Queue should already be populated by playSurah
+      if (ayahAudioQueueRef.current && ayahAudioQueueRef.current.length > 0) {
+        // Reset index just in case
+        setCurrentQueueIndex(0);
+        currentQueueIndexRef.current = 0;
         
-        if (data.status === 'success' && data.data[0]?.ayahs) {
-          const ayahs = data.data[0].ayahs;
-          const audioQueue = ayahs.map((ayah: Ayah) => ayah.numberInSurah);
-          
-          console.log('🎵 Setting up audio queue:', audioQueue);
-          setAyahAudioQueue(audioQueue);
-          ayahAudioQueueRef.current = audioQueue;
-          setCurrentQueueIndex(0);
-          currentQueueIndexRef.current = 0;
-          
-          // Estimate total duration
-          const estimatedTotalDuration = ayahs.length * 5;
-          setTotalSurahDuration(estimatedTotalDuration);
-          totalSurahDurationRef.current = estimatedTotalDuration;
-          
-          // Play ayah 1
-          console.log('🎵 Playing ayah 1 of surah', surahNum);
-          await playAyah(surahNum, 1);
-        }
-      } catch (err) {
-        console.error('❌ Error fetching surah after Bismillah:', err);
+        const firstAyah = ayahAudioQueueRef.current[0];
+        console.log('🎵 Playing ayah 1 of surah', surahNum, 'from queue:', firstAyah);
+        await playAyah(surahNum, firstAyah);
+      } else {
+        console.error('❌ Audio queue is empty after Bismillah!');
+        // Fallback or stop
         stopAudio();
       }
       return;

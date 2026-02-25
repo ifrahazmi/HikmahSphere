@@ -163,7 +163,7 @@ export interface QuranContextType {
   currentQueueIndex: number;       // Current ayah index in surah play queue
   totalSurahDuration: number;      // Total estimated duration for complete surah
   cumulativeTime: number;          // Cumulative time from previous ayahs
-  playAyah: (surahNumber: number, ayahNumber: number) => void;
+  playAyah: (surahNumber: number, ayahNumber: number, isContinuing?: boolean) => void;
   pauseAyah: () => void;
   resumeAyah: () => void;
   stopAyah: () => void;

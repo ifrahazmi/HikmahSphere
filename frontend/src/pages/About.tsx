@@ -642,8 +642,8 @@ const About: React.FC = () => {
             </div>
 
             <div className="relative">
-              {/* Timeline Line - Centered for all screen sizes */}
-              <div className="absolute left-1/2 transform -translate-x-1/2 w-0.5 sm:w-1 h-full bg-gradient-to-b from-emerald-500 via-teal-500 to-cyan-500 rounded-full"></div>
+              {/* Timeline Line - Centered for all screen sizes - extends only to "Current" phase */}
+              <div className="absolute left-1/2 transform -translate-x-1/2 w-0.5 sm:w-1 h-[calc(46%-8rem)] bg-gradient-to-b from-emerald-500 via-teal-500 to-cyan-500 rounded-full"></div>
 
               {/* Timeline Items */}
               <div className="space-y-4 sm:space-y-6 md:space-y-8">
