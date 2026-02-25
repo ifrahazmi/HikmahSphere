@@ -314,21 +314,21 @@ echo ""
 print_header "🔍 Quick Verification"
 
 print_step "Testing website accessibility..."
-if curl -s -o /dev/null -w "%{http_code}" https://hikmahsphere.site 2>/dev/null | grep -q "200"; then
-    print_success "Website is accessible (HTTP 200)"
+if curl -s -o /dev/null -w "%{http_code}" http://hikmahsphere.site 2>/dev/null | grep -q "200"; then
+    print_success "Website is accessible at http://hikmahsphere.site (HTTP 200)"
 else
     print_warning "Website may not be accessible - please check manually"
 fi
 
 print_step "Testing API endpoint..."
-if curl -s -o /dev/null -w "%{http_code}" https://hikmahsphere.site/api/health 2>/dev/null | grep -q "200\|404"; then
-    print_success "API is responding"
+if curl -s -o /dev/null -w "%{http_code}" http://hikmahsphere.site/api/health 2>/dev/null | grep -q "200\|404"; then
+    print_success "API is responding at http://hikmahsphere.site/api"
 else
     print_warning "API may not be responding - please check PM2 logs"
 fi
 
 print_step "Testing uploads folder..."
-if curl -s -o /dev/null -w "%{http_code}" https://hikmahsphere.site/uploads 2>/dev/null | grep -q "200\|403\|404"; then
+if curl -s -o /dev/null -w "%{http_code}" http://hikmahsphere.site/uploads 2>/dev/null | grep -q "200\|403\|404"; then
     print_success "Uploads folder is accessible"
 else
     print_warning "Uploads folder may not be accessible"
@@ -339,10 +339,13 @@ print_header "🎉 All Done!"
 
 echo ""
 echo -e "${YELLOW}Next Steps:${NC}"
-echo "  1. Visit https://hikmahsphere.site to verify"
+echo "  1. Visit http://hikmahsphere.site to verify (HTTP)"
 echo "  2. Run ./verify.sh for detailed verification"
 echo "  3. Check PM2 logs: pm2 logs hikmah-backend"
 echo "  4. Check Nginx logs: sudo tail -f /var/log/nginx/error.log"
+echo ""
+echo -e "${CYAN}Note: HTTPS not configured yet. To enable SSL:${NC}"
+echo "    sudo certbot --nginx -d hikmahsphere.site -d www.hikmahsphere.site"
 echo ""
 echo -e "${GREEN}Happy Deploying! 🚀${NC}"
 echo ""
