@@ -141,20 +141,20 @@ const Home: React.FC = () => {
 
   const testimonials = [
     {
-      name: 'Ahmad Hassan',
-      location: 'Bangalore, India',
+      name: 'Tasneem Fatima',
+      location: 'Kolkata, India',
       text: 'The prayer times feature has transformed my daily Salah routine. The accurate geolocation-based calculations and beautiful prayer cards I can share with family make staying connected to my faith effortless. The notifications are perfectly timed!',
       rating: 5,
-      avatar: '🧔🏽',
+      avatar: '🧕🏽',
       feature: 'Prayer Times',
     },
     {
-      name: 'Fatima Zahra',
+      name: 'Ahemed Khan',
       location: 'Bangalore, India',
       text: 'The Zakat calculator is incredibly comprehensive. It calculated my Zakat considering gold, silver, savings, and even my investments. The live nisab rates gave me confidence that my calculation was accurate. Made my annual Zakat so much easier!',
-      rating: 5,
-      avatar: '🧕🏽',
-      feature: 'Quran Reader',
+      rating: 4,
+      avatar: '🧔🏽',
+      feature: 'Zakat Calculator',
     },
     {
       name: 'Zafia Chowdhury',
@@ -162,7 +162,7 @@ const Home: React.FC = () => {
       text: 'As someone who reads Quran daily, the multi-translation reader with Indopak script is a blessing. I can compare translations, bookmark my favorite ayahs, and the audio recitations help me improve my Tajweed. The semantic search finds exactly what I need!',
       rating: 5,
       avatar: '🧕🏼',
-      feature: 'Community',
+      feature: 'Quran Reader',
     },
     {
       name: 'Zeenat Chowdhury',

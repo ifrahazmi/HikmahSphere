@@ -100,105 +100,117 @@ const Community: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 pt-16">
-      {/* Under Construction Popup Modal */}
+      {/* Under Construction Popup Modal - Enhanced & Mobile Optimized */}
       {showUnderConstruction && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
-          {/* Backdrop with blur */}
+          {/* Enhanced Backdrop with animated blur */}
           <div
-            className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm transition-opacity"
+            className="fixed inset-0 bg-gradient-to-br from-black/60 via-black/50 to-black/60 backdrop-blur-md transition-opacity animate-fade-in"
             onClick={() => setShowUnderConstruction(false)}
           ></div>
 
-          {/* Modal Content */}
-          <div className="flex min-h-full items-center justify-center p-4">
-            <div className="relative bg-white rounded-3xl shadow-2xl max-w-lg w-full p-8 transform transition-all animate-bounce-in">
-              {/* Close Button */}
-              <button
-                onClick={() => setShowUnderConstruction(false)}
-                className="absolute top-4 right-4 p-2 rounded-full hover:bg-gray-100 transition-colors"
-                aria-label="Close"
-              >
-                <XMarkIcon className="h-6 w-6 text-gray-500" />
-              </button>
+          {/* Modal Content - Mobile Optimized */}
+          <div className="flex min-h-full items-center justify-center p-3 sm:p-4">
+            <div className="relative bg-gradient-to-br from-white via-emerald-50/30 to-white rounded-3xl shadow-2xl max-w-md w-full p-5 sm:p-8 transform transition-all animate-scale-in border-4 border-emerald-400/30">
+              {/* Glowing border effect */}
+              <div className="absolute -inset-1 bg-gradient-to-r from-emerald-400 via-teal-400 to-emerald-400 rounded-3xl opacity-30 blur-xl animate-pulse"></div>
+              
+              {/* Content wrapper with relative positioning */}
+              <div className="relative">
+                {/* Close Button - Enhanced visibility */}
+                <button
+                  onClick={() => setShowUnderConstruction(false)}
+                  className="absolute -top-2 -right-2 sm:top-0 sm:right-0 p-2 rounded-full bg-red-500 hover:bg-red-600 text-white transition-all transform hover:scale-110 shadow-lg z-10"
+                  aria-label="Close"
+                >
+                  <XMarkIcon className="h-5 w-5 sm:h-6 sm:w-6" />
+                </button>
 
-              {/* Icon Animation */}
-              <div className="flex justify-center mb-6">
-                <div className="relative">
-                  {/* Animated circles */}
-                  <div className="absolute inset-0 bg-emerald-200 rounded-full animate-ping opacity-75"></div>
-                  <div className="relative bg-gradient-to-br from-emerald-500 to-teal-500 rounded-full p-6 shadow-lg">
-                    <svg className="h-16 w-16 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                    </svg>
+                {/* Animated Icon - Larger on mobile */}
+                <div className="flex justify-center mb-4 sm:mb-6">
+                  <div className="relative">
+                    {/* Multiple animated pulse rings */}
+                    <div className="absolute inset-0 bg-emerald-300 rounded-full animate-ping opacity-60"></div>
+                    <div className="absolute inset-0 bg-teal-300 rounded-full animate-ping opacity-40" style={{ animationDelay: '0.5s' }}></div>
+                    {/* Main icon container with gradient and shadow */}
+                    <div className="relative bg-gradient-to-br from-emerald-500 via-teal-500 to-emerald-600 rounded-full p-5 sm:p-6 shadow-2xl animate-float">
+                      <svg className="h-14 w-14 sm:h-16 sm:w-16 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                      </svg>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Title */}
-              <h2 className="text-2xl sm:text-3xl font-bold text-center text-gray-900 mb-3">
-                🚧 Under Construction
-              </h2>
+                {/* Title - Larger and more vibrant */}
+                <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-center mb-2 sm:mb-3 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 bg-clip-text text-transparent animate-gradient">
+                  🚧 Under Construction 🚧
+                </h2>
 
-              {/* Subtitle */}
-              <p className="text-center text-gray-600 mb-6">
-                We're building something amazing!
-              </p>
-
-              {/* Description */}
-              <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl p-5 mb-6">
-                <p className="text-sm text-gray-700 text-center leading-relaxed">
-                  Our <span className="font-semibold text-emerald-700">Community</span> page is currently being developed. 
-                  Soon you'll be able to connect with Muslims worldwide, join discussions, attend events, and be part of 
-                  a thriving Islamic community!
+                {/* Subtitle - Enhanced typography */}
+                <p className="text-center text-gray-700 font-semibold text-base sm:text-lg mb-4 sm:mb-6 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+                  ✨ We're building something amazing! ✨
                 </p>
-              </div>
 
-              {/* Features Preview */}
-              <div className="grid grid-cols-2 gap-3 mb-6">
-                <div className="bg-emerald-50 rounded-lg p-3 text-center">
-                  <div className="text-2xl mb-1">💬</div>
-                  <p className="text-xs font-medium text-gray-700">Forums</p>
+                {/* Description - Enhanced card with border */}
+                <div className="bg-gradient-to-r from-emerald-100 via-teal-100 to-emerald-100 rounded-2xl p-4 sm:p-5 mb-4 sm:mb-6 border-2 border-emerald-300/50 shadow-lg animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
+                  <p className="text-sm sm:text-base text-gray-800 text-center leading-relaxed font-medium">
+                    Our <span className="font-bold text-emerald-700 text-lg">Community</span> page is currently being developed. 
+                    Soon you'll be able to <span className="font-semibold text-teal-700">connect with Muslims worldwide</span>, join discussions, attend events, and be part of 
+                    a thriving Islamic community! 🌍
+                  </p>
                 </div>
-                <div className="bg-teal-50 rounded-lg p-3 text-center">
-                  <div className="text-2xl mb-1">📅</div>
-                  <p className="text-xs font-medium text-gray-700">Events</p>
-                </div>
-                <div className="bg-emerald-50 rounded-lg p-3 text-center">
-                  <div className="text-2xl mb-1">👥</div>
-                  <p className="text-xs font-medium text-gray-700">Groups</p>
-                </div>
-                <div className="bg-teal-50 rounded-lg p-3 text-center">
-                  <div className="text-2xl mb-1">🎯</div>
-                  <p className="text-xs font-medium text-gray-700">Activities</p>
-                </div>
-              </div>
 
-              {/* Progress Bar */}
-              <div className="mb-6">
-                <div className="flex justify-between text-xs text-gray-600 mb-2">
-                  <span>Development Progress</span>
-                  <span className="font-semibold">65%</span>
+                {/* Features Preview - Enhanced with hover effects */}
+                <div className="grid grid-cols-2 gap-2 sm:gap-3 mb-4 sm:mb-6 animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
+                  <div className="bg-gradient-to-br from-emerald-100 to-emerald-200 rounded-xl p-3 sm:p-4 text-center border-2 border-emerald-300/50 hover:scale-105 transition-transform shadow-md">
+                    <div className="text-3xl sm:text-4xl mb-1 animate-bounce">💬</div>
+                    <p className="text-xs sm:text-sm font-bold text-gray-800">Forums</p>
+                  </div>
+                  <div className="bg-gradient-to-br from-teal-100 to-teal-200 rounded-xl p-3 sm:p-4 text-center border-2 border-teal-300/50 hover:scale-105 transition-transform shadow-md">
+                    <div className="text-3xl sm:text-4xl mb-1 animate-bounce" style={{ animationDelay: '0.1s' }}>📅</div>
+                    <p className="text-xs sm:text-sm font-bold text-gray-800">Events</p>
+                  </div>
+                  <div className="bg-gradient-to-br from-emerald-100 to-emerald-200 rounded-xl p-3 sm:p-4 text-center border-2 border-emerald-300/50 hover:scale-105 transition-transform shadow-md">
+                    <div className="text-3xl sm:text-4xl mb-1 animate-bounce" style={{ animationDelay: '0.2s' }}>👥</div>
+                    <p className="text-xs sm:text-sm font-bold text-gray-800">Groups</p>
+                  </div>
+                  <div className="bg-gradient-to-br from-teal-100 to-teal-200 rounded-xl p-3 sm:p-4 text-center border-2 border-teal-300/50 hover:scale-105 transition-transform shadow-md">
+                    <div className="text-3xl sm:text-4xl mb-1 animate-bounce" style={{ animationDelay: '0.3s' }}>🎯</div>
+                    <p className="text-xs sm:text-sm font-bold text-gray-800">Activities</p>
+                  </div>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-                  <div className="bg-gradient-to-r from-emerald-500 to-teal-500 h-3 rounded-full transition-all duration-1000" style={{ width: '65%' }}></div>
+
+                {/* Progress Bar - Enhanced with glow */}
+                <div className="mb-5 sm:mb-6 animate-fade-in-up" style={{ animationDelay: '0.5s' }}>
+                  <div className="flex justify-between text-xs sm:text-sm text-gray-700 font-semibold mb-2">
+                    <span>🚀 Development Progress</span>
+                    <span className="text-emerald-600 font-bold">65%</span>
+                  </div>
+                  <div className="w-full bg-gray-300 rounded-full h-4 overflow-hidden shadow-inner">
+                    <div className="bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-500 h-4 rounded-full transition-all duration-1000 shadow-lg relative animate-progress" style={{ width: '65%' }}>
+                      <div className="absolute inset-0 bg-white/30 animate-shimmer"></div>
+                    </div>
+                  </div>
                 </div>
-              </div>
 
-              {/* Notify Me Button */}
-              <button
-                onClick={() => setShowUnderConstruction(false)}
-                className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 text-white py-3 px-6 rounded-xl font-semibold hover:from-emerald-600 hover:to-teal-600 transition-all transform hover:scale-105 shadow-lg"
-              >
-                Got it! I'll Check Back Later
-              </button>
+                {/* Action Button - Enhanced with glow effect */}
+                <button
+                  onClick={() => setShowUnderConstruction(false)}
+                  className="w-full bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 text-white py-3 sm:py-4 px-6 rounded-xl font-bold text-base sm:text-lg hover:from-emerald-600 hover:to-teal-600 transition-all transform hover:scale-105 shadow-2xl relative overflow-hidden group animate-fade-in-up"
+                  style={{ animationDelay: '0.6s' }}
+                >
+                  <span className="relative z-10">Got it! I'll Check Back Later 👍</span>
+                  <div className="absolute inset-0 bg-white/20 transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
+                </button>
 
-              {/* Coming Soon Badge */}
-              <div className="mt-4 text-center">
-                <span className="inline-flex items-center gap-2 px-4 py-2 bg-amber-100 text-amber-800 rounded-full text-xs font-medium">
-                  <span className="animate-pulse">✨</span>
-                  Coming Soon
-                  <span className="animate-pulse">✨</span>
-                </span>
+                {/* Coming Soon Badge - Enhanced */}
+                <div className="mt-4 sm:mt-5 text-center animate-fade-in-up" style={{ animationDelay: '0.7s' }}>
+                  <span className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-amber-200 via-yellow-200 to-amber-200 text-amber-900 rounded-full text-xs sm:text-sm font-bold shadow-lg border-2 border-amber-300">
+                    <span className="animate-pulse text-base">✨</span>
+                    <span className="animate-pulse">Coming Soon</span>
+                    <span className="animate-pulse text-base">✨</span>
+                  </span>
+                </div>
               </div>
             </div>
           </div>

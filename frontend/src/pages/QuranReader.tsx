@@ -105,31 +105,79 @@ const QuranReader: React.FC = () => {
 
   // Scroll to specific ayah
   const scrollToAyahNumber = (ayahNumber: number) => {
-    const ayahElement = document.getElementById(`ayah-${ayahNumber}`);
-    if (ayahElement) {
-      // iOS Safari fix: Use instant scroll for better compatibility
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    
+    // iOS Mobile requires multiple attempts with delays for reliable scrolling
+    const attemptScroll = (attempt = 0, maxAttempts = 5) => {
+      const ayahElement = document.getElementById(`ayah-${ayahNumber}`);
       
-      if (isIOS) {
-        // For iOS, use instant scroll with offset calculation for better reliability
-        const elementPosition = ayahElement.getBoundingClientRect().top + window.pageYOffset;
-        const offsetPosition = elementPosition - (window.innerHeight / 2) + (ayahElement.offsetHeight / 2);
-        
-        window.scrollTo({
-          top: offsetPosition,
-          behavior: 'auto'
-        });
-      } else {
-        // For other browsers, use smooth scroll
-        ayahElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (!ayahElement) {
+        console.log(`🔍 Ayah ${ayahNumber} not found, attempt ${attempt + 1}/${maxAttempts}`);
+        // Element not found, retry after delay
+        if (attempt < maxAttempts) {
+          setTimeout(() => attemptScroll(attempt + 1, maxAttempts), 200);
+        } else {
+          console.error(`❌ Failed to find ayah ${ayahNumber} after ${maxAttempts} attempts`);
+        }
+        return;
       }
-      
-      // Highlight the ayah temporarily
-      ayahElement.classList.add('bg-emerald-200', 'bg-opacity-30');
-      setTimeout(() => {
-        ayahElement.classList.remove('bg-emerald-200', 'bg-opacity-30');
-      }, 2000);
-    }
+
+      console.log(`✅ Found ayah ${ayahNumber}, scrolling... (iOS: ${isIOS})`);
+
+      // Use requestAnimationFrame for better timing on mobile
+      requestAnimationFrame(() => {
+        if (isIOS) {
+          // iOS-specific: Multiple strategies for reliable scrolling
+          
+          // Force reflow to ensure layout is complete
+          void ayahElement.offsetHeight;
+          
+          // Strategy 1: Direct element focus (helps with keyboard dismissal)
+          if (ayahElement.tabIndex === -1) {
+            ayahElement.tabIndex = -1;
+          }
+          
+          // Strategy 2: Get element position and scroll
+          const rect = ayahElement.getBoundingClientRect();
+          const absoluteTop = rect.top + window.pageYOffset;
+          const middle = absoluteTop - (window.innerHeight / 2) + (rect.height / 2);
+          
+          console.log(`📍 Scrolling to position: ${middle}`);
+          
+          // Use both methods for maximum compatibility
+          window.scrollTo(0, middle);
+          
+          // Backup: Also try scrollIntoView after a frame
+          setTimeout(() => {
+            ayahElement.scrollIntoView({ 
+              behavior: 'auto', 
+              block: 'center',
+              inline: 'nearest'
+            });
+            console.log(`📍 Applied scrollIntoView`);
+          }, 50);
+          
+        } else {
+          // For other browsers, use smooth scroll
+          ayahElement.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center',
+            inline: 'nearest'
+          });
+        }
+        
+        // Highlight the ayah temporarily
+        setTimeout(() => {
+          ayahElement.classList.add('bg-emerald-200', 'bg-opacity-30');
+          setTimeout(() => {
+            ayahElement.classList.remove('bg-emerald-200', 'bg-opacity-30');
+          }, 2000);
+        }, 100);
+      });
+    };
+    
+    // Start the scroll attempt
+    attemptScroll();
   };
 
   // Sync temp settings when settings change
@@ -589,7 +637,7 @@ const QuranReader: React.FC = () => {
                       addToRecentSearches(searchTerm);
                     }
                   }}
-                  className={`w-full pl-10 pr-10 py-3 text-sm border-2 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+                  className={`w-full pl-10 pr-10 py-3 text-base border-2 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
                     settings.theme === 'dark'
                       ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
                       : 'border-gray-200'
@@ -1094,7 +1142,10 @@ const QuranReader: React.FC = () => {
                             <button
                               onClick={() => {
                                 goToSurah(bookmark.surahNumber);
-                                setTimeout(() => scrollToAyahNumber(bookmark.ayahNumber), 600);
+                                // iOS needs longer delay for DOM to settle
+                                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+                                const delay = isIOS ? 1000 : 600;
+                                setTimeout(() => scrollToAyahNumber(bookmark.ayahNumber), delay);
                               }}
                               className="text-left flex-1"
                             >
@@ -1623,7 +1674,7 @@ const QuranReader: React.FC = () => {
                   placeholder="Search surahs..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className={`w-full pl-10 pr-3 py-1.5 text-sm border rounded-md focus:ring-emerald-500 focus:border-emerald-500 ${
+                  className={`w-full pl-10 pr-3 py-2 text-base border rounded-md focus:ring-emerald-500 focus:border-emerald-500 ${
                     settings.theme === 'dark'
                       ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
                       : 'border-gray-300'
@@ -2124,7 +2175,10 @@ const QuranReader: React.FC = () => {
                               onClick={() => {
                                 goToSurah(bookmark.surahNumber);
                                 cancelMobileSettings();
-                                setTimeout(() => scrollToAyahNumber(bookmark.ayahNumber), 800);
+                                // iOS needs longer delay for DOM to settle and modal to close
+                                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+                                const delay = isIOS ? 1200 : 800;
+                                setTimeout(() => scrollToAyahNumber(bookmark.ayahNumber), delay);
                               }}
                               className="text-left flex-1"
                             >
@@ -2187,7 +2241,7 @@ const QuranReader: React.FC = () => {
             }}
           >
             <div
-              className={`relative w-full max-w-md rounded-xl shadow-2xl border-2 border-emerald-500 p-5 ${
+              className={`relative w-full max-w-sm rounded-xl shadow-2xl border-2 border-emerald-500 p-4 ${
                 settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'
               }`}
               onClick={(e) => e.stopPropagation()}
@@ -2203,13 +2257,13 @@ const QuranReader: React.FC = () => {
 
               {!isBookmarked(bookmarkConfirm.surahNum, bookmarkConfirm.ayahNum) ? (
                 <>
-                  <p className={`text-sm font-semibold mb-3 ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                  <p className={`text-base font-semibold mb-3 ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
                     Add Bookmark
                   </p>
 
                   {/* Note Input */}
                   <div className="mb-3">
-                    <label className={`block text-xs font-medium mb-1 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <label className={`block text-sm font-medium mb-1 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
                       Note (optional)
                     </label>
                     <input
@@ -2217,7 +2271,7 @@ const QuranReader: React.FC = () => {
                       value={bookmarkConfirm.note || ''}
                       onChange={(e) => setBookmarkConfirm({ ...bookmarkConfirm, note: e.target.value })}
                       placeholder="Add a note..."
-                      className={`w-full px-3 py-2 text-sm rounded-lg border focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
+                      className={`w-full px-3 py-2 text-base rounded-lg border focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
                         settings.theme === 'dark'
                           ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
                           : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
@@ -2228,7 +2282,7 @@ const QuranReader: React.FC = () => {
 
                   {/* Color Selection */}
                   <div className="mb-4">
-                    <label className={`block text-xs font-medium mb-2 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <label className={`block text-sm font-medium mb-2 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
                       Highlight Color
                     </label>
                     <div className="flex gap-2 flex-wrap">
@@ -2236,7 +2290,7 @@ const QuranReader: React.FC = () => {
                         <button
                           key={color}
                           onClick={() => setBookmarkConfirm({ ...bookmarkConfirm, color })}
-                          className={`w-10 h-10 rounded-lg border-2 transition-all transform hover:scale-110 ${
+                          className={`w-9 h-9 rounded-lg border-2 transition-all transform hover:scale-110 ${
                             bookmarkConfirm.color === color ? 'border-gray-900 scale-110' : 'border-transparent'
                           } ${
                             color === 'emerald' ? 'bg-emerald-600' :
@@ -2252,7 +2306,7 @@ const QuranReader: React.FC = () => {
                   </div>
                 </>
               ) : (
-                <p className={`text-sm mb-3 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                <p className={`text-base mb-3 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
                   Remove this ayah from bookmarks?
                 </p>
               )}
@@ -2260,7 +2314,7 @@ const QuranReader: React.FC = () => {
               <div className="flex gap-2 justify-end">
                 <button
                   onClick={() => setBookmarkConfirm(null)}
-                  className={`px-4 py-2 text-xs font-medium rounded-lg ${
+                  className={`px-4 py-2 text-sm font-medium rounded-lg ${
                     settings.theme === 'dark'
                       ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -2270,7 +2324,7 @@ const QuranReader: React.FC = () => {
                 </button>
                 <button
                   onClick={confirmBookmark}
-                  className={`px-4 py-2 text-xs font-medium rounded-lg ${
+                  className={`px-4 py-2 text-sm font-medium rounded-lg ${
                     isBookmarked(bookmarkConfirm.surahNum, bookmarkConfirm.ayahNum)
                       ? 'bg-red-600 text-white hover:bg-red-700'
                       : 'bg-emerald-600 text-white hover:bg-emerald-700'
