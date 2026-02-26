@@ -348,7 +348,7 @@ const PrayerTimes: React.FC = () => {
         logging: false,
         useCORS: true,
         allowTaint: true,
-      });
+      } as any);
 
       console.log('✅ Canvas generated:', canvas.width, 'x', canvas.height);
 
@@ -416,7 +416,7 @@ const PrayerTimes: React.FC = () => {
         logging: false,
         useCORS: true,
         allowTaint: true,
-      });
+      } as any);
 
       console.log('✅ Canvas generated:', canvas.width, 'x', canvas.height);
 

@@ -84,6 +84,8 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
   // New form modals
   const [showCollectionModal, setShowCollectionModal] = useState(false);
   const [showSpendingModal, setShowSpendingModal] = useState(false);
+  const [editProofFile, setEditProofFile] = useState<File | null>(null);
+  const [editProofPreview, setEditProofPreview] = useState<string | null>(null);
 
   // Filter state
   const [filterType, setFilterType] = useState<'all' | 'collection' | 'spending'>('all');
@@ -197,6 +199,11 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
       if (editingTransaction.chequeNumber) formData.append('chequeNumber', editingTransaction.chequeNumber);
       if (editingTransaction.transactionRefId) formData.append('transactionRefId', editingTransaction.transactionRefId);
       if (editingTransaction.notes) formData.append('notes', editingTransaction.notes);
+      if (editProofFile) formData.append('proofOfPayment', editProofFile);
+      // If user removed the existing proof (red X) and didn't upload a new one
+      if (!editingTransaction.proofFilePath && !editProofFile) {
+        formData.append('removeProof', 'true');
+      }
 
       const response = await fetch(`${API_URL}/zakat/payment/${editingTransaction._id}`, {
         method: 'PUT',
@@ -209,6 +216,8 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
       if (data.status === 'success') {
         toast.success('Transaction updated successfully');
         setShowEditModal(false);
+        setEditProofFile(null);
+        setEditProofPreview(null);
         fetchZakatData();
       } else {
         toast.error(data.message || 'Update failed');
@@ -614,7 +623,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                           {isAdmin && (
                             <>
                               <button
-                                onClick={() => { setEditingTransaction(t); setShowEditModal(true); }}
+                                onClick={() => { setEditingTransaction(t); setEditProofFile(null); setEditProofPreview(null); setShowEditModal(true); }}
                                 className="text-indigo-600 hover:text-indigo-900 p-1 hover:bg-indigo-50 rounded transition-colors"
                                 title="Edit"
                               >
@@ -711,7 +720,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                     {isAdmin && (
                       <>
                         <button
-                          onClick={() => { setEditingTransaction(t); setShowEditModal(true); }}
+                          onClick={() => { setEditingTransaction(t); setEditProofFile(null); setEditProofPreview(null); setShowEditModal(true); }}
                           className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors"
                         >
                           <PencilIcon className="h-4 w-4" />
@@ -996,6 +1005,94 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                   value={editingTransaction.notes || ''}
                   onChange={e => setEditingTransaction({...editingTransaction, notes: e.target.value})}
                 />
+              </div>
+
+              {/* Proof of Payment Upload / Replace */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Proof of Payment</label>
+                
+                {/* Show existing proof if present and no new file selected */}
+                {editingTransaction.proofFilePath && !editProofPreview && (
+                  <div className="mb-2 p-3 bg-gray-50 rounded-xl border border-gray-200 relative">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <DocumentArrowDownIcon className="w-5 h-5 text-emerald-600" />
+                        <span className="text-sm text-gray-700 font-medium">Existing proof uploaded</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPreviewProofPath(editingTransaction.proofFilePath!);
+                          setShowProofPreview(true);
+                        }}
+                        className="text-xs text-emerald-600 hover:text-emerald-700 font-medium hover:underline"
+                      >
+                        View
+                      </button>
+                    </div>
+                    {/* Red cross to remove existing proof */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingTransaction({ ...editingTransaction, proofFilePath: undefined });
+                        toast.success('Proof marked for removal. Click Save to confirm.');
+                      }}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 shadow"
+                      title="Remove proof"
+                    >
+                      <XMarkIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
+                {/* New file preview */}
+                {editProofPreview && (
+                  <div className="mb-2 relative">
+                    {editProofPreview.startsWith('data:image') ? (
+                      <img src={editProofPreview} alt="New proof" className="max-h-32 mx-auto rounded-lg border" />
+                    ) : (
+                      <div className="flex items-center gap-2 p-3 bg-emerald-50 rounded-xl border border-emerald-200">
+                        <DocumentArrowDownIcon className="w-5 h-5 text-emerald-600" />
+                        <span className="text-sm text-emerald-700 font-medium">{editProofFile?.name}</span>
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => { setEditProofFile(null); setEditProofPreview(null); }}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 shadow"
+                    >
+                      <XMarkIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
+                <input
+                  type="file"
+                  id="edit-proof-upload"
+                  accept="image/jpeg,image/jpg,image/png,application/pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      if (file.size > 5 * 1024 * 1024) {
+                        toast.error('File must be under 5MB');
+                        return;
+                      }
+                      setEditProofFile(file);
+                      const reader = new FileReader();
+                      reader.onloadend = () => setEditProofPreview(reader.result as string);
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                />
+                <label
+                  htmlFor="edit-proof-upload"
+                  className="inline-flex items-center gap-2 px-4 py-2 border border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-emerald-400 hover:bg-emerald-50 transition-colors text-sm text-gray-600 hover:text-emerald-700"
+                >
+                  <ArrowUpOnSquareIcon className="w-4 h-4" />
+                  {editingTransaction.proofFilePath ? 'Replace Proof' : 'Upload Proof'}
+                </label>
+                <p className="text-xs text-gray-500 mt-1">JPEG, PNG, or PDF. Max 5MB.</p>
               </div>
 
               <div className="flex gap-3 pt-4">

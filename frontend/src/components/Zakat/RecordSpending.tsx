@@ -522,7 +522,20 @@ const RecordSpending: React.FC<RecordSpendingProps> = ({ currentBalance, onSucce
               />
               <label htmlFor="spending-proof-upload" className="cursor-pointer">
                 {proofPreview ? (
-                  <div className="space-y-2">
+                  <div className="space-y-2 relative">
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setProofFile(null);
+                        setProofPreview(null);
+                      }}
+                      className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 z-10"
+                      title="Remove proof"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
                     {proofPreview.startsWith('data:image') ? (
                       <img src={proofPreview} alt="Preview" className="max-h-40 mx-auto rounded-lg" />
                     ) : (

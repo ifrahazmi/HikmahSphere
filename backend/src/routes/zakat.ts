@@ -792,6 +792,18 @@ router.put('/payment/:id', [
     if (updates.recipientType) payment.recipientType = updates.recipientType;
     if (updates.notes !== undefined) payment.notes = updates.notes;
 
+    // Handle proof removal (user clicked red X to remove existing proof)
+    if (updates.removeProof === 'true' && !req.file) {
+      if (payment.proofFilePath) {
+        try {
+          fs.unlinkSync(getFilesystemPath(payment.proofFilePath));
+        } catch (e) {
+          console.error('Proof file deletion error:', e);
+        }
+        payment.proofFilePath = undefined as any;
+      }
+    }
+
     // Handle file update
     if (req.file) {
       // Delete the old file using the real filesystem path (not the stored URL path)

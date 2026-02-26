@@ -52,6 +52,11 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
   const pausedTimeRef = React.useRef(0);
   const isBismillahRef = React.useRef(false);
 
+  // Stable refs for audio event handlers (delegates to latest handler via ref)
+  const handleAudioEndedFnRef = React.useRef<() => void>(() => {});
+  const handleAudioTimeUpdateFnRef = React.useRef<() => void>(() => {});
+  const stopAudioRef = React.useRef<() => void>(() => {});
+
   // Keep refs in sync with state
   useEffect(() => {
     ayahAudioQueueRef.current = ayahAudioQueue;
@@ -178,14 +183,12 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
 
   // Navigation
   const goToSurah = useCallback((surahNumber: number) => {
-    // Stop audio playback if playing (any mode)
-    if (isPlaying) {
-      stopAudio();
-    }
+    // Always stop audio when changing surah (uses ref to avoid forward-reference issue)
+    stopAudioRef.current();
     setCurrentSurah(surahNumber);
     setCurrentAyah(1);
     loadSurahData(surahNumber);
-  }, [loadSurahData]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [loadSurahData]);
 
   const goToAyah = useCallback((surahNumber: number, ayahNumber: number) => {
     setCurrentSurah(surahNumber);
@@ -273,21 +276,36 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     }
   }, []);
 
+  // Initialize or get the persistent Audio element (critical for iOS Safari autoplay chain)
+  // iOS Safari only allows .play() on an Audio element that was originally started by a user gesture.
+  // Creating new Audio() in the 'ended' handler breaks the chain. Reusing the same element preserves it.
+  const initAudioElement = useCallback(() => {
+    if (!audioRef.current) {
+      const audio = new Audio();
+      audioRef.current = audio;
+
+      // Attach persistent event listeners that delegate to latest handlers via refs
+      audio.addEventListener('timeupdate', () => handleAudioTimeUpdateFnRef.current());
+      audio.addEventListener('loadedmetadata', () => handleAudioTimeUpdateFnRef.current());
+      audio.addEventListener('ended', () => handleAudioEndedFnRef.current());
+      audio.addEventListener('canplaythrough', () => setIsAudioLoading(false));
+      audio.addEventListener('waiting', () => setIsAudioLoading(true));
+      audio.addEventListener('playing', () => setIsAudioLoading(false));
+      audio.addEventListener('error', (e) => {
+        console.error('❌ Audio error:', e);
+        setIsAudioLoading(false);
+      });
+    }
+    return audioRef.current;
+  }, []);
+
   // Audio playback implementation
   const stopAudio = useCallback(() => {
     console.log('🛑 Stopping audio playback');
     if (audioRef.current) {
-      // Remove event listeners before cleaning up
-      const audio = audioRef.current;
-      audio.removeEventListener('timeupdate', handleAudioTimeUpdate);
-      audio.removeEventListener('ended', handleAudioEnded);
-      audio.removeEventListener('loadedmetadata', handleAudioTimeUpdate);
-      audio.removeEventListener('canplaythrough', () => {});
-      audio.removeEventListener('error', () => {});
-      
-      audio.pause();
-      audio.currentTime = 0;
-      audioRef.current = null;
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      // Don't destroy the Audio element - reuse it for iOS autoplay chain compatibility
     }
     setIsPlaying(false);
     setIsPaused(false);
@@ -305,17 +323,17 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     cumulativeTimeRef.current = 0;
     totalSurahDurationRef.current = 0;
     pausedTimeRef.current = 0;
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    isBismillahRef.current = false;
+  }, []);
+
+  // Keep stopAudioRef in sync
+  useEffect(() => {
+    stopAudioRef.current = stopAudio;
+  }, [stopAudio]);
 
   const playAyah = useCallback(async (surahNumber: number, ayahNumber: number, isContinuing: boolean = false) => {
     try {
       console.log('🎵 Playing ayah:', surahNumber, ':', ayahNumber, 'isContinuing:', isContinuing);
-      
-      // Stop any current playback (but preserve cumulative time in surah mode)
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
 
       // Fetch the ayah with audio
       const apiUrl = `${API_URL}/quran/ayah/${surahNumber}:${ayahNumber}?editions=${settings.reciter}`;
@@ -331,32 +349,9 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
         const audioUrl = data.data[0].audio;
         console.log('🎵 Audio URL:', audioUrl);
 
-        // Create new Audio object
-        const audio = new Audio();
-        audioRef.current = audio;
-        
-        // Attach event listeners to the new audio object
-        audio.addEventListener('timeupdate', handleAudioTimeUpdate);
-        audio.addEventListener('ended', handleAudioEnded);
-        audio.addEventListener('loadedmetadata', handleAudioTimeUpdate);
-        audio.addEventListener('canplaythrough', () => {
-          console.log('✅ Audio can play through');
-          setIsAudioLoading(false);
-        });
-        audio.addEventListener('waiting', () => {
-          console.log('⏳ Audio buffering...');
-          setIsAudioLoading(true);
-        });
-        audio.addEventListener('playing', () => {
-          console.log('▶️ Audio is playing');
-          setIsAudioLoading(false);
-        });
-        audio.addEventListener('error', (e) => {
-          console.error('❌ Audio error:', e);
-          setIsAudioLoading(false);
-        });
-        
-        console.log('🎵 Event listeners attached');
+        // Reuse persistent Audio element (critical for iOS Safari autoplay chain)
+        const audio = initAudioElement();
+        audio.pause();
 
         audio.src = audioUrl;
         audio.load();
@@ -383,7 +378,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       setIsPlaying(false);
       setIsAudioLoading(false);
     }
-  }, [settings.reciter]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [settings.reciter, initAudioElement]);
 
   // Play Bismillah separately (for surahs 2-8, 10-114)
   const playBismillah = useCallback(async (surahNumber: number) => {
@@ -398,30 +393,9 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       // Bismillah audio URL (Mishary Alafasy)
       const bismillahAudioUrl = 'https://cdn.islamic.network/quran/audio/128/ar.alafasy/1.mp3';
       
-      // Create new Audio object
-      const audio = new Audio();
-      audioRef.current = audio;
-      
-      // Attach event listeners
-      audio.addEventListener('timeupdate', handleAudioTimeUpdate);
-      audio.addEventListener('ended', handleAudioEnded);
-      audio.addEventListener('loadedmetadata', handleAudioTimeUpdate);
-      audio.addEventListener('canplaythrough', () => {
-        console.log('✅ Bismillah can play through');
-        setIsAudioLoading(false);
-      });
-      audio.addEventListener('waiting', () => {
-        console.log('⏳ Bismillah buffering...');
-        setIsAudioLoading(true);
-      });
-      audio.addEventListener('playing', () => {
-        console.log('▶️ Bismillah is playing');
-        setIsAudioLoading(false);
-      });
-      audio.addEventListener('error', (e) => {
-        console.error('❌ Bismillah error:', e);
-        setIsAudioLoading(false);
-      });
+      // Reuse persistent Audio element (critical for iOS Safari autoplay chain)
+      const audio = initAudioElement();
+      audio.pause();
       
       audio.src = bismillahAudioUrl;
       audio.load();
@@ -442,17 +416,16 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       setIsPlaying(false);
       setIsAudioLoading(false);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [initAudioElement]);
 
   const playSurah = useCallback(async (surahNumber: number) => {
     try {
       console.log('🎵 Playing complete surah:', surahNumber);
       setIsSurahMode(true);
 
-      // Stop any current playback
+      // Stop any current playback (don't destroy the element)
       if (audioRef.current) {
         audioRef.current.pause();
-        audioRef.current = null;
       }
       
       setIsAudioLoading(true);
@@ -656,7 +629,14 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     }
   }, [playAyah, stopAudio, settings.reciter]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Note: Audio event listeners are now attached in playAyah when creating new Audio object
+  // Keep handler refs in sync so the persistent audio element's delegated listeners always call latest
+  useEffect(() => {
+    handleAudioEndedFnRef.current = handleAudioEnded;
+  }, [handleAudioEnded]);
+
+  useEffect(() => {
+    handleAudioTimeUpdateFnRef.current = handleAudioTimeUpdate;
+  }, [handleAudioTimeUpdate]);
 
   // Stop and reset player when any relevant change occurs
   useEffect(() => {

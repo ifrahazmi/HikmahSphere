@@ -105,17 +105,31 @@ const QuranReader: React.FC = () => {
 
   // Scroll to specific ayah
   const scrollToAyahNumber = (ayahNumber: number) => {
-    setTimeout(() => {
-      const ayahElement = document.getElementById(`ayah-${ayahNumber}`);
-      if (ayahElement) {
+    const ayahElement = document.getElementById(`ayah-${ayahNumber}`);
+    if (ayahElement) {
+      // iOS Safari fix: Use instant scroll for better compatibility
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      
+      if (isIOS) {
+        // For iOS, use instant scroll with offset calculation for better reliability
+        const elementPosition = ayahElement.getBoundingClientRect().top + window.pageYOffset;
+        const offsetPosition = elementPosition - (window.innerHeight / 2) + (ayahElement.offsetHeight / 2);
+        
+        window.scrollTo({
+          top: offsetPosition,
+          behavior: 'auto'
+        });
+      } else {
+        // For other browsers, use smooth scroll
         ayahElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        // Highlight the ayah temporarily
-        ayahElement.classList.add('bg-emerald-200', 'bg-opacity-30');
-        setTimeout(() => {
-          ayahElement.classList.remove('bg-emerald-200', 'bg-opacity-30');
-        }, 2000);
       }
-    }, 500);
+      
+      // Highlight the ayah temporarily
+      ayahElement.classList.add('bg-emerald-200', 'bg-opacity-30');
+      setTimeout(() => {
+        ayahElement.classList.remove('bg-emerald-200', 'bg-opacity-30');
+      }, 2000);
+    }
   };
 
   // Sync temp settings when settings change
@@ -1080,7 +1094,7 @@ const QuranReader: React.FC = () => {
                             <button
                               onClick={() => {
                                 goToSurah(bookmark.surahNumber);
-                                setTimeout(() => scrollToAyahNumber(bookmark.ayahNumber), 300);
+                                setTimeout(() => scrollToAyahNumber(bookmark.ayahNumber), 600);
                               }}
                               className="text-left flex-1"
                             >
@@ -2110,7 +2124,7 @@ const QuranReader: React.FC = () => {
                               onClick={() => {
                                 goToSurah(bookmark.surahNumber);
                                 cancelMobileSettings();
-                                setTimeout(() => scrollToAyahNumber(bookmark.ayahNumber), 500);
+                                setTimeout(() => scrollToAyahNumber(bookmark.ayahNumber), 800);
                               }}
                               className="text-left flex-1"
                             >
