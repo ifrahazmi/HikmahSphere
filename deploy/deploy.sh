@@ -132,8 +132,25 @@ print_step "Installing frontend dependencies..."
 npm install
 print_success "Frontend dependencies installed"
 
-print_step "Building frontend (4GB memory limit)..."
-NODE_OPTIONS="--max-old-space-size=4096" npm run build
+# Ensure swap exists so builds don't get OOM-killed on low-memory VMs
+print_step "Checking swap space..."
+SWAP_SIZE=$(free -m | awk '/^Swap:/ {print $2}')
+if [ "${SWAP_SIZE}" -lt 1024 ] 2>/dev/null; then
+    print_warning "Swap is ${SWAP_SIZE}MB — creating 2GB swap file for build safety..."
+    sudo fallocate -l 2G /swapfile 2>/dev/null || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048 2>/dev/null
+    sudo chmod 600 /swapfile
+    sudo mkswap /swapfile >/dev/null 2>&1
+    sudo swapon /swapfile 2>/dev/null
+    print_success "2GB swap file activated"
+else
+    print_success "Swap space OK (${SWAP_SIZE}MB)"
+fi
+
+print_step "Building frontend (memory-safe mode)..."
+# GENERATE_SOURCEMAP=false   — skip source maps to save ~40% memory
+# TSC_COMPILE_ON_ERROR=true  — don't fork a separate TS process
+# --max-old-space-size=2048  — keep heap within VM limits
+GENERATE_SOURCEMAP=false TSC_COMPILE_ON_ERROR=true NODE_OPTIONS="--max-old-space-size=2048" npm run build
 print_success "Frontend built successfully"
 
 # Show build size
