@@ -37,10 +37,13 @@ const router = express.Router();
 // Ensure upload directory exists - Use absolute path for production
 // In production, save to /var/www/hikmah/uploads/zakat
 // In development, save to backend/src/uploads/zakat
-const isProduction = process.env.NODE_ENV === 'production';
-const uploadDir = isProduction 
+// Check NODE_ENV first, then fall back to checking if the production path exists.
+const isProduction = process.env.NODE_ENV === 'production' || fs.existsSync('/var/www/hikmah/uploads');
+const uploadDir = isProduction
   ? '/var/www/hikmah/uploads/zakat'
   : path.resolve(process.cwd(), 'src', 'uploads', 'zakat');
+
+console.log(`[Zakat] Upload directory: ${uploadDir} (NODE_ENV=${process.env.NODE_ENV})`);
 
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });

@@ -108,8 +108,11 @@ npm run build
 print_success "Backend built successfully"
 
 print_step "Restarting backend with PM2..."
-# Set NODE_ENV to production for correct upload path
-NODE_ENV=production pm2 restart hikmah-backend
+# Export NODE_ENV so it is inherited by the PM2 process.
+# --update-env is required to actually push the new env into the
+# already-running process (plain 'pm2 restart' keeps the old saved env).
+export NODE_ENV=production
+pm2 restart hikmah-backend --update-env
 sleep 2
 print_success "Backend restarted"
 

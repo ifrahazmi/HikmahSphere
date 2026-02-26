@@ -84,6 +84,8 @@ DonorSchema.statics.findOrCreateDonor = async function(
 };
 
 // Static method for fuzzy donor search
+// Only returns donors with at least one active payment (donationCount > 0)
+// so deleted donors never reappear in autocomplete suggestions.
 DonorSchema.statics.searchDonors = async function(
   searchTerm: string,
   limit: number = 10
@@ -97,6 +99,7 @@ DonorSchema.statics.searchDonors = async function(
   
   const donors = await this.find({
     name: regex,
+    donationCount: { $gt: 0 }, // exclude donors with no active payments
   })
   .sort({ totalDonated: -1, donationCount: -1 })
   .limit(limit);
