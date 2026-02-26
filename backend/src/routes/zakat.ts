@@ -46,12 +46,21 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
+// Helper: convert a stored URL path (/uploads/zakat/file.jpg)
+// back to the real filesystem path for file deletion.
+const getFilesystemPath = (urlPath: string): string => {
+  const clean = urlPath.replace(/^\//, ''); // strip leading slash
+  return isProduction
+    ? `/var/www/hikmah/${clean}`
+    : path.resolve(process.cwd(), 'src', clean);
+};
+
 // Multer Storage for Zakat Proofs
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
+  destination: (req: Express.Request, file: Express.Multer.File, cb: (error: Error | null, destination: string) => void) => {
     cb(null, uploadDir);
   },
-  filename: (req, file, cb) => {
+  filename: (req: Express.Request, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     cb(null, 'zakat-proof-' + uniqueSuffix + path.extname(file.originalname));
   }
@@ -60,7 +69,7 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage: storage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-  fileFilter: (req, file, cb) => {
+  fileFilter: (req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
     const allowedTypes = /jpeg|jpg|png|pdf/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
     const mimetype = allowedTypes.test(file.mimetype);
@@ -552,7 +561,7 @@ router.post('/transaction', [
       bankName: paymentMethod === 'Bank Transfer' ? bankName?.trim() : undefined,
       senderUpiId: paymentMethod === 'UPI Transfer' ? senderUpiId?.trim() : undefined,
       chequeNumber: paymentMethod === 'Cheque' ? chequeNumber?.trim() : undefined,
-      proofFilePath: req.file ? `uploads/zakat/${req.file.filename}` : undefined,
+      proofFilePath: req.file ? `/uploads/zakat/${req.file.filename}` : undefined,
       notes: notes?.trim(),
       recordedBy: req.user.userId,
     });
@@ -782,14 +791,16 @@ router.put('/payment/:id', [
 
     // Handle file update
     if (req.file) {
+      // Delete the old file using the real filesystem path (not the stored URL path)
       if (payment.proofFilePath) {
         try {
-          fs.unlinkSync(payment.proofFilePath);
+          fs.unlinkSync(getFilesystemPath(payment.proofFilePath));
         } catch (e) {
           console.error('Old file deletion error:', e);
         }
       }
-      payment.proofFilePath = req.file.path.replace(/\\/g, '/');
+      // Store as a URL path so the frontend can use it directly
+      payment.proofFilePath = `/uploads/zakat/${req.file.filename}`;
     }
 
     const updatedPayment = await payment.save();

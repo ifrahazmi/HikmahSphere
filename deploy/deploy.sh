@@ -161,15 +161,15 @@ print_step "Copying new build files..."
 sudo cp -r build/* /var/www/hikmah/
 print_success "Build files copied"
 
-print_step "Setting ownership to ${CURRENT_USER}..."
+print_step "Setting web root ownership to www-data (nginx user)..."
 
-#Poor Pratice
+# Poor Practice: chowning to current user breaks nginx file serving
 # sudo chown -R ${CURRENT_USER}:${CURRENT_USER} /var/www/hikmah
 
-#Best Pratice
+# Best Practice: www-data is the nginx process user
 sudo chown -R www-data:www-data /var/www/hikmah
 
-print_success "Ownership set to ${CURRENT_USER}"
+print_success "Web root ownership set to www-data (nginx user)"
 
 # ============================================
 # Upload Folders Setup
@@ -337,11 +337,12 @@ echo -e "  ${GREEN}✓${NC} Backend (PM2): Running"
 echo -e "  ${GREEN}✓${NC} Frontend: Deployed"
 echo -e "  ${GREEN}✓${NC} Nginx: Running"
 echo -e "  ${GREEN}✓${NC} Upload Folders: Created"
-echo -e "  ${GREEN}✓${NC} Ownership: ${CURRENT_USER}"
+echo -e "  ${GREEN}✓${NC} Web Root Ownership: www-data (nginx user)"
+echo -e "  ${GREEN}✓${NC} Upload Ownership: ${CURRENT_USER}"
 echo ""
-echo -e "${BLUE}Website:${NC} https://hikmahsphere.site"
-echo -e "${BLUE}Backend API:${NC} https://hikmahsphere.site/api"
-echo -e "${BLUE}Uploads:${NC} https://hikmahsphere.site/uploads"
+echo -e "${BLUE}Website:${NC} http://hikmahsphere.site"
+echo -e "${BLUE}Backend API:${NC} http://hikmahsphere.site/api"
+echo -e "${BLUE}Uploads:${NC} http://hikmahsphere.site/uploads"
 echo ""
 
 # ============================================
