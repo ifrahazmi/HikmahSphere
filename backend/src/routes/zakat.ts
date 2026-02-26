@@ -851,7 +851,7 @@ router.delete('/payment/:id', authMiddleware, async (req: any, res: any) => {
 
     if (payment.proofFilePath) {
       try {
-        fs.unlinkSync(payment.proofFilePath);
+        fs.unlinkSync(getFilesystemPath(payment.proofFilePath));
       } catch (e) {
         console.error('File deletion error:', e);
       }
@@ -860,12 +860,15 @@ router.delete('/payment/:id', authMiddleware, async (req: any, res: any) => {
     if (payment.type === 'collection' && payment.donorId) {
       const donor = await Donor.findById(payment.donorId);
       if (donor) {
-        donor.totalDonated = Math.max(0, donor.totalDonated - payment.amount);
-        donor.donationCount = Math.max(0, donor.donationCount - 1);
-        
-        if (donor.donationCount === 0) {
-          await Donor.findByIdAndUpdate(donor._id, { $unset: { lastDonationDate: 1 } });
+        const remainingDonations = Math.max(0, donor.donationCount - 1);
+
+        if (remainingDonations === 0) {
+          // No donations left — delete the donor entirely so they
+          // no longer appear in autocomplete suggestions
+          await Donor.findByIdAndDelete(donor._id);
         } else {
+          donor.totalDonated = Math.max(0, donor.totalDonated - payment.amount);
+          donor.donationCount = remainingDonations;
           await donor.save();
         }
       }

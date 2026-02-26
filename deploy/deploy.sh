@@ -209,8 +209,10 @@ done
 print_header "🌐 Nginx Configuration"
 
 # First, ensure main nginx.conf is correct
+# Note: 'sudo tee' is used instead of 'sudo cat >' because the shell opens
+# the redirect target before sudo runs, causing permission denied on root-owned files.
 print_step "Restoring Nginx main configuration..."
-sudo cat > /etc/nginx/nginx.conf << 'NGINX_MAIN_EOF'
+sudo tee /etc/nginx/nginx.conf << 'NGINX_MAIN_EOF' > /dev/null
 user www-data;
 worker_processes auto;
 pid /run/nginx.pid;
