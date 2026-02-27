@@ -3,8 +3,9 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { Toaster } from 'react-hot-toast';
-import { requestForToken } from './firebase';
+import { requestForToken, getPushSupportInfo } from './firebase';
 import axios from 'axios'; // Import axios
+import { toast } from 'react-hot-toast';
 
 // Components
 import Navbar from './components/Navbar';
@@ -51,6 +52,7 @@ const queryClient = new QueryClient({
 
 // Use relative URL to leverage package.json proxy for local dev
 const API_URL = '/api';
+const IOS_PUSH_GUIDE_SHOWN_KEY = 'iosPushGuideShown';
 
 const AppContent: React.FC = () => {
   const { user, loading } = useAuth();
@@ -59,6 +61,18 @@ const AppContent: React.FC = () => {
     // 1. Request Token & Register with Backend
     const registerToken = async () => {
       try {
+        const pushSupport = await getPushSupportInfo();
+        if (!pushSupport.supported && pushSupport.isIOS && !pushSupport.isStandalone) {
+          const alreadyShown = sessionStorage.getItem(IOS_PUSH_GUIDE_SHOWN_KEY);
+          if (!alreadyShown) {
+            toast('For iPhone notifications, install HikmahSphere to Home Screen, then allow notifications.', {
+              duration: 7000,
+              icon: 'i'
+            });
+            sessionStorage.setItem(IOS_PUSH_GUIDE_SHOWN_KEY, '1');
+          }
+        }
+
         const token = await requestForToken();
         
         if (token) {

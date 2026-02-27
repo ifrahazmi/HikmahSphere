@@ -35,14 +35,66 @@ const messagingPromise = isSupported().then(supported => {
   return null;
 });
 
+const isIOSDevice = (): boolean => {
+  const ua = navigator.userAgent || '';
+  const iOSByUa = /iPad|iPhone|iPod/.test(ua);
+  const iPadOS13Plus = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+  return iOSByUa || iPadOS13Plus;
+};
+
+const isStandalonePWA = (): boolean => {
+  const displayModeStandalone = window.matchMedia('(display-mode: standalone)').matches;
+  const navigatorStandalone = (window.navigator as any).standalone === true;
+  return displayModeStandalone || navigatorStandalone;
+};
+
+export interface PushSupportInfo {
+  supported: boolean;
+  isIOS: boolean;
+  isStandalone: boolean;
+  limitations: string[];
+}
+
+export const getPushSupportInfo = async (): Promise<PushSupportInfo> => {
+  const supported = Boolean(await messagingPromise);
+  const hasNotificationApi = typeof window !== 'undefined' && 'Notification' in window;
+  const hasServiceWorker = typeof navigator !== 'undefined' && 'serviceWorker' in navigator;
+  const isIOS = typeof navigator !== 'undefined' ? isIOSDevice() : false;
+  const isStandalone = typeof window !== 'undefined' ? isStandalonePWA() : false;
+  const limitations: string[] = [];
+
+  if (!hasNotificationApi) {
+    limitations.push('This browser does not support the Notification API.');
+  }
+
+  if (!hasServiceWorker) {
+    limitations.push('This browser does not support Service Worker, so push cannot work.');
+  }
+
+  if (isIOS && !isStandalone) {
+    limitations.push('On iPhone/iPad, push works only after installing HikmahSphere to Home Screen.');
+  }
+
+  if (!supported) {
+    limitations.push('Firebase Messaging is not supported in this browser context.');
+  }
+
+  return { supported, isIOS, isStandalone, limitations };
+};
+
 // Request permission and get token
 export const requestForToken = async () => {
   console.log('Checking messaging support...');
   const msg = await messagingPromise;
+  const supportInfo = await getPushSupportInfo();
+
+  if (supportInfo.limitations.length > 0) {
+    supportInfo.limitations.forEach((limitation) => console.warn(`[Push Support] ${limitation}`));
+  }
 
   if (!msg) {
     console.warn("Messaging not supported/initialized. Attempting to request permission natively for debugging...");
-    // Fallback: Request permission anyway (so user sees the prompt), but we can't get a Firebase token.
+    // Fallback: Request permission anyway so users can still see native browser behavior.
     if ('Notification' in window) {
       try {
         const permission = await Notification.requestPermission();
@@ -59,15 +111,18 @@ export const requestForToken = async () => {
     const permission = await Notification.requestPermission();
     if (permission === 'granted') {
         console.log('Notification permission granted.');
-        
+
         const vapidKey = process.env.REACT_APP_FIREBASE_VAPID_KEY || 'BMKXPfAlQOob4fha6L9Pos9_rcJxMsdCr-Z2uR0FrVOHqhMXTTD1qg133D5AN2klLzFIg8ii0iMEqccgdfSLLTY';
-        
+
         const currentToken = await getToken(msg, { vapidKey });
-        
+
         if (currentToken) {
           return currentToken;
         } else {
           console.log('No registration token available. Request permission to generate one.');
+          if (supportInfo.isIOS && !supportInfo.isStandalone) {
+            console.warn('Install HikmahSphere to Home Screen on iPhone/iPad, then allow notifications.');
+          }
           return null;
         }
     } else {

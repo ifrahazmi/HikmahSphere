@@ -101,7 +101,7 @@ const Home: React.FC = () => {
     {
       icon: '/AI-Scholar-Assistant.png',
       title: 'AI Assistant',
-      description: 'Islamic AI assistant for religious questions and guidance',
+      description: 'Islamic AI assistant for religious questions and guidance — powered by verified scholarly sources',
       color: 'text-gray-400',
       bgColor: 'bg-gray-100',
       disabled: true,
@@ -111,29 +111,29 @@ const Home: React.FC = () => {
 
   const stats = [
     {
-      label: 'Accurate Prayer Times',
-      description: 'Real-time geolocation & multiple calculation methods',
+      label: 'Precise Prayer Times',
+      description: 'Geolocation-based, multiple scholarly methods, Ramadan schedules',
       icon: ClockIcon,
       color: 'text-emerald-600',
       bgColor: 'bg-emerald-100',
     },
     {
       label: 'Complete Quran',
-      description: '114 Surahs with 10+ translations & audio',
+      description: '114 Surahs · 10+ translations · Audio recitations · IndoPak font',
       icon: BookOpenIcon,
       color: 'text-blue-600',
       bgColor: 'bg-blue-100',
     },
     {
       label: 'Smart Zakat',
-      description: 'Live nisab rates & all asset types supported',
+      description: 'Live nisab rates · All asset types · Crypto support',
       icon: SparklesIcon,
       color: 'text-yellow-600',
       bgColor: 'bg-yellow-100',
     },
     {
-      label: 'Global Qibla',
-      description: 'AR-powered precise direction worldwide',
+      label: 'Global Community',
+      description: 'Forums, Islamic events, and brotherhood worldwide',
       icon: GlobeAltIcon,
       color: 'text-purple-600',
       bgColor: 'bg-purple-100',
@@ -179,21 +179,28 @@ const Home: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="The Unified Islamic Digital Platform for Prayer, Quran and Zakat"
-        description="HikmahSphere offers accurate prayer times worldwide, a complete Quran reader with audio, transliteration, translations and IndoPak font options, plus an easy Zakat calculator with live nisab thresholds."
+        title="Islamic App for Prayer Times, Quran Reader, Zakat Calculator & Muslim Community"
+        description="HikmahSphere is your all-in-one Islamic platform — accurate daily prayer times worldwide, complete Quran with 10+ translations and audio, intelligent Zakat calculator with live nisab rates, and a global Muslim community. Free, ad-free, and privacy-first."
         path="/"
         keywords={[
           'islamic app',
           'muslim app',
           'islamic platform',
           'islamic digital platform',
-          'accurate prayer times worldwide',
-          'quran reader with audio',
-          'quran transliteration and translation',
-          'indo pak quran font',
-          'zakat calculator live nisab',
-          'qibla finder',
-          'qibla direction compass',
+          'accurate prayer times',
+          'prayer times india',
+          'salah times',
+          'namaz times',
+          'quran reader',
+          'quran with audio',
+          'quran with translation',
+          'urdu quran',
+          'indo pak quran',
+          'zakat calculator',
+          'zakat calculator india',
+          'nisab value today',
+          'muslim community app',
+          'ramadan fasting times',
           'hikmahsphere',
         ]}
       />
@@ -229,7 +236,7 @@ const Home: React.FC = () => {
             {/* Badge */}
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full border border-white/20 mb-8">
               <SparklesIcon className="w-4 h-4 text-emerald-300" />
-              <span className="text-sm font-medium text-emerald-100">Your Complete Islamic Digital Companion</span>
+            <span className="text-sm font-medium text-emerald-100">Prayer Times · Quran · Zakat · Community</span>
             </div>
 
             <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold mb-8 leading-tight">
@@ -240,7 +247,7 @@ const Home: React.FC = () => {
             </h1>
 
             <p className="text-xl sm:text-2xl mb-10 text-emerald-100 max-w-3xl mx-auto leading-relaxed">
-              Where Islamic knowledge, technology, and spiritual guidance unite in one beautiful digital experience
+              Accurate prayer times, the complete Quran, smart Zakat calculation, and a global Muslim community — one platform, built with sincerity for every believer
             </p>
 
             {/* CTA Buttons */}
@@ -329,99 +336,136 @@ const Home: React.FC = () => {
       {/* SEO Content Section */}
       <section className="py-20 bg-gradient-to-br from-emerald-50 via-white to-teal-50">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+
           {/* Main Heading */}
-          <div className="text-center mb-12">
-            <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-6 leading-tight">
+          <div className="text-center mb-14">
+            <h2 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-6 leading-tight">
               <span className="text-emerald-700">The Premier </span>
               <span className="bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">Islamic App</span>
               <span className="text-gray-900"> for the Modern Believer</span>
-            </h1>
+            </h2>
             <p className="text-lg text-gray-700 max-w-4xl mx-auto leading-relaxed">
-              HikmahSphere offers a seamless union of traditional Islamic knowledge and innovative technology. Our <strong className="text-emerald-700 font-semibold">islamic digital platform</strong> is designed to provide comprehensive spiritual guidance and essential tools for daily devotion, creating a unique and enriching digital experience for every user.
+              HikmahSphere is where timeless Islamic tradition meets the precision of modern technology. Built by Muslims, for Muslims — our{' '}
+              <strong className="text-emerald-700 font-semibold">islamic digital platform</strong> removes the friction between you and your faith, giving you the tools for every act of worship in one seamless, ad-free experience.
             </p>
           </div>
 
-          {/* Muslim App Section */}
+          {/* All-in-One Section */}
           <div className="mb-12 bg-white rounded-2xl shadow-lg p-8 border border-emerald-100">
             <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
-              <span>Your All-in-One </span>
+              Your All-in-One{' '}
               <span className="text-emerald-700">Muslim App</span>
             </h2>
             <p className="text-gray-700 mb-6 leading-relaxed">
-              Why use multiple applications when one can serve all your needs? HikmahSphere is the definitive <strong className="text-emerald-700 font-semibold">muslim app</strong>, meticulously crafted for the global Muslim community. We offer a suite of powerful features integrated into a single, user-friendly interface.
+              Why juggle five different applications for your daily Islamic needs? HikmahSphere is the definitive{' '}
+              <strong className="text-emerald-700 font-semibold">muslim app</strong> — meticulously designed for the global Ummah, bringing every essential feature into a single, beautiful interface.
             </p>
-            <ul className="space-y-3 text-gray-700">
+            <ul className="space-y-4 text-gray-700">
               <li className="flex items-start gap-3">
                 <CheckCircleIcon className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
-                <span><strong className="font-semibold text-gray-900">Accurate Prayer Times:</strong> Utilising advanced geolocation and multiple calculation methods for precise timings.</span>
+                <span><strong className="font-semibold text-gray-900">Accurate Prayer Times:</strong> GPS-powered Salah timings with multiple scholarly calculation methods (MWL, ISNA, Karachi, Umm al-Qura), Hanafi and Shafi Asr support, high-latitude corrections, and Ramadan fasting schedules — so you never miss a prayer, anywhere in the world.</span>
               </li>
               <li className="flex items-start gap-3">
                 <CheckCircleIcon className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
-                <span><strong className="font-semibold text-gray-900">Complete Quran:</strong> Access all 114 Surahs with numerous translations and high-quality audio recitations.</span>
+                <span><strong className="font-semibold text-gray-900">Complete Quran Reader:</strong> All 114 Surahs with 10+ translations in English, Urdu, Hindi and more, transliteration, authentic Indo-Pak Nastaleeq font, audio recitations from world-renowned reciters, semantic verse search, and personal bookmarks.</span>
               </li>
               <li className="flex items-start gap-3">
                 <CheckCircleIcon className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
-                <span><strong className="font-semibold text-gray-900">Smart Zakat Calculator:</strong> Simplify your obligations with live nisab rates and support for various asset types.</span>
+                <span><strong className="font-semibold text-gray-900">Intelligent Zakat Calculator:</strong> Live nisab thresholds updated with real-time gold and silver prices, support for all asset types including cash, investments, business stock and cryptocurrency — fulfil your obligation with total confidence.</span>
               </li>
               <li className="flex items-start gap-3">
                 <CheckCircleIcon className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
-                <span><strong className="font-semibold text-gray-900">Global Qibla Finder:</strong> Employing AR technology for an exact directional guide to the Kaaba from any location worldwide.</span>
+                <span><strong className="font-semibold text-gray-900">Global Muslim Community:</strong> Join thousands of believers in moderated Islamic forums, discover local events, share knowledge, and experience the warmth of the Ummah — from Bengaluru to Birmingham.</span>
               </li>
             </ul>
           </div>
 
-          {/* Essential Features Section */}
+          {/* Feature Deep-Dives */}
           <div className="mb-12">
             <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-8 text-center">
-              Essential Features for Daily Islamic Practice
+              Essential Tools for Daily Islamic Practice
             </h2>
             <p className="text-center text-gray-700 mb-10 max-w-3xl mx-auto leading-relaxed">
-              Experience the convenience of modern technology designed to support your faith. HikmahSphere is more than just an application; it is a companion for your spiritual journey.
+              Every feature in HikmahSphere is designed as a spiritual tool — built to support your worship, deepen your understanding, and strengthen your connection with Allah.
             </p>
 
-            {/* Prayer Times Feature */}
+            {/* Prayer Times */}
             <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-8 mb-6 border border-emerald-200">
               <h3 className="text-2xl font-bold text-gray-900 mb-3">
-                <span>Precise </span>
-                <span className="text-emerald-700">Daily Prayer Times</span>
+                Precise Daily <span className="text-emerald-700">Prayer Times</span>
               </h3>
               <p className="text-gray-700 leading-relaxed">
-                As a leading <strong className="font-semibold text-emerald-700">prayer times app</strong>, we ensure you never miss a prayer. Our system provides ultra-precise <strong className="font-semibold text-emerald-700">daily prayer times</strong>, with corrections for high latitudes and shareable prayer cards. This is the ultimate <strong className="font-semibold text-emerald-700">muslim prayer app</strong> for reliability and accuracy.
+                As a trusted <strong className="font-semibold text-emerald-700">prayer times app</strong>, HikmahSphere ensures you never miss Fajr, Dhuhr, Asr, Maghrib, or Isha. Our engine delivers ultra-precise{' '}
+                <strong className="font-semibold text-emerald-700">daily prayer times</strong> and full Ramadan fasting schedules (Sehri and Iftar) with beautiful, shareable prayer cards. The most reliable{' '}
+                <strong className="font-semibold text-emerald-700">muslim prayer app</strong> for accuracy and peace of mind.
               </p>
             </div>
 
-            {/* Quran App Feature */}
+            {/* Quran */}
             <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-8 mb-6 border border-blue-200">
               <h3 className="text-2xl font-bold text-gray-900 mb-3">
-                <span>The Definitive </span>
-                <span className="text-blue-700">Quran App</span>
+                The Definitive <span className="text-blue-700">Online Quran Reader</span>
               </h3>
               <p className="text-gray-700 leading-relaxed">
-                Our comprehensive <strong className="font-semibold text-blue-700">quran app</strong> allows you to immerse yourself in the sacred text. With features like a sophisticated <strong className="font-semibold text-blue-700">quran reader online</strong>, semantic AI search, bookmarks, and customizable fonts, your study of the Quran is enhanced and personalized.
+                Our comprehensive <strong className="font-semibold text-blue-700">quran app</strong> transforms how you engage with the Book of Allah. Enjoy a world-class{' '}
+                <strong className="font-semibold text-blue-700">quran reader online</strong> with semantic AI-powered verse search, side-by-side translations, authentic audio recitations, personalised bookmarks, and customisable fonts — including the revered Indo-Pak Nastaleeq script loved across South Asia.
               </p>
             </div>
 
-            {/* Zakat & Qibla Feature */}
-            <div className="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-2xl p-8 border border-amber-200">
+            {/* Zakat */}
+            <div className="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-2xl p-8 mb-6 border border-amber-200">
               <h3 className="text-2xl font-bold text-gray-900 mb-3">
-                <span>Advanced </span>
-                <span className="text-amber-700">Zakat Calculator</span>
-                <span> and </span>
-                <span className="text-teal-700">Qibla Finder</span>
+                The Smartest <span className="text-amber-700">Zakat Calculator</span> Online
               </h3>
               <p className="text-gray-700 leading-relaxed">
-                Fulfill your religious duties with ease using our intelligent <strong className="font-semibold text-amber-700">zakat calculator</strong>. Furthermore, our state-of-the-art AR-powered <strong className="font-semibold text-teal-700">qibla finder</strong> provides an accurate and visually intuitive guide, solidifying our position as the most advanced <strong className="font-semibold text-emerald-700">islamic app</strong> available.
+                Fulfilling the Third Pillar of Islam has never been this straightforward. HikmahSphere's{' '}
+                <strong className="font-semibold text-amber-700">zakat calculator</strong> is designed to make the entire process simple, accurate, and stress-free — just enter your assets and we handle the rest.
+              </p>
+              <ul className="mt-4 space-y-3 text-gray-700">
+                <li className="flex items-start gap-3">
+                  <CheckCircleIcon className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <span>
+                    <strong className="font-semibold">Live Nisab Value, Updated Daily</strong> — the current nisab threshold is displayed in real time, fetched automatically from today's gold and silver market prices across INR, USD, GBP, SAR and more. You always know exactly where you stand.
+                  </span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <CheckCircleIcon className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <span>
+                    <strong className="font-semibold">Every Asset Type, One Place</strong> — cash, savings accounts, gold, silver, business inventory, investments, and cryptocurrency. All eligible categories covered so nothing is missed.
+                  </span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <CheckCircleIcon className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <span>
+                    <strong className="font-semibold">Instant 2.5% Calculation</strong> — your Zakat due is calculated live as you enter values, with a clear breakdown so you fully understand your obligation before you give.
+                  </span>
+                </li>
+              </ul>
+              <p className="mt-4 text-gray-700 leading-relaxed">
+                The most thorough{' '}
+                <strong className="font-semibold text-amber-700">zakat calculator india</strong> and a globally trusted solution — because your obligation deserves clarity, not confusion.
+              </p>
+            </div>
+
+            {/* Community */}
+            <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-8 border border-purple-200">
+              <h3 className="text-2xl font-bold text-gray-900 mb-3">
+                A Thriving <span className="text-purple-700">Global Muslim Community</span>
+              </h3>
+              <p className="text-gray-700 leading-relaxed">
+                Islam thrives in community. HikmahSphere connects you with a growing{' '}
+                <strong className="font-semibold text-purple-700">muslim community app</strong> experience — moderated Islamic forums, local event discovery, knowledge sharing, and meaningful brother-and-sisterhood. Because believers, from Bengaluru to Kolkata or Bihar to Hyderabad all across every continent, are one Ummah.
               </p>
             </div>
           </div>
 
-          {/* Community Section */}
+          {/* Trust Statement */}
           <div className="text-center bg-white rounded-2xl shadow-lg p-8 border border-gray-200">
             <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
-              Connect with a Global Community
+              Free Forever. Ad-Free. Privacy First.
             </h2>
             <p className="text-gray-700 leading-relaxed max-w-3xl mx-auto">
-              Join millions of users who rely on HikmahSphere. Our platform fosters a sense of unity and brotherhood, connecting believers from Bengaluru to Kolkata and across the globe. We are committed to providing an exceptional, ad-free, and private experience for all.
+              HikmahSphere is and will always be free. No advertisements interrupt your ibadah. Your data is never sold or shared. We believe your spiritual journey is sacred — and your Islamic digital companion should honour that. Join a community of believers who trust HikmahSphere every single day.
             </p>
           </div>
         </div>

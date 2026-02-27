@@ -178,8 +178,27 @@ const fetchNisabData = async (standard: 'classical' | 'common' = 'common', curre
     const url = `https://islamicapi.com/api/v1/zakat-nisab/?standard=${standard}&currency=${currency}&unit=g&api_key=${ISLAMIC_API_KEY}`;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
-    const response = await fetch(url, { signal: controller.signal });
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+    });
     clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      console.warn(`⚠️ IslamicAPI nisab returned HTTP ${response.status} — falling back to market feed`);
+      return { success: false, error: `IslamicAPI returned ${response.status}` };
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      console.warn(`⚠️ IslamicAPI nisab returned non-JSON content-type (${contentType}) — falling back`);
+      return { success: false, error: 'IslamicAPI returned non-JSON response' };
+    }
+
     const data = await response.json() as NisabApiResponse;
 
     if (data.status === 'success') {

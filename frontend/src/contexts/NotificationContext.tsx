@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { onMessageListener } from '../firebase';
 import { toast } from 'react-hot-toast';
 import { MessagePayload } from 'firebase/messaging';
@@ -22,73 +22,125 @@ interface NotificationContextType {
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
+const STORAGE_KEY = 'notifications';
+const SW_MESSAGE_TYPE = 'HIKMAH_BACKGROUND_NOTIFICATION';
 
-export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [notifications, setNotifications] = useState<Notification[]>(() => {
-    // Load from local storage on init
-    try {
-      const saved = localStorage.getItem('notifications');
-      return saved ? JSON.parse(saved) : [];
-    } catch (error) {
-      console.error("Failed to parse notifications from local storage", error);
+interface BackgroundNotificationPayload {
+  id?: string;
+  messageId?: string;
+  title?: string;
+  body?: string;
+  timestamp?: string;
+  data?: Record<string, string>;
+  type?: Notification['type'];
+}
+
+interface ServiceWorkerMessageData {
+  type: string;
+  payload?: BackgroundNotificationPayload;
+}
+
+const parseStoredNotifications = (): Notification[] => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (!saved) {
       return [];
     }
-  });
+
+    const parsed = JSON.parse(saved);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error('Failed to parse notifications from local storage', error);
+    return [];
+  }
+};
+
+const createNotificationFromPayload = (payload: MessagePayload): Notification => {
+  const generatedId = `fcm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  return {
+    id: payload.messageId || payload.data?.notificationId || generatedId,
+    title: payload.notification?.title || payload.data?.title || 'New Notification',
+    body: payload.notification?.body || payload.data?.body || '',
+    timestamp: new Date().toISOString(),
+    read: false,
+    type: 'info',
+    data: payload.data
+  };
+};
+
+const createNotificationFromServiceWorkerPayload = (payload: BackgroundNotificationPayload): Notification => {
+  const generatedId = `sw-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  return {
+    id: payload.id || payload.messageId || generatedId,
+    title: payload.title || payload.data?.title || 'New Notification',
+    body: payload.body || payload.data?.body || '',
+    timestamp: payload.timestamp || new Date().toISOString(),
+    read: false,
+    type: payload.type || 'info',
+    data: payload.data
+  };
+};
+
+export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [notifications, setNotifications] = useState<Notification[]>(parseStoredNotifications);
 
   const unreadCount = notifications.filter(n => !n.read).length;
+  const addNotification = useCallback((newNotification: Notification) => {
+    setNotifications(prev => {
+      if (prev.some(existing => existing.id === newNotification.id)) {
+        return prev;
+      }
+      return [newNotification, ...prev];
+    });
+  }, []);
+
+  const playNotificationSound = useCallback(() => {
+    try {
+      const audio = new Audio('/notification.mp3');
+      audio.play().catch(e => console.log('Audio play failed (user interaction might be needed)', e));
+    } catch (error) {
+      console.error('Error playing sound:', error);
+    }
+  }, []);
+
+  const showNativeNotification = useCallback((payload: MessagePayload) => {
+    if (!('Notification' in window)) {
+      return;
+    }
+
+    if (Notification.permission === 'granted') {
+      const title = payload.notification?.title || payload.data?.title || 'New Notification';
+      const options: NotificationOptions = {
+        body: payload.notification?.body || payload.data?.body || '',
+        icon: '/small_logo.jpeg',
+        data: payload.data
+      };
+      try {
+        new Notification(title, options);
+      } catch (e) {
+        console.error('Native notification failed:', e);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     // Save to local storage whenever notifications change
-    localStorage.setItem('notifications', JSON.stringify(notifications));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(notifications));
   }, [notifications]);
 
   useEffect(() => {
-    const playNotificationSound = () => {
-      try {
-        const audio = new Audio('/notification.mp3');
-        audio.play().catch(e => console.log('Audio play failed (user interaction might be needed)', e));
-      } catch (error) {
-        console.error("Error playing sound:", error);
-      }
-    };
-
-    const showNativeNotification = (payload: MessagePayload) => {
-      if (!('Notification' in window)) {
-        return;
-      }
-
-      if (Notification.permission === 'granted') {
-        const title = payload.notification?.title || 'New Notification';
-        const options: NotificationOptions = {
-          body: payload.notification?.body,
-          icon: '/small_logo.jpeg',
-          data: payload.data
-        };
-        try {
-            new Notification(title, options);
-        } catch (e) {
-            console.error("Native notification failed:", e);
-        }
-      }
-    };
-
     const unsubscribe = onMessageListener((payload: MessagePayload) => {
       console.log('Received foreground message in Context: ', payload);
-      
+
       playNotificationSound();
       showNativeNotification(payload);
+      addNotification(createNotificationFromPayload(payload));
 
-      const newNotification: Notification = {
-        id: payload.messageId || Date.now().toString(),
-        title: payload.notification?.title || 'New Notification',
-        body: payload.notification?.body || '',
-        timestamp: new Date().toISOString(),
-        read: false,
-        type: 'info', // You might want to determine this from payload.data
-        data: payload.data
-      };
-
-      setNotifications(prev => [newNotification, ...prev]);
+      if (document.visibilityState !== 'visible') {
+        return;
+      }
 
       // Show Toast (Custom UI)
       toast.custom((t) => (
@@ -98,7 +150,6 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
           } max-w-md w-full bg-white shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-black ring-opacity-5 cursor-pointer`}
           onClick={() => {
             toast.dismiss(t.id);
-            // Optional: navigate to relevant page
           }}
         >
           <div className="flex-1 w-0 p-4">
@@ -106,19 +157,19 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
               <div className="flex-shrink-0 pt-0.5">
                 <img
                   className="h-10 w-10 rounded-full"
-                  src="/small_logo.jpeg" 
+                  src="/small_logo.jpeg"
                   alt="App Logo"
                   onError={(e) => {
-                      (e.target as HTMLImageElement).src = 'https://via.placeholder.com/40';
+                    (e.target as HTMLImageElement).src = 'https://via.placeholder.com/40';
                   }}
                 />
               </div>
               <div className="ml-3 flex-1">
                 <p className="text-sm font-medium text-gray-900">
-                  {payload?.notification?.title || 'New Notification'}
+                  {payload.notification?.title || payload.data?.title || 'New Notification'}
                 </p>
                 <p className="mt-1 text-sm text-gray-500">
-                  {payload?.notification?.body}
+                  {payload.notification?.body || payload.data?.body || ''}
                 </p>
               </div>
             </div>
@@ -139,9 +190,30 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     });
 
     return () => {
-       if (unsubscribe) unsubscribe();
+      if (unsubscribe) unsubscribe();
     };
-  }, []);
+  }, [addNotification, playNotificationSound, showNativeNotification]);
+
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) {
+      return;
+    }
+
+    const handleServiceWorkerMessage = (event: MessageEvent<ServiceWorkerMessageData>) => {
+      if (!event.data || event.data.type !== SW_MESSAGE_TYPE || !event.data.payload) {
+        return;
+      }
+
+      const notificationFromSw = createNotificationFromServiceWorkerPayload(event.data.payload);
+      addNotification(notificationFromSw);
+    };
+
+    navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+
+    return () => {
+      navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
+    };
+  }, [addNotification]);
 
   const markAsRead = (id: string) => {
     setNotifications(prev => 
