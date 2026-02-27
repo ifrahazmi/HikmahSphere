@@ -213,7 +213,13 @@ const PrayerTimes: React.FC = () => {
       }
 
       // Fetch Fasting Times from Backend API
-      const fastingRes = await fetch(`${API_URL}/prayers/fasting?latitude=${lat}&longitude=${lon}&method=${calculationMethod}`);
+      const fastingGregorianDate = prayerJson?.data?.date?.gregorian?.date;
+      const fastingDateParam = typeof fastingGregorianDate === 'string' && /^\d{2}-\d{2}-\d{4}$/.test(fastingGregorianDate)
+        ? `&date=${encodeURIComponent(fastingGregorianDate)}`
+        : '';
+      const fastingRes = await fetch(
+        `${API_URL}/prayers/fasting?latitude=${lat}&longitude=${lon}&method=${calculationMethod}&school=${school}${fastingDateParam}`
+      );
       const fastingJson = await fastingRes.json();
 
       console.log("Fasting API Response:", fastingJson);
