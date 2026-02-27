@@ -20,6 +20,7 @@ import {
   developers,
 } from '../data/aboutContent';
 import { getRandomVerse } from '../data/quranVerses';
+import PageSEO from '../components/PageSEO';
 import type { QuranVerse } from '../data/quranVerses';
 import type { SpiritualFeature } from '../data/aboutContent';
 
@@ -128,7 +129,19 @@ const About: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen">
+    <>
+      <PageSEO
+        title="About HikmahSphere and Our Mission"
+        description="Learn how HikmahSphere combines authentic Islamic knowledge with modern technology to support prayer, Quran study, Zakat, and a connected global Muslim community."
+        path="/about"
+        keywords={[
+          'about hikmahsphere',
+          'islamic digital platform mission',
+          'authentic islamic knowledge',
+          'muslim technology platform',
+        ]}
+      />
+      <div className="min-h-screen">
       {/* Hero Section */}
       <section
         ref={heroRef}
@@ -869,7 +882,8 @@ const About: React.FC = () => {
           </p>
         </div>
       </section>
-    </div>
+      </div>
+    </>
   );
 };
 

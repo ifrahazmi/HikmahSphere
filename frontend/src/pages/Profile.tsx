@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { UserIcon, ChartBarIcon, BookOpenIcon, XMarkIcon, PhotoIcon, PencilIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../hooks/useAuth';
 import toast from 'react-hot-toast';
+import PageSEO from '../components/PageSEO';
 import { API_URL } from '../config';
 
 const Profile: React.FC = () => {
@@ -119,14 +120,31 @@ const Profile: React.FC = () => {
 
   if (!authUser) {
       return (
-          <div className="min-h-screen pt-20 flex justify-center">
-              <p>Please sign in to view your profile.</p>
-          </div>
+          <>
+            <PageSEO
+              title="Your HikmahSphere Profile"
+              description="Manage your HikmahSphere profile and personalized settings."
+              path="/profile"
+              noIndex
+              noFollow
+            />
+            <div className="min-h-screen pt-20 flex justify-center">
+                <p>Please sign in to view your profile.</p>
+            </div>
+          </>
       )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 pt-16">
+    <>
+      <PageSEO
+        title="Your HikmahSphere Profile"
+        description="Manage your HikmahSphere profile and personalized settings."
+        path="/profile"
+        noIndex
+        noFollow
+      />
+      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 pt-16">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Profile Header */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
@@ -477,7 +495,8 @@ const Profile: React.FC = () => {
         )}
 
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 

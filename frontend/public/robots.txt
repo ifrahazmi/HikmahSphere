@@ -11,6 +11,7 @@ Disallow: /admin/
 Disallow: /api/
 Disallow: /dashboard
 Disallow: /auth
+Disallow: /profile
 
 # Sitemap location
 Sitemap: https://hikmahsphere.site/sitemap.xml

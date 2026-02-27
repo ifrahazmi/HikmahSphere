@@ -18,6 +18,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { useQuran } from '../contexts/QuranContext';
 import LoadingSpinner from '../components/LoadingSpinner';
+import PageSEO from '../components/PageSEO';
 import { DEFAULT_TRANSLATIONS } from '../types/quran';
 import { getIndopakQuranData, getIndopakSurah, type IndopakSurah } from '../utils/indopakQuran';
 
@@ -450,7 +451,24 @@ const QuranReader: React.FC = () => {
   }, [bookmarkConfirm]);
 
   return (
-    <div className={`min-h-screen ${settings.theme === 'dark' ? 'bg-gray-900' : 'bg-gradient-to-br from-emerald-50 via-white to-teal-50'}`}>
+    <>
+      <PageSEO
+        title="Quran Reader with Audio, Transliteration and Translation"
+        description="Read all 114 surahs with audio recitation, transliteration, multiple translations, IndoPak and Uthmani-style Arabic fonts, bookmarks, and personalized Quran reading settings."
+        path="/quran"
+        keywords={[
+          'quran app',
+          'quran reader online',
+          'quran with audio',
+          'quran transliteration',
+          'quran translation',
+          'online quran search',
+          'indo pak quran font',
+          'quran bookmarks',
+          'hikmahsphere quran',
+        ]}
+      />
+      <div className={`min-h-screen ${settings.theme === 'dark' ? 'bg-gray-900' : 'bg-gradient-to-br from-emerald-50 via-white to-teal-50'}`}>
       <div className="w-full">
         {/* Header - Desktop */}
         <div className="hidden lg:block text-center mb-3 pt-14">
@@ -2695,7 +2713,8 @@ const QuranReader: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 };
 

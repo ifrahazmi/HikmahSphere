@@ -9,6 +9,7 @@ import {
   BookOpenIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../hooks/useAuth';
+import PageSEO from '../components/PageSEO';
 
 const Home: React.FC = () => {
   const { user } = useAuth();
@@ -176,7 +177,27 @@ const Home: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen">
+    <>
+      <PageSEO
+        title="The Unified Islamic Digital Platform for Prayer, Quran and Zakat"
+        description="HikmahSphere offers accurate prayer times worldwide, a complete Quran reader with audio, transliteration, translations and IndoPak font options, plus an easy Zakat calculator with live nisab thresholds."
+        path="/"
+        keywords={[
+          'islamic app',
+          'muslim app',
+          'islamic platform',
+          'islamic digital platform',
+          'accurate prayer times worldwide',
+          'quran reader with audio',
+          'quran transliteration and translation',
+          'indo pak quran font',
+          'zakat calculator live nisab',
+          'qibla finder',
+          'qibla direction compass',
+          'hikmahsphere',
+        ]}
+      />
+      <div className="min-h-screen">
       {/* Hero Section */}
       <section className="relative bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-950 text-white overflow-hidden">
         {/* Animated Background Pattern */}
@@ -675,7 +696,8 @@ const Home: React.FC = () => {
           </div>
         </div>
       </section>
-    </div>
+      </div>
+    </>
   );
 };
 

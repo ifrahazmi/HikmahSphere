@@ -16,6 +16,7 @@ import { CheckCircleIcon as CheckCircleSolidIcon } from '@heroicons/react/24/sol
 import toast from 'react-hot-toast';
 import { useAuth } from '../hooks/useAuth';
 import ZakatManagement from '../components/Zakat/ZakatManagement';
+import PageSEO from '../components/PageSEO';
 import { API_URL } from '../config';
 
 interface NisabData {
@@ -253,7 +254,23 @@ const ZakatCalculator: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 pt-16 relative overflow-hidden">
+    <>
+      <PageSEO
+        title="Zakat Calculator with Live Nisab Threshold Today"
+        description="Calculate Zakat easily with live nisab thresholds for gold and silver, multi-currency support, and coverage for cash, savings, business assets, investments, and cryptocurrency."
+        path="/zakat"
+        keywords={[
+          'zakat calculator',
+          'calculate zakat online',
+          'live nisab today',
+          'zakat threshold gold silver',
+          'easy zakat calculation',
+          'zakat on savings and assets',
+          'cryptocurrency zakat calculator',
+          'hikmahsphere zakat',
+        ]}
+      />
+      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 pt-16 relative overflow-hidden">
       {/* Islamic Pattern Background */}
       <div className="absolute inset-0 opacity-5 pointer-events-none">
         <div className="absolute inset-0" style={{
@@ -918,7 +935,8 @@ const ZakatCalculator: React.FC = () => {
         </>
         )}
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 

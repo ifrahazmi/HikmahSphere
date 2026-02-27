@@ -18,6 +18,7 @@ import {
 import { useAuth } from '../hooks/useAuth';
 import LoadingSpinner from '../components/LoadingSpinner';
 import IslamicCalendar from '../components/IslamicCalendar';
+import PageSEO from '../components/PageSEO';
 import { API_URL } from '../config';
 import { IslamicReminder, getCurrentPrayerWindow, selectReminder } from '../data/islamicReminders';
 
@@ -809,11 +810,52 @@ const PrayerTimes: React.FC = () => {
 
   // Show full screen spinner while loading initial data
   if (loading || !prayerData) {
-    return <LoadingSpinner fullScreen text="Loading prayer times..." />;
+    return (
+      <>
+        <PageSEO
+          title="Accurate Prayer Times Worldwide"
+          description="Get accurate daily prayer times for any city worldwide with geolocation, multiple calculation methods, madhab settings, high-latitude adjustments, fasting schedule and Hijri calendar."
+          path="/prayers"
+          keywords={[
+            'accurate prayer times',
+            'prayer times worldwide',
+            'prayer times app',
+            'muslim prayer app',
+            'daily prayer times',
+            'islamic prayer times',
+            'salah times by city',
+            'fajr dhuhr asr maghrib isha',
+            'ramadan fasting times',
+            'hijri calendar',
+            'hikmahsphere prayer times',
+          ]}
+        />
+        <LoadingSpinner fullScreen text="Loading prayer times..." />
+      </>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 pt-16 pb-8">
+    <>
+      <PageSEO
+        title="Accurate Prayer Times Worldwide"
+        description="Get accurate daily prayer times for any city worldwide with geolocation, multiple calculation methods, madhab settings, high-latitude adjustments, fasting schedule and Hijri calendar."
+        path="/prayers"
+        keywords={[
+          'accurate prayer times',
+          'prayer times worldwide',
+          'prayer times app',
+          'muslim prayer app',
+          'daily prayer times',
+          'islamic prayer times',
+          'salah times by city',
+          'fajr dhuhr asr maghrib isha',
+          'ramadan fasting times',
+          'hijri calendar',
+          'hikmahsphere prayer times',
+        ]}
+      />
+      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 pt-16 pb-8">
       <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6">
         {/* Header Section */}
         <div className="max-w-4xl mx-auto text-center mb-6 sm:mb-8">
@@ -2162,7 +2204,8 @@ const PrayerTimes: React.FC = () => {
             </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 

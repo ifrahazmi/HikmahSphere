@@ -16,6 +16,7 @@ import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import AdminNotificationPanel from '../components/Notifications/AdminNotificationPanel';
 import ZakatManagement from '../components/Zakat/ZakatManagement';
+import PageSEO from '../components/PageSEO';
 
 const Dashboard: React.FC = () => {
   const { user, hasRole } = useAuth();
@@ -183,21 +184,38 @@ const Dashboard: React.FC = () => {
 
   if (!canAccessDashboard) {
       return (
-          <div className="min-h-screen pt-24 flex justify-center items-center flex-col">
-              <h2 className="text-2xl font-bold text-red-600 mb-2">Access Denied</h2>
-              <p className="text-gray-600">You do not have permission to view this dashboard.</p>
-              <button
-                  onClick={() => navigate('/')}
-                  className="mt-4 text-emerald-600 hover:text-emerald-700 font-medium"
-              >
-                  Go Home
-              </button>
-          </div>
+          <>
+            <PageSEO
+              title="HikmahSphere Dashboard"
+              description="Secure dashboard area for authorized HikmahSphere users."
+              path="/dashboard"
+              noIndex
+              noFollow
+            />
+            <div className="min-h-screen pt-24 flex justify-center items-center flex-col">
+                <h2 className="text-2xl font-bold text-red-600 mb-2">Access Denied</h2>
+                <p className="text-gray-600">You do not have permission to view this dashboard.</p>
+                <button
+                    onClick={() => navigate('/')}
+                    className="mt-4 text-emerald-600 hover:text-emerald-700 font-medium"
+                >
+                    Go Home
+                </button>
+            </div>
+          </>
       );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-16">
+    <>
+      <PageSEO
+        title="HikmahSphere Dashboard"
+        description="Secure dashboard area for authorized HikmahSphere users."
+        path="/dashboard"
+        noIndex
+        noFollow
+      />
+      <div className="min-h-screen bg-gray-50 pt-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center mb-8">
           <div className="w-12 h-12 flex items-center justify-center overflow-hidden rounded-full bg-white shadow-md mr-4">
@@ -577,7 +595,8 @@ const Dashboard: React.FC = () => {
             </div>
         )}
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { useAuth } from '../hooks/useAuth';
 import toast from 'react-hot-toast';
+import PageSEO from '../components/PageSEO';
 import { API_URL } from '../config';
 
 const Auth: React.FC = () => {
@@ -94,11 +95,30 @@ const Auth: React.FC = () => {
   };
 
   if (loading) {
-    return <LoadingSpinner fullScreen text={isLogin ? 'Signing in...' : 'Processing...'} />;
+    return (
+      <>
+        <PageSEO
+          title="Sign In to HikmahSphere"
+          description="Sign in or create your HikmahSphere account to access personalized Islamic tools and services."
+          path="/auth"
+          noIndex
+          noFollow
+        />
+        <LoadingSpinner fullScreen text={isLogin ? 'Signing in...' : 'Processing...'} />
+      </>
+    );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-950 py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+    <>
+      <PageSEO
+        title="Sign In to HikmahSphere"
+        description="Sign in or create your HikmahSphere account to access personalized Islamic tools and services."
+        path="/auth"
+        noIndex
+        noFollow
+      />
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-950 py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
       {/* Animated Background Pattern */}
       <div className="absolute inset-0 opacity-5">
         <div className="absolute inset-0" style={{
@@ -302,7 +322,8 @@ const Auth: React.FC = () => {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 

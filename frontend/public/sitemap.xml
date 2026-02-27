@@ -4,102 +4,53 @@
         xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9
         http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
 
-  <!-- ============================================ -->
-  <!-- HikmahSphere - Islamic Digital Platform      -->
-  <!-- Comprehensive Sitemap for SEO Optimization   -->
-  <!-- Generated for: https://hikmahsphere.site     -->
-  <!-- ============================================ -->
-
-  <!-- ==================== -->
-  <!-- HIGH PRIORITY (1.0)  -->
-  <!-- ==================== -->
-
-  <!-- Homepage - Main landing page -->
   <url>
     <loc>https://hikmahsphere.site/</loc>
-    <lastmod>2025-02-24</lastmod>
+    <lastmod>2026-02-27</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
 
-  <!-- ==================== -->
-  <!-- HIGH PRIORITY (0.9)  -->
-  <!-- ==================== -->
-
-  <!-- Prayer Times - Daily prayer schedule -->
   <url>
     <loc>https://hikmahsphere.site/prayers</loc>
-    <lastmod>2025-02-24</lastmod>
+    <lastmod>2026-02-27</lastmod>
     <changefreq>daily</changefreq>
-    <priority>0.9</priority>
+    <priority>0.95</priority>
   </url>
 
-  <!-- Quran Reader - Read and explore Quran -->
   <url>
     <loc>https://hikmahsphere.site/quran</loc>
-    <lastmod>2025-02-24</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
+    <lastmod>2026-02-27</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
   </url>
 
-  <!-- Zakat Calculator - Calculate Zakat obligation -->
   <url>
     <loc>https://hikmahsphere.site/zakat</loc>
-    <lastmod>2025-02-24</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
+    <lastmod>2026-02-27</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
   </url>
 
-  <!-- ==================== -->
-  <!-- MEDIUM-HIGH (0.8)    -->
-  <!-- ==================== -->
-
-  <!-- Community - Muslim community features -->
   <url>
     <loc>https://hikmahsphere.site/community</loc>
-    <lastmod>2025-02-24</lastmod>
+    <lastmod>2026-02-27</lastmod>
     <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
+    <priority>0.75</priority>
   </url>
 
-  <!-- Profile - User profile page -->
-  <url>
-    <loc>https://hikmahsphere.site/profile</loc>
-    <lastmod>2025-02-24</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-
-  <!-- ==================== -->
-  <!-- MEDIUM PRIORITY (0.7)-->
-  <!-- ==================== -->
-
-  <!-- About Page - Learn about HikmahSphere -->
   <url>
     <loc>https://hikmahsphere.site/about</loc>
-    <lastmod>2025-02-24</lastmod>
+    <lastmod>2026-02-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
 
-  <!-- ==================== -->
-  <!-- INFORMATIONAL (0.5)  -->
-  <!-- ==================== -->
-
-  <!-- Help Center -->
-  <url>
-    <loc>https://hikmahsphere.site/help</loc>
-    <lastmod>2025-02-24</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.5</priority>
-  </url>
-
-  <!-- Contact Us -->
   <url>
     <loc>https://hikmahsphere.site/contact</loc>
-    <lastmod>2025-02-24</lastmod>
+    <lastmod>2026-02-27</lastmod>
     <changefreq>monthly</changefreq>
-    <priority>0.5</priority>
+    <priority>0.6</priority>
   </url>
 
 </urlset>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { UserGroupIcon, ChatBubbleLeftIcon, CalendarIcon, MapPinIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import PageSEO from '../components/PageSEO';
 
 const Community: React.FC = () => {
   const [activeTab, setActiveTab] = useState('forums');
@@ -99,7 +100,21 @@ const Community: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 pt-16">
+    <>
+      <PageSEO
+        title="Muslim Community Forums and Events"
+        description="Join the HikmahSphere Muslim community for Islamic discussions, Quran study circles, worship insights, and local events that strengthen brotherhood and learning."
+        path="/community"
+        keywords={[
+          'muslim community app',
+          'muslim community online',
+          'islamic discussion forum',
+          'quran study circle',
+          'muslim events',
+          'hikmahsphere community',
+        ]}
+      />
+      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 pt-16">
       {/* Under Construction Popup Modal - Enhanced & Mobile Optimized */}
       {showUnderConstruction && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -337,7 +352,8 @@ const Community: React.FC = () => {
           <p className="text-xs text-gray-400 mt-2">- Quran 9:71</p>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 
