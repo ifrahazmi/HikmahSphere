@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { API_URL } from '../config';
+import { useAuth } from '../hooks/useAuth';
 import {
   Surah,
   SurahData,
@@ -15,6 +16,8 @@ import {
 const QuranContext = createContext<QuranContextType | undefined>(undefined);
 
 export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
+  const { isAuthenticated, loading: authLoading } = useAuth();
+
   // State
   const [currentSurah, setCurrentSurah] = useState<number | null>(null);
   const [currentAyah, setCurrentAyah] = useState<number | null>(null);
@@ -41,6 +44,8 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
   const [ayahAudioQueue, setAyahAudioQueue] = useState<number[]>([]);
   const [currentQueueIndex, setCurrentQueueIndex] = useState(0);
   const [isSurahMode, setIsSurahMode] = useState(false);
+  const isHydratingCloudStateRef = useRef(false);
+  const hasLoadedCloudStateRef = useRef(false);
 
   // Refs for audio ended handler (to avoid re-registering event listener)
   const ayahAudioQueueRef = React.useRef<number[]>([]);
@@ -99,6 +104,172 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     const saved = localStorage.getItem('quranLastRead');
     return saved ? JSON.parse(saved) : null;
   });
+
+  const saveSettingsToLocal = useCallback((nextSettings: QuranSettings) => {
+    localStorage.setItem('quranSettings', JSON.stringify(nextSettings));
+    window.dispatchEvent(new Event('quranSettingsChanged'));
+  }, []);
+
+  const saveBookmarksToLocal = useCallback((nextBookmarks: Bookmark[]) => {
+    localStorage.setItem('quranBookmarks', JSON.stringify(nextBookmarks));
+  }, []);
+
+  const saveLastReadToLocal = useCallback((nextLastRead: LastRead | null) => {
+    if (!nextLastRead) {
+      localStorage.removeItem('quranLastRead');
+      return;
+    }
+    localStorage.setItem('quranLastRead', JSON.stringify(nextLastRead));
+  }, []);
+
+  const toDate = (value: unknown): Date => {
+    if (value instanceof Date) return value;
+    if (typeof value === 'string' || typeof value === 'number') {
+      const parsed = new Date(value);
+      if (!Number.isNaN(parsed.getTime())) return parsed;
+    }
+    return new Date();
+  };
+
+  const normalizeBookmarks = (value: unknown): Bookmark[] => {
+    if (!Array.isArray(value)) return [];
+    return value
+      .map((item, index) => {
+        if (!item || typeof item !== 'object') return null;
+        const raw = item as Record<string, unknown>;
+        const surahNumber = Number(raw.surahNumber);
+        const ayahNumber = Number(raw.ayahNumber);
+        const surahName = typeof raw.surahName === 'string' ? raw.surahName : '';
+        if (!Number.isInteger(surahNumber) || surahNumber < 1 || surahNumber > 114) return null;
+        if (!Number.isInteger(ayahNumber) || ayahNumber < 1 || !surahName) return null;
+        return {
+          id: typeof raw.id === 'string' && raw.id ? raw.id : `${surahNumber}:${ayahNumber}:${Date.now()}-${index}`,
+          surahNumber,
+          ayahNumber,
+          surahName,
+          timestamp: toDate(raw.timestamp),
+          note: typeof raw.note === 'string' ? raw.note : undefined,
+          color: typeof raw.color === 'string' ? raw.color as Bookmark['color'] : undefined,
+        } as Bookmark;
+      })
+      .filter(Boolean) as Bookmark[];
+  };
+
+  const normalizeLastRead = (value: unknown): LastRead | null => {
+    if (!value || typeof value !== 'object') return null;
+    const raw = value as Record<string, unknown>;
+    const surahNumber = Number(raw.surahNumber);
+    const ayahNumber = Number(raw.ayahNumber);
+    const surahName = typeof raw.surahName === 'string' ? raw.surahName : '';
+    if (!Number.isInteger(surahNumber) || surahNumber < 1 || surahNumber > 114) return null;
+    if (!Number.isInteger(ayahNumber) || ayahNumber < 1 || !surahName) return null;
+    return {
+      surahNumber,
+      ayahNumber,
+      surahName,
+      timestamp: toDate(raw.timestamp),
+    };
+  };
+
+  const syncUserQuranStateToBackend = useCallback(
+    async (payload: { settings: QuranSettings; bookmarks: Bookmark[]; lastRead: LastRead | null }) => {
+      if (!isAuthenticated) return;
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      try {
+        await fetch(`${API_URL}/quran/user-state`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        });
+      } catch (err) {
+        console.error('Failed to sync Quran state to backend:', err);
+      }
+    },
+    [isAuthenticated]
+  );
+
+  useEffect(() => {
+    if (authLoading) return;
+
+    if (!isAuthenticated) {
+      hasLoadedCloudStateRef.current = false;
+      return;
+    }
+
+    const loadUserQuranState = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      isHydratingCloudStateRef.current = true;
+
+      try {
+        const response = await fetch(`${API_URL}/quran/user-state`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch user state (${response.status})`);
+        }
+
+        const data = await response.json();
+        const remoteSettings = data?.data?.settings;
+        const remoteBookmarks = normalizeBookmarks(data?.data?.bookmarks);
+        const remoteLastRead = normalizeLastRead(data?.data?.lastRead);
+
+        const hasRemoteState =
+          !!remoteSettings || remoteBookmarks.length > 0 || !!remoteLastRead;
+
+        if (hasRemoteState) {
+          if (remoteSettings && typeof remoteSettings === 'object') {
+            const mergedSettings = {
+              ...DEFAULT_QURAN_SETTINGS,
+              ...remoteSettings,
+            } as QuranSettings;
+            setSettings(mergedSettings);
+            saveSettingsToLocal(mergedSettings);
+          }
+          setBookmarks(remoteBookmarks);
+          saveBookmarksToLocal(remoteBookmarks);
+
+          setLastRead(remoteLastRead);
+          saveLastReadToLocal(remoteLastRead);
+        } else {
+          // First login for existing local user: push local state so it is available across devices.
+          await syncUserQuranStateToBackend({
+            settings,
+            bookmarks,
+            lastRead,
+          });
+        }
+      } catch (err) {
+        console.error('Failed to load Quran user state:', err);
+      } finally {
+        hasLoadedCloudStateRef.current = true;
+        isHydratingCloudStateRef.current = false;
+      }
+    };
+
+    loadUserQuranState();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, authLoading]);
+
+  useEffect(() => {
+    if (authLoading || !isAuthenticated) return;
+    if (!hasLoadedCloudStateRef.current || isHydratingCloudStateRef.current) return;
+
+    const timeout = setTimeout(() => {
+      syncUserQuranStateToBackend({ settings, bookmarks, lastRead });
+    }, 500);
+
+    return () => clearTimeout(timeout);
+  }, [settings, bookmarks, lastRead, isAuthenticated, authLoading, syncUserQuranStateToBackend]);
 
   // Load surahs list on mount
   useEffect(() => {
@@ -176,10 +347,10 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
   const updateSettings = useCallback((newSettings: Partial<QuranSettings>) => {
     setSettings(prev => {
       const updated = { ...prev, ...newSettings };
-      localStorage.setItem('quranSettings', JSON.stringify(updated));
+      saveSettingsToLocal(updated);
       return updated;
     });
-  }, []);
+  }, [saveSettingsToLocal]);
 
   // Navigation
   const goToSurah = useCallback((surahNumber: number) => {
@@ -225,18 +396,18 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
 
     setBookmarks(prev => {
       const updated = [...prev, bookmark];
-      localStorage.setItem('quranBookmarks', JSON.stringify(updated));
+      saveBookmarksToLocal(updated);
       return updated;
     });
-  }, [surahs]);
+  }, [surahs, saveBookmarksToLocal]);
 
   const removeBookmark = useCallback((id: string) => {
     setBookmarks(prev => {
       const updated = prev.filter(b => b.id !== id);
-      localStorage.setItem('quranBookmarks', JSON.stringify(updated));
+      saveBookmarksToLocal(updated);
       return updated;
     });
-  }, []);
+  }, [saveBookmarksToLocal]);
 
   // Last read
   const updateLastRead = useCallback((surah: number, ayah: number) => {
@@ -251,8 +422,8 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     };
     
     setLastRead(lastReadData);
-    localStorage.setItem('quranLastRead', JSON.stringify(lastReadData));
-  }, [surahs]);
+    saveLastReadToLocal(lastReadData);
+  }, [surahs, saveLastReadToLocal]);
 
   // Search
   const search = useCallback(async (query: string) => {

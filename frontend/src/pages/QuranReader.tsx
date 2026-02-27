@@ -615,155 +615,180 @@ const QuranReader: React.FC = () => {
               </div>
             )}
           </div>
+        </div>
           
-          {/* Enhanced Mobile Surah Search Panel */}
-          {showSurahSearch && (
-            <div className={`mt-2 ${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg p-3 border ${settings.theme === 'dark' ? 'border-gray-700' : 'border-gray-100'}`}>
-              {/* Search Bar */}
-              <div className="relative mb-3">
-                <MagnifyingGlassIcon className="h-5 w-5 absolute left-3 top-3 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search by surah name or number..."
-                  value={searchTerm}
-                  onChange={(e) => {
-                    setSearchTerm(e.target.value);
-                    if (e.target.value.trim()) {
-                      addToRecentSearches(e.target.value);
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && searchTerm.trim()) {
-                      addToRecentSearches(searchTerm);
-                    }
-                  }}
-                  className={`w-full pl-10 pr-10 py-3 text-base border-2 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
-                    settings.theme === 'dark'
-                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
-                      : 'border-gray-200'
-                  }`}
-                  autoFocus
-                />
+        {/* Enhanced Mobile Surah Search Panel - Fixed Overlay */}
+        {showSurahSearch && (
+          <>
+            {/* Backdrop */}
+            <div 
+              className="fixed inset-0 bg-black/50 z-40"
+              onClick={() => {
+                setShowSurahSearch(false);
+                setSearchTerm('');
+              }}
+            />
+            
+            {/* Search Panel - Fixed at top */}
+            <div 
+              className={`fixed top-0 left-0 right-0 z-50 ${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'} shadow-2xl`}
+              style={{ maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}
+            >
+              {/* Header Bar */}
+              <div className={`flex items-center gap-3 p-4 border-b ${settings.theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
+                <MagnifyingGlassIcon className="h-6 w-6 text-emerald-600 flex-shrink-0" />
+                <span className={`font-semibold text-lg flex-1 ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                  Search Surah
+                </span>
                 <button
                   onClick={() => {
                     setShowSurahSearch(false);
                     setSearchTerm('');
                   }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1"
+                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                 >
-                  <XMarkIcon className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                  <XMarkIcon className="h-6 w-6 text-gray-500" />
                 </button>
               </div>
-
-              {/* Search Filters */}
-              <div className="flex gap-2 mb-3 overflow-x-auto pb-1">
-                {(['all', 'surah'] as const).map((filter) => (
-                  <button
-                    key={filter}
-                    onClick={() => setSearchFilter(filter)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
-                      searchFilter === filter
-                        ? 'bg-emerald-500 text-white'
-                        : settings.theme === 'dark'
-                        ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              
+              {/* Search Content - Scrollable */}
+              <div className="flex-1 overflow-y-auto p-4" style={{ paddingBottom: '2rem' }}>
+                {/* Search Bar */}
+                <div className="relative mb-4">
+                  <input
+                    type="text"
+                    placeholder="Search by surah name or number..."
+                    value={searchTerm}
+                    onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      if (e.target.value.trim()) {
+                        addToRecentSearches(e.target.value);
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && searchTerm.trim()) {
+                        addToRecentSearches(searchTerm);
+                      }
+                    }}
+                    className={`w-full px-4 py-4 text-base border-2 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+                      settings.theme === 'dark'
+                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                        : 'bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-500'
                     }`}
-                  >
-                    {filter === 'all' ? '📖 All' : '📜 Surah'}
-                  </button>
-                ))}
-              </div>
-
-              {/* Recent Searches */}
-              {recentSearches.length > 0 && !searchTerm && (
-                <div className={`mb-3 p-2 rounded-lg ${settings.theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'}`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className={`text-xs font-medium ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                      Recent Searches
-                    </span>
-                    <button
-                      onClick={clearRecentSearches}
-                      className="text-xs text-emerald-600 hover:text-emerald-700"
-                    >
-                      Clear
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {recentSearches.map((term, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => setSearchTerm(term)}
-                        className={`px-2.5 py-1 rounded-full text-xs ${
-                          settings.theme === 'dark'
-                            ? 'bg-gray-600 text-gray-300 hover:bg-gray-500'
-                            : 'bg-white text-gray-600 hover:bg-gray-100'
-                        } border ${settings.theme === 'dark' ? 'border-gray-500' : 'border-gray-200'}`}
-                      >
-                        {term}
-                      </button>
-                    ))}
-                  </div>
+                    autoFocus
+                  />
                 </div>
-              )}
 
-              {/* Search Results */}
-              <div className="max-h-80 overflow-y-auto space-y-1.5">
-                {filteredSurahs.length > 0 ? (
-                  filteredSurahs.map((surah) => (
+                {/* Search Filters */}
+                <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
+                  {(['all', 'surah'] as const).map((filter) => (
                     <button
-                      key={surah.number}
-                      onClick={() => {
-                        goToSurah(surah.number);
-                        setShowSurahSearch(false);
-                        setSearchTerm('');
-                      }}
-                      className={`w-full text-left p-3 rounded-xl transition-all active:scale-[0.98] ${
-                        currentSurah === surah.number
-                          ? settings.theme === 'dark'
-                            ? 'bg-emerald-900 text-emerald-100'
-                            : 'bg-emerald-100 text-emerald-800'
+                      key={filter}
+                      onClick={() => setSearchFilter(filter)}
+                      className={`px-4 py-2 rounded-lg text-base font-medium whitespace-nowrap transition-all ${
+                        searchFilter === filter
+                          ? 'bg-emerald-500 text-white'
                           : settings.theme === 'dark'
-                          ? 'hover:bg-gray-700 text-white'
-                          : 'hover:bg-gray-50 text-gray-900'
+                          ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                       }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2.5">
-                          <span className={`text-xs font-bold px-2 py-1 rounded-lg min-w-[28px] text-center ${
-                            currentSurah === surah.number
-                              ? 'bg-emerald-600 text-white'
-                              : settings.theme === 'dark'
-                              ? 'bg-gray-600 text-gray-300'
-                              : 'bg-gray-200 text-gray-600'
-                          }`}>
-                            {surah.number}
-                          </span>
-                          <div>
-                            <p className={`font-medium text-sm ${getFontFamilyClass()}`}>{surah.name}</p>
-                            <p className={`text-xs ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                              {surah.englishName} • {surah.englishNameTranslation}
-                            </p>
-                          </div>
-                        </div>
-                        <span className={`text-xs ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-400'}`}>
-                          {surah.numberOfAyahs} ayahs
-                        </span>
-                      </div>
+                      {filter === 'all' ? '📖 All' : '📜 Surah'}
                     </button>
-                  ))
-                ) : (
-                  <div className={`text-center py-8 ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                    <MagnifyingGlassIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">No surahs found</p>
-                    <p className="text-xs mt-1">Try a different search term</p>
+                  ))}
+                </div>
+
+                {/* Recent Searches */}
+                {recentSearches.length > 0 && !searchTerm && (
+                  <div className={`mb-4 p-3 rounded-lg ${settings.theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`text-sm font-medium ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                        Recent Searches
+                      </span>
+                      <button
+                        onClick={clearRecentSearches}
+                        className="text-sm text-emerald-600 hover:text-emerald-700 font-medium"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {recentSearches.map((term, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => setSearchTerm(term)}
+                          className={`px-3 py-2 rounded-full text-base ${
+                            settings.theme === 'dark'
+                              ? 'bg-gray-600 text-gray-300 hover:bg-gray-500'
+                              : 'bg-white text-gray-600 hover:bg-gray-100'
+                          } border ${settings.theme === 'dark' ? 'border-gray-500' : 'border-gray-200'}`}
+                        >
+                          {term}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
+
+                {/* Search Results */}
+                <div className="space-y-2">
+                  {filteredSurahs.length > 0 ? (
+                    filteredSurahs.map((surah) => (
+                      <button
+                        key={surah.number}
+                        onClick={() => {
+                          goToSurah(surah.number);
+                          setShowSurahSearch(false);
+                          setSearchTerm('');
+                        }}
+                        className={`w-full text-left p-4 rounded-xl transition-all active:scale-[0.98] ${
+                          currentSurah === surah.number
+                            ? settings.theme === 'dark'
+                              ? 'bg-emerald-900 text-emerald-100'
+                              : 'bg-emerald-100 text-emerald-800'
+                            : settings.theme === 'dark'
+                            ? 'hover:bg-gray-700 text-white'
+                            : 'hover:bg-gray-50 text-gray-900'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <span className={`text-sm font-bold px-2.5 py-1.5 rounded-lg min-w-[32px] text-center ${
+                              currentSurah === surah.number
+                                ? 'bg-emerald-600 text-white'
+                                : settings.theme === 'dark'
+                                ? 'bg-gray-600 text-gray-300'
+                                : 'bg-gray-200 text-gray-600'
+                            }`}>
+                              {surah.number}
+                            </span>
+                            <div>
+                              <p className={`font-medium text-base ${getFontFamilyClass()}`}>{surah.name}</p>
+                              <p className={`text-sm ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                                {surah.englishName} • {surah.englishNameTranslation}
+                              </p>
+                            </div>
+                          </div>
+                          <span className={`text-sm ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-400'}`}>
+                            {surah.numberOfAyahs} ayahs
+                          </span>
+                        </div>
+                      </button>
+                    ))
+                  ) : (
+                    <div className={`text-center py-12 ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                      <MagnifyingGlassIcon className="h-16 w-16 mx-auto mb-3 opacity-50" />
+                      <p className="text-base font-medium">No surahs found</p>
+                      <p className="text-sm mt-2">Try a different search term</p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          )}
-        </div>
+          </>
+        )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
           {/* Left Sidebar - Settings (Desktop Only) */}
           <div className="hidden lg:block lg:col-span-2">
             <div className={`${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow-md p-3 sticky top-16 max-h-[calc(100vh-5rem)] overflow-y-auto`}>

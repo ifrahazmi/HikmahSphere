@@ -1375,8 +1375,23 @@ const PrayerTimes: React.FC = () => {
                                       </div>
                                     )}
                                 </div>
+                            ) : prayer.name === 'Isha' ? (
+                              <div className="flex flex-col gap-1">
+                                {isCurrentPrayer && (
+                                  <div>
+                                    <span className="text-[10px] sm:text-xs font-medium text-emerald-600 uppercase tracking-wide font-bold">● Now</span>
+                                    <p className="text-sm font-bold text-emerald-700">Prayer Time</p>
+                                  </div>
+                                )}
+                                {prayerData?.times?.Midnight && (
+                                  <div className={`${isCurrentPrayer ? 'mt-1 pt-1 border-t border-gray-100' : ''}`}>
+                                    <span className="text-xs font-medium text-gray-500">Islamic Midnight</span>
+                                    <p className="text-sm font-bold text-emerald-600">{prayerData.times.Midnight}</p>
+                                  </div>
+                                )}
+                              </div>
                             ) : isCurrentPrayer ? (
-                              // Show "Prayer Time Now" for other current prayers (Dhuhr, Asr, Isha)
+                              // Show "Prayer Time Now" for other current prayers (Dhuhr, Asr)
                               <div className="flex flex-col gap-1">
                                 <div>
                                   <span className="text-[10px] sm:text-xs font-medium text-emerald-600 uppercase tracking-wide font-bold">● Now</span>

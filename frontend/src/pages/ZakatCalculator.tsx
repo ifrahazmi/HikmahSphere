@@ -16,12 +16,14 @@ import { CheckCircleIcon as CheckCircleSolidIcon } from '@heroicons/react/24/sol
 import toast from 'react-hot-toast';
 import { useAuth } from '../hooks/useAuth';
 import ZakatManagement from '../components/Zakat/ZakatManagement';
+import { API_URL } from '../config';
 
 interface NisabData {
   gold: number;
   silver: number;
   currency: string;
   lastUpdated: string;
+  source?: string;
   goldUnitPrice: number; // Price per gram
   silverUnitPrice: number; // Price per gram
   weightUnit: string;
@@ -112,31 +114,38 @@ const ZakatCalculator: React.FC = () => {
     e.currentTarget.blur();
   };
 
+  const formatCurrencyValue = (amount: number, currencyCode?: string) => {
+    if (!currencyCode) return amount.toLocaleString('en-IN');
+    return amount.toLocaleString('en-IN', {
+      style: 'currency',
+      currency: currencyCode.toUpperCase(),
+      maximumFractionDigits: 2,
+    });
+  };
+
   const fetchNisabDataCallback = useCallback(async () => {
     try {
-      const apiKey = 'icgUaIHMO8GWEVLh7XhFcFoTHjQlsfhSBpJtYfrtTUJXY1eI';
       const standard = form.calculationStandard === 'classical' ? 'classical' : 'common';
-      const response = await fetch(
-        `https://islamicapi.com/api/v1/zakat-nisab/?standard=${standard}&currency=${form.currency}&unit=g&api_key=${apiKey}`
-      );
+      const response = await fetch(`${API_URL}/zakat/nisab-live?standard=${standard}&currency=${form.currency}`);
       const data = await response.json();
 
-      if (data.status === 'success') {
-        setNisabData({
-          gold: data.data.nisab_thresholds.gold.nisab_amount,
-          silver: data.data.nisab_thresholds.silver.nisab_amount,
-          currency: data.data.currency,
-          lastUpdated: new Date().toLocaleString(),
-          goldUnitPrice: data.data.nisab_thresholds.gold.unit_price,
-          silverUnitPrice: data.data.nisab_thresholds.silver.unit_price,
-          weightUnit: data.weight_unit || 'gram',
-        });
-      } else {
-        toast.error('Unable to fetch live nisab values. Using manual calculation.');
+      if (!response.ok || data.status !== 'success' || !data.data) {
+        throw new Error(data.message || 'Failed to fetch live nisab data');
       }
+
+      setNisabData({
+        gold: data.data.gold.nisabAmount,
+        silver: data.data.silver.nisabAmount,
+        currency: data.data.currency,
+        lastUpdated: data.data.updatedAt ? new Date(data.data.updatedAt).toLocaleString() : new Date().toLocaleString(),
+        source: data.data.source || 'Live provider',
+        goldUnitPrice: data.data.gold.unitPrice,
+        silverUnitPrice: data.data.silver.unitPrice,
+        weightUnit: data.data.weightUnit || 'gram',
+      });
     } catch (error) {
       console.error('Nisab API error:', error);
-      toast.error('Unable to fetch live nisab values.');
+      toast.error('Unable to fetch live nisab values right now.');
     }
   }, [form.calculationStandard, form.currency]);
 
@@ -420,32 +429,57 @@ const ZakatCalculator: React.FC = () => {
             </div>
           </div>
 
-          {/* Nisab Display */}
+          {/* Live Nisab Snapshot */}
           {nisabData && nisabData.currency && (
-            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl p-4 border-2 border-emerald-200">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="text-center">
-                  <p className="text-sm text-gray-600 mb-1">Gold Nisab</p>
-                  <p className="text-2xl font-bold text-emerald-700">
-                    {nisabData.gold.toLocaleString('en-IN', { style: 'currency', currency: nisabData.currency.toUpperCase() })}
+            <div className="bg-gradient-to-br from-emerald-50 via-white to-teal-50 rounded-2xl p-5 border-2 border-emerald-200 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                <div>
+                  <p className="text-sm font-semibold text-emerald-700">Live Nisab Snapshot</p>
+                  <p className="text-xs text-gray-500">Refreshed using current market-linked rates</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={fetchNisabDataCallback}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors self-start sm:self-auto"
+                >
+                  Refresh Rates
+                </button>
+              </div>
+
+              <div className="bg-white rounded-xl border border-emerald-200 p-4 mb-4">
+                <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">Selected Threshold ({form.metalStandard})</p>
+                <p className="text-2xl sm:text-3xl font-bold text-emerald-700">
+                  {form.metalStandard === 'gold'
+                    ? formatCurrencyValue(nisabData.gold, nisabData.currency)
+                    : formatCurrencyValue(nisabData.silver, nisabData.currency)}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                  <p className="text-xs font-semibold text-amber-700 mb-1">Gold Nisab</p>
+                  <p className="text-lg font-bold text-amber-900">{formatCurrencyValue(nisabData.gold, nisabData.currency)}</p>
+                  <p className="text-xs text-amber-700 mt-1">
+                    1g rate: {formatCurrencyValue(nisabData.goldUnitPrice, nisabData.currency)}
                   </p>
                 </div>
-                <div className="text-center">
-                  <p className="text-sm text-gray-600 mb-1">Silver Nisab</p>
-                  <p className="text-2xl font-bold text-emerald-700">
-                    {nisabData.silver.toLocaleString('en-IN', { style: 'currency', currency: nisabData.currency.toUpperCase() })}
-                  </p>
-                </div>
-                <div className="text-center">
-                  <p className="text-sm text-gray-600 mb-1">Selected Standard</p>
-                  <p className="text-lg font-semibold text-gray-800">
-                    {form.metalStandard === 'gold' ? '🥇 Gold' : '🥈 Silver'}
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                  <p className="text-xs font-semibold text-slate-700 mb-1">Silver Nisab</p>
+                  <p className="text-lg font-bold text-slate-900">{formatCurrencyValue(nisabData.silver, nisabData.currency)}</p>
+                  <p className="text-xs text-slate-600 mt-1">
+                    1g rate: {formatCurrencyValue(nisabData.silverUnitPrice, nisabData.currency)}
                   </p>
                 </div>
               </div>
-              <p className="text-xs text-gray-500 text-center mt-3">
-                Last updated: {nisabData.lastUpdated}
+
+              <p className="text-[11px] text-gray-500 mt-3">
+                Updated: {nisabData.lastUpdated}
               </p>
+              {nisabData.source && (
+                <p className="text-[11px] text-gray-500">
+                  Source: {nisabData.source}
+                </p>
+              )}
             </div>
           )}
         </div>

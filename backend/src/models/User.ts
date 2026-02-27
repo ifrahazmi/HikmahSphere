@@ -72,8 +72,19 @@ export interface IUser extends Document {
       lastRead: {
         surah: number;
         ayah: number;
+        surahName?: string;
         timestamp: Date;
       };
+      bookmarks: Array<{
+        id: string;
+        surah: number;
+        ayah: number;
+        surahName: string;
+        timestamp: Date;
+        note?: string;
+        color?: 'emerald' | 'blue' | 'purple' | 'amber' | 'rose';
+      }>;
+      settings?: Record<string, unknown>;
       completedSurahs: number[];
       totalRecitations: number;
     };
@@ -238,8 +249,19 @@ const UserSchema = new Schema<IUser>({
       lastRead: {
         surah: { type: Number, min: 1, max: 114 },
         ayah: { type: Number, min: 1 },
+        surahName: { type: String, trim: true },
         timestamp: { type: Date, default: Date.now },
       },
+      bookmarks: [{
+        id: { type: String, required: true },
+        surah: { type: Number, min: 1, max: 114, required: true },
+        ayah: { type: Number, min: 1, required: true },
+        surahName: { type: String, required: true, trim: true },
+        timestamp: { type: Date, default: Date.now },
+        note: { type: String, trim: true, maxlength: 500 },
+        color: { type: String, enum: ['emerald', 'blue', 'purple', 'amber', 'rose'] },
+      }],
+      settings: { type: Schema.Types.Mixed },
       completedSurahs: [{ type: Number, min: 1, max: 114 }],
       totalRecitations: { type: Number, default: 0 },
     },

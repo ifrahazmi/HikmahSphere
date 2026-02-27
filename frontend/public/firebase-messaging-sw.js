@@ -29,7 +29,7 @@ messaging.onBackgroundMessage((payload) => {
   const notificationTitle = payload.notification.title;
   const notificationOptions = {
     body: payload.notification.body,
-    icon: '/logo192.png', // Replace with your app logo
+    icon: '/small_logo.jpeg', // Replace with your app logo
     vibrate: [200, 100, 200],
     data: {
         url: payload.data?.url || '/'

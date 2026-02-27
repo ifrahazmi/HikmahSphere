@@ -320,6 +320,7 @@ router.get('/timesByCity', [
             Asr: data.timings.Asr,
             Maghrib: data.timings.Maghrib,
             Isha: data.timings.Isha,
+            Midnight: data.timings.Midnight,
             Imsak: data.timings.Imsak || data.timings.Fajr
           },
           date: data.date,

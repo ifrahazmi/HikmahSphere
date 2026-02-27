@@ -1,11 +1,253 @@
 import express from 'express';
 import { query, validationResult } from 'express-validator';
-import { optionalAuthMiddleware } from '../middleware/auth';
+import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth';
+import User from '../models/User';
 
 const router = express.Router();
 
 // Al-Quran Cloud API Configuration
 const QURAN_API_BASE = 'https://api.alquran.cloud/v1';
+
+type BookmarkColor = 'emerald' | 'blue' | 'purple' | 'amber' | 'rose';
+
+interface UserStateBookmark {
+  id: string;
+  surah: number;
+  ayah: number;
+  surahName: string;
+  timestamp: Date;
+  note?: string;
+  color?: BookmarkColor;
+}
+
+interface UserStateLastRead {
+  surah: number;
+  ayah: number;
+  surahName?: string;
+  timestamp: Date;
+}
+
+const isBookmarkColor = (value: unknown): value is BookmarkColor => {
+  return typeof value === 'string' && ['emerald', 'blue', 'purple', 'amber', 'rose'].includes(value);
+};
+
+const sanitizeBookmarks = (value: unknown): UserStateBookmark[] | null => {
+  if (!Array.isArray(value)) return null;
+
+  const sanitized: UserStateBookmark[] = [];
+
+  for (let i = 0; i < value.length; i++) {
+    const item = value[i];
+    if (!item || typeof item !== 'object') continue;
+
+    const raw = item as Record<string, unknown>;
+    const surah = Number(raw.surahNumber);
+    const ayah = Number(raw.ayahNumber);
+    const surahName = typeof raw.surahName === 'string' ? raw.surahName.trim() : '';
+
+    if (!Number.isInteger(surah) || surah < 1 || surah > 114) continue;
+    if (!Number.isInteger(ayah) || ayah < 1) continue;
+    if (!surahName) continue;
+
+    const parsedTimestamp =
+      typeof raw.timestamp === 'string' || raw.timestamp instanceof Date
+        ? new Date(raw.timestamp)
+        : new Date();
+    const timestamp = Number.isNaN(parsedTimestamp.getTime()) ? new Date() : parsedTimestamp;
+
+    const note = typeof raw.note === 'string' ? raw.note.trim().slice(0, 500) : undefined;
+    const color = isBookmarkColor(raw.color) ? raw.color : undefined;
+    const id =
+      typeof raw.id === 'string' && raw.id.trim().length > 0
+        ? raw.id
+        : `${surah}:${ayah}:${Date.now()}-${i}`;
+
+    const bookmark: UserStateBookmark = {
+      id,
+      surah,
+      ayah,
+      surahName,
+      timestamp,
+    };
+    if (note) bookmark.note = note;
+    if (color) bookmark.color = color;
+
+    sanitized.push(bookmark);
+  }
+
+  return sanitized;
+};
+
+const sanitizeLastRead = (value: unknown): UserStateLastRead | null | 'invalid' => {
+  if (value === null) return null;
+  if (!value || typeof value !== 'object') return 'invalid';
+
+  const raw = value as Record<string, unknown>;
+  const surah = Number(raw.surahNumber);
+  const ayah = Number(raw.ayahNumber);
+
+  if (!Number.isInteger(surah) || surah < 1 || surah > 114) return 'invalid';
+  if (!Number.isInteger(ayah) || ayah < 1) return 'invalid';
+
+  const surahName = typeof raw.surahName === 'string' ? raw.surahName.trim() : undefined;
+  const parsedTimestamp =
+    typeof raw.timestamp === 'string' || raw.timestamp instanceof Date
+      ? new Date(raw.timestamp)
+      : new Date();
+
+  const timestamp = Number.isNaN(parsedTimestamp.getTime()) ? new Date() : parsedTimestamp;
+
+  const result: UserStateLastRead = {
+    surah,
+    ayah,
+    timestamp,
+  };
+  if (surahName) {
+    result.surahName = surahName;
+  }
+
+  return result;
+};
+
+/**
+ * @route   GET /api/quran/user-state
+ * @desc    Get logged-in user's Quran reader state (settings, bookmarks, last read)
+ * @access  Private
+ */
+router.get('/user-state', authMiddleware, async (req: any, res: any) => {
+  try {
+    const user = await User.findById(req.user.userId).select('religious.quranProgress');
+    if (!user) {
+      return res.status(404).json({ status: 'error', message: 'User not found' });
+    }
+
+    const progress = user.religious?.quranProgress;
+    const bookmarks = Array.isArray(progress?.bookmarks) ? progress.bookmarks : [];
+
+    const payload = {
+      settings: progress?.settings || null,
+      bookmarks: bookmarks.map((b: UserStateBookmark) => ({
+        id: b.id,
+        surahNumber: b.surah,
+        ayahNumber: b.ayah,
+        surahName: b.surahName,
+        timestamp: b.timestamp,
+        note: b.note,
+        color: b.color,
+      })),
+      lastRead: progress?.lastRead?.surah && progress?.lastRead?.ayah
+        ? {
+            surahNumber: progress.lastRead.surah,
+            ayahNumber: progress.lastRead.ayah,
+            surahName: progress.lastRead.surahName,
+            timestamp: progress.lastRead.timestamp,
+          }
+        : null,
+    };
+
+    return res.json({ status: 'success', data: payload });
+  } catch (error: any) {
+    console.error('Quran user-state fetch error:', error.message);
+    return res.status(500).json({ status: 'error', message: 'Failed to fetch Quran user state' });
+  }
+});
+
+/**
+ * @route   PUT /api/quran/user-state
+ * @desc    Save logged-in user's Quran reader state (settings, bookmarks, last read)
+ * @access  Private
+ */
+router.put('/user-state', authMiddleware, async (req: any, res: any) => {
+  try {
+    const { settings, bookmarks, lastRead } = req.body as {
+      settings?: Record<string, unknown>;
+      bookmarks?: unknown;
+      lastRead?: unknown;
+    };
+
+    const setData: Record<string, unknown> = {};
+    const unsetData: Record<string, unknown> = {};
+
+    if (typeof settings !== 'undefined') {
+      if (!settings || typeof settings !== 'object') {
+        return res.status(400).json({ status: 'error', message: 'settings must be an object' });
+      }
+      setData['religious.quranProgress.settings'] = settings;
+    }
+
+    if (typeof bookmarks !== 'undefined') {
+      const sanitizedBookmarks = sanitizeBookmarks(bookmarks);
+      if (!sanitizedBookmarks) {
+        return res.status(400).json({ status: 'error', message: 'bookmarks must be an array' });
+      }
+      setData['religious.quranProgress.bookmarks'] = sanitizedBookmarks;
+    }
+
+    if (typeof lastRead !== 'undefined') {
+      const sanitizedLastRead = sanitizeLastRead(lastRead);
+      if (sanitizedLastRead === 'invalid') {
+        return res.status(400).json({ status: 'error', message: 'lastRead is invalid' });
+      }
+
+      if (sanitizedLastRead === null) {
+        unsetData['religious.quranProgress.lastRead'] = 1;
+      } else {
+        setData['religious.quranProgress.lastRead'] = sanitizedLastRead;
+      }
+    }
+
+    if (!Object.keys(setData).length && !Object.keys(unsetData).length) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'No valid fields to update. Provide settings, bookmarks, or lastRead.',
+      });
+    }
+
+    const updateQuery: Record<string, unknown> = {};
+    if (Object.keys(setData).length) updateQuery.$set = setData;
+    if (Object.keys(unsetData).length) updateQuery.$unset = unsetData;
+
+    const user = await User.findByIdAndUpdate(req.user.userId, updateQuery, {
+      new: true,
+      runValidators: true,
+    }).select('religious.quranProgress');
+
+    if (!user) {
+      return res.status(404).json({ status: 'error', message: 'User not found' });
+    }
+
+    const progress = user.religious?.quranProgress;
+    const responseBookmarks = Array.isArray(progress?.bookmarks) ? progress.bookmarks : [];
+
+    return res.json({
+      status: 'success',
+      message: 'Quran user state updated successfully',
+      data: {
+        settings: progress?.settings || null,
+        bookmarks: responseBookmarks.map((b: UserStateBookmark) => ({
+          id: b.id,
+          surahNumber: b.surah,
+          ayahNumber: b.ayah,
+          surahName: b.surahName,
+          timestamp: b.timestamp,
+          note: b.note,
+          color: b.color,
+        })),
+        lastRead: progress?.lastRead?.surah && progress?.lastRead?.ayah
+          ? {
+              surahNumber: progress.lastRead.surah,
+              ayahNumber: progress.lastRead.ayah,
+              surahName: progress.lastRead.surahName,
+              timestamp: progress.lastRead.timestamp,
+            }
+          : null,
+      },
+    });
+  } catch (error: any) {
+    console.error('Quran user-state update error:', error.message);
+    return res.status(500).json({ status: 'error', message: 'Failed to update Quran user state' });
+  }
+});
 
 /**
  * @route   GET /api/quran/surahs

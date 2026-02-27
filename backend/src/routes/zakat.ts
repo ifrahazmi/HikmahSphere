@@ -108,6 +108,71 @@ interface NisabApiResponse {
   message?: string;
 }
 
+interface FxApiResponse {
+  result?: string;
+  rates?: Record<string, number>;
+}
+
+const fetchFallbackNisabData = async (standard: 'classical' | 'common' = 'common', currency: string = 'inr') => {
+  try {
+    const [goldRes, silverRes, fxRes] = await Promise.all([
+      fetch('https://api.gold-api.com/price/XAU'),
+      fetch('https://api.gold-api.com/price/XAG'),
+      fetch('https://open.er-api.com/v6/latest/USD'),
+    ]);
+
+    const [goldData, silverData, fxData] = await Promise.all([
+      goldRes.json() as Promise<{ price?: number; updatedAt?: string }>,
+      silverRes.json() as Promise<{ price?: number; updatedAt?: string }>,
+      fxRes.json() as Promise<FxApiResponse>,
+    ]);
+
+    const goldPerOunceUsd = Number(goldData?.price);
+    const silverPerOunceUsd = Number(silverData?.price);
+    const targetCurrency = currency.toUpperCase();
+    const fxRate = targetCurrency === 'USD' ? 1 : Number(fxData?.rates?.[targetCurrency]);
+
+    if (
+      !Number.isFinite(goldPerOunceUsd) ||
+      !Number.isFinite(silverPerOunceUsd) ||
+      !Number.isFinite(fxRate) ||
+      fxRate <= 0
+    ) {
+      return { success: false, error: 'Fallback provider returned invalid market rates' };
+    }
+
+    // 1 troy ounce = 31.1034768 grams
+    const goldUnitPrice = (goldPerOunceUsd / 31.1034768) * fxRate;
+    const silverUnitPrice = (silverPerOunceUsd / 31.1034768) * fxRate;
+
+    const goldWeight = standard === 'classical' ? ZAKAT_RATES.NISAB_GOLD_GRAMS_CLASSICAL : ZAKAT_RATES.NISAB_GOLD_GRAMS;
+    const silverWeight = standard === 'classical' ? ZAKAT_RATES.NISAB_SILVER_GRAMS_CLASSICAL : ZAKAT_RATES.NISAB_SILVER_GRAMS;
+
+    return {
+      success: true,
+      data: {
+        gold: {
+          weight: goldWeight,
+          unitPrice: goldUnitPrice,
+          nisabAmount: goldWeight * goldUnitPrice,
+        },
+        silver: {
+          weight: silverWeight,
+          unitPrice: silverUnitPrice,
+          nisabAmount: silverWeight * silverUnitPrice,
+        },
+        currency: currency.toLowerCase(),
+        weightUnit: 'gram',
+        updatedAt: goldData?.updatedAt || new Date().toISOString(),
+        source: 'Fallback live market feed',
+      },
+    };
+  } catch (error) {
+    console.error('Fallback Nisab API Error:', error);
+    return { success: false, error: 'Unable to fetch fallback live nisab values' };
+  }
+};
+
 const fetchNisabData = async (standard: 'classical' | 'common' = 'common', currency: string = 'inr') => {
   try {
     const url = `https://islamicapi.com/api/v1/zakat-nisab/?standard=${standard}&currency=${currency}&unit=g&api_key=${ISLAMIC_API_KEY}`;
@@ -143,6 +208,52 @@ const fetchNisabData = async (standard: 'classical' | 'common' = 'common', curre
     return { success: false, error: 'Unable to fetch live nisab values' };
   }
 };
+
+router.get('/nisab-live', [
+  query('standard').optional().isIn(['classical', 'common']),
+  query('currency').optional().isString().trim().isLength({ min: 3, max: 3 }),
+], optionalAuthMiddleware, async (req: any, res: any) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ status: 'error', errors: errors.array() });
+    }
+
+    const standard = (req.query.standard as 'classical' | 'common') || 'common';
+    const currency = ((req.query.currency as string) || 'inr').toLowerCase();
+
+    const primary = await fetchNisabData(standard, currency);
+    if (primary.success && primary.data) {
+      return res.json({
+        status: 'success',
+        data: {
+          ...primary.data,
+          source: 'IslamicAPI',
+        },
+      });
+    }
+
+    const fallback = await fetchFallbackNisabData(standard, currency);
+    if (fallback.success && fallback.data) {
+      return res.json({
+        status: 'success',
+        data: fallback.data,
+      });
+    }
+
+    return res.status(503).json({
+      status: 'error',
+      message: 'Unable to fetch live nisab values from current providers',
+      details: {
+        primaryError: primary.success ? null : primary.error,
+        fallbackError: fallback.success ? null : fallback.error,
+      },
+    });
+  } catch (error: any) {
+    console.error('Live Nisab route error:', error);
+    return res.status(500).json({ status: 'error', message: 'Failed to fetch live nisab values' });
+  }
+});
 
 const convertWeightToValue = (weight: number, unitPrice: number, weightUnit: string, inputUnit: string): number => {
   let weightInGrams = weight;
