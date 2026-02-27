@@ -29,6 +29,72 @@ function getCompassDirection(bearing: number): string {
   return directions[index] || 'N';
 }
 
+// Helper to avoid leaking secrets and huge HTML in upstream error logs
+function sanitizeUpstreamErrorBody(body: string, maxLength: number = 400): string {
+  return body
+    .replace(/api_key=[^&"'\\s]+/gi, 'api_key=REDACTED')
+    .replace(/\s+/g, ' ')
+    .slice(0, maxLength);
+}
+
+// ── Ramadan daily duas (30 authentic Qur'anic / Prophetic duas, one per day) ──
+const RAMADAN_DUAS = [
+  { title: 'Day 1 – Dua for Good in Both Worlds', arabic: 'رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الْآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ', translation: 'Our Lord, give us good in this world and good in the Hereafter, and protect us from the punishment of the Fire.', transliteration: "Rabbana atina fid-dunya hasanatan wa fil-akhirati hasanatan wa qina 'adhaban-nar.", reference: "Qur'an 2:201" },
+  { title: 'Day 2 – Dua of Adam & Hawwa', arabic: 'رَبَّنَا ظَلَمْنَا أَنفُسَنَا وَإِن لَّمْ تَغْفِرْ لَنَا وَتَرْحَمْنَا لَنَكُونَنَّ مِنَ الْخَاسِرِينَ', translation: 'Our Lord, we have wronged ourselves, and if You do not forgive us and have mercy upon us, we will surely be among the losers.', transliteration: "Rabbana zalamna anfusana wa-in lam taghfir lana wa-tarhamma lana lanakuunanna minal-khasirin.", reference: "Qur'an 7:23" },
+  { title: 'Day 3 – Dua for Steadfast Heart', arabic: 'رَبَّنَا لَا تُزِغْ قُلُوبَنَا بَعْدَ إِذْ هَدَيْتَنَا وَهَبْ لَنَا مِن لَّدُنكَ رَحْمَةً', translation: 'Our Lord, do not let our hearts deviate after You have guided us, and grant us from Yourself mercy.', transliteration: "Rabbana la tuzigh qulubana ba'da idh hadaytana wa-hab lana min ladunka rahmah.", reference: "Qur'an 3:8" },
+  { title: 'Day 4 – Dua of Yunus', arabic: 'لَّا إِلَٰهَ إِلَّا أَنتَ سُبْحَانَكَ إِنِّي كُنتُ مِنَ الظَّالِمِينَ', translation: 'There is no deity except You; exalted are You. Indeed, I have been of the wrongdoers.', transliteration: "La ilaha illa anta subhanaka inni kuntu minadh-dhalimin.", reference: "Qur'an 21:87" },
+  { title: 'Day 5 – Dua for Increase in Knowledge', arabic: 'رَبِّ زِدْنِي عِلْمًا', translation: 'My Lord, increase me in knowledge.', transliteration: "Rabbi zidni 'ilma.", reference: "Qur'an 20:114" },
+  { title: 'Day 6 – Dua for Mercy upon Parents', arabic: 'رَّبِّ ارْحَمْهُمَا كَمَا رَبَّيَانِي صَغِيرًا', translation: 'My Lord, have mercy upon them as they raised me when I was small.', transliteration: "Rabbir-hamhuma kama rabbayani saghira.", reference: "Qur'an 17:24" },
+  { title: 'Day 7 – Dua for Tawakkul', arabic: 'حَسْبُنَا اللَّهُ وَنِعْمَ الْوَكِيلُ', translation: 'Sufficient for us is Allah, and He is the best Disposer of affairs.', transliteration: "Hasbunallahu wa ni'mal-wakil.", reference: "Qur'an 3:173" },
+  { title: 'Day 8 – Dua for Gratitude & Righteousness', arabic: 'رَبِّ أَوْزِعْنِي أَنْ أَشْكُرَ نِعْمَتَكَ الَّتِي أَنْعَمْتَ عَلَيَّ وَعَلَىٰ وَالِدَيَّ وَأَنْ أَعْمَلَ صَالِحًا تَرْضَاهُ', translation: 'My Lord, enable me to be grateful for Your favour which You have bestowed upon me and upon my parents and to do righteousness of which You approve.', transliteration: "Rabbi awzi'ni an ashkura ni'mataka allati an'amta 'alayya wa 'ala walidayya wa an a'mala salihan tardahu.", reference: "Qur'an 27:19" },
+  { title: 'Day 9 – Dua of Ibrahim for His Family', arabic: 'رَبِّ اجْعَلْنِي مُقِيمَ الصَّلَاةِ وَمِن ذُرِّيَّتِي رَبَّنَا وَتَقَبَّلْ دُعَاءِ', translation: 'My Lord, make me an establisher of prayer, and from my descendants. Our Lord, and accept my supplication.', transliteration: "Rabbij-'alni muqimas-salati wa min dhurriyyati. Rabbana wa taqabbal du'a.", reference: "Qur'an 14:40" },
+  { title: 'Day 10 – Dua for Righteous Offspring', arabic: 'رَبَّنَا هَبْ لَنَا مِنْ أَزْوَاجِنَا وَذُرِّيَّاتِنَا قُرَّةَ أَعْيُنٍ وَاجْعَلْنَا لِلْمُتَّقِينَ إِمَامًا', translation: 'Our Lord, grant us from among our wives and offspring comfort to our eyes and make us a leader for the righteous.', transliteration: "Rabbana hab lana min azwajina wa dhurriyyatina qurrata a'yunin waj'alna lil-muttaqina imama.", reference: "Qur'an 25:74" },
+  { title: 'Day 11 – Dua of Ibrahim for Mecca', arabic: 'رَبِّ اجْعَلْ هَٰذَا الْبَلَدَ آمِنًا وَاجْنُبْنِي وَبَنِيَّ أَن نَّعْبُدَ الْأَصْنَامَ', translation: 'My Lord, make this city secure and keep me and my sons away from worshipping idols.', transliteration: "Rabbij-'al hadhal-balada aminan waj-nubnee wa baniyya an na'budal-asnam.", reference: "Qur'an 14:35" },
+  { title: 'Day 12 – Dua for Protection from Hellfire', arabic: 'رَبَّنَا اصْرِفْ عَنَّا عَذَابَ جَهَنَّمَ إِنَّ عَذَابَهَا كَانَ غَرَامًا', translation: 'Our Lord, avert from us the punishment of Hell. Indeed, its punishment is ever adhering.', transliteration: "Rabbanas-rif 'anna 'adhaba jahannam, inna 'adhabaha kana gharama.", reference: "Qur'an 25:65" },
+  { title: 'Day 13 – Dua for Forgiveness of Sins', arabic: 'رَبَّنَا فَاغْفِرْ لَنَا ذُنُوبَنَا وَكَفِّرْ عَنَّا سَيِّئَاتِنَا وَتَوَفَّنَا مَعَ الْأَبْرَارِ', translation: 'Our Lord, forgive us our sins and remove from us our misdeeds and cause us to die with the righteous.', transliteration: "Rabbana faghfir lana dhunubana wa kaffir 'anna sayyi'atina wa tawaffana ma'al-abrar.", reference: "Qur'an 3:193" },
+  { title: 'Day 14 – Dua for Guidance to the Straight Path', arabic: 'اهْدِنَا الصِّرَاطَ الْمُسْتَقِيمَ', translation: 'Guide us to the straight path.', transliteration: "Ihdinas-siratal-mustaqim.", reference: "Qur'an 1:6" },
+  { title: 'Day 15 – Dua of Musa for Help', arabic: 'رَبِّ إِنِّي لِمَا أَنزَلْتَ إِلَيَّ مِنْ خَيْرٍ فَقِيرٌ', translation: 'My Lord, indeed I am, for whatever good You would send down to me, in need.', transliteration: "Rabbi inni lima anzalta ilayya min khayrin faqir.", reference: "Qur'an 28:24" },
+  { title: 'Day 16 – Dua of Zakariyya', arabic: 'رَبِّ لَا تَذَرْنِي فَرْدًا وَأَنتَ خَيْرُ الْوَارِثِينَ', translation: 'My Lord, do not leave me alone, and You are the best of inheritors.', transliteration: "Rabbi la tadharni fardan wa anta khayrul-waritheen.", reference: "Qur'an 21:89" },
+  { title: 'Day 17 – Dua for Relief from Distress', arabic: 'أَنِّي مَسَّنِيَ الضُّرُّ وَأَنتَ أَرْحَمُ الرَّاحِمِينَ', translation: 'Indeed, adversity has touched me, and You are the Most Merciful of the merciful.', transliteration: "Anni massaniad-durru wa anta arhamur-rahimin.", reference: "Qur'an 21:83" },
+  { title: 'Day 18 – Dua for Acceptance of Deeds', arabic: 'رَبَّنَا تَقَبَّلْ مِنَّا إِنَّكَ أَنتَ السَّمِيعُ الْعَلِيمُ', translation: 'Our Lord, accept this from us. Indeed, You are the Hearing, the Knowing.', transliteration: "Rabbana taqabbal minna innaka antas-sami'ul-'alim.", reference: "Qur'an 2:127" },
+  { title: 'Day 19 – Dua for Entering Jannah', arabic: 'رَبَّنَا وَأَدْخِلْهُمْ جَنَّاتِ عَدْنٍ الَّتِي وَعَدتَّهُمْ', translation: 'Our Lord, and admit them to gardens of perpetual residence which You have promised them.', transliteration: "Rabbana wa-adkhilhum jannati 'adninillatee wa'adttahum.", reference: "Qur'an 40:8" },
+  { title: 'Day 20 – Dua for Complete Repentance', arabic: 'رَبَّنَا إِنَّنَا آمَنَّا فَاغْفِرْ لَنَا ذُنُوبَنَا وَقِنَا عَذَابَ النَّارِ', translation: 'Our Lord, indeed we have believed, so forgive us our sins and protect us from the punishment of the Fire.', transliteration: "Rabbana innana amanna faghfir lana dhunubana wa-qina 'adhaban-nar.", reference: "Qur'an 3:16" },
+  { title: 'Day 21 – Dua of Laylat al-Qadr', arabic: 'اللَّهُمَّ إِنَّكَ عَفُوٌّ تُحِبُّ الْعَفْوَ فَاعْفُ عَنِّي', translation: 'O Allah, You are Pardoning and love to pardon, so pardon me.', transliteration: "Allahumma innaka 'afuwwun tuhibbul-'afwa fa'fu 'anni.", reference: "Tirmidhi 3513 (Sahih)" },
+  { title: 'Day 22 – Dua for Light in the Heart', arabic: 'اللَّهُمَّ اجْعَلْ فِي قَلْبِي نُورًا وَفِي سَمْعِي نُورًا وَفِي بَصَرِي نُورًا', translation: 'O Allah, place light in my heart, light in my hearing, and light in my sight.', transliteration: "Allahumma-j'al fee qalbi nura wa fee sam'ee nura wa fee basaree nura.", reference: "Sahih Muslim 763" },
+  { title: 'Day 23 – Dua for Strength against the Wrongdoers', arabic: 'رَبَّنَا لَا تَجْعَلْنَا فِتْنَةً لِّلْقَوْمِ الظَّالِمِينَ وَنَجِّنَا بِرَحْمَتِكَ مِنَ الْقَوْمِ الْكَافِرِينَ', translation: 'Our Lord, do not make us victims of the wrongdoers, and save us by Your mercy from the disbelieving people.', transliteration: "Rabbana la taj'alna fitnatan lil-qawmidh-dhalimin wa najjina birahmatika minal-qawmil-kafirin.", reference: "Qur'an 10:85-86" },
+  { title: 'Day 24 – Dua for Ease in Affairs', arabic: 'رَبِّ اشْرَحْ لِي صَدْرِي وَيَسِّرْ لِي أَمْرِي', translation: 'My Lord, expand for me my breast and ease for me my task.', transliteration: "Rabbish-rah lee sadree wa yassir lee amree.", reference: "Qur'an 20:25-26" },
+  { title: 'Day 25 – Dua of Acceptance after Iftar', arabic: 'اللَّهُمَّ إِنِّي لَكَ صُمْتُ وَبِكَ آمَنْتُ وَعَلَى رِزْقِكَ أَفْطَرْتُ', translation: 'O Allah, I fasted for You, I believed in You, and I break my fast with Your sustenance.', transliteration: "Allahumma inni laka sumtu wa bika amantu wa 'ala rizqika aftartu.", reference: "Abu Dawud 2358" },
+  { title: 'Day 26 – Dua for Protection from Four Things', arabic: 'اللَّهُمَّ إِنِّي أَعُوذُ بِكَ مِنَ الْهَمِّ وَالْحَزَنِ وَالْعَجْزِ وَالْكَسَلِ', translation: 'O Allah, I seek refuge in You from anxiety and sorrow, weakness and laziness.', transliteration: "Allahumma inni a'udhu bika minal-hammi wal-hazan, wal-'ajzi wal-kasal.", reference: "Sahih al-Bukhari 6369" },
+  { title: 'Day 27 – Dua for the Night of Power', arabic: 'اللَّهُمَّ إِنَّكَ عَفُوٌّ كَرِيمٌ تُحِبُّ الْعَفْوَ فَاعْفُ عَنِّي', translation: 'O Allah, You are Pardoning, Generous, and You love to pardon, so pardon me.', transliteration: "Allahumma innaka 'afuwwun karimun tuhibbul-'afwa fa'fu 'anni.", reference: "Tirmidhi 3513 (Sahih)" },
+  { title: 'Day 28 – Dua for Good Ending', arabic: 'رَبَّنَا أَتْمِمْ لَنَا نُورَنَا وَاغْفِرْ لَنَا إِنَّكَ عَلَىٰ كُلِّ شَيْءٍ قَدِيرٌ', translation: 'Our Lord, perfect for us our light and forgive us. Indeed, You are over all things competent.', transliteration: "Rabbana atmim lana nurana waghfir lana innaka 'ala kulli shay'in qadir.", reference: "Qur'an 66:8" },
+  { title: 'Day 29 – Dua for Acceptance of All Worship', arabic: 'رَبَّنَا اقْبَلْ مِنَّا إِنَّكَ أَنتَ السَّمِيعُ الْعَلِيمُ وَتُبْ عَلَيْنَا إِنَّكَ أَنتَ التَّوَّابُ الرَّحِيمُ', translation: 'Our Lord, accept from us; indeed You are the Hearing, the Knowing. And accept our repentance; indeed, You are the Accepting of repentance, the Merciful.', transliteration: "Rabbana taqabbal minna, innaka antas-Sami'ul-'Alim. Wa tub 'alayna, innaka antat-Tawwabur-Rahim.", reference: "Qur'an 2:127-128" },
+  { title: 'Day 30 – Dua for Completion & Forgiveness', arabic: 'اللَّهُمَّ تَقَبَّلْ مِنَّا صِيَامَنَا وَقِيَامَنَا وَرُكُوعَنَا وَسُجُودَنَا وَتَخَشُّعَنَا', translation: 'O Allah, accept from us our fasting, our night prayers, our bowing, our prostrations, and our humility.', transliteration: "Allahumma taqabbal minna siyamana wa qiyamana wa ruku'ana wa sujudana wa takhashhu'ana.", reference: "Du'a of the Salaf (Pious Predecessors)" },
+];
+
+// ── Authentic Ramadan hadiths pool (random on each refresh) ──
+const RAMADAN_HADITHS = [
+  { arabic: 'مَنْ صَامَ رَمَضَانَ إِيمَانًا وَاحْتِسَابًا غُفِرَ لَهُ مَا تَقَدَّمَ مِنْ ذَنْبِهِ', english: 'Whoever fasts Ramadan out of faith and in hope of reward, his previous sins will be forgiven.', source: 'Sahih al-Bukhari 38, Sahih Muslim 760', grade: 'Sahih' },
+  { arabic: 'إِذَا جَاءَ رَمَضَانُ فُتِّحَتْ أَبْوَابُ الْجَنَّةِ وَغُلِّقَتْ أَبْوَابُ النَّارِ وَصُفِّدَتِ الشَّيَاطِينُ', english: 'When Ramadan comes, the gates of Paradise are opened, the gates of Hell are closed, and the devils are chained.', source: 'Sahih al-Bukhari 1899, Sahih Muslim 1079', grade: 'Sahih' },
+  { arabic: 'لِلصَّائِمِ فَرْحَتَانِ يَفْرَحُهُمَا إِذَا أَفْطَرَ فَرِحَ وَإِذَا لَقِيَ رَبَّهُ فَرِحَ بِصَوْمِهِ', english: 'The fasting person has two occasions of joy: when he breaks his fast he rejoices, and when he meets his Lord he rejoices for his fasting.', source: 'Sahih al-Bukhari 1904, Sahih Muslim 1151', grade: 'Sahih' },
+  { arabic: 'مَنْ قَامَ رَمَضَانَ إِيمَانًا وَاحْتِسَابًا غُفِرَ لَهُ مَا تَقَدَّمَ مِنْ ذَنْبِهِ', english: 'Whoever stands in prayer during Ramadan out of faith and hope for reward, his previous sins will be forgiven.', source: 'Sahih al-Bukhari 37, Sahih Muslim 759', grade: 'Sahih' },
+  { arabic: 'كَانَ النَّبِيُّ ﷺ أَجْوَدَ النَّاسِ وَكَانَ أَجْوَدُ مَا يَكُونُ فِي رَمَضَانَ', english: 'The Prophet ﷺ was the most generous of all people, and he was even more generous in Ramadan.', source: 'Sahih al-Bukhari 6', grade: 'Sahih' },
+  { arabic: 'الصَّوْمُ جُنَّةٌ فَلَا يَرْفُثْ وَلَا يَجْهَلْ', english: 'Fasting is a shield; so the fasting person should avoid obscene speech and ignorant behavior.', source: 'Sahih al-Bukhari 1904', grade: 'Sahih' },
+  { arabic: 'مَنْ لَمْ يَدَعْ قَوْلَ الزُّورِ وَالْعَمَلَ بِهِ فَلَيْسَ لِلَّهِ حَاجَةٌ فِي أَنْ يَدَعَ طَعَامَهُ وَشَرَابَهُ', english: 'Whoever does not give up false statements and acting upon them, Allah is not interested in him giving up his food and drink.', source: 'Sahih al-Bukhari 1903', grade: 'Sahih' },
+  { arabic: 'تَسَحَّرُوا فَإِنَّ فِي السَّحُورِ بَرَكَةً', english: 'Take Suhoor (pre-dawn meal) for indeed there is blessing in Suhoor.', source: 'Sahih al-Bukhari 1923, Sahih Muslim 1095', grade: 'Sahih' },
+  { arabic: 'مَنْ صَامَ رَمَضَانَ ثُمَّ أَتْبَعَهُ سِتًّا مِنْ شَوَّالٍ كَانَ كَصِيَامِ الدَّهْرِ', english: 'Whoever fasts Ramadan and follows it with six days of Shawwal, it will be as if he fasted the entire year.', source: 'Sahih Muslim 1164', grade: 'Sahih' },
+  { arabic: 'اتَّقُوا النَّارَ وَلَوْ بِشِقِّ تَمْرَةٍ', english: 'Protect yourselves from the Fire even by giving half a date in charity.', source: 'Sahih al-Bukhari 1413, Sahih Muslim 1016', grade: 'Sahih' },
+  { arabic: 'أَفْضَلُ الصِّيَامِ بَعْدَ رَمَضَانَ شَهْرُ اللَّهِ الْمُحَرَّمُ', english: 'The best fasting after Ramadan is in Allah\'s sacred month of Muharram.', source: 'Sahih Muslim 1163', grade: 'Sahih' },
+  { arabic: 'إِنَّ فِي الْجَنَّةِ بَابًا يُقَالُ لَهُ الرَّيَّانُ يَدْخُلُ مِنْهُ الصَّائِمُونَ يَوْمَ الْقِيَامَةِ', english: 'In Paradise there is a gate called Al-Rayyan, through which those who fast will enter on the Day of Resurrection.', source: 'Sahih al-Bukhari 1896, Sahih Muslim 1152', grade: 'Sahih' },
+];
+
+// Helper: find today's 0-based index inside the Ramadan fasting array
+// Falls back to 0 if today is not in the array (before/after Ramadan)
+function getRamadanDayIndexFromFasting(fastingArr: Array<{ date: string }>): number {
+  const todayStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const idx = fastingArr.findIndex(d => d.date && d.date.slice(0, 10) === todayStr);
+  return idx >= 0 ? idx : 0;
+}
+
 // Helper function to calculate distance to Mecca using Haversine formula
 function calculateDistanceToMecca(lat: number, lon: number): number {
   const R = 6371; // Earth's radius in kilometers
@@ -397,28 +463,36 @@ router.get('/fasting', [
         }
 
         console.log('Fetching fasting times from Islamic API');
+        console.log(`🔗 API URL: https://islamicapi.com/api/v1/fasting/`);
+        console.log(`📍 Coordinates: lat=${latitude}, lon=${longitude}, method=${method}`);
 
         // Use Islamic API for fasting times
         const apiUrl = `https://islamicapi.com/api/v1/fasting/?lat=${latitude}&lon=${longitude}&method=${method}&api_key=${islamicApiKey}`;
 
-        // Add headers to mimic a browser/curl request to avoid 403 blocks
+        // Add headers to mimic a real browser request
         const headers = {
-            'User-Agent': 'Mozilla/5.0 (compatible; HikmahSphere/1.0; +https://hikmahsphere.site)',
-            'Accept': 'application/json'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Accept': 'application/json',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Referer': 'https://islamicapi.com/',
+            'Origin': 'https://islamicapi.com'
         };
 
+        console.log('🌐 Fetching with browser-like headers...');
         const response = await fetch(apiUrl, { headers });
+        
+        console.log(`📡 Fasting API Response: HTTP ${response.status} ${response.statusText}`);
         
         // Handle 403 and other API errors gracefully
         if (!response.ok) {
             const errorText = await response.text();
-            console.warn(`⚠️ Islamic API returned ${response.status}: ${errorText}`);
-            console.warn('Using fallback calculation...');
+            const safeErrorText = sanitizeUpstreamErrorBody(errorText);
+            console.log(`ℹ️ Islamic API unavailable (${response.status}), using fallback calculation from Aladhan API`);
             
             // Determine reason for failure
             let failureReason = `Islamic API error: ${response.status}`;
             if (!islamicApiKey) failureReason = 'API Key missing';
-            else if (response.status === 403) failureReason = 'API Key invalid/expired';
+            else if (response.status === 403) failureReason = 'Upstream access blocked (403)';
 
             // Fallback: Calculate fasting times from prayer times
             const prayerTimesUrl = `https://api.aladhan.com/v1/timings?latitude=${latitude}&longitude=${longitude}&method=${method}`;
@@ -466,8 +540,7 @@ router.get('/fasting', [
                             fajr: fajrTime,
                             maghrib: iftarTime
                         }],
-                        white_days: [],
-                        note: `Calculated from prayer times (${failureReason})`
+                        white_days: []
                     }
                 };
 
@@ -558,107 +631,146 @@ router.get('/ramadan', [
         }
 
         console.log('Fetching Ramadan times from Islamic API');
+        console.log(`🔗 API URL: https://islamicapi.com/api/v1/ramadan/`);
+        console.log(`📍 Coordinates: lat=${latitude}, lon=${longitude}, method=${method}`);
 
         // Use Islamic API for Ramadan times
         const apiUrl = `https://islamicapi.com/api/v1/ramadan/?lat=${latitude}&lon=${longitude}&method=${method}&api_key=${islamicApiKey}`;
 
-        // Add headers to mimic a browser/curl request
+        // Standard headers — avoid spoofed Referer/Origin which can trigger 403
         const headers = {
-            'User-Agent': 'Mozilla/5.0 (compatible; HikmahSphere/1.0; +https://hikmahsphere.site)',
-            'Accept': 'application/json'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Accept': 'application/json, text/plain, */*',
+            'Accept-Language': 'en-US,en;q=0.9',
         };
 
+        console.log('🌐 Fetching with browser-like headers...');
         const response = await fetch(apiUrl, { headers });
+        
+        console.log(`📡 Ramadan API Response: HTTP ${response.status} ${response.statusText}`);
         
         // Handle 403 and other API errors gracefully
         if (!response.ok) {
             const errorText = await response.text();
-            console.warn(`⚠️ Islamic API returned ${response.status}: ${errorText}`);
-            console.warn('Using fallback calculation...');
+            const safeErrorText = sanitizeUpstreamErrorBody(errorText);
+            console.log(`ℹ️ Islamic API unavailable (${response.status}), using fallback from Aladhan Hijri Calendar`);
 
             // Determine reason for failure
             let failureReason = `Islamic API error: ${response.status}`;
             if (!islamicApiKey) failureReason = 'API Key missing';
-            else if (response.status === 403) failureReason = 'API Key invalid/expired';
+            else if (response.status === 403) failureReason = 'Upstream access blocked (403)';
 
-            // Fallback: Calculate Ramadan fasting times from prayer times calendar
-            // Use Hijri Calendar API to get Ramadan (Month 9)
-            const currentYear = new Date().getFullYear();
-            
-            // Assume 2026 Ramadan is in 1447, 2025 is 1446
-            // We'll try to guess based on year.
-            let hijriYear = 1447; // Default target
-            if (currentYear === 2025) hijriYear = 1446;
-            if (currentYear === 2024) hijriYear = 1445;
-            
-            // For robustness, try current year first, if it fails, try next.
-            // Aladhan API: /v1/hijriCalendar/:month/:year
-            const calendarUrl = `https://api.aladhan.com/v1/hijriCalendar/9/${hijriYear}?latitude=${latitude}&longitude=${longitude}&method=${method}`;
-            console.log(`Fetching fallback Ramadan calendar from: ${calendarUrl}`);
-            
-            const calendarResponse = await fetch(calendarUrl);
+            // Fallback: Use Aladhan Hijri calendar for Ramadan (month 9).
+            // Correct endpoint format is /hijriCalendar/{hijriYear}/{hijriMonth}
+            const estimatedHijriYear = Math.round((new Date().getFullYear() - 622) * 33 / 32);
+            const candidateHijriYears = Array.from(
+              new Set([estimatedHijriYear - 1, estimatedHijriYear, estimatedHijriYear + 1])
+            );
 
-            if (!calendarResponse.ok) {
-                console.error(`Fallback Aladhan API failed: ${calendarResponse.status}`);
-                throw new Error('Both Islamic API and Aladhan API failed');
+            let selectedCalendar: { hijriYear: number; data: any[] } | null = null;
+
+            for (const hijriYear of candidateHijriYears) {
+              const calendarUrl = `https://api.aladhan.com/v1/hijriCalendar/${hijriYear}/9?latitude=${latitude}&longitude=${longitude}&method=${method}`;
+              console.log(`Fetching fallback Ramadan calendar from: ${calendarUrl}`);
+
+              const calendarResponse = await fetch(calendarUrl);
+              if (!calendarResponse.ok) {
+                console.warn(`⚠️ Fallback Aladhan API failed for ${hijriYear}: ${calendarResponse.status}`);
+                continue;
+              }
+
+              const calendarData: any = await calendarResponse.json();
+              if (calendarData.code === 200 && Array.isArray(calendarData.data) && calendarData.data.length > 0) {
+                selectedCalendar = { hijriYear, data: calendarData.data };
+                break;
+              }
             }
 
-            const calendarData: any = await calendarResponse.json();
+            if (!selectedCalendar) {
+              throw new Error('Both Islamic API and Aladhan Hijri calendar fallback failed');
+            }
 
-            if (calendarData.code === 200 && Array.isArray(calendarData.data) && calendarData.data.length > 0) {
-                const fastingTimes = calendarData.data.map((day: any) => {
-                    const fajrTime = day.timings.Fajr;
-                    const maghribTime = day.timings.Maghrib;
+            const fastingTimes = selectedCalendar.data.map((day: any) => {
+                // Strip timezone suffix e.g. "05:29 (IST)" -> "05:29"
+                const fajrTime = (day.timings.Fajr || '').split(' ')[0];
+                const maghribTime = (day.timings.Maghrib || '').split(' ')[0];
 
-                    // Calculate Sahur time (1 hour before Fajr)
-                    const sahurHour = parseInt(fajrTime.split(':')[0]) - 1;
-                    const sahurMinute = parseInt(fajrTime.split(':')[1]);
-                    const sahurTime = `${sahurHour.toString().padStart(2, '0')}:${sahurMinute.toString().padStart(2, '0')}`;
+                // Calculate Sahur time (1 hour before Fajr)
+                const sahurHour = (parseInt(fajrTime.split(':')[0], 10) + 23) % 24;
+                const sahurMinute = parseInt(fajrTime.split(':')[1], 10);
+                const sahurTime = `${sahurHour.toString().padStart(2, '0')}:${sahurMinute.toString().padStart(2, '0')}`;
 
-                    // Calculate duration
-                    const fajrParts = fajrTime.split(':').map(Number);
-                    const maghribParts = maghribTime.split(':').map(Number);
-                    const fajrMinutes = fajrParts[0] * 60 + fajrParts[1];
-                    const maghribMinutes = maghribParts[0] * 60 + maghribParts[1];
-                    const durationMinutes = maghribMinutes - fajrMinutes;
-                    const durationHours = Math.floor(durationMinutes / 60);
-                    const durationMins = durationMinutes % 60;
-                    const duration = `${durationHours}h ${durationMins}m`;
+                // Calculate duration
+                const fajrParts = fajrTime.split(':').map(Number);
+                const maghribParts = maghribTime.split(':').map(Number);
+                const fajrMinutes = fajrParts[0] * 60 + fajrParts[1];
+                const maghribMinutes = maghribParts[0] * 60 + maghribParts[1];
+                const durationMinutes = maghribMinutes - fajrMinutes;
+                const durationHours = Math.floor(durationMinutes / 60);
+                const durationMins = durationMinutes % 60;
+                const duration = `${durationHours}h ${durationMins}m`;
 
-                    return {
-                        time: {
-                            sahur: sahurTime,
-                            iftar: maghribTime,
-                            duration: duration
-                        },
-                        fajr: fajrTime,
-                        maghrib: maghribTime,
-                        date: day.date.readable,
-                        day: day.date.gregorian.weekday.en,
-                        hijri_readable: `${day.date.hijri.day} ${day.date.hijri.month.en} ${day.date.hijri.year}`
-                    };
-                });
-
-                const responseData = {
-                    status: 'success',
-                    data: {
-                        ramadan_year: hijriYear,
-                        fasting: fastingTimes,
-                        white_days: [],
-                        resource: 'Aladhan Calendar API (Fallback)',
-                        note: `Calculated from prayer times (${failureReason})`
+                // Convert Aladhan "DD-MM-YYYY" gregorian date to ISO "YYYY-MM-DD"
+                const aladhanDate: string = day.date.gregorian.date || ''; // "DD-MM-YYYY"
+                let isoDate = '';
+                if (aladhanDate && aladhanDate.includes('-')) {
+                    const parts = aladhanDate.split('-');
+                    if (parts.length === 3) {
+                        isoDate = `${parts[2]}-${parts[1]}-${parts[0]}`; // YYYY-MM-DD
                     }
+                }
+
+                // Build hijri field in "YYYY-MM-DD" format (e.g. "1447-09-01")
+                const hijriYear: string = String(day.date.hijri.year || '');
+                const hijriMonth: string = String(day.date.hijri.month?.number || '9').padStart(2, '0');
+                const hijriDay: string = String(day.date.hijri.day || '').padStart(2, '0');
+                const hijriField = hijriYear && hijriDay ? `${hijriYear}-${hijriMonth}-${hijriDay}` : '';
+
+                return {
+                    time: {
+                        sahur: sahurTime,
+                        iftar: maghribTime,
+                        duration: duration
+                    },
+                    fajr: fajrTime,
+                    maghrib: maghribTime,
+                    date: isoDate || day.date.readable,
+                    day: day.date.gregorian.weekday.en,
+                    hijri: hijriField,
+                    hijri_readable: `${day.date.hijri.day} ${day.date.hijri.month.en} ${day.date.hijri.year}`
                 };
+            });
 
-                return res.json(responseData);
-            }
+            // Pick today's dua based on actual Ramadan day in the fasting array
+            const todayRamadanIdx = getRamadanDayIndexFromFasting(fastingTimes);
+            const duaOfTheDay = RAMADAN_DUAS[todayRamadanIdx % RAMADAN_DUAS.length]!;
+            const hadithOfTheDay = RAMADAN_HADITHS[Math.floor(Math.random() * RAMADAN_HADITHS.length)];
+            console.log(`📿 Dua selected: Ramadan Day ${todayRamadanIdx + 1} — ${duaOfTheDay.title}`);
 
-            throw new Error(`Islamic API error: ${response.status}`);
+            const responseData = {
+                status: 'success',
+                data: {
+                    ramadan_year: selectedCalendar.hijriYear,
+                    fasting: fastingTimes,
+                    white_days: [],
+                    resource: {
+                        dua: duaOfTheDay,
+                        hadith: hadithOfTheDay
+                    },
+                    note: `Calculated from prayer times (${failureReason})`
+                }
+            };
+
+            // ⚠️ Do NOT cache fallback data — allow fresh primary API attempt on next request
+            console.log(`⚠️ Returning fallback Ramadan data (NOT caching) — primary API failed: ${failureReason}`);
+
+            return res.json(responseData);
         }
 
         const apiData: any = await response.json();
 
-        console.log('Islamic Ramadan API Response received successfully:', apiData);
+        console.log('✅ Islamic Ramadan API returned valid data - using primary source');
+        console.log(`📦 Data: ${apiData.data?.fasting?.length || 0} days of Ramadan, ${Object.keys(apiData.data?.white_days || {}).length > 0 ? 'includes white days' : 'no white days'}`);
 
         if (apiData.status === 'success' && apiData.data?.fasting?.length > 0) {
             const responseData = {

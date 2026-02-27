@@ -39,6 +39,10 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
   const [totalSurahDuration, setTotalSurahDuration] = useState(0);
   const [cumulativeTime, setCumulativeTime] = useState(0);
 
+  const DEFAULT_QURAN_TITLE = 'Quran Reader with Audio, Transliteration and Translation | HikmahSphere';
+  const PLAYER_BRAND_TITLE = 'Hikmah Sphere - A Unified Islamic Digital Platform';
+  const PREFETCH_LOOKAHEAD_AYAHS = 5;
+
   // Audio ref
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
   const [ayahAudioQueue, setAyahAudioQueue] = useState<number[]>([]);
@@ -56,6 +60,8 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
   const isSurahModeRef = React.useRef(false);
   const pausedTimeRef = React.useRef(0);
   const isBismillahRef = React.useRef(false);
+  const ayahAudioUrlMapRef = React.useRef<Map<number, string>>(new Map());
+  const prefetchedAyahAudioRef = React.useRef<Map<number, HTMLAudioElement>>(new Map());
 
   // Stable refs for audio event handlers (delegates to latest handler via ref)
   const handleAudioEndedFnRef = React.useRef<() => void>(() => {});
@@ -447,6 +453,85 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     }
   }, []);
 
+  const getSurahDisplayName = useCallback((surahNumber: number | null): string => {
+    if (!surahNumber) return 'Quran';
+    return surahs.find((s) => s.number === surahNumber)?.englishName || `Surah ${surahNumber}`;
+  }, [surahs]);
+
+  const updateNowPlayingMetadata = useCallback((surahNumber: number | null, ayahNumber: number | null) => {
+    if (!surahNumber) return;
+
+    const safeAyah = ayahNumber && ayahNumber > 0 ? ayahNumber : 1;
+    const surahName = getSurahDisplayName(surahNumber);
+    const trackTitle = `${surahName} - Ayah ${safeAyah}`;
+    const fullTitle = `${trackTitle} | ${PLAYER_BRAND_TITLE}`;
+
+    document.title = fullTitle;
+
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: fullTitle,
+        artist: 'Quran Audio',
+        album: 'Quran Audio',
+        artwork: [
+          { src: '/logo.png', sizes: '96x96', type: 'image/png' },
+          { src: '/logo.png', sizes: '192x192', type: 'image/png' },
+          { src: '/logo.png', sizes: '512x512', type: 'image/png' },
+        ],
+      });
+    }
+  }, [getSurahDisplayName, PLAYER_BRAND_TITLE]);
+
+  const clearPrefetchedAyahs = useCallback(() => {
+    prefetchedAyahAudioRef.current.forEach((audio) => {
+      audio.pause();
+      audio.removeAttribute('src');
+      audio.load();
+    });
+    prefetchedAyahAudioRef.current.clear();
+    ayahAudioUrlMapRef.current.clear();
+  }, []);
+
+  const prefetchUpcomingAyahs = useCallback((fromQueueIndex: number) => {
+    if (!isSurahModeRef.current) return;
+
+    const queue = ayahAudioQueueRef.current;
+    if (!queue.length) return;
+
+    const endIndex = Math.min(queue.length, fromQueueIndex + PREFETCH_LOOKAHEAD_AYAHS);
+    for (let i = fromQueueIndex; i < endIndex; i++) {
+      const ayahNumber = queue[i];
+      if (prefetchedAyahAudioRef.current.has(ayahNumber)) continue;
+
+      const audioUrl = ayahAudioUrlMapRef.current.get(ayahNumber);
+      if (!audioUrl) continue;
+
+      const prefetchAudio = new Audio();
+      prefetchAudio.preload = 'auto';
+      prefetchAudio.src = audioUrl;
+      prefetchAudio.load();
+      prefetchedAyahAudioRef.current.set(ayahNumber, prefetchAudio);
+    }
+
+    const cleanupBefore = Math.max(0, fromQueueIndex - 1);
+    const staleAyahs: number[] = [];
+    prefetchedAyahAudioRef.current.forEach((_audio, ayahNumber) => {
+      const indexInQueue = queue.indexOf(ayahNumber);
+      if (indexInQueue !== -1 && indexInQueue < cleanupBefore) {
+        staleAyahs.push(ayahNumber);
+      }
+    });
+    staleAyahs.forEach((ayahNumber) => {
+      const staleAudio = prefetchedAyahAudioRef.current.get(ayahNumber);
+      if (staleAudio) {
+        staleAudio.pause();
+        staleAudio.removeAttribute('src');
+        staleAudio.load();
+      }
+      prefetchedAyahAudioRef.current.delete(ayahNumber);
+    });
+  }, [PREFETCH_LOOKAHEAD_AYAHS]);
+
   // Initialize or get the persistent Audio element (critical for iOS Safari autoplay chain)
   // iOS Safari only allows .play() on an Audio element that was originally started by a user gesture.
   // Creating new Audio() in the 'ended' handler breaks the chain. Reusing the same element preserves it.
@@ -491,65 +576,99 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     setAyahAudioQueue([]);
     setCurrentQueueIndex(0);
     setIsSurahMode(false);
+    isSurahModeRef.current = false;
     cumulativeTimeRef.current = 0;
     totalSurahDurationRef.current = 0;
     pausedTimeRef.current = 0;
     isBismillahRef.current = false;
-  }, []);
+    clearPrefetchedAyahs();
+    document.title = DEFAULT_QURAN_TITLE;
+
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.metadata = null;
+      navigator.mediaSession.playbackState = 'none';
+    }
+  }, [clearPrefetchedAyahs, DEFAULT_QURAN_TITLE]);
 
   // Keep stopAudioRef in sync
   useEffect(() => {
     stopAudioRef.current = stopAudio;
   }, [stopAudio]);
 
-  const playAyah = useCallback(async (surahNumber: number, ayahNumber: number, isContinuing: boolean = false) => {
+  const playAyah = useCallback(async (
+    surahNumber: number,
+    ayahNumber: number,
+    isContinuing: boolean = false,
+    preResolvedAudioUrl?: string
+  ) => {
     try {
       console.log('🎵 Playing ayah:', surahNumber, ':', ayahNumber, 'isContinuing:', isContinuing);
 
-      // Fetch the ayah with audio
-      const apiUrl = `${API_URL}/quran/ayah/${surahNumber}:${ayahNumber}?editions=${settings.reciter}`;
-      console.log('🎵 Fetching ayah audio from:', apiUrl);
+      let audioUrl = preResolvedAudioUrl || ayahAudioUrlMapRef.current.get(ayahNumber);
 
-      const response = await fetch(apiUrl);
-      const data = await response.json();
+      // Fallback to endpoint only when queue URL map doesn't have this ayah
+      if (!audioUrl) {
+        const apiUrl = `${API_URL}/quran/ayah/${surahNumber}:${ayahNumber}?editions=${settings.reciter}`;
+        console.log('🎵 Fetching ayah audio from:', apiUrl);
 
-      console.log('🎵 API Response:', data);
+        const response = await fetch(apiUrl);
+        const data = await response.json();
 
-      // For ayah endpoint, the structure is: data[0].audio (not data[0].ayahs[0].audio)
-      if (data.status === 'success' && Array.isArray(data.data) && data.data[0]?.audio) {
-        const audioUrl = data.data[0].audio;
-        console.log('🎵 Audio URL:', audioUrl);
+        console.log('🎵 API Response:', data);
 
-        // Reuse persistent Audio element (critical for iOS Safari autoplay chain)
-        const audio = initAudioElement();
-        audio.pause();
-
-        audio.src = audioUrl;
-        audio.load();
-
-        setCurrentPlayingSurah(surahNumber);
-        setCurrentPlayingAyah(ayahNumber);
-        
-        // Only set isPlaying when audio actually starts
-        audio.play().then(() => {
-          setIsPlaying(true);
-          console.log('✅ Audio playback started successfully');
-        }).catch(error => {
-          console.error('❌ Audio playback failed:', error);
-          setIsPlaying(false);
-          setIsAudioLoading(false);
-        });
-      } else {
-        console.error('❌ No audio URL in response:', data);
-        console.log('Expected structure: data.data[0].audio');
-        console.log('Actual data.data:', data.data);
+        if (data.status === 'success' && Array.isArray(data.data) && data.data[0]?.audio) {
+          audioUrl = data.data[0].audio;
+          ayahAudioUrlMapRef.current.set(ayahNumber, audioUrl);
+          console.log('🎵 Audio URL:', audioUrl);
+        } else {
+          console.error('❌ No audio URL in response:', data);
+          console.log('Expected structure: data.data[0].audio');
+          console.log('Actual data.data:', data.data);
+          return;
+        }
       }
+
+      // Reuse persistent Audio element (critical for iOS Safari autoplay chain)
+      const audio = initAudioElement();
+      audio.pause();
+      audio.preload = 'auto';
+      audio.src = audioUrl;
+      audio.load();
+
+      setCurrentPlayingSurah(surahNumber);
+      setCurrentPlayingAyah(ayahNumber);
+      updateNowPlayingMetadata(surahNumber, ayahNumber);
+
+      if (isSurahModeRef.current && ayahAudioQueueRef.current.length > 0) {
+        const currentIndex = ayahAudioQueueRef.current.indexOf(ayahNumber);
+        if (currentIndex >= 0) {
+          prefetchUpcomingAyahs(currentIndex + 1);
+        }
+
+        const consumedPrefetch = prefetchedAyahAudioRef.current.get(ayahNumber);
+        if (consumedPrefetch) {
+          consumedPrefetch.pause();
+          consumedPrefetch.removeAttribute('src');
+          consumedPrefetch.load();
+          prefetchedAyahAudioRef.current.delete(ayahNumber);
+        }
+      }
+
+      // Only set isPlaying when audio actually starts
+      audio.play().then(() => {
+        setIsPlaying(true);
+        console.log('✅ Audio playback started successfully');
+      }).catch(error => {
+        console.error('❌ Audio playback failed:', error);
+        setIsPlaying(false);
+        setIsAudioLoading(false);
+      });
     } catch (err) {
       console.error('❌ Error playing ayah:', err);
       setIsPlaying(false);
       setIsAudioLoading(false);
     }
-  }, [settings.reciter, initAudioElement]);
+  }, [settings.reciter, initAudioElement, prefetchUpcomingAyahs, updateNowPlayingMetadata]);
 
   // Play Bismillah separately (for surahs 2-8, 10-114)
   const playBismillah = useCallback(async (surahNumber: number) => {
@@ -572,6 +691,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       audio.load();
       
       setCurrentPlayingAyah(0); // Mark as Bismillah
+      updateNowPlayingMetadata(surahNumber, 1);
       
       // Play
       audio.play().then(() => {
@@ -587,12 +707,13 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       setIsPlaying(false);
       setIsAudioLoading(false);
     }
-  }, [initAudioElement]);
+  }, [initAudioElement, updateNowPlayingMetadata]);
 
   const playSurah = useCallback(async (surahNumber: number) => {
     try {
       console.log('🎵 Playing complete surah:', surahNumber);
       setIsSurahMode(true);
+      isSurahModeRef.current = true;
 
       // Stop any current playback (don't destroy the element)
       if (audioRef.current) {
@@ -613,6 +734,12 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       if (data.status === 'success' && data.data[0]?.ayahs) {
         const ayahs = data.data[0].ayahs;
         const audioQueue = ayahs.map((ayah: Ayah) => ayah.numberInSurah);
+        const audioUrlMap = new Map<number, string>();
+        ayahs.forEach((ayah: Ayah) => {
+          if (ayah.audio) {
+            audioUrlMap.set(ayah.numberInSurah, ayah.audio);
+          }
+        });
 
         console.log('🎵 Audio queue created:', audioQueue);
 
@@ -624,6 +751,9 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
         setAyahAudioQueue(audioQueue);
         // Important: Update ref immediately for handleAudioEnded
         ayahAudioQueueRef.current = audioQueue;
+        ayahAudioUrlMapRef.current = audioUrlMap;
+        clearPrefetchedAyahs();
+        ayahAudioUrlMapRef.current = audioUrlMap;
         
         setCurrentQueueIndex(0);
         currentQueueIndexRef.current = 0;
@@ -636,6 +766,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
         // For Surah 1 (Al-Fatiha), Bismillah is part of Ayah 1
         // For other surahs (2-8, 10-114), play Bismillah first
         const hasBismillah = surahNumber !== 1 && surahNumber !== 9;
+        prefetchUpcomingAyahs(0);
 
         if (hasBismillah) {
           console.log('🎵 Playing Bismillah first for Surah', surahNumber);
@@ -651,7 +782,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
         // Play first ayah
         if (audioQueue.length > 0) {
           console.log('🎵 Starting with first ayah:', audioQueue[0]);
-          await playAyah(surahNumber, audioQueue[0]);
+          await playAyah(surahNumber, audioQueue[0], false, audioUrlMap.get(audioQueue[0]));
         }
       }
     } catch (err) {
@@ -660,7 +791,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       setIsAudioLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.reciter, playAyah, playBismillah]);
+  }, [settings.reciter, playAyah, playBismillah, clearPrefetchedAyahs, prefetchUpcomingAyahs]);
 
   const pauseAyah = useCallback(() => {
     console.log('⏸️ Pausing audio');
@@ -712,6 +843,11 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     }
   }, [isPlaying, pauseAyah, resumeAyah, currentPlayingAyah, currentPlayingSurah]);
 
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    navigator.mediaSession.playbackState = isPlaying ? 'playing' : isPaused ? 'paused' : 'none';
+  }, [isPlaying, isPaused]);
+
   const seekAudio = useCallback((time: number) => {
     if (audioRef.current) {
       audioRef.current.currentTime = time;
@@ -762,7 +898,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
         
         const firstAyah = ayahAudioQueueRef.current[0];
         console.log('🎵 Playing ayah 1 of surah', surahNum, 'from queue:', firstAyah);
-        await playAyah(surahNum, firstAyah);
+        await playAyah(surahNum, firstAyah, true, ayahAudioUrlMapRef.current.get(firstAyah));
       } else {
         console.error('❌ Audio queue is empty after Bismillah!');
         // Fallback or stop
@@ -791,7 +927,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       currentQueueIndexRef.current = nextIndex;
 
       if (surahNum) {
-        await playAyah(surahNum, nextAyahNumber, true);
+        await playAyah(surahNum, nextAyahNumber, true, ayahAudioUrlMapRef.current.get(nextAyahNumber));
       }
     } else {
       console.log('🎵 Audio playback complete - stopping');

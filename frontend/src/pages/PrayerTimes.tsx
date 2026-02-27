@@ -27,6 +27,7 @@ const PrayerTimes: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [location, setLocation] = useState<{lat: number, lon: number, city?: string, country?: string} | null>(null);
+  const [detectedCountry, setDetectedCountry] = useState<string>('');
   const [cityQuery, setCityQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [showSearch, setShowSearch] = useState(false);
@@ -43,6 +44,7 @@ const PrayerTimes: React.FC = () => {
   const [selectedMadhab, setSelectedMadhab] = useState<string>(user?.madhab || 'shafi');
   const [calculationMethod, setCalculationMethod] = useState(1); // Default: University of Islamic Sciences, Karachi
   const [highLatitudeRule, setHighLatitudeRule] = useState(1); // Default: Middle of Night
+  const [timeFormat, setTimeFormat] = useState<'12h' | '24h'>('12h');
 
   // Data states
   const [prayerData, setPrayerData] = useState<any>(null);
@@ -70,27 +72,73 @@ const PrayerTimes: React.FC = () => {
   const hasScrolledRef = useRef(false);
   const prayersContainerRef = useRef<HTMLDivElement>(null);
 
+  const resolveLocationDetails = useCallback(async (lat: number, lon: number) => {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`
+      );
+      const data = await response.json();
+      const address = data?.address || {};
+
+      const city =
+        address.city ||
+        address.town ||
+        address.village ||
+        address.municipality ||
+        address.state ||
+        '';
+      const country = address.country || '';
+
+      if (country) {
+        setDetectedCountry(country);
+      }
+      if (city) {
+        setCityQuery((prev) => prev || city);
+      }
+    } catch (err) {
+      console.warn('Reverse geocoding failed:', err);
+    }
+  }, []);
+
   useEffect(() => {
     setLoading(true); // Ensure loading starts immediately on mount
     // Try getting current location first
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (position) => {
+        async (position) => {
+          const lat = position.coords.latitude;
+          const lon = position.coords.longitude;
+
           setLocation({
-            lat: position.coords.latitude,
-            lon: position.coords.longitude
+            lat,
+            lon
           });
+          await resolveLocationDetails(lat, lon);
           // Note: We don't set loading false here, we wait for fetchPrayerTimes
         },
         (err) => {
           console.warn("Geolocation denied or failed:", err);
-          setLocation({ lat: 12.96, lon: 77.57 }); // Default to Bangalore
+          setLocation({ lat: 12.96, lon: 77.57, city: 'Bengaluru', country: 'India' }); // Default to Bangalore
+          setDetectedCountry('India');
+          setCityQuery('Bengaluru');
         }
       );
     } else {
-      setLocation({ lat: 12.96, lon: 77.57 });
+      setLocation({ lat: 12.96, lon: 77.57, city: 'Bengaluru', country: 'India' });
+      setDetectedCountry('India');
+      setCityQuery('Bengaluru');
     }
-  }, []);
+  }, [resolveLocationDetails]);
+
+  const activeCountry = location?.country || detectedCountry || '';
+  const isOutsideIndia = !!activeCountry && !activeCountry.toLowerCase().includes('india');
+
+  useEffect(() => {
+    // Default behavior by location:
+    // India -> 12h, Outside India -> 24h (user can still change it manually)
+    if (!activeCountry) return;
+    setTimeFormat(isOutsideIndia ? '24h' : '12h');
+  }, [activeCountry, isOutsideIndia]);
 
   useEffect(() => {
     if (location) {
@@ -548,9 +596,9 @@ const PrayerTimes: React.FC = () => {
 
   const selectLocation = (result: any) => {
     // Extract city and country from result
-    const displayNameParts = result.display_name.split(',').map((s: string) => s.trim());
-    const city = displayNameParts[0];
-    const country = displayNameParts[displayNameParts.length - 1];
+    const displayNameParts = (result.display_name || '').split(',').map((s: string) => s.trim());
+    const city = displayNameParts[0] || 'Unknown';
+    const country = displayNameParts[displayNameParts.length - 1] || 'Unknown';
     
     setLocation({
       lat: parseFloat(result.lat),
@@ -558,9 +606,36 @@ const PrayerTimes: React.FC = () => {
       city: city,
       country: country
     });
+    setDetectedCountry(country);
     setCityQuery(city);
     setSearchResults([]);
     setShowSearch(false);
+  };
+
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported by your browser.');
+      return;
+    }
+
+    setError(null);
+    setLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const lat = position.coords.latitude;
+        const lon = position.coords.longitude;
+
+        setLocation({ lat, lon });
+        await resolveLocationDetails(lat, lon);
+        setShowSearch(false);
+        setSearchResults([]);
+      },
+      (geoError) => {
+        console.warn('Failed to get current location:', geoError);
+        setLoading(false);
+        setError('Unable to get your current location. Please allow location permission.');
+      }
+    );
   };
   
   // Helper: Find weather closest to a given time string (e.g., "05:30")
@@ -568,7 +643,8 @@ const PrayerTimes: React.FC = () => {
       if (!weatherData || !weatherData.hourly) return null;
       
       // Parse prayer time "HH:mm"
-      const [hours] = timeStr.split(':').map(Number);
+      const parsed = parseTimeString(timeStr);
+      const hours = parsed?.hours ?? 0;
       
       const now = new Date();
       const currentHour = hours; // Approximation is fine
@@ -635,13 +711,48 @@ const PrayerTimes: React.FC = () => {
     return { icon: SunIcon, color: 'text-orange-400', label: 'Sunny' };
   };
 
+  // Helper: Parse time string from formats like "05:30", "05:30 (+05)", "5:30 PM"
+  function parseTimeString(timeStr: string): { hours: number; minutes: number } | null {
+    if (!timeStr) return null;
+
+    const hasMeridian = /\b(am|pm)\b/i.test(timeStr);
+    const match = timeStr.match(/(\d{1,2}):(\d{2})/);
+    if (!match) return null;
+
+    let hours = parseInt(match[1], 10);
+    const minutes = parseInt(match[2], 10);
+    if (Number.isNaN(hours) || Number.isNaN(minutes)) return null;
+
+    if (hasMeridian) {
+      const meridian = (timeStr.match(/\b(am|pm)\b/i)?.[1] || '').toLowerCase();
+      if (meridian === 'pm' && hours < 12) hours += 12;
+      if (meridian === 'am' && hours === 12) hours = 0;
+    }
+
+    return { hours: hours % 24, minutes };
+  }
+
+  const formatTimeForDisplay = (timeStr: string): string => {
+    const parsed = parseTimeString(timeStr);
+    if (!parsed) return timeStr;
+
+    const hh24 = `${String(parsed.hours).padStart(2, '0')}:${String(parsed.minutes).padStart(2, '0')}`;
+    if (timeFormat === '24h') return hh24;
+
+    const hours12 = parsed.hours % 12 || 12;
+    const meridian = parsed.hours >= 12 ? 'PM' : 'AM';
+    return `${hours12}:${String(parsed.minutes).padStart(2, '0')} ${meridian}`;
+  };
+
   // Helper: Parse time string (HH:mm) to Date object for today
-  const parsePrayerTime = (timeStr: string, baseDate: Date = new Date()): Date => {
-    const [hours, minutes] = timeStr.split(':').map(Number);
+  const parsePrayerTime = useCallback((timeStr: string, baseDate: Date = new Date()): Date => {
+    const parsed = parseTimeString(timeStr);
+    const hours = parsed?.hours ?? 0;
+    const minutes = parsed?.minutes ?? 0;
     const prayerTime = new Date(baseDate);
     prayerTime.setHours(hours, minutes, 0, 0);
     return prayerTime;
-  };
+  }, []);
 
   // Helper: Format countdown time
   const formatCountdown = (totalSeconds: number): string => {
@@ -706,7 +817,7 @@ const PrayerTimes: React.FC = () => {
       minutes: Math.floor((totalSeconds % 3600) / 60),
       seconds: totalSeconds % 60
     });
-  }, [prayerData]);
+  }, [parsePrayerTime, prayerData]);
 
   // Update timer every second
   useEffect(() => {
@@ -1004,6 +1115,24 @@ const PrayerTimes: React.FC = () => {
                   </select>
                 </div>
 
+                {/* Clock Format */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Clock Format
+                  </label>
+                  <select
+                    value={timeFormat}
+                    onChange={(e) => setTimeFormat(e.target.value as '12h' | '24h')}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+                  >
+                    <option value="12h">12-hour (AM/PM)</option>
+                    <option value="24h">24-hour</option>
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Default is 12-hour in India and 24-hour outside India.
+                  </p>
+                </div>
+
                 {/* Month/Year Selection for Monthly View */}
                 {viewMode === 'monthly' && (
                   <>
@@ -1048,6 +1177,17 @@ const PrayerTimes: React.FC = () => {
             </div>
           )}
 
+          {isOutsideIndia && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 sm:p-4 mb-4 sm:mb-6 text-left">
+              <p className="text-sm sm:text-base font-semibold text-amber-800">
+                Location Notice: {activeCountry}
+              </p>
+              <p className="text-xs sm:text-sm text-amber-700 mt-1">
+                For better prayer-time accuracy outside India, review your Calculation Method, Madhab, and High Latitude Adjustment in settings.
+              </p>
+            </div>
+          )}
+
           {/* Islamic Events Display - Mobile Optimized */}
           {islamicEvents.length > 0 && (
             <div className="bg-gradient-to-r from-emerald-100 to-teal-100 rounded-xl p-3 sm:p-4 mb-4 sm:mb-6">
@@ -1063,7 +1203,7 @@ const PrayerTimes: React.FC = () => {
                         : 'bg-emerald-500 text-white'
                     }`}
                   >
-                    {event.icon} <span className="hidden xs:inline">{event.name}</span><span className="xs:hidden">{event.name.split(' ')[0]}</span>
+                    {event.icon} <span className="hidden xs:inline">{event.name || 'Event'}</span><span className="xs:hidden">{event.name?.split(' ')[0] || 'Event'}</span>
                   </div>
                 ))}
               </div>
@@ -1072,15 +1212,24 @@ const PrayerTimes: React.FC = () => {
 
           {/* Location and Date Display - Mobile Optimized */}
           <div className="flex flex-col items-center justify-center text-gray-600 mb-3 sm:mb-4">
-            <button
-                onClick={() => setShowSearch(!showSearch)}
-                className="flex items-center hover:text-emerald-600 transition-colors text-sm sm:text-base"
-            >
-                <MapPinIcon className="h-4 w-4 sm:h-5 sm:w-5 mr-1.5 sm:mr-2" />
-                <span className="truncate max-w-[280px] sm:max-w-full">
-                    {location ? `${cityQuery || 'Current Location'}` : 'Select Location'}
-                </span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                  onClick={() => setShowSearch(!showSearch)}
+                  className="flex items-center hover:text-emerald-600 transition-colors text-sm sm:text-base"
+              >
+                  <MapPinIcon className="h-4 w-4 sm:h-5 sm:w-5 mr-1.5 sm:mr-2" />
+                  <span className="truncate max-w-[220px] sm:max-w-full">
+                      {location ? `${cityQuery || 'Current Location'}` : 'Select Location'}
+                  </span>
+              </button>
+              <button
+                onClick={handleUseCurrentLocation}
+                className="text-[11px] sm:text-xs px-2.5 py-1 rounded-full border border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors"
+                title="Use current location"
+              >
+                Use Current
+              </button>
+            </div>
 
             <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 mt-1.5 text-xs sm:text-sm">
                 <p className="text-emerald-600 font-medium">
@@ -1116,9 +1265,17 @@ const PrayerTimes: React.FC = () => {
                 <MagnifyingGlassIcon className="h-5 w-5 text-gray-400 absolute left-3 top-2.5" />
                 <button
                     type="submit"
-                    className="absolute right-1 top-1 bg-emerald-600 text-white px-4 py-1.5 rounded-lg hover:bg-emerald-700 text-sm font-medium"
+                    className="absolute right-1 top-1 bg-emerald-600 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-700 text-sm font-medium"
                 >
                     Search
+                </button>
+                <button
+                    type="button"
+                    onClick={handleUseCurrentLocation}
+                    className="absolute right-[74px] top-1 bg-white text-emerald-700 border border-emerald-200 px-2 py-1.5 rounded-lg hover:bg-emerald-50 text-xs font-semibold"
+                    title="Use current location"
+                >
+                    Current
                 </button>
                 </form>
 
@@ -1202,12 +1359,12 @@ const PrayerTimes: React.FC = () => {
                           <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-sm text-gray-500">
                             {day.date.gregorian.weekday.en}
                           </td>
-                          <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-sm text-gray-900">{day.timings.Fajr}</td>
-                          <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-sm text-gray-500">{day.timings.Sunrise}</td>
-                          <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-sm text-gray-900">{day.timings.Dhuhr}</td>
-                          <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-sm text-gray-900">{day.timings.Asr}</td>
-                          <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-sm text-gray-900">{day.timings.Maghrib}</td>
-                          <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-sm text-gray-900">{day.timings.Isha}</td>
+                          <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-sm text-gray-900">{formatTimeForDisplay(day.timings.Fajr)}</td>
+                          <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-sm text-gray-500">{formatTimeForDisplay(day.timings.Sunrise)}</td>
+                          <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-sm text-gray-900">{formatTimeForDisplay(day.timings.Dhuhr)}</td>
+                          <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-sm text-gray-900">{formatTimeForDisplay(day.timings.Asr)}</td>
+                          <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-sm text-gray-900">{formatTimeForDisplay(day.timings.Maghrib)}</td>
+                          <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-sm text-gray-900">{formatTimeForDisplay(day.timings.Isha)}</td>
                           <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-sm text-gray-500">
                             {day.date.hijri.day} {day.date.hijri.month.en}
                           </td>
@@ -1339,7 +1496,7 @@ const PrayerTimes: React.FC = () => {
                                   : 'text-emerald-600'
                               }`}
                             >
-                              {prayer.time}
+                              {formatTimeForDisplay(prayer.time)}
                             </p>
                             <p className="text-xs sm:text-sm font-arabic text-gray-600">{prayer.arabic}</p>
                             </div>
@@ -1363,13 +1520,13 @@ const PrayerTimes: React.FC = () => {
                                 {prayer.name === 'Fajr' && fastingData?.fasting?.[0] && (
                                   <div className="mt-1 pt-1 border-t border-gray-100">
                                     <span className="text-xs font-medium text-gray-500">Sehri Ends</span>
-                                    <p className="text-sm font-bold text-emerald-600">{fastingData.fasting[0].time.sahur}</p>
+                                    <p className="text-sm font-bold text-emerald-600">{formatTimeForDisplay(fastingData.fasting[0].time.sahur)}</p>
                                   </div>
                                 )}
                                 {prayer.name === 'Maghrib' && fastingData?.fasting?.[0] && (
                                   <div className="mt-1 pt-1 border-t border-gray-100">
                                     <span className="text-xs font-medium text-gray-500">Iftar Time</span>
-                                    <p className="text-sm font-bold text-emerald-600">{fastingData.fasting[0].time.iftar}</p>
+                                    <p className="text-sm font-bold text-emerald-600">{formatTimeForDisplay(fastingData.fasting[0].time.iftar)}</p>
                                   </div>
                                 )}
                               </div>
@@ -1383,13 +1540,13 @@ const PrayerTimes: React.FC = () => {
                                         </div>
                                         <div className="mt-1 pt-1 border-t border-gray-100">
                                           <span className="text-xs font-medium text-gray-500">Sehri Ends</span>
-                                          <p className="text-sm font-bold text-emerald-600">{fastingData.fasting[0].time.sahur}</p>
+                                          <p className="text-sm font-bold text-emerald-600">{formatTimeForDisplay(fastingData.fasting[0].time.sahur)}</p>
                                         </div>
                                       </>
                                     ) : (
                                       <div>
                                           <span className="text-xs font-medium text-gray-500">Sehri Ends</span>
-                                          <p className="text-sm font-bold text-emerald-600">{fastingData.fasting[0].time.sahur}</p>
+                                          <p className="text-sm font-bold text-emerald-600">{formatTimeForDisplay(fastingData.fasting[0].time.sahur)}</p>
                                       </div>
                                     )}
                                 </div>
@@ -1403,7 +1560,7 @@ const PrayerTimes: React.FC = () => {
                                         </div>
                                         <div className="mt-1 pt-1 border-t border-gray-100">
                                           <span className="text-xs font-medium text-gray-500">Iftar Time</span>
-                                          <p className="text-sm font-bold text-emerald-600">{fastingData.fasting[0].time.iftar}</p>
+                                          <p className="text-sm font-bold text-emerald-600">{formatTimeForDisplay(fastingData.fasting[0].time.iftar)}</p>
                                           <span className="text-xs font-medium text-gray-500">Duration</span>
                                           <p className="text-xs font-semibold text-gray-600">{fastingData.fasting[0].time.duration}</p>
                                         </div>
@@ -1411,7 +1568,7 @@ const PrayerTimes: React.FC = () => {
                                     ) : (
                                       <div>
                                           <span className="text-xs font-medium text-gray-500">Iftar Time</span>
-                                          <p className="text-sm font-bold text-emerald-600">{fastingData.fasting[0].time.iftar}</p>
+                                          <p className="text-sm font-bold text-emerald-600">{formatTimeForDisplay(fastingData.fasting[0].time.iftar)}</p>
                                           <span className="text-xs font-medium text-gray-500">Duration</span>
                                           <p className="text-xs font-semibold text-gray-600">{fastingData.fasting[0].time.duration}</p>
                                       </div>
@@ -1428,7 +1585,7 @@ const PrayerTimes: React.FC = () => {
                                 {prayerData?.times?.Midnight && (
                                   <div className={`${isCurrentPrayer ? 'mt-1 pt-1 border-t border-gray-100' : ''}`}>
                                     <span className="text-xs font-medium text-gray-500">Islamic Midnight</span>
-                                    <p className="text-sm font-bold text-emerald-600">{prayerData.times.Midnight}</p>
+                                    <p className="text-sm font-bold text-emerald-600">{formatTimeForDisplay(prayerData.times.Midnight)}</p>
                                   </div>
                                 )}
                               </div>
@@ -2010,8 +2167,16 @@ const PrayerTimes: React.FC = () => {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
                 {ramadanData.fasting.map((day: any, idx: number) => {
+                  // Safety checks for undefined values — hijri optional (fallback may omit it)
+                  if (!day || !day.date || !day.time) {
+                    return null;
+                  }
+                  
                   const isToday = new Date(day.date).toDateString() === new Date().toDateString();
-                  const dayNumber = parseInt(day.hijri.split('-')[2]);
+                  // Use hijri day number if available, else fall back to 1-based index
+                  const dayNumber = day.hijri
+                    ? (parseInt(day.hijri.split('-')[2] || String(idx + 1)) || idx + 1)
+                    : idx + 1;
                   const dateObj = new Date(day.date);
 
                   return (
@@ -2046,34 +2211,36 @@ const PrayerTimes: React.FC = () => {
                       {/* Card Content */}
                       <div className="p-3 sm:p-4">
                         {/* Day Name */}
-                        <p className="text-xs sm:text-sm font-medium text-gray-500 mb-1.5 sm:mb-2">{day.day}</p>
+                        <p className="text-xs sm:text-sm font-medium text-gray-500 mb-1.5 sm:mb-2">{day.day || 'Day'}</p>
 
                         {/* Gregorian Date */}
                         <p className="text-sm sm:text-base font-semibold text-gray-900 mb-1">
-                          {dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          {isNaN(dateObj.getTime())
+                            ? day.date
+                            : dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </p>
 
                         {/* Hijri Date */}
                         <p className="text-xs sm:text-sm font-arabic text-emerald-600 mb-3 sm:mb-4" dir="rtl">
-                          {day.hijri_readable}
+                          {day.hijri_readable || day.hijri || 'Ramadan'}
                         </p>
 
                         {/* Times Grid */}
                         <div className="grid grid-cols-2 gap-1.5 sm:gap-2 mb-2.5 sm:mb-3">
                           <div className="bg-orange-50 rounded-lg sm:rounded-xl p-1.5 sm:p-2 text-center">
                             <p className="text-[10px] sm:text-xs text-orange-600 font-medium mb-0.5 sm:mb-1">Sehri Ends</p>
-                            <p className="text-base sm:text-lg font-bold text-orange-700">{day.time.sahur}</p>
+                            <p className="text-base sm:text-lg font-bold text-orange-700">{formatTimeForDisplay(day.time?.sahur || day.time?.fajr)}</p>
                           </div>
                           <div className="bg-emerald-50 rounded-lg sm:rounded-xl p-1.5 sm:p-2 text-center">
                             <p className="text-[10px] sm:text-xs text-emerald-600 font-medium mb-0.5 sm:mb-1">Iftar</p>
-                            <p className="text-base sm:text-lg font-bold text-emerald-700">{day.time.iftar}</p>
+                            <p className="text-base sm:text-lg font-bold text-emerald-700">{formatTimeForDisplay(day.time?.iftar || day.time?.maghrib)}</p>
                           </div>
                         </div>
 
                         {/* Duration */}
                         <div className="bg-gray-50 rounded-lg sm:rounded-xl p-1.5 sm:p-2 text-center">
                           <p className="text-[10px] sm:text-xs text-gray-500 font-medium">Duration</p>
-                          <p className="text-xs sm:text-sm font-bold text-gray-700">{day.time.duration}</p>
+                          <p className="text-xs sm:text-sm font-bold text-gray-700">{day.time?.duration || 'N/A'}</p>
                         </div>
                       </div>
                     </div>
