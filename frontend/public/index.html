@@ -5,36 +5,28 @@
   <link rel="icon" href="/logo.png"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
 
-  <!-- PRIMARY SEO TITLE -->
-  <title>HikmahSphere – Islamic App for Prayer Times, Quran, Zakat & Muslim Community</title>
-
-  <!-- META DESCRIPTION -->
+  <!--
+    Fallback title/description for the homepage only.
+    All other pages get unique <title>, <meta description>, <link rel="canonical">
+    og: and twitter: tags injected by the PageSEO component (react-helmet-async).
+    Do NOT add canonical, og:title, og:description, twitter:title, twitter:description
+    here — they would conflict with Helmet's per-page tags and cause duplicate SEO
+    issues in Google Search Console.
+  -->
+  <title>HikmahSphere – Islamic App for Prayer Times, Quran, Zakat &amp; Muslim Community</title>
   <meta name="description" content="HikmahSphere is your all-in-one Islamic platform. Get accurate daily prayer times worldwide, read the complete Quran with 10+ translations and audio recitations, calculate Zakat with live nisab rates, and connect with a global Muslim community — free, ad-free and private."/>
 
-  <!-- KEYWORDS -->
-  <meta name="keywords" content="islamic app, muslim app, prayer times, salah times, namaz times, accurate prayer times india, quran reader, quran with translation, quran audio, urdu quran, indo pak quran, quran transliteration, zakat calculator, zakat calculator india, nisab value today, gold price for zakat, zakat on cryptocurrency, muslim community app, islamic platform, ramadan fasting times, sehri iftar times, hijri calendar, islamic calendar, quran search, online quran, islamic digital platform, muslim prayer app, best islamic app"/>
-
   <meta name="theme-color" content="#000000"/>
+  <meta name="author" content="HikmahSphere"/>
 
-  <!-- Open Graph (for social media preview) -->
-  <meta property="og:title" content="HikmahSphere - Accurate Prayer Times, Quran Reader and Zakat Calculator"/>
-  <meta property="og:description" content="Accurate prayer times worldwide, Quran with audio and translations, and an easy Zakat calculator with live nisab thresholds."/>
-  <meta property="og:url" content="https://hikmahsphere.site"/>
+  <!-- Safe og: fallbacks (Helmet overrides title/description/url/canonical per-page) -->
   <meta property="og:type" content="website"/>
+  <meta property="og:site_name" content="HikmahSphere"/>
   <meta property="og:image" content="https://hikmahsphere.site/logo.png"/>
-
-  <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image"/>
-  <meta name="twitter:title" content="HikmahSphere - Accurate Prayer Times, Quran Reader and Zakat Calculator"/>
-  <meta name="twitter:description" content="Accurate prayer times worldwide, Quran with audio and translations, and an easy Zakat calculator with live nisab thresholds."/>
   <meta name="twitter:image" content="https://hikmahsphere.site/logo.png"/>
 
-  <!-- Additional SEO -->
-  <meta name="author" content="HikmahSphere"/>
-  <meta name="robots" content="index, follow"/>
-  <link rel="canonical" href="https://hikmahsphere.site"/>
-
-  <!-- Schema Markup -->
+  <!-- Schema Markup (site-wide structured data, does not affect per-page SEO) -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
