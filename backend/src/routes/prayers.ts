@@ -87,6 +87,18 @@ const RAMADAN_HADITHS = [
   { arabic: 'إِنَّ فِي الْجَنَّةِ بَابًا يُقَالُ لَهُ الرَّيَّانُ يَدْخُلُ مِنْهُ الصَّائِمُونَ يَوْمَ الْقِيَامَةِ', english: 'In Paradise there is a gate called Al-Rayyan, through which those who fast will enter on the Day of Resurrection.', source: 'Sahih al-Bukhari 1896, Sahih Muslim 1152', grade: 'Sahih' },
 ];
 
+// Helper: fetch with a configurable timeout (default 8 s) so external APIs
+// can never hang the request indefinitely.
+async function fetchWithTimeout(url: string, timeoutMs = 8000): Promise<globalThis.Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // Helper: find today's 0-based index inside the Ramadan fasting array
 // Falls back to 0 if today is not in the array (before/after Ramadan)
 function getRamadanDayIndexFromFasting(fastingArr: Array<{ date: string }>): number {
@@ -189,7 +201,7 @@ router.get('/times', [
     console.log(`🔗 API URL: ${apiUrl}`);
     console.log('⏳ Fetching from Aladhan API...');
 
-    const apiResponse = await fetch(apiUrl);
+    const apiResponse = await fetchWithTimeout(apiUrl, 8000);
 
     console.log(`📥 API Response Status: ${apiResponse.status} ${apiResponse.statusText}`);
     console.log(`📦 Response OK: ${apiResponse.ok}`);
@@ -349,7 +361,7 @@ router.get('/timesByCity', [
     console.log(`🔗 API URL: ${apiUrl}`);
     console.log('⏳ Fetching from Aladhan API...');
 
-    const apiResponse = await fetch(apiUrl);
+    const apiResponse = await fetchWithTimeout(apiUrl, 8000);
 
     console.log(`📥 API Response Status: ${apiResponse.status} ${apiResponse.statusText}`);
     console.log(`📦 Response OK: ${apiResponse.ok}`);
@@ -479,7 +491,7 @@ router.get('/fasting', [
     console.log(`⚙️ Settings: method=${method}, school=${schoolParam} (${schoolParam === '1' ? 'Hanafi' : 'Shafi'})`);
     console.log(`🔗 API URL: ${apiUrl}`);
 
-    const response = await fetch(apiUrl);
+    const response = await fetchWithTimeout(apiUrl, 8000);
     if (!response.ok) {
       throw new Error(`Aladhan timings API error: ${response.status}`);
     }
@@ -607,7 +619,7 @@ router.get('/ramadan', [
     const monthResponses = await Promise.all(
       monthRequests.map(async (month) => {
         const url = `${CALENDAR_API_URL}/${targetYear}/${month}?latitude=${latitude}&longitude=${longitude}&method=${method}&school=${schoolParam}`;
-        const response = await fetch(url);
+        const response = await fetchWithTimeout(url, 10000);
         if (!response.ok) {
           throw new Error(`Aladhan calendar API error for ${targetYear}-${month}: ${response.status}`);
         }
@@ -765,7 +777,7 @@ router.get('/weather', [
 
           console.log(`Fetching weather from: ${apiUrl}`);
 
-          const response = await fetch(apiUrl);
+          const response = await fetchWithTimeout(apiUrl, 6000);
           if (!response.ok) {
               throw new Error(`Weather API error: ${response.status}`);
           }

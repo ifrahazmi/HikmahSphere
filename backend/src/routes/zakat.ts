@@ -241,17 +241,9 @@ router.get('/nisab-live', [
     const standard = (req.query.standard as 'classical' | 'common') || 'common';
     const currency = ((req.query.currency as string) || 'inr').toLowerCase();
 
-    const primary = await fetchNisabData(standard, currency);
-    if (primary.success && primary.data) {
-      return res.json({
-        status: 'success',
-        data: {
-          ...primary.data,
-          source: 'IslamicAPI',
-        },
-      });
-    }
-
+    // islamicapi.com is behind Cloudflare Bot Fight Mode and blocks server-side
+    // fetch requests with a 403 challenge page. Skip it and use the market feed
+    // directly (gold-api.com + open.er-api.com) which works reliably from the server.
     const fallback = await fetchFallbackNisabData(standard, currency);
     if (fallback.success && fallback.data) {
       return res.json({
@@ -264,7 +256,6 @@ router.get('/nisab-live', [
       status: 'error',
       message: 'Unable to fetch live nisab values from current providers',
       details: {
-        primaryError: primary.success ? null : primary.error,
         fallbackError: fallback.success ? null : fallback.error,
       },
     });
@@ -310,7 +301,8 @@ router.post('/calculate', [
       currency = 'inr',
     } = req.body;
 
-    const nisabResult = await fetchNisabData(calculationStandard, currency);
+    // islamicapi.com is behind Cloudflare and blocks server-side requests — use fallback directly
+    const nisabResult = await fetchFallbackNisabData(calculationStandard, currency);
 
     let goldUnitPrice = 0;
     let silverUnitPrice = 0;
