@@ -60,6 +60,22 @@ print_info() {
     echo -e "${BLUE}ℹ INFO:${NC} $1"
 }
 
+# Resolve backend port from backend/.env, falling back to 5000.
+get_backend_port() {
+    local env_file="$HOME/HikmahSphere/backend/.env"
+    local detected_port=""
+
+    if [ -f "$env_file" ]; then
+        detected_port=$(grep -E '^PORT=' "$env_file" | tail -n 1 | cut -d'=' -f2 | tr -d '[:space:]')
+    fi
+
+    if [[ "$detected_port" =~ ^[0-9]{2,5}$ ]]; then
+        echo "$detected_port"
+    else
+        echo "5000"
+    fi
+}
+
 # ============================================
 # Main Verification Process
 # ============================================
@@ -69,6 +85,8 @@ echo -e "${YELLOW}Time: $(timestamp)${NC}"
 echo ""
 
 cd ~/HikmahSphere || { print_fail "Failed to navigate to project directory"; exit 1; }
+BACKEND_PORT=$(get_backend_port)
+print_info "Backend port resolved to ${CYAN}${BACKEND_PORT}${NC}"
 
 # ============================================
 # Git Status
@@ -132,11 +150,11 @@ else
 fi
 
 # Check if backend port is listening
-print_info "Checking if backend port (5000) is listening..."
-if netstat -tuln 2>/dev/null | grep -q ":5000" || ss -tuln 2>/dev/null | grep -q ":5000"; then
-    print_pass "Backend port 5000 is listening"
+print_info "Checking if backend port (${BACKEND_PORT}) is listening..."
+if netstat -tuln 2>/dev/null | grep -q ":${BACKEND_PORT}" || ss -tuln 2>/dev/null | grep -q ":${BACKEND_PORT}"; then
+    print_pass "Backend port ${BACKEND_PORT} is listening"
 else
-    print_warn "Backend port 5000 not detected (may be configured differently)"
+    print_warn "Backend port ${BACKEND_PORT} not detected (may be configured differently)"
 fi
 
 # ============================================

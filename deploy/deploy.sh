@@ -61,6 +61,22 @@ print_info() {
     echo -e "${MAGENTA}ℹ $1${NC}"
 }
 
+# Resolve backend port from backend/.env, falling back to 5000.
+get_backend_port() {
+    local env_file="$HOME/HikmahSphere/backend/.env"
+    local detected_port=""
+
+    if [ -f "$env_file" ]; then
+        detected_port=$(grep -E '^PORT=' "$env_file" | tail -n 1 | cut -d'=' -f2 | tr -d '[:space:]')
+    fi
+
+    if [[ "$detected_port" =~ ^[0-9]{2,5}$ ]]; then
+        echo "$detected_port"
+    else
+        echo "5000"
+    fi
+}
+
 # ============================================
 # Main Deployment Process
 # ============================================
@@ -74,6 +90,8 @@ echo ""
 # Navigate to project directory
 cd ~/HikmahSphere || { print_error "Failed to navigate to project directory"; exit 1; }
 print_success "Navigated to project directory"
+BACKEND_PORT=$(get_backend_port)
+print_info "Backend port resolved to ${CYAN}${BACKEND_PORT}${NC}"
 
 # ============================================
 # Git Operations
@@ -112,6 +130,7 @@ print_step "Restarting backend with PM2..."
 # --update-env is required to actually push the new env into the
 # already-running process (plain 'pm2 restart' keeps the old saved env).
 export NODE_ENV=production
+export PORT="${BACKEND_PORT}"
 pm2 restart hikmah-backend --update-env
 sleep 2
 print_success "Backend restarted"
@@ -270,17 +289,26 @@ print_success "Nginx main configuration restored"
 print_step "Copying Nginx site configuration..."
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEPLOY_DIR="${HOME}/HikmahSphere/deploy"
+NGINX_SOURCE=""
 
 # Try SCRIPT_DIR first, then fall back to DEPLOY_DIR
 if [ -f "${SCRIPT_DIR}/nginx-hikmah.conf" ]; then
-    sudo cp "${SCRIPT_DIR}/nginx-hikmah.conf" /etc/nginx/sites-available/hikmahsphere
-    print_success "Nginx config copied from SCRIPT_DIR"
+    NGINX_SOURCE="${SCRIPT_DIR}/nginx-hikmah.conf"
+    print_info "Using nginx config from SCRIPT_DIR"
 elif [ -f "${DEPLOY_DIR}/nginx-hikmah.conf" ]; then
-    sudo cp "${DEPLOY_DIR}/nginx-hikmah.conf" /etc/nginx/sites-available/hikmahsphere
-    print_success "Nginx config copied from DEPLOY_DIR"
+    NGINX_SOURCE="${DEPLOY_DIR}/nginx-hikmah.conf"
+    print_info "Using nginx config from DEPLOY_DIR"
 else
     print_error "nginx-hikmah.conf not found in ${SCRIPT_DIR} or ${DEPLOY_DIR}"
     print_warning "Please ensure nginx-hikmah.conf exists in the deploy folder"
+fi
+
+if [ -n "${NGINX_SOURCE}" ]; then
+    TMP_NGINX_CONF=$(mktemp)
+    sed "s/__BACKEND_PORT__/${BACKEND_PORT}/g" "${NGINX_SOURCE}" > "${TMP_NGINX_CONF}"
+    sudo cp "${TMP_NGINX_CONF}" /etc/nginx/sites-available/hikmahsphere
+    rm -f "${TMP_NGINX_CONF}"
+    print_success "Nginx config deployed with backend port ${CYAN}${BACKEND_PORT}${NC}"
 fi
 
 # Enable site
