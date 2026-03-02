@@ -94,16 +94,20 @@ const ZAKAT_RATES = {
 
 const ISLAMIC_API_KEY = process.env.ISLAMIC_API_KEY || 'icgUaIHMO8GWEVLh7XhFcFoTHjQlsfhSBpJtYfrtTUJXY1eI';
 
+// Actual islamicapi.com response shape:
+// { code, status, calculation_standard, currency, weight_unit, updated_at, data: { nisab_thresholds: { gold, silver } } }
 interface NisabApiResponse {
+  code: number;
   status: string;
+  calculation_standard?: string;
+  currency: string;       // top-level
+  weight_unit: string;    // top-level
+  updated_at: string;     // top-level
   data: {
     nisab_thresholds: {
       gold: { weight: number; unit_price: number; nisab_amount: number };
       silver: { weight: number; unit_price: number; nisab_amount: number };
     };
-    currency: string;
-    weight_unit: string;
-    updated_at: string;
   };
   message?: string;
 }
@@ -215,9 +219,11 @@ const fetchNisabData = async (standard: 'classical' | 'common' = 'common', curre
             unitPrice: data.data.nisab_thresholds.silver.unit_price,
             nisabAmount: data.data.nisab_thresholds.silver.nisab_amount,
           },
-          currency: data.data.currency,
-          weightUnit: data.data.weight_unit,
-          updatedAt: data.data.updated_at,
+          // currency, weight_unit, updated_at are at the TOP level of the response
+          currency: data.currency,
+          weightUnit: data.weight_unit,
+          updatedAt: data.updated_at,
+          source: 'islamicapi.com',
         }
       };
     }
@@ -241,22 +247,50 @@ router.get('/nisab-live', [
     const standard = (req.query.standard as 'classical' | 'common') || 'common';
     const currency = ((req.query.currency as string) || 'inr').toLowerCase();
 
-    // islamicapi.com is behind Cloudflare Bot Fight Mode and blocks server-side
-    // fetch requests with a 403 challenge page. Skip it and use the market feed
-    // directly (gold-api.com + open.er-api.com) which works reliably from the server.
-    const fallback = await fetchFallbackNisabData(standard, currency);
-    if (fallback.success && fallback.data) {
-      return res.json({
-        status: 'success',
-        data: fallback.data,
-      });
+    // PRIMARY: islamicapi.com/api/v1/zakat-nisab
+    console.log('🕌 Fetching Nisab from islamicapi.com (primary)...');
+    const primary = await fetchNisabData(standard, currency);
+    if (primary.success && primary.data) {
+      console.log('✅ islamicapi.com Nisab data received');
+      return res.json({ status: 'success', data: primary.data });
     }
 
-    return res.status(503).json({
-      status: 'error',
-      message: 'Unable to fetch live nisab values from current providers',
-      details: {
-        fallbackError: fallback.success ? null : fallback.error,
+    // FALLBACK 1: market feed (gold-api.com + open.er-api.com)
+    console.warn(`⚠️ islamicapi.com Nisab failed (${primary.error}) — using market feed fallback`);
+    const fallback = await fetchFallbackNisabData(standard, currency);
+    if (fallback.success && fallback.data) {
+      console.log('✅ Market feed fallback Nisab data received');
+      return res.json({ status: 'success', data: fallback.data });
+    }
+
+    // FALLBACK 2: static hardcoded rates (last resort — always shows the section)
+    console.warn(`⚠️ Market feed also failed (${fallback.error}) — using static rates`);
+    const goldWeight = standard === 'classical' ? ZAKAT_RATES.NISAB_GOLD_GRAMS_CLASSICAL : ZAKAT_RATES.NISAB_GOLD_GRAMS;
+    const silverWeight = standard === 'classical' ? ZAKAT_RATES.NISAB_SILVER_GRAMS_CLASSICAL : ZAKAT_RATES.NISAB_SILVER_GRAMS;
+    // Approximate rates per gram (USD base, shown as-is for INR display)
+    const STATIC_GOLD_PER_GRAM_USD = 90;   // ~$90/g (approximate 2025/26)
+    const STATIC_SILVER_PER_GRAM_USD = 1;  // ~$1/g
+    const FX: Record<string, number> = { inr: 84, usd: 1, gbp: 0.79, eur: 0.92, sar: 3.75, aed: 3.67 };
+    const fx = FX[currency.toLowerCase()] ?? 84;
+    const goldUnitPrice = STATIC_GOLD_PER_GRAM_USD * fx;
+    const silverUnitPrice = STATIC_SILVER_PER_GRAM_USD * fx;
+    return res.json({
+      status: 'success',
+      data: {
+        gold: {
+          weight: goldWeight,
+          unitPrice: goldUnitPrice,
+          nisabAmount: goldWeight * goldUnitPrice,
+        },
+        silver: {
+          weight: silverWeight,
+          unitPrice: silverUnitPrice,
+          nisabAmount: silverWeight * silverUnitPrice,
+        },
+        currency: currency.toLowerCase(),
+        weightUnit: 'gram',
+        updatedAt: new Date().toISOString(),
+        source: 'Static rates (live feed unavailable)',
       },
     });
   } catch (error: any) {
@@ -301,8 +335,15 @@ router.post('/calculate', [
       currency = 'inr',
     } = req.body;
 
-    // islamicapi.com is behind Cloudflare and blocks server-side requests — use fallback directly
-    const nisabResult = await fetchFallbackNisabData(calculationStandard, currency);
+    // PRIMARY: islamicapi.com | FALLBACK 1: market feed | FALLBACK 2: static rates
+    console.log('🕌 Fetching Nisab for Zakat calculation from islamicapi.com (primary)...');
+    let nisabResult = await fetchNisabData(calculationStandard, currency);
+    if (!nisabResult.success) {
+      console.warn(`⚠️ islamicapi.com Nisab failed (${nisabResult.error}) — falling back to market feed`);
+      nisabResult = await fetchFallbackNisabData(calculationStandard, currency);
+    } else {
+      console.log('✅ islamicapi.com Nisab data used for calculation');
+    }
 
     let goldUnitPrice = 0;
     let silverUnitPrice = 0;
@@ -313,9 +354,21 @@ router.post('/calculate', [
     if (nisabResult.success && nisabResult.data) {
       goldUnitPrice = nisabResult.data.gold.unitPrice;
       silverUnitPrice = nisabResult.data.silver.unitPrice;
-      weightUnit = nisabResult.data.weightUnit;
+      weightUnit = nisabResult.data.weightUnit || 'gram';
       nisabGoldAmount = nisabResult.data.gold.nisabAmount;
       nisabSilverAmount = nisabResult.data.silver.nisabAmount;
+    } else {
+      // Static fallback so calculation always works
+      console.warn('⚠️ All Nisab feeds failed — using static rates for calculation');
+      const FX: Record<string, number> = { inr: 84, usd: 1, gbp: 0.79, eur: 0.92, sar: 3.75, aed: 3.67 };
+      const fx = FX[(currency || 'inr').toLowerCase()] ?? 84;
+      goldUnitPrice = 90 * fx;
+      silverUnitPrice = 1 * fx;
+      weightUnit = 'gram';
+      const gw = calculationStandard === 'classical' ? ZAKAT_RATES.NISAB_GOLD_GRAMS_CLASSICAL : ZAKAT_RATES.NISAB_GOLD_GRAMS;
+      const sw = calculationStandard === 'classical' ? ZAKAT_RATES.NISAB_SILVER_GRAMS_CLASSICAL : ZAKAT_RATES.NISAB_SILVER_GRAMS;
+      nisabGoldAmount = gw * goldUnitPrice;
+      nisabSilverAmount = sw * silverUnitPrice;
     }
 
     let finalGoldValue = parseFloat(goldValue);
