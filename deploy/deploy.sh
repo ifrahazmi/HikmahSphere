@@ -415,10 +415,11 @@ else
 fi
 
 print_step "Testing uploads folder..."
-if curl -s -o /dev/null -w "%{http_code}" http://hikmahsphere.site/uploads 2>/dev/null | grep -q "200\|403\|404"; then
-    print_success "Uploads folder is accessible"
+UPLOADS_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://hikmahsphere.site/uploads 2>/dev/null || echo "000")
+if [ "$UPLOADS_CODE" == "200" ] || [ "$UPLOADS_CODE" == "403" ] || [ "$UPLOADS_CODE" == "404" ]; then
+    print_success "Uploads folder is accessible (HTTP $UPLOADS_CODE)"
 else
-    print_warning "Uploads folder may not be accessible"
+    print_warning "Uploads folder may not be accessible (HTTP $UPLOADS_CODE)"
 fi
 
 echo ""

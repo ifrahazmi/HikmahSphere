@@ -306,7 +306,7 @@ fi
 # Test uploads folder accessibility
 print_info "Testing uploads folder..."
 UPLOADS_CODE=$(curl -s -o /dev/null -w "%{http_code}" -k https://hikmahsphere.site/uploads 2>/dev/null || echo "000")
-if [ "$UPLOAD_CODE" == "200" ] || [ "$UPLOAD_CODE" == "403" ] || [ "$UPLOAD_CODE" == "404" ]; then
+if [ "$UPLOADS_CODE" == "200" ] || [ "$UPLOADS_CODE" == "403" ] || [ "$UPLOADS_CODE" == "404" ]; then
     print_pass "Uploads folder accessible (HTTP $UPLOADS_CODE)"
 else
     print_warn "Uploads folder returned HTTP $UPLOADS_CODE"
