@@ -9,6 +9,8 @@ const router = express.Router();
 const API_BASE_URL = 'https://api.aladhan.com/v1/timings';
 const TIMINGS_BY_CITY_URL = 'https://api.aladhan.com/v1/timingsByCity';
 const CALENDAR_API_URL = 'https://api.aladhan.com/v1/calendar';
+const ISLAMIC_API_PRAYER_URL = 'https://islamicapi.com/api/v1/prayer-time';
+const ISLAMIC_API_FASTING_URL = 'https://islamicapi.com/api/v1/fasting';
 const ISLAMIC_API_RAMADAN_URL = 'https://islamicapi.com/api/v1/ramadan';
 
 // Cache TTL configuration (in seconds)
@@ -192,96 +194,158 @@ router.get('/times', [
       // Continue to fetch from API if cache fails
     }
 
-    const timestamp = Math.floor(Date.now() / 1000);
-    const apiUrl = `${API_BASE_URL}/${timestamp}?latitude=${latitude}&longitude=${longitude}&method=${method}&school=${school === '2' ? '1' : '0'}`;
+    const islamicApiKey = process.env.ISLAMIC_API_KEY || 'icgUaIHMO8GWEVLh7XhFcFoTHjQlsfhSBpJtYfrtTUJXY1eI';
+    // islamicapi.com school: 1=Shafi, 2=Hanafi (matches our param directly)
+    const islamicApiUrl = `${ISLAMIC_API_PRAYER_URL}/?lat=${latitude}&lon=${longitude}&method=${method}&school=${school}&api_key=${islamicApiKey}`;
 
-    // 🕌 Aladhan API Call Debug Logging
-    console.log('🕌 ========== ALADHAN API CALL ==========');
-    console.log(`📍 Location: ${latitude}, ${longitude}`);
-    console.log(`⚙️  Settings: method=${method}, school=${school === '2' ? '1' : '0'} (${school === '2' ? 'Hanafi' : 'Shafi'})`);
-    console.log(`🔗 API URL: ${apiUrl}`);
-    console.log('⏳ Fetching from Aladhan API...');
+    let responseData: any = null;
 
-    const apiResponse = await fetchWithTimeout(apiUrl, 8000);
+    // ── PRIMARY: islamicapi.com ──────────────────────────────────────────────
+    try {
+      console.log('🕌 ========== ISLAMICAPI.COM PRAYER CALL ==========');
+      console.log(`📍 Location: ${latitude}, ${longitude}`);
+      console.log(`⚙️  Settings: method=${method}, school=${school}`);
 
-    console.log(`📥 API Response Status: ${apiResponse.status} ${apiResponse.statusText}`);
-    console.log(`📦 Response OK: ${apiResponse.ok}`);
+      const islamicResp = await fetchWithTimeout(islamicApiUrl, 8000, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'application/json',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Referer': 'https://islamicapi.com/',
+        },
+      });
 
-    if (!apiResponse.ok) {
-        throw new Error(`Aladhan API responded with ${apiResponse.status}`);
-    }
+      console.log(`📥 IslamicAPI Status: ${islamicResp.status}`);
 
-    const apiData: any = await apiResponse.json();
+      if (islamicResp.ok) {
+        const islamicData: any = await islamicResp.json();
 
-    console.log('✅ Prayer API Response received successfully');
-    console.log(`📊 Response Code: ${apiData.code}`);
-    console.log(`📊 Response Status: ${apiData.status}`);
-    if (apiData.data) {
-        console.log(`📅 Date: ${apiData.data.date?.readable}`);
-        console.log(`🕐 Fajr: ${apiData.data.timings?.Fajr}`);
-        console.log(`🌅 Sunrise: ${apiData.data.timings?.Sunrise}`);
-        console.log(`☀️  Dhuhr: ${apiData.data.timings?.Dhuhr}`);
-        console.log(`🌤️  Asr: ${apiData.data.timings?.Asr}`);
-        console.log(`🌇 Maghrib: ${apiData.data.timings?.Maghrib}`);
-        console.log(`🌙 Isha: ${apiData.data.timings?.Isha}`);
-        console.log(`🕋 Qibla Direction: ${calculateQiblaDirection(parseFloat(latitude), parseFloat(longitude)).toFixed(2)}°`);
-        console.log(`📏 Distance to Mecca: ${calculateDistanceToMecca(parseFloat(latitude), parseFloat(longitude)).toFixed(2)} km`);
-    }
-    console.log('🕌 ======================================');
+        if (islamicData.code === 200 && islamicData.data?.times) {
+          const d = islamicData.data;
+          console.log(`✅ IslamicAPI prayer times OK — Fajr: ${d.times.Fajr}`);
 
-    if (apiData.code === 200 && apiData.data) {
-        const data = apiData.data;
-        const qiblaDegrees = calculateQiblaDirection(parseFloat(latitude), parseFloat(longitude));
-        const distanceToMecca = calculateDistanceToMecca(parseFloat(latitude), parseFloat(longitude));
-
-        const responseData = {
+          responseData = {
             status: 'success',
             data: {
-                times: {
-                    Fajr: data.timings.Fajr,
-                    Sunrise: data.timings.Sunrise,
-                    Dhuhr: data.timings.Dhuhr,
-                    Asr: data.timings.Asr,
-                    Maghrib: data.timings.Maghrib,
-                    Isha: data.timings.Isha,
-                    Midnight: data.timings.Midnight,
-                    Imsak: data.timings.Imsak
+              times: {
+                Fajr:     d.times.Fajr,
+                Sunrise:  d.times.Sunrise,
+                Dhuhr:    d.times.Dhuhr,
+                Asr:      d.times.Asr,
+                Maghrib:  d.times.Maghrib,
+                Isha:     d.times.Isha,
+                Midnight: d.times.Midnight,
+                Imsak:    d.times.Imsak,
+              },
+              date: {
+                readable:  d.date.readable,
+                timestamp: d.date.timestamp,
+                gregorian: d.date.gregorian,
+                hijri:     d.date.hijri,
+              },
+              qibla: {
+                direction: {
+                  degrees:   d.qibla?.direction?.degrees   ?? calculateQiblaDirection(parseFloat(latitude), parseFloat(longitude)),
+                  from:      d.qibla?.direction?.from,
+                  clockwise: d.qibla?.direction?.clockwise,
                 },
-                date: {
-                    readable: data.date.readable,
-                    timestamp: data.date.timestamp,
-                    gregorian: data.date.gregorian,
-                    hijri: data.date.hijri
+                distance: {
+                  value: d.qibla?.distance?.value ?? calculateDistanceToMecca(parseFloat(latitude), parseFloat(longitude)),
+                  unit:  d.qibla?.distance?.unit  ?? 'km',
                 },
-                qibla: {
-                    direction: {
-                        degrees: qiblaDegrees
-                    },
-                    distance: {
-                        value: distanceToMecca
-                    }
-                },
-                meta: data.meta,
-                location: {
-                    latitude: parseFloat(latitude),
-                    longitude: parseFloat(longitude),
-                },
-                settings: { method, school }
-            }
-        };
-
-        // Store in cache
-        try {
-          await redisClient.setEx(cacheKey, CACHE_TTL.PRAYER_TIMES, JSON.stringify(responseData));
-          console.log(`💾 Cached prayer times for ${CACHE_TTL.PRAYER_TIMES / 60} minutes`);
-        } catch (cacheError) {
-          console.warn('⚠️ Redis cache write error:', cacheError);
+              },
+              prohibited_times: d.prohibited_times ?? null,
+              timezone: d.timezone ?? null,
+              location: {
+                latitude:  parseFloat(latitude),
+                longitude: parseFloat(longitude),
+              },
+              settings: { method, school },
+              source: 'islamicapi.com',
+            },
+          };
+        } else {
+          throw new Error(`IslamicAPI returned code ${islamicData.code}: ${islamicData.message ?? 'unknown'}`);
         }
-
-        return res.json(responseData);
-    } else {
-        throw new Error('Invalid response from Aladhan API');
+      } else {
+        const errBody = await islamicResp.text().catch(() => '');
+        throw new Error(`IslamicAPI HTTP ${islamicResp.status}: ${sanitizeUpstreamErrorBody(errBody)}`);
+      }
+    } catch (islamicErr: any) {
+      console.warn(`⚠️ IslamicAPI prayer time failed (${islamicErr.message}) — falling back to Aladhan`);
     }
+
+    // ── FALLBACK: Aladhan API ─────────────────────────────────────────────────
+    if (!responseData) {
+      const timestamp = Math.floor(Date.now() / 1000);
+      const aladhanUrl = `${API_BASE_URL}/${timestamp}?latitude=${latitude}&longitude=${longitude}&method=${method}&school=${school === '2' ? '1' : '0'}`;
+
+      console.log('🕌 ========== ALADHAN FALLBACK PRAYER CALL ==========');
+      console.log(`🔗 URL: ${aladhanUrl}`);
+
+      const aladhanResp = await fetchWithTimeout(aladhanUrl, 8000);
+
+      console.log(`📥 Aladhan Status: ${aladhanResp.status}`);
+
+      if (!aladhanResp.ok) {
+        throw new Error(`Aladhan API responded with ${aladhanResp.status}`);
+      }
+
+      const aladhanData: any = await aladhanResp.json();
+
+      if (aladhanData.code === 200 && aladhanData.data) {
+        const data = aladhanData.data;
+        const qiblaDegrees    = calculateQiblaDirection(parseFloat(latitude), parseFloat(longitude));
+        const distanceToMecca = calculateDistanceToMecca(parseFloat(latitude), parseFloat(longitude));
+
+        console.log(`✅ Aladhan prayer times OK — Fajr: ${data.timings.Fajr}`);
+
+        responseData = {
+          status: 'success',
+          data: {
+            times: {
+              Fajr:     data.timings.Fajr,
+              Sunrise:  data.timings.Sunrise,
+              Dhuhr:    data.timings.Dhuhr,
+              Asr:      data.timings.Asr,
+              Maghrib:  data.timings.Maghrib,
+              Isha:     data.timings.Isha,
+              Midnight: data.timings.Midnight,
+              Imsak:    data.timings.Imsak,
+            },
+            date: {
+              readable:  data.date.readable,
+              timestamp: data.date.timestamp,
+              gregorian: data.date.gregorian,
+              hijri:     data.date.hijri,
+            },
+            qibla: {
+              direction: { degrees: qiblaDegrees },
+              distance:  { value: distanceToMecca, unit: 'km' },
+            },
+            meta: data.meta,
+            location: {
+              latitude:  parseFloat(latitude),
+              longitude: parseFloat(longitude),
+            },
+            settings: { method, school },
+            source: 'aladhan.com',
+          },
+        };
+      } else {
+        throw new Error('Invalid response from Aladhan API');
+      }
+    }
+
+    // ── Cache & respond ──────────────────────────────────────────────────────
+    try {
+      await redisClient.setEx(cacheKey, CACHE_TTL.PRAYER_TIMES, JSON.stringify(responseData));
+      console.log(`💾 Cached prayer times (source: ${responseData.data.source}) for ${CACHE_TTL.PRAYER_TIMES / 60} min`);
+    } catch (cacheError) {
+      console.warn('⚠️ Redis cache write error:', cacheError);
+    }
+
+    return res.json(responseData);
 
   } catch (error: any) {
     console.error('Prayer times API error:', error.message);
@@ -432,7 +496,9 @@ router.get('/timesByCity', [
 
 /**
  * @route   GET /api/prayers/fasting
- * @desc    Get today's fasting times (Sehri ends/Iftar) from Aladhan timings API
+ * @desc    Get fasting times (Sehri/Iftar) for today or a specific date
+ *          Primary: islamicapi.com/api/v1/fasting (any date, returns sahur/iftar directly)
+ *          Fallback: Aladhan timings API
  * @access  Public
  */
 router.get('/fasting', [
@@ -462,14 +528,13 @@ router.get('/fasting', [
       date?: string;
     };
 
-    // Frontend school mapping: 1 => Shafi, 2 => Hanafi.
-    // Aladhan school mapping: 0 => Shafi, 1 => Hanafi.
+    // Frontend school: 1=Shafi, 2=Hanafi | Aladhan school: 0=Shafi, 1=Hanafi
     const schoolParam = school === '2' ? '1' : '0';
     const today = new Date();
-    const defaultDate = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}-${today.getFullYear()}`;
-    const dateStr = date || defaultDate;
+    const todayDDMMYYYY = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}-${today.getFullYear()}`;
+    // dateStr is in DD-MM-YYYY (Aladhan format, as sent by frontend)
+    const dateStr = date || todayDDMMYYYY;
 
-    // Include date + settings in cache key to ensure accuracy.
     const cacheKey = `fasting_times:${latitude}:${longitude}:${method}:${schoolParam}:${dateStr}`;
 
     try {
@@ -482,73 +547,145 @@ router.get('/fasting', [
       console.warn('⚠️ Redis cache read error:', cacheError);
     }
 
-    // Use daily timings endpoint exactly as requested:
-    // /v1/timings/{date}?latitude=...&longitude=...&method=...&school=...
-    const apiUrl = `${API_BASE_URL}/${dateStr}?latitude=${latitude}&longitude=${longitude}&method=${method}&school=${schoolParam}`;
-
-    console.log('🕌 ========== ALADHAN FASTING API CALL ==========');
-    console.log(`📍 Coordinates: lat=${latitude}, lon=${longitude}`);
-    console.log(`📅 Date: ${dateStr}`);
-    console.log(`⚙️ Settings: method=${method}, school=${schoolParam} (${schoolParam === '1' ? 'Hanafi' : 'Shafi'})`);
-    console.log(`🔗 API URL: ${apiUrl}`);
-
-    const response = await fetchWithTimeout(apiUrl, 8000);
-    if (!response.ok) {
-      throw new Error(`Aladhan timings API error: ${response.status}`);
+    // Convert DD-MM-YYYY → YYYY-MM-DD (islamicapi.com format)
+    function toISODate(ddmmyyyy: string): string {
+      const parts = ddmmyyyy.split('-');
+      if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+      return ddmmyyyy;
     }
 
-    const apiData: any = await response.json();
-    if (apiData.code !== 200 || !apiData.data?.timings) {
-      throw new Error('Invalid response from Aladhan timings API');
-    }
+    let responseData: any = null;
 
-    // Strip timezone suffix like "05:31 (IST)" -> "05:31"
-    const fajr = String(apiData.data.timings.Fajr || '').split(' ')[0] ?? '00:00';
-    const maghrib = String(apiData.data.timings.Maghrib || '').split(' ')[0] ?? '00:00';
+    // ── PRIMARY: islamicapi.com /api/v1/fasting ─────────────────────────────
+    // This API supports any date and returns sahur/iftar/duration directly.
+    try {
+      const islamicApiKey = process.env.ISLAMIC_API_KEY || 'icgUaIHMO8GWEVLh7XhFcFoTHjQlsfhSBpJtYfrtTUJXY1eI';
+      const isoDate = toISODate(dateStr); // YYYY-MM-DD
+      const islamicUrl = `${ISLAMIC_API_FASTING_URL}/?lat=${latitude}&lon=${longitude}&method=${method}&date=${isoDate}&api_key=${islamicApiKey}`;
 
-    // Sehri ends exactly at Fajr.
-    const sahur = fajr;
-    const iftar = maghrib;
+      console.log('🕌 ========== ISLAMICAPI.COM FASTING CALL ==========');
+      console.log(`📍 Coordinates: lat=${latitude}, lon=${longitude}`);
+      console.log(`📅 Date: ${isoDate}`);
+      console.log(`⚙️  Method: ${method}`);
+      console.log(`🔗 URL: ${islamicUrl.replace(islamicApiKey, 'REDACTED')}`);
 
-    const [fajrHourRaw = '0', fajrMinuteRaw = '0'] = fajr.split(':');
-    const [maghribHourRaw = '0', maghribMinuteRaw = '0'] = maghrib.split(':');
-    const fajrHour = parseInt(fajrHourRaw, 10) || 0;
-    const fajrMinute = parseInt(fajrMinuteRaw, 10) || 0;
-    const maghribHour = parseInt(maghribHourRaw, 10) || 0;
-    const maghribMinute = parseInt(maghribMinuteRaw, 10) || 0;
-    const fajrMinutesTotal = fajrHour * 60 + fajrMinute;
-    let maghribMinutesTotal = maghribHour * 60 + maghribMinute;
-    if (maghribMinutesTotal < fajrMinutesTotal) {
-      maghribMinutesTotal += 24 * 60;
-    }
-    const durationMinutes = Math.max(0, maghribMinutesTotal - fajrMinutesTotal);
-    const duration = `${Math.floor(durationMinutes / 60)}h ${durationMinutes % 60}m`;
+      const islamicResp = await fetchWithTimeout(islamicUrl, 8000, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'application/json',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Referer': 'https://islamicapi.com/',
+        },
+      });
 
-    const responseData = {
-      status: 'success',
-      data: {
-        fasting: [
-          {
-            time: {
-              sahur,
-              iftar,
-              duration,
+      console.log(`📥 IslamicAPI Fasting Status: ${islamicResp.status}`);
+
+      if (islamicResp.ok) {
+        const islamicData: any = await islamicResp.json();
+
+        if (islamicData.code === 200 && islamicData.data?.fasting?.length > 0) {
+          const entry = islamicData.data.fasting[0];
+          const { sahur, iftar, duration } = entry.time;
+
+          console.log(`✅ IslamicAPI fasting OK — Sahur: ${sahur}, Iftar: ${iftar}, Duration: ${duration}`);
+
+          // hijri from API: "DD-MM-YYYY" e.g. "29-01-1447"
+          const hijriRaw: string = entry.hijri || '';
+          const hijriParts = hijriRaw.split('-');
+          const hijriISO = hijriParts.length === 3
+            ? `${hijriParts[2]}-${hijriParts[1]}-${hijriParts[0]}`
+            : hijriRaw;
+
+          responseData = {
+            status: 'success',
+            data: {
+              source: 'islamicapi.com',
+              fasting: [{
+                time: { sahur, iftar, duration },
+                date:          entry.date,           // YYYY-MM-DD
+                hijri:         hijriISO,
+                hijri_readable: entry.hijri_readable, // e.g. "29 Muharram 1447 AH"
+              }],
+              white_days: islamicData.data.white_days ?? [],
             },
-            fajr,
-            maghrib,
-            date: apiData.data.date?.gregorian?.date,
-            day: apiData.data.date?.gregorian?.weekday?.en,
-            hijri: `${apiData.data.date?.hijri?.year}-${String(apiData.data.date?.hijri?.month?.number || '').padStart(2, '0')}-${String(apiData.data.date?.hijri?.day || '').padStart(2, '0')}`,
-            hijri_readable: `${apiData.data.date?.hijri?.day} ${apiData.data.date?.hijri?.month?.en} ${apiData.data.date?.hijri?.year}`,
-          },
-        ],
-        white_days: [],
-      },
-    };
+          };
+        } else {
+          throw new Error(`IslamicAPI fasting code ${islamicData.code}: ${islamicData.message ?? 'unknown'}`);
+        }
+      } else {
+        const errBody = await islamicResp.text().catch(() => '');
+        throw new Error(`IslamicAPI fasting HTTP ${islamicResp.status}: ${sanitizeUpstreamErrorBody(errBody)}`);
+      }
+      } catch (islamicErr: any) {
+        console.warn(`⚠️ IslamicAPI fasting failed (${islamicErr.message}) — falling back to Aladhan`);
+    }
 
+    // ── FALLBACK: Aladhan timings API ────────────────────────────────────────
+    if (!responseData) {
+      const aladhanUrl = `${API_BASE_URL}/${dateStr}?latitude=${latitude}&longitude=${longitude}&method=${method}&school=${schoolParam}`;
+
+      console.log('🕌 ========== ALADHAN FASTING FALLBACK CALL ==========');
+      console.log(`📍 Coordinates: lat=${latitude}, lon=${longitude}`);
+      console.log(`📅 Date: ${dateStr}`);
+      console.log(`⚙️  Settings: method=${method}, school=${schoolParam} (${schoolParam === '1' ? 'Hanafi' : 'Shafi'})`);
+      console.log(`🔗 URL: ${aladhanUrl}`);
+
+      const aladhanResp = await fetchWithTimeout(aladhanUrl, 8000);
+      if (!aladhanResp.ok) {
+        throw new Error(`Aladhan timings API error: ${aladhanResp.status}`);
+      }
+
+      const aladhanData: any = await aladhanResp.json();
+      if (aladhanData.code !== 200 || !aladhanData.data?.timings) {
+        throw new Error('Invalid response from Aladhan timings API');
+      }
+
+      const t = aladhanData.data.timings;
+      // Strip timezone suffix e.g. "05:31 (IST)" → "05:31"
+      const fajr    = String(t.Fajr    || '').split(' ')[0] ?? '00:00';
+      const maghrib = String(t.Maghrib  || '').split(' ')[0] ?? '00:00';
+      const imsak   = String(t.Imsak   || '').split(' ')[0] || fajr;
+      const sahur   = imsak;
+      const iftar   = maghrib;
+
+      const [fH = '0', fM = '0'] = fajr.split(':');
+      const [mH = '0', mM = '0'] = maghrib.split(':');
+      const fTotal = (parseInt(fH, 10) || 0) * 60 + (parseInt(fM, 10) || 0);
+      let   mTotal = (parseInt(mH, 10) || 0) * 60 + (parseInt(mM, 10) || 0);
+      if (mTotal < fTotal) mTotal += 24 * 60;
+      const durMin  = Math.max(0, mTotal - fTotal);
+      const duration = `${Math.floor(durMin / 60)}h ${durMin % 60}m`;
+
+      const d = aladhanData.data;
+      const hjYear  = String(d.date?.hijri?.year || '');
+      const hjMonth = String(d.date?.hijri?.month?.number || '').padStart(2, '0');
+      const hjDay   = String(d.date?.hijri?.day || '').padStart(2, '0');
+
+      console.log(`✅ Aladhan fasting OK — Sahur: ${sahur}, Iftar: ${iftar}`);
+
+      responseData = {
+        status: 'success',
+        data: {
+          source: 'aladhan.com',
+          fasting: [{
+            time: { sahur, iftar, duration },
+            fajr,
+            imsak,
+            maghrib,
+            date:          d.date?.gregorian?.date,
+            day:           d.date?.gregorian?.weekday?.en,
+            hijri:         hjYear && hjDay ? `${hjYear}-${hjMonth}-${hjDay}` : '',
+            hijri_readable: `${d.date?.hijri?.day} ${d.date?.hijri?.month?.en} ${hjYear}`,
+          }],
+          white_days: [],
+        },
+      };
+    }
+
+    // ── Cache & respond ───────────────────────────────────────────────────────
     try {
       await redisClient.setEx(cacheKey, CACHE_TTL.FASTING_TIMES, JSON.stringify(responseData));
-      console.log(`💾 Cached fasting times for ${CACHE_TTL.FASTING_TIMES / 60} minutes`);
+      console.log(`💾 Cached fasting times (source: ${responseData.data.source}) for ${CACHE_TTL.FASTING_TIMES / 60} min`);
     } catch (cacheError) {
       console.warn('⚠️ Redis cache write error:', cacheError);
     }

@@ -176,6 +176,9 @@ const PrayerTimes: React.FC = () => {
       const prayerRes = await fetch(prayerUrl);
       const prayerJson = await prayerRes.json();
 
+      // Hoisted so fasting logic below can read it regardless of the prayer status branch
+      let isRamadan = false;
+
       if (prayerJson.status === 'success') {
         setPrayerData(prayerJson.data);
 
@@ -185,7 +188,15 @@ const PrayerTimes: React.FC = () => {
         const hijriDay = prayerJson.data?.date?.hijri?.day;
 
         // Check if current month is Ramadan
-        if (hijriMonth === 'Ramaḍān') {
+        // Use month number (9) as primary check — covers both islamicapi.com and Aladhan
+        // islamicapi.com → "Ramadan", Aladhan → "Ramaḍān" (diacritics differ)
+        const hijriMonthNumber = prayerJson.data?.date?.hijri?.month?.number;
+        isRamadan = hijriMonthNumber === 9
+          || hijriMonth === 'Ramaḍān'
+          || hijriMonth === 'Ramadan'
+          || hijriMonth?.toLowerCase().startsWith('rama');
+
+        if (isRamadan) {
           setIsRamadanMonth(true);
           events.push({ name: 'Ramadan', type: 'month', icon: '🌙' });
           if (hijriDay === '27') events.push({ name: 'Laylat al-Qadr (Night of Power)', type: 'special', icon: '✨' });
@@ -193,10 +204,15 @@ const PrayerTimes: React.FC = () => {
           setIsRamadanMonth(false);
         }
 
-        if (hijriMonth === 'Dhū al-Ḥijjah' && hijriDay === '9') {
+        const isDhulHijjah = hijriMonthNumber === 12
+          || hijriMonth === 'Dhū al-Ḥijjah'
+          || hijriMonth === 'Dhu al-Hijjah'
+          || hijriMonth?.toLowerCase().startsWith('dhu');
+
+        if (isDhulHijjah && hijriDay === '9') {
           events.push({ name: 'Day of Arafah', type: 'special', icon: '🕋' });
         }
-        if (hijriMonth === 'Dhū al-Ḥijjah' && (hijriDay === '10' || hijriDay === '11' || hijriDay === '12' || hijriDay === '13')) {
+        if (isDhulHijjah && (hijriDay === '10' || hijriDay === '11' || hijriDay === '12' || hijriDay === '13')) {
           events.push({ name: 'Eid al-Adha', type: 'holiday', icon: '🎉' });
         }
         if (hijriMonth === 'Shawwāl' && hijriDay === '1') {
@@ -212,7 +228,8 @@ const PrayerTimes: React.FC = () => {
         setError('Unable to fetch prayer times.');
       }
 
-      // Fetch Fasting Times from Backend API
+      // Fetch Fasting Times — dedicated islamicapi.com /fasting endpoint (primary),
+      // Aladhan timings as fallback. Backend handles source selection transparently.
       const fastingGregorianDate = prayerJson?.data?.date?.gregorian?.date;
       const fastingDateParam = typeof fastingGregorianDate === 'string' && /^\d{2}-\d{2}-\d{4}$/.test(fastingGregorianDate)
         ? `&date=${encodeURIComponent(fastingGregorianDate)}`
@@ -222,13 +239,26 @@ const PrayerTimes: React.FC = () => {
       );
       const fastingJson = await fastingRes.json();
 
-      console.log("Fasting API Response:", fastingJson);
+      console.log('Fasting API Response:', fastingJson);
 
       if (fastingJson.status === 'success' && fastingJson.data?.fasting?.length > 0) {
-          setFastingData(fastingJson.data);
-          console.log("Fasting data set:", fastingJson.data);
+        setFastingData(fastingJson.data);
+        console.log('Fasting data set:', fastingJson.data);
       } else {
-          console.warn("Fasting API Error:", fastingJson);
+        console.warn('Fasting API Error:', fastingJson);
+      }
+
+      // Pre-fetch Ramadan schedule in the background during Ramadan so the tab is instant
+      if (isRamadan) {
+        fetch(`${API_URL}/prayers/ramadan?latitude=${lat}&longitude=${lon}&method=${calculationMethod}&school=${school}`)
+          .then(r => r.json())
+          .then(d => {
+            if (d.status === 'success' && d.data?.fasting?.length > 0) {
+              setRamadanData(d.data);
+              setIsRamadanMonth(true);
+            }
+          })
+          .catch(err => console.warn('Ramadan pre-fetch error:', err));
       }
 
       // Fetch Weather
@@ -1332,14 +1362,29 @@ const PrayerTimes: React.FC = () => {
                     {monthlyData.map((day: any, idx: number) => {
                       const isToday = new Date(day.date.gregorian.date).toDateString() === new Date().toDateString();
 
-                      // Detect Islamic months and special days
+                      // Aladhan Hijri is consistently 1 day AHEAD of islamicapi.
+                      // Subtract 1 for both display and event detection to match islamicapi.
                       const hijriMonth = day.date.hijri.month.en;
-                      const hijriDay = parseInt(day.date.hijri.day);
+                      const hijriDayRaw = parseInt(day.date.hijri.day); // Aladhan raw
+                      const hijriDay = hijriDayRaw - 1;                  // islamicapi-aligned
+                      const displayHijriDay = hijriDay > 0 ? hijriDay : 30; // boundary: day 0 = last of prev month
+
                       const isRamadan = hijriMonth.includes('Rama') || hijriMonth.includes('rama');
                       const isEidFitr = hijriMonth === 'Shawwāl' && hijriDay === 1;
                       const isEidAdha = hijriMonth === 'Dhū al-Ḥijjah' && hijriDay === 10;
                       const isArafah = hijriMonth === 'Dhū al-Ḥijjah' && hijriDay === 9;
                       const isAshura = hijriMonth === 'Muḥarram' && hijriDay === 10;
+
+                      // White Days: build YYYY-MM-DD from Aladhan separate fields to avoid DD-MM-YYYY parsing issues
+                      const gd = day.date.gregorian;
+                      const isoGregDate = `${gd.year}-${String(gd.month.number).padStart(2, '0')}-${String(gd.day).padStart(2, '0')}`;
+                      const whiteDayDatesSet = new Set<string>(
+                        fastingData?.white_days?.days
+                          ? Object.values(fastingData.white_days.days as Record<string, string>).filter(Boolean)
+                          : []
+                      );
+                      const isWhiteDay = !isToday && !isEidFitr && !isEidAdha && !isArafah && !isAshura && !isRamadan
+                        && whiteDayDatesSet.has(isoGregDate);
 
                       // Determine row background color (priority order)
                       let rowBgClass = 'hover:bg-gray-50';
@@ -1353,6 +1398,8 @@ const PrayerTimes: React.FC = () => {
                         rowBgClass = 'bg-purple-100 hover:bg-purple-100';
                       } else if (isAshura) {
                         rowBgClass = 'bg-blue-100 hover:bg-blue-100';
+                      } else if (isWhiteDay) {
+                        rowBgClass = 'bg-amber-50 hover:bg-amber-50';
                       } else if (isRamadan) {
                         rowBgClass = 'bg-indigo-50 hover:bg-indigo-50';
                       }
@@ -1372,7 +1419,12 @@ const PrayerTimes: React.FC = () => {
                           <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-sm text-gray-900">{formatTimeForDisplay(day.timings.Maghrib)}</td>
                           <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-sm text-gray-900">{formatTimeForDisplay(day.timings.Isha)}</td>
                           <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-sm text-gray-500">
-                            {day.date.hijri.day} {day.date.hijri.month.en}
+                            <span className="flex items-center gap-1">
+                              {isWhiteDay && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" title="White Day"></span>
+                              )}
+                              {displayHijriDay} {day.date.hijri.month.en}
+                            </span>
                           </td>
                         </tr>
                       );
@@ -1384,7 +1436,7 @@ const PrayerTimes: React.FC = () => {
               {/* Color Legend - Mobile Optimized */}
               <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-200">
                 <p className="text-xs font-medium text-gray-500 uppercase mb-2.5">Color Legend</p>
-                <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-6 gap-2 sm:gap-3">
+                <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-3">
                   <div className="flex items-center">
                     <div className="w-3 h-3 sm:w-4 sm:h-4 rounded bg-emerald-100 mr-2"></div>
                     <span className="text-xs text-gray-600">Today</span>
@@ -1408,6 +1460,41 @@ const PrayerTimes: React.FC = () => {
                   <div className="flex items-center">
                     <div className="w-3 h-3 sm:w-4 sm:h-4 rounded bg-blue-100 mr-2"></div>
                     <span className="text-xs text-gray-600">Ashura</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 sm:w-4 sm:h-4 rounded bg-amber-50 ring-1 ring-amber-200 mr-1 flex-shrink-0"></div>
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0"></span>
+                    <span className="text-xs text-gray-600">White Days</span>
+                  </div>
+                </div>
+
+                {/* White Days Info Banner */}
+                <div className="mt-4 rounded-lg bg-amber-50 border border-amber-200 p-3 sm:p-4">
+                  <div className="flex items-start gap-3">
+                    <span className="text-xl leading-none mt-0.5">🌕</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-amber-900 mb-0.5">White Days (Al-Ayyam Al-Beed)</p>
+                      <p className="text-xs text-amber-800 leading-relaxed">
+                        The 13th, 14th &amp; 15th of every Hijri month. It is Sunnah to fast on these days — the Prophet ﷺ
+                        used to observe these fasts and encouraged the Ummah to do the same. They are called White Days
+                        because the moon is full and the nights are bright.
+                      </p>
+                      {fastingData?.white_days?.days && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {Object.entries(fastingData.white_days.days as Record<string, string>).map(([label, iso]) => {
+                            if (!iso) return null;
+                            const d = new Date(iso + 'T00:00:00');
+                            const formatted = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+                            return (
+                              <span key={label} className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 text-xs px-2 py-0.5 rounded-full font-medium">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                                {label}: {formatted}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1633,7 +1720,7 @@ const PrayerTimes: React.FC = () => {
 
           {/* Calendar Column */}
           <div className="xl:col-span-1">
-            <IslamicCalendar />
+            <IslamicCalendar whiteDays={fastingData?.white_days} todayHijri={prayerData?.date?.hijri} />
           </div>
         </div>
         )}
