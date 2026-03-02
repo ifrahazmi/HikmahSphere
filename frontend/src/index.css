@@ -40,13 +40,9 @@
   animation: slide-up 0.4s ease-out forwards;
 }
 
-/* Arabic Fonts Import */
-@import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Scheherazade+New:wght@400;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@400;500;600;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Lateef:wght@400;500;600;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Reem+Kufi:wght@400;500;600;700&display=swap');
+/* Arabic Fonts — loaded via <link> in public/index.html for faster parallel
+   loading and to enable document.fonts.ready detection. @imports removed to
+   avoid the double-fetch and 2-3 s FOUT (Flash of Unstyled Text) delay. */
 
 body {
   margin: 0;
