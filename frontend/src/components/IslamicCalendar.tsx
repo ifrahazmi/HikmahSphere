@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 
 interface WhiteDays {
   status?: string;
@@ -28,7 +28,7 @@ const HIJRI_MONTHS: string[] = [
 ];
 
 const IslamicCalendar: React.FC<IslamicCalendarProps> = ({ whiteDays, todayHijri }) => {
-  const [currentDate] = useState(new Date());
+  const currentDate = new Date();
 
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();

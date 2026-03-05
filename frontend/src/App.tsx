@@ -65,7 +65,20 @@ const AppContent: React.FC = () => {
         if (!pushSupport.supported && pushSupport.isIOS && !pushSupport.isStandalone) {
           const alreadyShown = sessionStorage.getItem(IOS_PUSH_GUIDE_SHOWN_KEY);
           if (!alreadyShown) {
-            toast('For iPhone notifications, install HikmahSphere to Home Screen, then allow notifications.', {
+            toast((t) => (
+              <div className="flex items-start gap-3">
+                <p className="text-sm leading-snug">
+                  For iPhone notifications, install HikmahSphere to Home Screen, then allow notifications.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => toast.dismiss(t.id)}
+                  className="shrink-0 rounded-md border border-gray-200 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                >
+                  Close
+                </button>
+              </div>
+            ), {
               duration: 7000,
               icon: 'i'
             });

@@ -22,6 +22,129 @@ import PageSEO from '../components/PageSEO';
 import { API_URL } from '../config';
 import { IslamicReminder, getCurrentPrayerWindow, selectReminder } from '../data/islamicReminders';
 
+interface HijriDate {
+  day: string;
+  month: { number: number; en: string };
+  year: string;
+  readable?: string;
+}
+
+const HIJRI_MONTH_NAMES: Record<number, string> = {
+  1: 'Muharram',
+  2: 'Safar',
+  3: 'Rabi al-Awwal',
+  4: 'Rabi al-Thani',
+  5: 'Jumada al-Awwal',
+  6: 'Jumada al-Thani',
+  7: 'Rajab',
+  8: "Sha'ban",
+  9: 'Ramadan',
+  10: 'Shawwal',
+  11: 'Dhul Qada',
+  12: 'Dhul Hijjah',
+};
+
+const parseGregorianDDMMYYYY = (value?: string): Date | null => {
+  if (!value) return null;
+  const match = value.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (!match) return null;
+
+  const day = parseInt(match[1], 10);
+  const month = parseInt(match[2], 10);
+  const year = parseInt(match[3], 10);
+  if (!day || !month || !year) return null;
+
+  const parsed = new Date(year, month - 1, day);
+  if (
+    parsed.getFullYear() !== year
+    || parsed.getMonth() !== month - 1
+    || parsed.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return parsed;
+};
+
+const formatGregorianDDMMYYYY = (value: Date): string => (
+  `${String(value.getDate()).padStart(2, '0')}-${String(value.getMonth() + 1).padStart(2, '0')}-${value.getFullYear()}`
+);
+
+const addDaysToGregorianDDMMYYYY = (value: string, days: number): string | null => {
+  const parsed = parseGregorianDDMMYYYY(value);
+  if (!parsed) return null;
+  parsed.setDate(parsed.getDate() + days);
+  return formatGregorianDDMMYYYY(parsed);
+};
+
+const buildHijriDateFromFastingEntry = (entry: any): HijriDate | null => {
+  if (!entry) return null;
+
+  const hijriIso = typeof entry.hijri === 'string' ? entry.hijri : '';
+  const readable = typeof entry.hijri_readable === 'string' ? entry.hijri_readable : '';
+  const isoMatch = hijriIso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const readableMatch = readable.match(/^(\d{1,2})\s+(.+?)\s+(\d{4})/);
+
+  if (isoMatch) {
+    const year = parseInt(isoMatch[1], 10);
+    const month = parseInt(isoMatch[2], 10);
+    const day = parseInt(isoMatch[3], 10);
+    if (year && month && day) {
+      return {
+        day: String(day),
+        month: {
+          number: month,
+          en: readableMatch?.[2]?.trim() || HIJRI_MONTH_NAMES[month] || '',
+        },
+        year: String(year),
+        readable: readable || undefined,
+      };
+    }
+  }
+
+  if (readableMatch) {
+    return {
+      day: readableMatch[1],
+      month: { number: 0, en: readableMatch[2].trim() },
+      year: readableMatch[3],
+      readable,
+    };
+  }
+
+  return null;
+};
+
+const incrementHijriByOneDay = (hijri?: HijriDate | null): HijriDate | null => {
+  if (!hijri) return null;
+
+  const currentDay = parseInt(hijri.day, 10);
+  let monthNum = hijri.month.number;
+  let year = parseInt(hijri.year, 10);
+  if (!currentDay || !year) return null;
+  if (!monthNum) monthNum = 1;
+
+  // Fallback only when next-day API data is unavailable.
+  // We use 30 as a safe maximum length to keep the date moving forward.
+  let nextDay = currentDay + 1;
+  if (nextDay > 30) {
+    nextDay = 1;
+    monthNum += 1;
+    if (monthNum > 12) {
+      monthNum = 1;
+      year += 1;
+    }
+  }
+
+  return {
+    day: String(nextDay),
+    month: {
+      number: monthNum,
+      en: HIJRI_MONTH_NAMES[monthNum] || hijri.month.en,
+    },
+    year: String(year),
+  };
+};
+
 const PrayerTimes: React.FC = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -53,6 +176,7 @@ const PrayerTimes: React.FC = () => {
   const [monthlyData, setMonthlyData] = useState<any>(null);
   const [islamicEvents, setIslamicEvents] = useState<any[]>([]);
   const [currentReminder, setCurrentReminder] = useState<IslamicReminder | null>(null);
+  const [nextHijriDate, setNextHijriDate] = useState<HijriDate | null>(null);
 
   // Share image generation states
   const [showRatioModal, setShowRatioModal] = useState(false);
@@ -71,6 +195,7 @@ const PrayerTimes: React.FC = () => {
   const prayerCardRefs = useRef<(HTMLDivElement | null)[]>([]);
   const hasScrolledRef = useRef(false);
   const prayersContainerRef = useRef<HTMLDivElement>(null);
+  const hijriFetchRequestIdRef = useRef(0);
 
   const resolveLocationDetails = useCallback(async (lat: number, lon: number) => {
     try {
@@ -156,6 +281,9 @@ const PrayerTimes: React.FC = () => {
   const fetchData = useCallback(async (lat: number, lon: number, city?: string, country?: string) => {
     setLoading(true);
     setError(null);
+    setNextHijriDate(null);
+    const requestId = Date.now();
+    hijriFetchRequestIdRef.current = requestId;
 
     // Convert madhab to school parameter (Backend API: 1=Shafi/Maliki/Hanbali, 2=Hanafi)
     const school = selectedMadhab === 'hanafi' ? 2 : 1;
@@ -246,6 +374,29 @@ const PrayerTimes: React.FC = () => {
         console.log('Fasting data set:', fastingJson.data);
       } else {
         console.warn('Fasting API Error:', fastingJson);
+      }
+
+      // Pre-fetch tomorrow's Hijri date so UI can roll over exactly at Maghrib.
+      const tomorrowGregorianDate = typeof fastingGregorianDate === 'string' && /^\d{2}-\d{2}-\d{4}$/.test(fastingGregorianDate)
+        ? addDaysToGregorianDDMMYYYY(fastingGregorianDate, 1)
+        : null;
+
+      if (tomorrowGregorianDate) {
+        fetch(
+          `${API_URL}/prayers/fasting?latitude=${lat}&longitude=${lon}&method=${calculationMethod}&school=${school}&date=${encodeURIComponent(tomorrowGregorianDate)}`
+        )
+          .then((r) => r.json())
+          .then((nextDayJson) => {
+            if (nextDayJson.status === 'success' && nextDayJson.data?.fasting?.length > 0) {
+              const parsedHijri = buildHijriDateFromFastingEntry(nextDayJson.data.fasting[0]);
+              if (parsedHijri && hijriFetchRequestIdRef.current === requestId) {
+                setNextHijriDate(parsedHijri);
+              }
+            }
+          })
+          .catch((nextHijriError) => {
+            console.warn('Next-day Hijri fetch error:', nextHijriError);
+          });
       }
 
       // Pre-fetch Ramadan schedule in the background during Ramadan so the tab is instant
@@ -830,9 +981,13 @@ const PrayerTimes: React.FC = () => {
     }
 
     // If after Isha, next prayer is Fajr (next day)
-    if (currentIdx === prayerTimes.length - 1 || currentIdx === -1) {
+    if (currentIdx === prayerTimes.length - 1) {
       nextIdx = 0;
       isNext = true;
+    } else if (currentIdx === -1) {
+      // Before Fajr, next prayer is today's Fajr.
+      nextIdx = 0;
+      isNext = false;
     }
 
     setCurrentPrayerIndex(currentIdx);
@@ -954,6 +1109,30 @@ const PrayerTimes: React.FC = () => {
     { name: 'Maghrib', time: prayerData.times?.Maghrib, arabic: 'المغرب', description: 'Sunset Prayer', icon: SunIcon },
     { name: 'Isha', time: prayerData.times?.Isha, arabic: 'العشاء', description: 'Night Prayer', icon: MoonIcon },
   ] : [];
+
+  const baseHijriDate: HijriDate | null = prayerData?.date?.hijri ? {
+    day: String(prayerData.date.hijri.day),
+    month: {
+      number: Number(prayerData.date.hijri.month?.number) || 0,
+      en: String(prayerData.date.hijri.month?.en || ''),
+    },
+    year: String(prayerData.date.hijri.year),
+  } : null;
+
+  const nowForHijri = new Date();
+  const maghribTimeToday = prayerData?.times?.Maghrib
+    ? parsePrayerTime(prayerData.times.Maghrib, nowForHijri)
+    : null;
+  const isAfterMaghrib = Boolean(maghribTimeToday && nowForHijri >= maghribTimeToday);
+  const fallbackNextHijri = incrementHijriByOneDay(baseHijriDate);
+  const effectiveHijriDate = isAfterMaghrib
+    ? (nextHijriDate || fallbackNextHijri || baseHijriDate)
+    : baseHijriDate;
+
+  const baseHijriReadable = fastingData?.fasting?.[0]?.hijri_readable
+    || (baseHijriDate ? `${baseHijriDate.day} ${baseHijriDate.month.en} ${baseHijriDate.year}` : '');
+  const effectiveHijriReadable = effectiveHijriDate?.readable
+    || (effectiveHijriDate ? `${effectiveHijriDate.day} ${effectiveHijriDate.month.en} ${effectiveHijriDate.year}` : baseHijriReadable);
 
   // Show full screen spinner while loading initial data
   if (loading || !prayerData) {
@@ -1273,7 +1452,7 @@ const PrayerTimes: React.FC = () => {
                 </p>
                 <span className="text-gray-400">•</span>
                 <p className="font-arabic text-gray-700">
-                    {fastingData?.fasting?.[0]?.hijri_readable || `${prayerData?.date?.hijri?.day} ${prayerData?.date?.hijri?.month?.en} ${prayerData?.date?.hijri?.year}`}
+                    {effectiveHijriReadable}
                 </p>
 
                 {/* Current Weather Display next to date */}
@@ -1720,7 +1899,7 @@ const PrayerTimes: React.FC = () => {
 
           {/* Calendar Column */}
           <div className="xl:col-span-1">
-            <IslamicCalendar whiteDays={fastingData?.white_days} todayHijri={prayerData?.date?.hijri} />
+            <IslamicCalendar whiteDays={fastingData?.white_days} todayHijri={effectiveHijriDate || prayerData?.date?.hijri} />
           </div>
         </div>
         )}
