@@ -57,21 +57,21 @@ Get HikmahSphere up and running in less than 5 minutes!
 
 **Option 1: Super Quick Start** 🏃‍♂️
 ```bash
-git clone https://github.com/yani2298/HikmahSphere.git
+git clone https://github.com/ifrahazmi/HikmahSphere.git
 cd HikmahSphere
 ./deploy/start.sh
 ```
 
 **Option 2: Standard Deployment** 🎯
 ```bash
-git clone https://github.com/yani2298/HikmahSphere.git
+git clone https://github.com/ifrahazmi/HikmahSphere.git
 cd HikmahSphere
 ./deploy/deploy.sh
 ```
 
 **Option 3: Windows (PowerShell)** 🪟
 ```powershell
-git clone https://github.com/yani2298/HikmahSphere.git
+git clone https://github.com/ifrahazmi/HikmahSphere.git
 cd HikmahSphere
 bash deploy/deploy.sh
 ```
