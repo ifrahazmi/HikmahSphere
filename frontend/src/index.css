@@ -111,6 +111,19 @@ code {
   font-family: 'Indopak Nastaleeq', 'Noto Naskh Arabic', serif;
 }
 
+/* Jameel Noori Nastaleeq - Urdu Translation Font */
+@font-face {
+  font-family: 'Jameel Noori Nastaleeq';
+  src: url('../public/Jameel Noori Nastaleeq Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+.font-jameel-noori {
+  font-family: 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif;
+}
+
 /* Justified Arabic Text for Better Alignment */
 .arabic-justified {
   text-align: justify;

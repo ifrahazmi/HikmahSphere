@@ -15,6 +15,7 @@ import redisClient from './config/redis'; // Import Redis client
 import authRoutes from './routes/auth';
 import prayerRoutes from './routes/prayers';
 import quranRoutes from './routes/quran';
+import dhikrRoutes from './routes/dhikr';
 import zakatRoutes from './routes/zakat';
 import communityRoutes from './routes/community';
 import notificationRoutes from './routes/notifications'; // Import notification routes
@@ -111,6 +112,7 @@ app.get('/', (req, res) => {
       auth: '/api/auth',
       prayers: '/api/prayers',
       quran: '/api/quran',
+      dhikr: '/api/dhikr',
       zakat: '/api/zakat',
       community: '/api/community'
     },
@@ -197,6 +199,7 @@ app.get('/api/tools/users', async (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/prayers', prayerRoutes);
 app.use('/api/quran', quranRoutes);
+app.use('/api/dhikr', dhikrRoutes);
 app.use('/api/zakat', zakatRoutes);
 app.use('/api/community', communityRoutes);
 app.use('/api/notifications', notificationRoutes); // Use notification routes

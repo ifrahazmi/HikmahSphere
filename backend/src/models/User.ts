@@ -88,6 +88,29 @@ export interface IUser extends Document {
       completedSurahs: number[];
       totalRecitations: number;
     };
+    dhikrDuaProgress?: {
+      bookmarks: string[];
+      lastViewedDuaId?: string;
+      tasbih?: {
+        presetId: string;
+        count: number;
+      };
+      dailyTracker?: {
+        date: string;
+        counts: Record<string, number>;
+      };
+      reminders?: {
+        enabled: boolean;
+        morning: boolean;
+        evening: boolean;
+        friday: boolean;
+      };
+      settings?: {
+        darkMode: boolean;
+        translationLanguage: 'english' | 'urdu';
+      };
+      updatedAt?: Date;
+    };
   };
   community: {
     joinedGroups: mongoose.Types.ObjectId[];
@@ -264,6 +287,33 @@ const UserSchema = new Schema<IUser>({
       settings: { type: Schema.Types.Mixed },
       completedSurahs: [{ type: Number, min: 1, max: 114 }],
       totalRecitations: { type: Number, default: 0 },
+    },
+    dhikrDuaProgress: {
+      bookmarks: [{ type: String, trim: true }],
+      lastViewedDuaId: { type: String, trim: true },
+      tasbih: {
+        presetId: { type: String, trim: true },
+        count: { type: Number, min: 0, default: 0 },
+      },
+      dailyTracker: {
+        date: { type: String, trim: true },
+        counts: { type: Schema.Types.Mixed },
+      },
+      reminders: {
+        enabled: { type: Boolean, default: false },
+        morning: { type: Boolean, default: true },
+        evening: { type: Boolean, default: true },
+        friday: { type: Boolean, default: true },
+      },
+      settings: {
+        darkMode: { type: Boolean, default: false },
+        translationLanguage: {
+          type: String,
+          enum: ['english', 'urdu'],
+          default: 'english',
+        },
+      },
+      updatedAt: { type: Date, default: Date.now },
     },
   },
   community: {

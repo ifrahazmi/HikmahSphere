@@ -91,9 +91,9 @@ const Home: React.FC = () => {
       gradient: 'from-purple-500 to-pink-500',
     },
     {
-      icon: '/Qibla-Finder-AR.png',
-      title: 'Qibla Finder AR',
-      description: 'Augmented reality Qibla direction with 3D compass, precise geolocation calculations, visual overlay guidance, and accurate Kaaba direction for any location worldwide',
+      icon: '/Tasbih.png',
+      title: 'Dhikr & Dua',
+      description: 'Authentic daily duas and adhkar with Arabic, transliteration, English/Urdu translation, verified references, favorites, and a built-in online tasbih counter for daily remembrance',
       color: 'text-teal-600',
       bgColor: 'bg-teal-50',
       gradient: 'from-teal-500 to-emerald-500',
@@ -123,6 +123,13 @@ const Home: React.FC = () => {
       icon: BookOpenIcon,
       color: 'text-blue-600',
       bgColor: 'bg-blue-100',
+    },
+    {
+      label: 'Dhikr & Dua',
+      description: 'Morning/evening adhkar · Authentic references · Tasbih counter',
+      icon: HeartIcon,
+      color: 'text-teal-600',
+      bgColor: 'bg-teal-100',
     },
     {
       label: 'Smart Zakat',
@@ -179,8 +186,8 @@ const Home: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="Islamic App for Prayer Times, Quran Reader, Zakat Calculator & Muslim Community"
-        description="HikmahSphere is your all-in-one Islamic platform — accurate daily prayer times worldwide, complete Quran with 10+ translations and audio, intelligent Zakat calculator with live nisab rates, and a global Muslim community. Free, ad-free, and privacy-first."
+        title="Islamic App for Prayer Times, Quran Reader, Dhikr & Dua, Zakat Calculator & Muslim Community"
+        description="HikmahSphere is your all-in-one Islamic platform — accurate daily prayer times, complete Quran with 10+ translations and audio, authentic Dhikr & Dua with online tasbih counter, intelligent Zakat calculator, and a global Muslim community. Free, ad-free, and privacy-first."
         path="/"
         keywords={[
           'islamic app',
@@ -196,6 +203,9 @@ const Home: React.FC = () => {
           'quran with translation',
           'urdu quran',
           'indo pak quran',
+          'dhikr and dua',
+          'morning evening adhkar',
+          'online tasbih counter',
           'zakat calculator',
           'zakat calculator india',
           'nisab value today',
@@ -236,7 +246,7 @@ const Home: React.FC = () => {
             {/* Badge */}
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full border border-white/20 mb-8">
               <SparklesIcon className="w-4 h-4 text-emerald-300" />
-            <span className="text-sm font-medium text-emerald-100">Prayer Times · Quran · Zakat · Community</span>
+            <span className="text-sm font-medium text-emerald-100">Prayer Times · Quran · Dhikr &amp; Dua · Zakat · Community</span>
             </div>
 
             <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold mb-8 leading-tight">
@@ -247,7 +257,7 @@ const Home: React.FC = () => {
             </h1>
 
             <p className="text-xl sm:text-2xl mb-10 text-emerald-100 max-w-3xl mx-auto leading-relaxed">
-              Accurate prayer times, the complete Quran, smart Zakat calculation, and a global Muslim community — one platform, built with sincerity for every believer
+              Accurate prayer times, the complete Quran, authentic Dhikr &amp; Dua, smart Zakat calculation, and a global Muslim community — one platform, built with sincerity for every believer
             </p>
 
             {/* CTA Buttons */}
@@ -311,7 +321,7 @@ const Home: React.FC = () => {
             </p>
           </div>
           
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 lg:gap-8">
             {stats.map((stat, index) => (
               <div 
                 key={index} 
@@ -371,6 +381,10 @@ const Home: React.FC = () => {
               </li>
               <li className="flex items-start gap-3">
                 <CheckCircleIcon className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
+                <span><strong className="font-semibold text-gray-900">Authentic Dhikr &amp; Dua Companion:</strong> Access daily adhkar and duas with Arabic text, transliteration, English/Urdu translation, hadith references, bookmarking, and a built-in online tasbih counter for focused remembrance.</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <CheckCircleIcon className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
                 <span><strong className="font-semibold text-gray-900">Intelligent Zakat Calculator:</strong> Live nisab thresholds updated with real-time gold and silver prices, support for all asset types including cash, investments, business stock and cryptocurrency — fulfil your obligation with total confidence.</span>
               </li>
               <li className="flex items-start gap-3">
@@ -409,6 +423,16 @@ const Home: React.FC = () => {
               <p className="text-gray-700 leading-relaxed">
                 Our comprehensive <strong className="font-semibold text-blue-700">quran app</strong> transforms how you engage with the Book of Allah. Enjoy a world-class{' '}
                 <strong className="font-semibold text-blue-700">quran reader online</strong> with semantic AI-powered verse search, side-by-side translations, authentic audio recitations, personalised bookmarks, and customisable fonts — including the revered Indo-Pak Nastaleeq script loved across South Asia.
+              </p>
+            </div>
+
+            {/* Dhikr & Dua */}
+            <div className="bg-gradient-to-br from-teal-50 to-emerald-50 rounded-2xl p-8 mb-6 border border-teal-200">
+              <h3 className="text-2xl font-bold text-gray-900 mb-3">
+                Authentic <span className="text-teal-700">Dhikr &amp; Dua</span> for Daily Life
+              </h3>
+              <p className="text-gray-700 leading-relaxed">
+                HikmahSphere provides a practical <strong className="font-semibold text-teal-700">dhikr and dua app</strong> experience with morning and evening adhkar, daily life supplications, Salah duas, and situational duas. Every entry includes Arabic, transliteration, English and Urdu translation, plus source references. Use the built-in <strong className="font-semibold text-teal-700">online tasbih counter</strong> to track remembrance with focus every day.
               </p>
             </div>
 
@@ -483,7 +507,7 @@ const Home: React.FC = () => {
               Everything You Need in One Place
             </h2>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              Experience Islam in the digital age with cutting-edge technology designed for the modern Muslim
+              Experience Islam in the digital age with cutting-edge technology for prayer, Quran, Dhikr &amp; Dua, Zakat, and community
             </p>
           </div>
 

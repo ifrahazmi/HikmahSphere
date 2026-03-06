@@ -22,6 +22,8 @@ import PrayerTimes from './pages/PrayerTimes';
 import QuranReader from './pages/QuranReader';
 import ZakatCalculator from './pages/ZakatCalculator';
 import Community from './pages/Community';
+import DhikrDua from './pages/DhikrDua';
+import DuaDetail from './pages/DuaDetail';
 import Profile from './pages/Profile';
 import About from './pages/About';
 import Contact from './pages/Contact'; // Import Contact page
@@ -134,6 +136,8 @@ const AppContent: React.FC = () => {
               <QuranReader />
             </QuranProvider>
           } />
+          <Route path="/dhikr-dua" element={<DhikrDua />} />
+          <Route path="/dua/:slug" element={<DuaDetail />} />
           <Route path="/zakat" element={<ZakatCalculator />} />
           <Route path="/community" element={<Community />} />
           

@@ -132,13 +132,14 @@ const About: React.FC = () => {
     <>
       <PageSEO
         title="About HikmahSphere and Our Mission"
-        description="Learn how HikmahSphere combines authentic Islamic knowledge with modern technology to support prayer, Quran study, Zakat, and a connected global Muslim community."
+        description="Learn how HikmahSphere combines authentic Islamic knowledge with modern technology to support prayer, Quran study, Dhikr & Dua, Zakat, and a connected global Muslim community."
         path="/about"
         keywords={[
           'about hikmahsphere',
           'islamic digital platform mission',
           'authentic islamic knowledge',
           'muslim technology platform',
+          'dhikr and dua platform',
         ]}
       />
       <div className="min-h-screen">

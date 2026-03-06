@@ -6,51 +6,156 @@
 
   <url>
     <loc>https://hikmahsphere.site/</loc>
-    <lastmod>2026-03-01</lastmod>
+    <lastmod>2026-03-06</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
 
   <url>
     <loc>https://hikmahsphere.site/prayers</loc>
-    <lastmod>2026-03-01</lastmod>
+    <lastmod>2026-03-06</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.95</priority>
   </url>
 
   <url>
     <loc>https://hikmahsphere.site/quran</loc>
-    <lastmod>2026-03-01</lastmod>
+    <lastmod>2026-03-06</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.95</priority>
   </url>
 
   <url>
     <loc>https://hikmahsphere.site/zakat</loc>
-    <lastmod>2026-03-01</lastmod>
+    <lastmod>2026-03-06</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.95</priority>
   </url>
 
   <url>
+    <loc>https://hikmahsphere.site/dhikr-dua</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.98</priority>
+  </url>
+
+  <url>
     <loc>https://hikmahsphere.site/community</loc>
-    <lastmod>2026-03-01</lastmod>
+    <lastmod>2026-03-06</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.75</priority>
   </url>
 
   <url>
     <loc>https://hikmahsphere.site/about</loc>
-    <lastmod>2026-03-01</lastmod>
+    <lastmod>2026-03-06</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
 
   <url>
     <loc>https://hikmahsphere.site/contact</loc>
-    <lastmod>2026-03-01</lastmod>
+    <lastmod>2026-03-06</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
+  </url>
+
+  <url>
+    <loc>https://hikmahsphere.site/dua/dua-for-anxiety</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <url>
+    <loc>https://hikmahsphere.site/dua/dua-before-study</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+
+  <url>
+    <loc>https://hikmahsphere.site/dua/dua-for-knowledge</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+
+  <url>
+    <loc>https://hikmahsphere.site/dua/dua-for-protection-from-evil-eye</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+
+  <url>
+    <loc>https://hikmahsphere.site/dua/hajj-talbiyah</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.84</priority>
+  </url>
+
+  <url>
+    <loc>https://hikmahsphere.site/dua/hajj-entering-masjid-al-haram</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.83</priority>
+  </url>
+
+  <url>
+    <loc>https://hikmahsphere.site/dua/hajj-first-sight-of-kaaba</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.83</priority>
+  </url>
+
+  <url>
+    <loc>https://hikmahsphere.site/dua/hajj-starting-tawaf</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.83</priority>
+  </url>
+
+  <url>
+    <loc>https://hikmahsphere.site/dua/hajj-rukn-yamani-and-hajar-aswad-dua</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.83</priority>
+  </url>
+
+  <url>
+    <loc>https://hikmahsphere.site/dua/hajj-safa-marwah-dhikr</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.83</priority>
+  </url>
+
+  <url>
+    <loc>https://hikmahsphere.site/dua/hajj-talbiyah-during-pilgrimage</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.83</priority>
+  </url>
+
+  <url>
+    <loc>https://hikmahsphere.site/dua/hajj-best-dua-of-arafah</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.83</priority>
+  </url>
+
+  <url>
+    <loc>https://hikmahsphere.site/dua/hajj-dhikr-at-muzdalifah</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.83</priority>
+  </url>
+
+  <url>
+    <loc>https://hikmahsphere.site/dua/hajj-takbir-jamarat</loc>
+    <lastmod>2026-03-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.83</priority>
   </url>
 
 </urlset>

@@ -1,14 +1,21 @@
 import React, { useState } from 'react';
 import { HeartIcon } from '@heroicons/react/24/solid';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { EnvelopeIcon } from '@heroicons/react/24/outline'; // Import Envelope Icon
 import { API_URL } from '../config';
 import { toast } from 'react-hot-toast';
 
 const Footer: React.FC = () => {
   const currentYear = new Date().getFullYear();
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const goToDhikrDua = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault();
+    navigate('/dhikr-dua');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,8 +62,8 @@ const Footer: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div className="col-span-1 md:col-span-2">
             <div className="flex items-center mb-4">
-              <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center">
-                <img src="/logo.png" alt="HikmahSphere Logo" className="w-48 h-48 object-contain" />
+              <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center overflow-hidden">
+                <img src="/logo.png" alt="HikmahSphere Logo" className="w-8 h-8 object-contain" />
               </div>
               <span className="ml-3 text-xl font-bold text-emerald-400">HikmahSphere</span>
             </div>
@@ -69,6 +76,7 @@ const Footer: React.FC = () => {
             <h3 className="text-sm font-semibold text-emerald-400 uppercase tracking-wider mb-4">Platform</h3>
             <ul className="space-y-3">
               <li><Link to="/prayers" className="text-gray-300 hover:text-emerald-400">Prayer Times</Link></li>
+              <li><Link to="/dhikr-dua" onClick={goToDhikrDua} className="text-gray-300 hover:text-emerald-400">Dhikr &amp; Dua</Link></li>
               <li><Link to="/quran" className="text-gray-300 hover:text-emerald-400">Quran Reader</Link></li>
               <li><Link to="/zakat" className="text-gray-300 hover:text-emerald-400">Zakat Center</Link></li>
               <li><Link to="/community" className="text-gray-300 hover:text-emerald-400">Community</Link></li>

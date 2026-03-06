@@ -98,7 +98,7 @@ export const timeline: TimelineItem[] = [
     features: [
       "Accurate Prayer Times with Notifications",
       "Complete Quran Reader & Audio",
-      "Qibla Finder with AR",
+      "Dhikr & Dua Library with Tasbih Counter",
       "Zakat Calculator & Management",
       "Community Connection Hub"
     ]
@@ -190,9 +190,9 @@ export const spiritualFeatures: SpiritualFeature[] = [
     description: "Find your brothers and sisters across continents. Connect through forums, discover local events, join meaningful discussions, and strengthen the bonds of Islamic brotherhood worldwide."
   },
   {
-    icon: "/Qibla-Finder-AR.png",
-    title: "Qibla Finder AR",
-    description: "Face the House of Allah with confidence. Augmented reality guidance, 3D compass, precise geolocation calculations, and visual overlay showing the exact direction to the Kaaba from anywhere on Earth."
+    icon: "/Tasbih.png",
+    title: "Dhikr & Dua",
+    description: "Keep your heart connected to Allah throughout the day. Access authentic daily duas and adhkar with Arabic text, transliteration, English/Urdu translation, full hadith references, bookmarks, and a focused online tasbih counter."
   },
   {
     icon: "/AI-Scholar-Assistant.png",
