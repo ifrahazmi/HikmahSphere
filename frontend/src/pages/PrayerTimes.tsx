@@ -77,6 +77,28 @@ const addDaysToGregorianDDMMYYYY = (value: string, days: number): string | null 
   return formatGregorianDDMMYYYY(parsed);
 };
 
+const parseGregorianYYYYMMDDLocal = (value?: string): Date | null => {
+  if (!value) return null;
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+
+  const year = parseInt(match[1], 10);
+  const month = parseInt(match[2], 10);
+  const day = parseInt(match[3], 10);
+  if (!year || !month || !day) return null;
+
+  const parsed = new Date(year, month - 1, day);
+  if (
+    parsed.getFullYear() !== year
+    || parsed.getMonth() !== month - 1
+    || parsed.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return parsed;
+};
+
 const buildHijriDateFromFastingEntry = (entry: any): HijriDate | null => {
   if (!entry) return null;
 
@@ -1124,6 +1146,11 @@ const PrayerTimes: React.FC = () => {
     ? parsePrayerTime(prayerData.times.Maghrib, nowForHijri)
     : null;
   const isAfterMaghrib = Boolean(maghribTimeToday && nowForHijri >= maghribTimeToday);
+  const activeRamadanGregorianDate = new Date(nowForHijri);
+  activeRamadanGregorianDate.setHours(0, 0, 0, 0);
+  if (isAfterMaghrib) {
+    activeRamadanGregorianDate.setDate(activeRamadanGregorianDate.getDate() + 1);
+  }
   const fallbackNextHijri = incrementHijriByOneDay(baseHijriDate);
   const effectiveHijriDate = isAfterMaghrib
     ? (nextHijriDate || fallbackNextHijri || baseHijriDate)
@@ -2444,12 +2471,16 @@ const PrayerTimes: React.FC = () => {
                     return null;
                   }
                   
-                  const isToday = new Date(day.date).toDateString() === new Date().toDateString();
+                  const dayDate = parseGregorianYYYYMMDDLocal(day.date) || new Date(day.date);
+                  const isToday = dayDate.toDateString() === activeRamadanGregorianDate.toDateString();
                   // Use hijri day number if available, else fall back to 1-based index
                   const dayNumber = day.hijri
                     ? (parseInt(day.hijri.split('-')[2] || String(idx + 1)) || idx + 1)
                     : idx + 1;
-                  const dateObj = new Date(day.date);
+                  const dateObj = dayDate;
+                  const hijriText = isToday && effectiveHijriReadable
+                    ? effectiveHijriReadable
+                    : (day.hijri_readable || day.hijri || 'Ramadan');
 
                   return (
                     <div
@@ -2494,7 +2525,7 @@ const PrayerTimes: React.FC = () => {
 
                         {/* Hijri Date */}
                         <p className="text-xs sm:text-sm font-arabic text-emerald-600 mb-3 sm:mb-4" dir="rtl">
-                          {day.hijri_readable || day.hijri || 'Ramadan'}
+                          {hijriText}
                         </p>
 
                         {/* Times Grid */}

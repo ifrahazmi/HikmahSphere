@@ -84,7 +84,7 @@ export interface QuranSettings {
   selectedTranslations: string[];  // Edition identifiers (up to 3)
   showTransliteration: boolean;
   arabicOnlyMode: boolean;         // Show only Arabic text
-  fontSize: number;                // 14-32px
+  fontSize: number;                // 14-38px
   theme: 'light' | 'dark';
   arabicFont: 'al-mushaf' | 'indopak-nastaleeq' | 'amiri' | 'scheherazade' | 'noto-naskh' | 'cairo' | 'lateef' | 'reem-kufi';
   fontColor: 'default' | 'emerald' | 'blue' | 'amber' | 'rose';

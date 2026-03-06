@@ -859,13 +859,13 @@ const QuranReader: React.FC = () => {
                     <input
                       type="range"
                       min="14"
-                      max="32"
+                      max="38"
                       value={settings.fontSize}
                       onChange={(e) => updateSettings({ fontSize: parseInt(e.target.value) })}
                       className="flex-1"
                     />
                     <button
-                      onClick={() => updateSettings({ fontSize: Math.min(32, settings.fontSize + 2) })}
+                      onClick={() => updateSettings({ fontSize: Math.min(38, settings.fontSize + 2) })}
                       className={`p-1.5 rounded-md ${settings.theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'}`}
                     >
                       <PlusIcon className="h-3 w-3" />
@@ -1879,13 +1879,13 @@ const QuranReader: React.FC = () => {
                     <input
                       type="range"
                       min="14"
-                      max="32"
+                      max="38"
                       value={tempSettings.fontSize}
                       onChange={(e) => updateSingleSetting('fontSize', parseInt(e.target.value))}
                       className="flex-1 h-2"
                     />
                     <button
-                      onClick={() => updateSingleSetting('fontSize', Math.min(32, tempSettings.fontSize + 2))}
+                      onClick={() => updateSingleSetting('fontSize', Math.min(38, tempSettings.fontSize + 2))}
                       className={`p-2 rounded-lg ${settings.theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'}`}
                     >
                       <PlusIcon className="h-4 w-4" />

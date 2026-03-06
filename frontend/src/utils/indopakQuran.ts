@@ -22,6 +22,14 @@ export interface IndopakSurah {
   ayahs: IndopakAyah[];
 }
 
+// Normalize Quranic marks that render as round circles in some IndoPak fonts.
+// We convert them to the standard sukun shape used by Al Mushaf-style rendering.
+const normalizeIndopakMarks = (text: string): string => (
+  text
+    .replace(/\u06E1/g, '\u0652') // ARABIC SMALL HIGH DOTLESS HEAD OF KHAH -> SUKUN
+    .replace(/\u06DF/g, '\u0652') // ARABIC SMALL HIGH ROUNDED ZERO -> SUKUN
+);
+
 /**
  * Parse the Indopak JSON data and group by Surah and Ayah
  */
@@ -57,7 +65,7 @@ export const loadIndopakQuran = (): Map<number, IndopakSurah> => {
   // Build complete text for each ayah by joining words
   surahMap.forEach((surah) => {
     surah.ayahs.forEach((ayah) => {
-      ayah.text = ayah.words.map(w => w.text).join(' ');
+      ayah.text = normalizeIndopakMarks(ayah.words.map(w => w.text).join(' '));
     });
     
     // Sort ayahs by ayah number
