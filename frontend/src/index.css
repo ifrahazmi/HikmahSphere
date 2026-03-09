@@ -114,6 +114,24 @@ code {
   text-rendering: optimizeLegibility;
 }
 
+.indopak-waqf-marker {
+  display: inline-block;
+  font-family: 'Noto Naskh Arabic', 'Amiri', serif;
+  font-feature-settings: "mark" 0, "mkmk" 0, "calt" 0;
+  line-height: 1;
+  vertical-align: middle;
+  unicode-bidi: isolate;
+  margin-inline: 0.18em;
+  font-size: 0.9em;
+  transform: translateY(-0.02em);
+}
+
+@media (max-width: 768px) {
+  .indopak-waqf-marker {
+    font-family: 'Noto Naskh Arabic', 'Amiri', serif;
+  }
+}
+
 /* Jameel Noori Nastaleeq - Urdu Translation Font */
 @font-face {
   font-family: 'Jameel Noori Nastaleeq';

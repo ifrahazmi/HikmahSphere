@@ -91,13 +91,38 @@
       transition: opacity 0.35s ease, visibility 0.35s ease;
     }
     #flo.done { opacity: 0; visibility: hidden; pointer-events: none; }
-    .flo-ring-wrap { position: relative; width: 84px; height: 84px; margin-bottom: 18px; }
+    .flo-ring-wrap {
+      position: relative;
+      width: 96px;
+      height: 96px;
+      margin-bottom: 18px;
+      display: grid;
+      place-items: center;
+    }
     .flo-ring {
       position: absolute; inset: 0; border-radius: 50%;
       border: 4px solid #d1fae5; border-top-color: #059669;
       animation: flo-spin 0.85s linear infinite;
     }
-    .flo-ring-wrap img { position: absolute; inset: 10px; object-fit: contain; }
+    .flo-logo {
+      position: relative;
+      z-index: 1;
+      width: 72px;
+      height: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 9999px;
+      background: #ffffff;
+      padding: 2px;
+      box-sizing: border-box;
+    }
+    .flo-logo img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
     @keyframes flo-spin { to { transform: rotate(360deg); } }
     .flo-label {
       font-family: system-ui, -apple-system, sans-serif;
@@ -120,7 +145,9 @@
     <div id="flo" aria-hidden="true">
       <div class="flo-ring-wrap">
         <div class="flo-ring"></div>
-        <img src="/logo.png" alt=""/>
+        <div class="flo-logo">
+          <img src="/logo.png" alt=""/>
+        </div>
       </div>
       <p class="flo-label">Loading HikmahSphere…</p>
       <p class="flo-arabic">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</p>

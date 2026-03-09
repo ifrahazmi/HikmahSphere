@@ -399,17 +399,34 @@ const QuranReader: React.FC = () => {
     return text;
   };
 
-  // IndoPak waqf symbols like ۚ are combining marks and may overlap nearby glyphs.
-  // Attach them to a dotted circle with spacing so they appear clearly between words.
-  const formatIndopakAyahText = (text: string): string => (
-    text
+  const INDO_PAK_MARKERS = new Set(['ۚ', 'ۖ', 'ۗ', 'ۘ', 'ۜ', '۩', '۝', 'مـ', 'صلی', 'قلی']);
+  const COMBINING_WAQF_MARKERS = new Set(['ۚ', 'ۖ', 'ۗ', 'ۘ', 'ۜ']);
+  const markerSplitPattern = /(مـ|صلی|قلی|[ۚۖۗۘۜ۩۝])/g;
+
+  // IndoPak waqf symbols can merge with surrounding letters on mobile shaping engines.
+  // Render markers in dedicated spans so they stay visually separate from ayah words.
+  const formatIndopakAyahText = (text: string, keyPrefix = 'indopak'): React.ReactNode => {
+    const normalizedText = text
       .replace(/صلى/g, 'صلی')
       .replace(/قلى/g, 'قلی')
-      .replace(/([ۚۖۗۘۜ])/g, ' \u25CC$1 ')
-      .replace(/([۩۝])/g, ' $1 ')
       .replace(/\s+/g, ' ')
-      .trim()
-  );
+      .trim();
+
+    const tokens = normalizedText.split(markerSplitPattern).filter(Boolean);
+
+    return tokens.map((token, index) => {
+      if (!INDO_PAK_MARKERS.has(token)) {
+        return <React.Fragment key={`${keyPrefix}-text-${index}`}>{token}</React.Fragment>;
+      }
+
+      const markerText = COMBINING_WAQF_MARKERS.has(token) ? `\u25CC${token}` : token;
+      return (
+        <span key={`${keyPrefix}-marker-${index}`} className="indopak-waqf-marker">
+          {markerText}
+        </span>
+      );
+    });
+  };
 
   const getActualLineHeight = () => {
     if (settings.arabicFont === 'indopak-nastaleeq') {
@@ -1411,7 +1428,7 @@ const QuranReader: React.FC = () => {
                                 onClick={(e) => handleAyahClick(e, surahData.number, ayahNum)}
                                 className={`cursor-pointer hover:bg-emerald-100 hover:bg-opacity-30 rounded px-1 ${bgClass} ${isSelectedForBookmark ? 'bg-emerald-400 bg-opacity-40 ring-2 ring-emerald-500' : ''}`}
                               >
-                                {formatIndopakAyahText(ayah.text)}
+                                {formatIndopakAyahText(ayah.text, `indopak-inline-${ayahNum}`)}
                               </span>
                               {' '}
                               <span
@@ -1460,7 +1477,7 @@ const QuranReader: React.FC = () => {
                                           onClick={(e) => handleAyahClick(e, surahData.number, ayahNum)}
                                           className={`cursor-pointer hover:bg-emerald-100 hover:bg-opacity-30 rounded px-1 ${bgClass}`}
                                         >
-                                          {formatIndopakAyahText(ayah.text)}
+                                          {formatIndopakAyahText(ayah.text, `indopak-block-${ayahNum}`)}
                                         </span>
                                         {' '}
                                         <span

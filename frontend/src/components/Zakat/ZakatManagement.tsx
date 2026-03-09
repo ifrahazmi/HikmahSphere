@@ -764,15 +764,25 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
 
       {/* View Transaction Modal */}
       {showViewModal && viewingTransaction && (
-        <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl">
-            <div className="flex justify-between items-center p-6 border-b">
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-gray-900/50 p-3 sm:items-center sm:p-4"
+          onClick={() => setShowViewModal(false)}
+        >
+          <div
+            className="my-3 w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl max-h-[92dvh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-white/95 p-4 backdrop-blur sm:p-6">
               <h3 className="text-xl font-bold text-gray-900">Transaction Details</h3>
-              <button onClick={() => setShowViewModal(false)} className="text-gray-400 hover:text-gray-600">
+              <button
+                onClick={() => setShowViewModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+                aria-label="Close transaction details"
+              >
                 <XMarkIcon className="w-6 h-6" />
               </button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="max-h-[calc(92dvh-10rem)] overflow-y-auto p-4 space-y-4 sm:max-h-[calc(92dvh-11rem)] sm:p-6">
               <div className="flex items-center gap-3">
                 <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
                   viewingTransaction.type === 'collection' 
@@ -869,7 +879,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                 </div>
               )}
             </div>
-            <div className="p-6 border-t bg-gray-50 rounded-b-2xl">
+            <div className="sticky bottom-0 border-t bg-gray-50 p-4 sm:rounded-b-2xl sm:p-6">
               <button
                 onClick={() => setShowViewModal(false)}
                 className="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-colors font-medium"
