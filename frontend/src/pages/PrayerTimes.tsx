@@ -199,6 +199,8 @@ const PrayerTimes: React.FC = () => {
   const [islamicEvents, setIslamicEvents] = useState<any[]>([]);
   const [currentReminder, setCurrentReminder] = useState<IslamicReminder | null>(null);
   const [nextHijriDate, setNextHijriDate] = useState<HijriDate | null>(null);
+  const [nextDayPrayerData, setNextDayPrayerData] = useState<any>(null);
+  const [nextDayFastingData, setNextDayFastingData] = useState<any>(null);
 
   // Share image generation states
   const [showRatioModal, setShowRatioModal] = useState(false);
@@ -304,6 +306,8 @@ const PrayerTimes: React.FC = () => {
     setLoading(true);
     setError(null);
     setNextHijriDate(null);
+    setNextDayPrayerData(null);
+    setNextDayFastingData(null);
     const requestId = Date.now();
     hijriFetchRequestIdRef.current = requestId;
 
@@ -410,6 +414,9 @@ const PrayerTimes: React.FC = () => {
           .then((r) => r.json())
           .then((nextDayJson) => {
             if (nextDayJson.status === 'success' && nextDayJson.data?.fasting?.length > 0) {
+              if (hijriFetchRequestIdRef.current === requestId) {
+                setNextDayFastingData(nextDayJson.data);
+              }
               const parsedHijri = buildHijriDateFromFastingEntry(nextDayJson.data.fasting[0]);
               if (parsedHijri && hijriFetchRequestIdRef.current === requestId) {
                 setNextHijriDate(parsedHijri);
@@ -418,6 +425,37 @@ const PrayerTimes: React.FC = () => {
           })
           .catch((nextHijriError) => {
             console.warn('Next-day Hijri fetch error:', nextHijriError);
+          });
+
+        const aladhanSchool = selectedMadhab === 'hanafi' ? 1 : 0;
+        fetch(
+          `https://api.aladhan.com/v1/timings/${tomorrowGregorianDate}?latitude=${lat}&longitude=${lon}&method=${calculationMethod}&school=${aladhanSchool}&latitudeAdjustmentMethod=${highLatitudeRule}`
+        )
+          .then((r) => r.json())
+          .then((nextPrayerJson) => {
+            if (nextPrayerJson.code !== 200 || !nextPrayerJson.data || hijriFetchRequestIdRef.current !== requestId) {
+              return;
+            }
+
+            const nextDay = nextPrayerJson.data;
+            setNextDayPrayerData({
+              times: {
+                Fajr: nextDay.timings?.Fajr,
+                Sunrise: nextDay.timings?.Sunrise,
+                Dhuhr: nextDay.timings?.Dhuhr,
+                Asr: nextDay.timings?.Asr,
+                Maghrib: nextDay.timings?.Maghrib,
+                Isha: nextDay.timings?.Isha,
+                Imsak: nextDay.timings?.Imsak,
+                Midnight: nextDay.timings?.Midnight,
+              },
+              date: nextDay.date,
+              qibla: prayerJson.data?.qibla,
+              meta: nextDay.meta || prayerJson.data?.meta,
+            });
+          })
+          .catch((nextPrayerError) => {
+            console.warn('Next-day prayer fetch error:', nextPrayerError);
           });
       }
 
@@ -448,7 +486,7 @@ const PrayerTimes: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedMadhab, calculationMethod]);
+  }, [selectedMadhab, calculationMethod, highLatitudeRule]);
 
   const fetchMonthlyData = useCallback(async (lat: number, lon: number, month: number, year: number) => {
     setLoading(true);
@@ -567,7 +605,19 @@ const PrayerTimes: React.FC = () => {
       if (!prayerData?.times) return;
       
       const now = new Date();
-      const prayerWindow = getCurrentPrayerWindow(prayerData.times);
+      const maghribParsed = parseTimeString(prayerData.times?.Maghrib || '');
+      let isAfterMaghribForReminder = false;
+      if (maghribParsed) {
+        const maghribToday = new Date(now);
+        maghribToday.setHours(maghribParsed.hours, maghribParsed.minutes, 0, 0);
+        isAfterMaghribForReminder = now >= maghribToday;
+      }
+
+      const reminderTimes = isAfterMaghribForReminder && nextDayPrayerData?.times
+        ? nextDayPrayerData.times
+        : prayerData.times;
+
+      const prayerWindow = getCurrentPrayerWindow(reminderTimes);
       const dayOfWeek = now.getDay();
       // Use hour as seed for consistent rotation within same hour
       const seed = now.getHours() + now.getDate();
@@ -582,7 +632,7 @@ const PrayerTimes: React.FC = () => {
     const interval = setInterval(updateReminder, 60000);
     
     return () => clearInterval(interval);
-  }, [prayerData, islamicEvents]);
+  }, [prayerData, nextDayPrayerData, islamicEvents]);
 
   // Generate and share Dua image
   const generateAndShareDuaImage = async (ratio: 'story' | 'post', platform: string) => {
@@ -985,9 +1035,15 @@ const PrayerTimes: React.FC = () => {
     if (!prayerData?.times) return;
 
     const now = new Date();
+    const maghribTimeToday = prayerData?.times?.Maghrib
+      ? parsePrayerTime(prayerData.times.Maghrib, now)
+      : null;
+    const shouldUseNextDay = Boolean(maghribTimeToday && now >= maghribTimeToday && nextDayPrayerData?.times);
+    const activeTimesSource = shouldUseNextDay ? nextDayPrayerData : prayerData;
+    if (!activeTimesSource?.times) return;
 
     const prayerNames = ['Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
-    const prayerTimes = prayerNames.map(name => parsePrayerTime(prayerData.times[name] || '00:00', now));
+    const prayerTimes = prayerNames.map(name => parsePrayerTime(activeTimesSource.times[name] || '00:00', now));
     
     // Find current and next prayer
     let currentIdx = -1;
@@ -1018,8 +1074,8 @@ const PrayerTimes: React.FC = () => {
 
     // Calculate countdown
     let targetTime = isNext 
-      ? parsePrayerTime(prayerData.times[prayerNames[0]], new Date(now.getTime() + 86400000)) // Tomorrow
-      : parsePrayerTime(prayerData.times[prayerNames[nextIdx]], now);
+      ? parsePrayerTime(activeTimesSource.times[prayerNames[0]], new Date(now.getTime() + 86400000)) // Tomorrow
+      : parsePrayerTime(activeTimesSource.times[prayerNames[nextIdx]], now);
     
     let diffMs = targetTime.getTime() - now.getTime();
     if (diffMs < 0) diffMs = 0;
@@ -1030,7 +1086,7 @@ const PrayerTimes: React.FC = () => {
       minutes: Math.floor((totalSeconds % 3600) / 60),
       seconds: totalSeconds % 60
     });
-  }, [parsePrayerTime, prayerData]);
+  }, [parsePrayerTime, prayerData, nextDayPrayerData]);
 
   // Update timer every second
   useEffect(() => {
@@ -1122,16 +1178,6 @@ const PrayerTimes: React.FC = () => {
     return () => clearTimeout(scrollTimeout);
   }, [prayerData, currentPrayerIndex, viewMode]);
 
-  // Define prayers list based on loaded data or placeholders if still loading (though spinner will cover it)
-  const prayers = prayerData ? [
-    { name: 'Fajr', time: prayerData.times?.Fajr, arabic: 'الفجر', description: 'Dawn Prayer', icon: MoonIcon },
-    { name: 'Sunrise', time: prayerData.times?.Sunrise, arabic: 'الشروق', description: 'Sunrise', icon: SunIcon, isSecondary: true },
-    { name: 'Dhuhr', time: prayerData.times?.Dhuhr, arabic: 'الظهر', description: 'Noon Prayer', icon: SunIcon },
-    { name: 'Asr', time: prayerData.times?.Asr, arabic: 'العصر', description: 'Afternoon Prayer', icon: SunIcon },
-    { name: 'Maghrib', time: prayerData.times?.Maghrib, arabic: 'المغرب', description: 'Sunset Prayer', icon: SunIcon },
-    { name: 'Isha', time: prayerData.times?.Isha, arabic: 'العشاء', description: 'Night Prayer', icon: MoonIcon },
-  ] : [];
-
   const baseHijriDate: HijriDate | null = prayerData?.date?.hijri ? {
     day: String(prayerData.date.hijri.day),
     month: {
@@ -1146,20 +1192,37 @@ const PrayerTimes: React.FC = () => {
     ? parsePrayerTime(prayerData.times.Maghrib, nowForHijri)
     : null;
   const isAfterMaghrib = Boolean(maghribTimeToday && nowForHijri >= maghribTimeToday);
-  const activeRamadanGregorianDate = new Date(nowForHijri);
-  activeRamadanGregorianDate.setHours(0, 0, 0, 0);
+  const activeIslamicGregorianDate = new Date(nowForHijri);
+  activeIslamicGregorianDate.setHours(0, 0, 0, 0);
   if (isAfterMaghrib) {
-    activeRamadanGregorianDate.setDate(activeRamadanGregorianDate.getDate() + 1);
+    activeIslamicGregorianDate.setDate(activeIslamicGregorianDate.getDate() + 1);
   }
   const fallbackNextHijri = incrementHijriByOneDay(baseHijriDate);
   const effectiveHijriDate = isAfterMaghrib
     ? (nextHijriDate || fallbackNextHijri || baseHijriDate)
     : baseHijriDate;
+  const activePrayerData = isAfterMaghrib && nextDayPrayerData?.times
+    ? nextDayPrayerData
+    : prayerData;
+  const activeFastingData = isAfterMaghrib && nextDayFastingData?.fasting?.length
+    ? nextDayFastingData
+    : fastingData;
+  const activeFastingEntry = activeFastingData?.fasting?.[0];
 
-  const baseHijriReadable = fastingData?.fasting?.[0]?.hijri_readable
+  const baseHijriReadable = activeFastingEntry?.hijri_readable
     || (baseHijriDate ? `${baseHijriDate.day} ${baseHijriDate.month.en} ${baseHijriDate.year}` : '');
   const effectiveHijriReadable = effectiveHijriDate?.readable
     || (effectiveHijriDate ? `${effectiveHijriDate.day} ${effectiveHijriDate.month.en} ${effectiveHijriDate.year}` : baseHijriReadable);
+
+  // Define prayers list based on active Islamic day.
+  const prayers = activePrayerData ? [
+    { name: 'Fajr', time: activePrayerData.times?.Fajr, arabic: 'الفجر', description: 'Dawn Prayer', icon: MoonIcon },
+    { name: 'Sunrise', time: activePrayerData.times?.Sunrise, arabic: 'الشروق', description: 'Sunrise', icon: SunIcon, isSecondary: true },
+    { name: 'Dhuhr', time: activePrayerData.times?.Dhuhr, arabic: 'الظهر', description: 'Noon Prayer', icon: SunIcon },
+    { name: 'Asr', time: activePrayerData.times?.Asr, arabic: 'العصر', description: 'Afternoon Prayer', icon: SunIcon },
+    { name: 'Maghrib', time: activePrayerData.times?.Maghrib, arabic: 'المغرب', description: 'Sunset Prayer', icon: SunIcon },
+    { name: 'Isha', time: activePrayerData.times?.Isha, arabic: 'العشاء', description: 'Night Prayer', icon: MoonIcon },
+  ] : [];
 
   // Show full screen spinner while loading initial data
   if (loading || !prayerData) {
@@ -1475,7 +1538,7 @@ const PrayerTimes: React.FC = () => {
 
             <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 mt-1.5 text-xs sm:text-sm">
                 <p className="text-emerald-600 font-medium">
-                    {prayerData?.date?.readable}
+                    {activePrayerData?.date?.readable || prayerData?.date?.readable}
                 </p>
                 <span className="text-gray-400">•</span>
                 <p className="font-arabic text-gray-700">
@@ -1566,7 +1629,7 @@ const PrayerTimes: React.FC = () => {
                   </thead>
                   <tbody className="divide-y divide-gray-200">
                     {monthlyData.map((day: any, idx: number) => {
-                      const isToday = new Date(day.date.gregorian.date).toDateString() === new Date().toDateString();
+                      const isToday = new Date(day.date.gregorian.date).toDateString() === activeIslamicGregorianDate.toDateString();
 
                       // Aladhan Hijri is consistently 1 day AHEAD of islamicapi.
                       // Subtract 1 for both display and event detection to match islamicapi.
@@ -1816,20 +1879,20 @@ const PrayerTimes: React.FC = () => {
                                   </p>
                                 </div>
                                 {/* Also show fasting time for Fajr and Maghrib */}
-                                {prayer.name === 'Fajr' && fastingData?.fasting?.[0] && (
+                                {prayer.name === 'Fajr' && activeFastingEntry && (
                                   <div className="mt-1 pt-1 border-t border-gray-100">
                                     <span className="text-xs font-medium text-gray-500">Sehri Ends</span>
-                                    <p className="text-sm font-bold text-emerald-600">{formatTimeForDisplay(fastingData.fasting[0].time.sahur)}</p>
+                                    <p className="text-sm font-bold text-emerald-600">{formatTimeForDisplay(activeFastingEntry.time.sahur)}</p>
                                   </div>
                                 )}
-                                {prayer.name === 'Maghrib' && fastingData?.fasting?.[0] && (
+                                {prayer.name === 'Maghrib' && activeFastingEntry && (
                                   <div className="mt-1 pt-1 border-t border-gray-100">
                                     <span className="text-xs font-medium text-gray-500">Iftar Time</span>
-                                    <p className="text-sm font-bold text-emerald-600">{formatTimeForDisplay(fastingData.fasting[0].time.iftar)}</p>
+                                    <p className="text-sm font-bold text-emerald-600">{formatTimeForDisplay(activeFastingEntry.time.iftar)}</p>
                                   </div>
                                 )}
                               </div>
-                            ) : prayer.name === 'Fajr' && fastingData?.fasting?.[0] ? (
+                            ) : prayer.name === 'Fajr' && activeFastingEntry ? (
                                 <div className="flex flex-col gap-1">
                                     {isCurrentPrayer ? (
                                       // When Fajr is current, show "Now" above Sehri time
@@ -1839,17 +1902,17 @@ const PrayerTimes: React.FC = () => {
                                         </div>
                                         <div className="mt-1 pt-1 border-t border-gray-100">
                                           <span className="text-xs font-medium text-gray-500">Sehri Ends</span>
-                                          <p className="text-sm font-bold text-emerald-600">{formatTimeForDisplay(fastingData.fasting[0].time.sahur)}</p>
+                                          <p className="text-sm font-bold text-emerald-600">{formatTimeForDisplay(activeFastingEntry.time.sahur)}</p>
                                         </div>
                                       </>
                                     ) : (
                                       <div>
                                           <span className="text-xs font-medium text-gray-500">Sehri Ends</span>
-                                          <p className="text-sm font-bold text-emerald-600">{formatTimeForDisplay(fastingData.fasting[0].time.sahur)}</p>
+                                          <p className="text-sm font-bold text-emerald-600">{formatTimeForDisplay(activeFastingEntry.time.sahur)}</p>
                                       </div>
                                     )}
                                 </div>
-                            ) : prayer.name === 'Maghrib' && fastingData?.fasting?.[0] ? (
+                            ) : prayer.name === 'Maghrib' && activeFastingEntry ? (
                                 <div className="flex flex-col gap-1">
                                     {isCurrentPrayer ? (
                                       // When Maghrib is current, show "Now" above Iftar time
@@ -1859,17 +1922,17 @@ const PrayerTimes: React.FC = () => {
                                         </div>
                                         <div className="mt-1 pt-1 border-t border-gray-100">
                                           <span className="text-xs font-medium text-gray-500">Iftar Time</span>
-                                          <p className="text-sm font-bold text-emerald-600">{formatTimeForDisplay(fastingData.fasting[0].time.iftar)}</p>
+                                          <p className="text-sm font-bold text-emerald-600">{formatTimeForDisplay(activeFastingEntry.time.iftar)}</p>
                                           <span className="text-xs font-medium text-gray-500">Duration</span>
-                                          <p className="text-xs font-semibold text-gray-600">{fastingData.fasting[0].time.duration}</p>
+                                          <p className="text-xs font-semibold text-gray-600">{activeFastingEntry.time.duration}</p>
                                         </div>
                                       </>
                                     ) : (
                                       <div>
                                           <span className="text-xs font-medium text-gray-500">Iftar Time</span>
-                                          <p className="text-sm font-bold text-emerald-600">{formatTimeForDisplay(fastingData.fasting[0].time.iftar)}</p>
+                                          <p className="text-sm font-bold text-emerald-600">{formatTimeForDisplay(activeFastingEntry.time.iftar)}</p>
                                           <span className="text-xs font-medium text-gray-500">Duration</span>
-                                          <p className="text-xs font-semibold text-gray-600">{fastingData.fasting[0].time.duration}</p>
+                                          <p className="text-xs font-semibold text-gray-600">{activeFastingEntry.time.duration}</p>
                                       </div>
                                     )}
                                 </div>
@@ -1881,10 +1944,10 @@ const PrayerTimes: React.FC = () => {
                                     <p className="text-sm font-bold text-emerald-700">Prayer Time</p>
                                   </div>
                                 )}
-                                {prayerData?.times?.Midnight && (
+                                {activePrayerData?.times?.Midnight && (
                                   <div className={`${isCurrentPrayer ? 'mt-1 pt-1 border-t border-gray-100' : ''}`}>
                                     <span className="text-xs font-medium text-gray-500">Islamic Midnight</span>
-                                    <p className="text-sm font-bold text-emerald-600">{formatTimeForDisplay(prayerData.times.Midnight)}</p>
+                                    <p className="text-sm font-bold text-emerald-600">{formatTimeForDisplay(activePrayerData.times.Midnight)}</p>
                                   </div>
                                 )}
                               </div>
@@ -1926,7 +1989,7 @@ const PrayerTimes: React.FC = () => {
 
           {/* Calendar Column */}
           <div className="xl:col-span-1">
-            <IslamicCalendar whiteDays={fastingData?.white_days} todayHijri={effectiveHijriDate || prayerData?.date?.hijri} />
+            <IslamicCalendar whiteDays={activeFastingData?.white_days || fastingData?.white_days} todayHijri={effectiveHijriDate || prayerData?.date?.hijri} />
           </div>
         </div>
         )}
@@ -2472,7 +2535,7 @@ const PrayerTimes: React.FC = () => {
                   }
                   
                   const dayDate = parseGregorianYYYYMMDDLocal(day.date) || new Date(day.date);
-                  const isToday = dayDate.toDateString() === activeRamadanGregorianDate.toDateString();
+                  const isToday = dayDate.toDateString() === activeIslamicGregorianDate.toDateString();
                   // Use hijri day number if available, else fall back to 1-based index
                   const dayNumber = day.hijri
                     ? (parseInt(day.hijri.split('-')[2] || String(idx + 1)) || idx + 1)

@@ -19,8 +19,39 @@ const ARABIC_HEADINGS = [
   'بسم الله الرحمن الرحيم',
 ];
 
+const normalizeArabicForDisplay = (arabicText: string): string => {
+  return arabicText
+    .replace(/[﴿﴾]/g, ' ')
+    .replace(/\*+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s.,،؛:]+|[\s.,،؛:]+$/g, '')
+    .trim();
+};
+
+const renderArabicWithStopMarkers = (arabicText: string, keyPrefix: string): React.ReactNode => {
+  const normalized = normalizeArabicForDisplay(arabicText);
+  const parts = normalized.split('،').map((part) => part.trim()).filter(Boolean);
+
+  if (parts.length <= 1) {
+    return normalized;
+  }
+
+  return parts.map((part, index) => (
+    <React.Fragment key={`${keyPrefix}-${index}`}>
+      {part}
+      {index < parts.length - 1 && (
+        <>
+          {'، '}
+          <span aria-hidden="true" className="mx-1 inline-block h-1.5 w-1.5 align-middle rounded-full bg-emerald-600" />
+          {' '}
+        </>
+      )}
+    </React.Fragment>
+  ));
+};
+
 const splitArabicHeading = (arabicText: string): { heading: string; body: string } => {
-  const clean = arabicText.trim();
+  const clean = normalizeArabicForDisplay(arabicText);
   for (const heading of ARABIC_HEADINGS) {
     if (clean.startsWith(heading)) {
       const body = clean.slice(heading.length).trim();
@@ -421,7 +452,7 @@ const DuaDetail: React.FC = () => {
               <div className="rounded-xl bg-emerald-50 p-4 text-right text-emerald-950">
                 {arabicHeading && <p className="mb-2 text-2xl font-indopak-nastaleeq">{arabicHeading}</p>}
                 <p className="text-4xl leading-relaxed font-indopak-nastaleeq">
-                  {arabicBody || dua.arabic}
+                  {renderArabicWithStopMarkers(arabicBody || dua.arabic, `${dua.id}-detail`)}
                 </p>
               </div>
             </div>
@@ -439,7 +470,7 @@ const DuaDetail: React.FC = () => {
               </p>
               <p className={`rounded-xl bg-emerald-50/80 p-4 text-sm text-gray-800 ${
                 translationLanguage === 'urdu' ? 'font-jameel-noori text-right text-[1.7rem] leading-[3.05rem] sm:text-[2.4rem] sm:leading-[4.1rem]' : ''
-              }`}>
+              }`} dir={translationLanguage === 'urdu' ? 'rtl' : 'ltr'} style={translationLanguage === 'urdu' ? { unicodeBidi: 'plaintext' } : undefined}>
                 {selectedTranslation}
               </p>
             </div>

@@ -97,6 +97,10 @@ const getTodayKey = (): string => {
 
 const normalize = (value: string): string => value.toLowerCase().trim();
 
+const MORNING_EVENING_1_REF = 'HM-27-75';
+const MORNING_EVENING_2_REF = 'HM-27-76';
+const BEFORE_SLEEP_1_REF = 'HM-28-99';
+
 const ARABIC_HEADINGS = [
   'أَعُوذُ بِاللَّهِ مِنَ الشَّيطَانِ الرَّجِيمِ',
   'أَعُوذُ بِاللَّهِ مِنَ الشَّيْطَانِ الرَّجِيمِ',
@@ -104,8 +108,73 @@ const ARABIC_HEADINGS = [
   'بسم الله الرحمن الرحيم',
 ];
 
+const normalizeArabicForDisplay = (arabicText: string): string => {
+  return arabicText
+    .replace(/[﴿﴾]/g, ' ')
+    .replace(/\*+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s.,،؛:]+|[\s.,،؛:]+$/g, '')
+    .trim();
+};
+
+const extractArabicBracketBlocks = (arabicText: string): string[] => {
+  const blocks = Array.from(arabicText.matchAll(/\(([^()]+)\)/g))
+    .map((match) => normalizeArabicForDisplay(match[1]))
+    .filter(Boolean);
+
+  if (blocks.length > 0) {
+    return blocks;
+  }
+
+  const fallback = normalizeArabicForDisplay(arabicText);
+  return fallback ? [fallback] : [];
+};
+
+const extractBeforeSleepSurahBlocks = (arabicText: string): string[] => {
+  const surahBlocks = (arabicText.match(/بسم الله الرحمن الرحيم\s*﴿[^﴾]+﴾/g) || [])
+    .map((block) => normalizeArabicForDisplay(block))
+    .filter(Boolean);
+
+  if (surahBlocks.length > 0) {
+    return surahBlocks;
+  }
+
+  return extractArabicBracketBlocks(arabicText).slice(0, 3);
+};
+
+const renderArabicWithStopMarkers = (
+  arabicText: string,
+  keyPrefix: string,
+  isDarkMode: boolean
+): React.ReactNode => {
+  const normalized = normalizeArabicForDisplay(arabicText);
+  const parts = normalized.split('،').map((part) => part.trim()).filter(Boolean);
+
+  if (parts.length <= 1) {
+    return normalized;
+  }
+
+  return parts.map((part, index) => (
+    <React.Fragment key={`${keyPrefix}-${index}`}>
+      {part}
+      {index < parts.length - 1 && (
+        <>
+          {'، '}
+          <span
+            aria-hidden="true"
+            className={`mx-1 inline-block h-1.5 w-1.5 align-middle rounded-full ${
+              isDarkMode ? 'bg-emerald-300' : 'bg-emerald-600'
+            }`}
+          />
+          {' '}
+        </>
+      )}
+    </React.Fragment>
+  ));
+};
+
 const splitArabicHeading = (arabicText: string): { heading: string; body: string } => {
-  const clean = arabicText.trim();
+  const clean = normalizeArabicForDisplay(arabicText);
   for (const heading of ARABIC_HEADINGS) {
     if (clean.startsWith(heading)) {
       const body = clean.slice(heading.length).trim();
@@ -168,6 +237,7 @@ const DhikrDua: React.FC = () => {
   const profileSectionRef = useRef<HTMLDivElement | null>(null);
   const listSectionRef = useRef<HTMLDivElement | null>(null);
   const touchStartXRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
   const cardRefs = useRef<Record<string, HTMLElement | null>>({});
   const arabicSectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const isHydratingCloudStateRef = useRef(false);
@@ -644,7 +714,7 @@ const DhikrDua: React.FC = () => {
     }, 120);
 
     return () => window.clearTimeout(timerId);
-  }, [expandedDuaId, activeMobileSection, filteredDuas.length]);
+  }, [expandedDuaId]);
 
   const toggleCard = (id: string) => {
     setExpandedDuaId((previous) => {
@@ -770,12 +840,23 @@ const DhikrDua: React.FC = () => {
     }
   };
 
+  const decrementTasbih = () => {
+    setTasbihCount((previous) => Math.max(0, previous - 1));
+    setDailyTracker((previous) => ({
+      date: getTodayKey(),
+      counts: {
+        ...previous.counts,
+        [selectedPreset.id]: Math.max(0, (previous.counts[selectedPreset.id] || 0) - 1),
+      },
+    }));
+  };
+
   const resetTasbih = () => {
     setTasbihCount(0);
   };
 
   const focusDuaCard = (duaId: string, fromMobileProfile = false) => {
-    const scheduleFocusScroll = (delayMs: number) => {
+    const scheduleFocusScroll = (delayMs = 140) => {
       window.setTimeout(() => {
         scrollCardIntoView(duaId);
       }, delayMs);
@@ -786,16 +867,14 @@ const DhikrDua: React.FC = () => {
       window.setTimeout(() => {
         setExpandedDuaId(duaId);
         markAsViewed(duaId);
-        scheduleFocusScroll(120);
-        scheduleFocusScroll(340);
+        scheduleFocusScroll(180);
       }, 180);
       return;
     }
 
     setExpandedDuaId(duaId);
     markAsViewed(duaId);
-    scheduleFocusScroll(120);
-    scheduleFocusScroll(280);
+    scheduleFocusScroll();
   };
 
   const resumeReading = () => {
@@ -937,15 +1016,20 @@ const DhikrDua: React.FC = () => {
 
   const onTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
     touchStartXRef.current = event.changedTouches[0].clientX;
+    touchStartYRef.current = event.changedTouches[0].clientY;
   };
 
   const onTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
-    if (touchStartXRef.current === null) return;
+    if (touchStartXRef.current === null || touchStartYRef.current === null) return;
 
     const deltaX = event.changedTouches[0].clientX - touchStartXRef.current;
+    const deltaY = event.changedTouches[0].clientY - touchStartYRef.current;
     touchStartXRef.current = null;
+    touchStartYRef.current = null;
 
     if (Math.abs(deltaX) < 60) return;
+    if (Math.abs(deltaY) > 80) return;
+    if (Math.abs(deltaX) <= Math.abs(deltaY) * 1.2) return;
     if (deltaX < 0) {
       moveFocusBySwipe('next');
     } else {
@@ -1446,7 +1530,19 @@ const DhikrDua: React.FC = () => {
                       const isExpanded = expandedDuaId === dua.id;
                       const isBookmarked = bookmarkedIds.includes(dua.id);
                       const isPlaying = playingDuaId === dua.id;
-                      const { heading: arabicHeading, body: arabicBody } = splitArabicHeading(dua.arabic);
+                      const isMorningEveningOne = dua.reference.hadithNumber === MORNING_EVENING_1_REF;
+                      const isMorningEveningTwo = dua.reference.hadithNumber === MORNING_EVENING_2_REF;
+                      const isBeforeSleepOne = dua.reference.hadithNumber === BEFORE_SLEEP_1_REF;
+                      const requiresRawArabic = isMorningEveningTwo || isBeforeSleepOne;
+                      const arabicSource = requiresRawArabic ? (dua.rawArabic || dua.arabic) : dua.arabic;
+                      const arabicBlocks = isMorningEveningTwo
+                        ? extractArabicBracketBlocks(arabicSource)
+                        : isBeforeSleepOne
+                        ? extractBeforeSleepSurahBlocks(arabicSource)
+                        : [];
+                      const shouldRenderArabicBlocks = (isMorningEveningTwo || isBeforeSleepOne) && arabicBlocks.length > 0;
+                      const normalizedArabic = normalizeArabicForDisplay(arabicSource);
+                      const { heading: arabicHeading, body: arabicBody } = splitArabicHeading(normalizedArabic);
                       const selectedTranslation = translationLanguage === 'urdu' ? dua.translationUrdu : dua.translation;
                       const hajjStep = hajjStepMap.get(dua.id);
 
@@ -1558,14 +1654,48 @@ const DhikrDua: React.FC = () => {
                                     className={`rounded-xl p-4 text-right leading-relaxed ${
                                     isDarkMode ? 'bg-slate-800 text-emerald-100' : 'bg-emerald-50 text-emerald-950'
                                   }`}>
-                                    {arabicHeading && (
-                                      <p className="mb-2 text-xl font-semibold font-indopak-nastaleeq">
-                                        {arabicHeading}
-                                      </p>
+                                    {shouldRenderArabicBlocks ? (
+                                      <div className="space-y-3">
+                                        {arabicBlocks.map((block, index) => {
+                                          const { heading: blockHeading, body: blockBody } = splitArabicHeading(block);
+                                          return (
+                                            <div
+                                              key={`${dua.id}-block-${index}`}
+                                              className={`rounded-lg border p-3 ${
+                                                isDarkMode
+                                                  ? 'border-slate-700 bg-slate-900/70'
+                                                  : 'border-emerald-200 bg-white/80'
+                                              }`}
+                                            >
+                                              <p className="mb-1 text-center text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
+                                                Dua {index + 1}
+                                              </p>
+                                              {blockHeading && (
+                                                <p className="mb-2 text-center text-xl font-semibold font-indopak-nastaleeq">
+                                                  {blockHeading}
+                                                </p>
+                                              )}
+                                              <p className="text-[1.6rem] sm:text-[1.85rem] font-indopak-nastaleeq">
+                                                {renderArabicWithStopMarkers(blockBody || block, `${dua.id}-block-text-${index}`, isDarkMode)}
+                                              </p>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    ) : (
+                                      <>
+                                        {arabicHeading && (
+                                          <p className={`mb-2 text-center text-xl font-semibold font-indopak-nastaleeq ${
+                                            isMorningEveningOne ? 'sm:text-[1.65rem]' : ''
+                                          }`}>
+                                            {arabicHeading}
+                                          </p>
+                                        )}
+                                        <p className="text-[1.75rem] sm:text-[2rem] font-indopak-nastaleeq">
+                                          {renderArabicWithStopMarkers(arabicBody || normalizedArabic || dua.arabic, `${dua.id}-body`, isDarkMode)}
+                                        </p>
+                                      </>
                                     )}
-                                    <p className="text-[1.75rem] sm:text-[2rem] font-indopak-nastaleeq">
-                                      {arabicBody || dua.arabic}
-                                    </p>
                                   </div>
                                 </div>
 
@@ -1580,9 +1710,13 @@ const DhikrDua: React.FC = () => {
                                   <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-emerald-700">
                                     Translation ({translationLanguage === 'urdu' ? 'Urdu' : 'English'})
                                   </p>
-                                  <p className={`rounded-xl p-4 text-sm leading-relaxed ${
-                                    isDarkMode ? 'bg-slate-800 text-slate-100' : 'bg-emerald-50/80 text-gray-800'
-                                  } ${translationLanguage === 'urdu' ? 'font-jameel-noori text-right text-[1.7rem] leading-[3.05rem] sm:text-[2.4rem] sm:leading-[4.1rem]' : ''}`}>
+                                  <p
+                                    className={`rounded-xl p-4 text-sm leading-relaxed ${
+                                      isDarkMode ? 'bg-slate-800 text-slate-100' : 'bg-emerald-50/80 text-gray-800'
+                                    } ${translationLanguage === 'urdu' ? 'font-jameel-noori text-right text-[1.7rem] leading-[3.05rem] sm:text-[2.4rem] sm:leading-[4.1rem]' : ''}`}
+                                    dir={translationLanguage === 'urdu' ? 'rtl' : 'ltr'}
+                                    style={translationLanguage === 'urdu' ? { unicodeBidi: 'plaintext' } : undefined}
+                                  >
                                     {selectedTranslation}
                                   </p>
                                 </div>
@@ -1653,15 +1787,40 @@ const DhikrDua: React.FC = () => {
 
                     <button
                       type="button"
-                      onClick={incrementTasbih}
-                      className="mx-auto mt-4 flex h-56 w-56 max-w-full items-center justify-center rounded-full bg-gradient-to-br from-emerald-600 to-teal-600 text-center text-white shadow-xl transition hover:from-emerald-700 hover:to-teal-700"
+                      onPointerDown={(event) => {
+                        if (event.pointerType === 'mouse' && event.button !== 0) return;
+                        incrementTasbih();
+                      }}
+                      onContextMenu={(event) => event.preventDefault()}
+                      className="mx-auto mt-4 flex h-[62vw] w-[62vw] min-h-[11rem] min-w-[11rem] max-h-56 max-w-56 select-none touch-manipulation items-center justify-center rounded-full bg-gradient-to-br from-emerald-600 to-teal-600 text-center text-white shadow-xl transition active:scale-[0.98] hover:from-emerald-700 hover:to-teal-700"
                     >
                       <div>
                         <p className="text-5xl font-bold">{tasbihCount}</p>
-                        <p className="mt-1 text-sm font-semibold">Tap Anywhere</p>
+                        <p className="mt-1 text-sm font-semibold">Tap to Count</p>
                         <p className="mt-2 text-xs">{selectedPreset.label}</p>
                       </div>
                     </button>
+
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={decrementTasbih}
+                        className={`inline-flex w-full items-center justify-center rounded-xl border px-4 py-2 text-sm font-semibold transition ${
+                          isDarkMode
+                            ? 'border-slate-600 text-slate-100 hover:border-slate-500'
+                            : 'border-emerald-200 text-emerald-700 hover:border-emerald-400'
+                        }`}
+                      >
+                        Undo -1
+                      </button>
+                      <button
+                        type="button"
+                        onClick={incrementTasbih}
+                        className="inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                      >
+                        +1 Tasbih
+                      </button>
+                    </div>
 
                     <div className="mt-4">
                       <div className="mb-1 flex justify-between text-xs font-medium">

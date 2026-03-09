@@ -13,6 +13,7 @@ export interface SpiritualFeature {
   icon: any;
   title: string;
   description: string;
+  path?: string;
   color?: string;
   bgColor?: string;
   image?: string;
@@ -172,26 +173,31 @@ export const spiritualFeatures: SpiritualFeature[] = [
   {
     icon: "/Smart-Prayer-Times.png",
     title: "Smart Prayer Times",
+    path: "/prayers",
     description: "Never miss the connection with your Lord. Ultra-precise calculations with real-time geolocation, multiple scholarly methods (MWL, ISNA, Umm al-Qura), high latitude corrections, and beautiful shareable prayer cards."
   },
   {
     icon: "/Quran-Reader.png",
     title: "Quran Reader",
+    path: "/quran",
     description: "Understand His words in your language. Complete 114 Surahs with 10+ translations, semantic AI search, audio recitations, bookmarks, Indopak script, and seamless navigation that transforms your reading experience."
   },
   {
     icon: "/Zakat.png",
     title: "Zakat Management",
+    path: "/zakat",
     description: "Purify your wealth with confidence. Complete dashboard for Zakat collection and distribution, donor tracking, real-time balance, leaderboards, and transparent fund management with export capabilities."
   },
   {
     icon: "/Global-Community.png",
     title: "Global Community",
+    path: "/community",
     description: "Find your brothers and sisters across continents. Connect through forums, discover local events, join meaningful discussions, and strengthen the bonds of Islamic brotherhood worldwide."
   },
   {
     icon: "/Tasbih.png",
     title: "Dhikr & Dua",
+    path: "/dhikr-dua",
     description: "Keep your heart connected to Allah throughout the day. Access authentic daily duas and adhkar with Arabic text, transliteration, English/Urdu translation, full hadith references, bookmarks, and a focused online tasbih counter."
   },
   {

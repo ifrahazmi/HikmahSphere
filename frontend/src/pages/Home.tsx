@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
 import {
   HeartIcon,
   CheckCircleIcon,
@@ -59,6 +60,7 @@ const Home: React.FC = () => {
     {
       icon: '/Smart-Prayer-Times.png',
       title: 'Smart Prayer Times',
+      path: '/prayers',
       description: 'Ultra-precise prayer times with real-time geolocation, multiple calculation methods (MWL, ISNA, Umm al-Qura), astronomical corrections for high latitudes, and beautiful shareable prayer cards',
       color: 'text-emerald-600',
       bgColor: 'bg-emerald-50',
@@ -67,6 +69,7 @@ const Home: React.FC = () => {
     {
       icon: '/Quran-Reader.png',
       title: 'Quran Reader',
+      path: '/quran',
       description: 'Complete 114 Surahs with 10+ translations, semantic AI search, audio recitations, bookmarks, Indopak script, customizable fonts, and seamless navigation between ayahs',
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
@@ -75,6 +78,7 @@ const Home: React.FC = () => {
     {
       icon: '/Zakat.png',
       title: hasManagementAccess ? 'Zakat Management' : 'Zakat Calculator',
+      path: '/zakat',
       description: hasManagementAccess
         ? 'Complete Zakat dashboard with donor tracking, collection/spending records, real-time balance, donor leaderboards, and export capabilities for transparent fund management'
         : 'Intelligent Zakat calculator with live nisab rates, support for gold/silver/assets/crypto, 2.5% calculation, and multiple scholarly methodologies',
@@ -85,6 +89,7 @@ const Home: React.FC = () => {
     {
       icon: '/Global-Community.png',
       title: 'Global Community',
+      path: '/community',
       description: 'Connect with Muslims worldwide through community forums, local event discovery, group discussions, and reputation systems fostering meaningful Islamic brotherhood',
       color: 'text-purple-600',
       bgColor: 'bg-purple-50',
@@ -93,6 +98,7 @@ const Home: React.FC = () => {
     {
       icon: '/Tasbih.png',
       title: 'Dhikr & Dua',
+      path: '/dhikr-dua',
       description: 'Authentic daily duas and adhkar with Arabic, transliteration, English/Urdu translation, verified references, favorites, and a built-in online tasbih counter for daily remembrance',
       color: 'text-teal-600',
       bgColor: 'bg-teal-50',
@@ -108,6 +114,19 @@ const Home: React.FC = () => {
       gradient: 'from-gray-400 to-gray-500',
     },
   ];
+
+  const handleFeatureCardClick = (feature: (typeof features)[number]) => {
+    if (feature.disabled) {
+      if (feature.title === 'AI Assistant') {
+        toast.error('AI Assistant is not yet implemented.');
+      }
+      return;
+    }
+
+    if (feature.path) {
+      navigate(feature.path);
+    }
+  };
 
   const stats = [
     {
@@ -513,9 +532,13 @@ const Home: React.FC = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {features.map((feature, index) => (
-              <div
+              <button
                 key={index}
-                className={`group relative bg-white rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-2 border border-gray-100 overflow-hidden ${feature.disabled ? 'opacity-60' : ''}`}
+                type="button"
+                onClick={() => handleFeatureCardClick(feature)}
+                className={`group relative bg-white rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-2 border border-gray-100 overflow-hidden text-left w-full ${
+                  feature.disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
+                }`}
               >
                 {/* Gradient Background on Hover */}
                 <div className={`absolute inset-0 bg-gradient-to-br ${feature.gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-500`}></div>
@@ -557,7 +580,7 @@ const Home: React.FC = () => {
                     </div>
                   )}
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </div>

@@ -46,6 +46,7 @@ export interface DuaEntry {
   shortDescription: string;
   sectionTitle: string;
   arabic: string;
+  rawArabic?: string;
   transliteration: string;
   translation: string;
   translationUrdu: string;
@@ -293,6 +294,7 @@ const URDU_TRANSLATION_MAP = urduTranslations as Record<string, string>;
 const sanitizeArabicText = (value?: string): string => {
   return (value || '')
     .replace(/[()[\]{}]/g, ' ')
+    .replace(/[﴿﴾]/g, ' ')
     .replace(/\*+/g, ' ')
     .replace(/\.{2,}/g, ' ')
     .replace(/[“”"']/g, ' ')
@@ -302,8 +304,41 @@ const sanitizeArabicText = (value?: string): string => {
 
 const getSafeText = (value?: string): string => (value || '').replace(/\s+/g, ' ').trim();
 
-const getUrduTranslation = (englishTranslation: string): string => {
-  return URDU_TRANSLATION_MAP[englishTranslation] || 'اردو ترجمہ دستیاب نہیں ہے۔';
+const sanitizeNarrativeText = (value?: string): string => {
+  let text = getSafeText(value);
+  if (!text) return '';
+
+  let previous = '';
+  while (text !== previous) {
+    previous = text;
+    text = text
+      .replace(/^\(\s*(.*)\s*\)\.?$/u, '$1')
+      .replace(/^\[\s*(.*)\s*\]\.?$/u, '$1')
+      .replace(/^\{\s*(.*)\s*\}\.?$/u, '$1')
+      .trim();
+  }
+
+  return text;
+};
+
+const getUrduTranslation = (originalEnglishTranslation: string, sanitizedEnglishTranslation: string): string => {
+  const candidates = [
+    originalEnglishTranslation,
+    sanitizedEnglishTranslation,
+    `(${sanitizedEnglishTranslation})`,
+    `${sanitizedEnglishTranslation}.`,
+  ];
+
+  for (const key of candidates) {
+    const normalizedKey = getSafeText(key);
+    if (!normalizedKey) continue;
+    const mapped = URDU_TRANSLATION_MAP[normalizedKey];
+    if (mapped) {
+      return sanitizeNarrativeText(mapped);
+    }
+  }
+
+  return 'اردو ترجمہ دستیاب نہیں ہے۔';
 };
 
 const getSimpleTitleFromContext = (
@@ -846,9 +881,10 @@ for (const section of RAW_SECTIONS) {
 
   sectionItems.forEach((item, itemIndex) => {
     const arabic = sanitizeArabicText(item.ARABIC_TEXT);
-    const transliteration = getSafeText(item.LANGUAGE_ARABIC_TRANSLATED_TEXT) || 'Transliteration available in source audio.';
-    const translation = getSafeText(item.TRANSLATED_TEXT) || 'Translation not available in source dataset.';
-    const translationUrdu = getUrduTranslation(translation);
+    const transliteration = sanitizeNarrativeText(item.LANGUAGE_ARABIC_TRANSLATED_TEXT) || 'Transliteration available in source audio.';
+    const rawTranslation = getSafeText(item.TRANSLATED_TEXT);
+    const translation = sanitizeNarrativeText(item.TRANSLATED_TEXT) || 'Translation not available in source dataset.';
+    const translationUrdu = getUrduTranslation(rawTranslation, translation);
     const repeat = typeof item.REPEAT === 'number' ? item.REPEAT : 1;
     const simpleTitle = getSimpleTitleFromContext(categoryId, sectionTitle, translation);
     const title = sectionItems.length > 1 ? `${simpleTitle} ${itemIndex + 1}` : simpleTitle;
@@ -868,6 +904,7 @@ for (const section of RAW_SECTIONS) {
       shortDescription,
       sectionTitle,
       arabic,
+      rawArabic: getSafeText(item.ARABIC_TEXT),
       transliteration,
       translation,
       translationUrdu,

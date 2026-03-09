@@ -109,6 +109,9 @@ code {
 
 .font-indopak-nastaleeq {
   font-family: 'Indopak Nastaleeq', 'Noto Naskh Arabic', serif;
+  font-variant-ligatures: contextual common-ligatures;
+  font-feature-settings: "mark" 1, "mkmk" 1, "calt" 1;
+  text-rendering: optimizeLegibility;
 }
 
 /* Jameel Noori Nastaleeq - Urdu Translation Font */

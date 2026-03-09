@@ -120,8 +120,30 @@ app.get('/', (req, res) => {
   });
 });
 
-// Health check endpoint
-app.get('/health', async (req, res) => {
+// API base endpoint (supports both /api and /api/)
+app.get(['/api', '/api/'], (req, res) => {
+  res.status(200).json({
+    status: 'success',
+    message: '🕌 HikmahSphere API base endpoint',
+    version: '1.0.0',
+    basePath: '/api',
+    endpoints: {
+      health: '/health',
+      auth: '/api/auth',
+      prayers: '/api/prayers',
+      quran: '/api/quran',
+      dhikr: '/api/dhikr',
+      zakat: '/api/zakat',
+      community: '/api/community',
+      notifications: '/api/notifications',
+      support: '/api/support',
+      activity: '/api/activity',
+    },
+  });
+});
+
+// Health check endpoint (supports both /health and /api/health)
+app.get(['/health', '/api/health'], async (req, res) => {
   let redisStatus = 'disconnected';
   try {
       if (redisClient.isOpen) {

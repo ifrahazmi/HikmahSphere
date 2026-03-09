@@ -11,6 +11,8 @@ const Auth: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [passwordChangeToken, setPasswordChangeToken] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
 
   const { login, register } = useAuth();
   const navigate = useNavigate();
@@ -22,9 +24,23 @@ const Auth: React.FC = () => {
     newPassword: ''
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
+
+    const submittedData = new FormData(e.currentTarget);
+    const submittedName = String(submittedData.get('name') || formData.name).trim();
+    const submittedEmail = String(submittedData.get('email') || formData.email).trim().toLowerCase();
+    const submittedPassword = String(submittedData.get('password') || formData.password);
+    const submittedNewPassword = String(submittedData.get('newPassword') || formData.newPassword);
+
+    setFormData(prev => ({
+      ...prev,
+      name: submittedName,
+      email: submittedEmail,
+      password: submittedPassword,
+      newPassword: submittedNewPassword,
+    }));
 
     try {
         if (showPasswordChange) {
@@ -35,7 +51,7 @@ const Auth: React.FC = () => {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${passwordChangeToken}`
                 },
-                body: JSON.stringify({ newPassword: formData.newPassword })
+                body: JSON.stringify({ newPassword: submittedNewPassword })
             });
             const data = await response.json();
             if (data.status === 'success') {
@@ -43,6 +59,7 @@ const Auth: React.FC = () => {
                 setShowPasswordChange(false);
                 setPasswordChangeToken('');
                 setFormData(prev => ({ ...prev, password: '', newPassword: '' }));
+                setShowNewPassword(false);
                 setIsLogin(true);
             } else {
                 toast.error(data.message || 'Failed to change password');
@@ -56,7 +73,7 @@ const Auth: React.FC = () => {
             const response = await fetch(`${API_URL}/auth/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: formData.email, password: formData.password })
+                body: JSON.stringify({ email: submittedEmail, password: submittedPassword })
             });
 
             const data = await response.json();
@@ -68,7 +85,7 @@ const Auth: React.FC = () => {
                     setShowPasswordChange(true);
                 } else {
                     // Use the login function from auth context to properly update state
-                    await login(formData.email, formData.password);
+                    await login(submittedEmail, submittedPassword);
                     toast.success('Successfully logged in!');
                     navigate('/dashboard');
                 }
@@ -77,7 +94,7 @@ const Auth: React.FC = () => {
             }
 
         } else {
-            await register(formData.name, formData.email, formData.password);
+            await register(submittedName, submittedEmail, submittedPassword);
             toast.success('Account created successfully!');
             navigate('/dashboard');
         }
@@ -196,7 +213,7 @@ const Auth: React.FC = () => {
               </p>
             </div>
 
-            <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+            <form className="mt-8 space-y-6" onSubmit={handleSubmit} autoComplete="on">
               <div className="space-y-5">
 
                 {showPasswordChange && (
@@ -208,13 +225,22 @@ const Auth: React.FC = () => {
                       <input
                         id="newPassword"
                         name="newPassword"
-                        type="password"
+                        type={showNewPassword ? 'text' : 'password'}
+                        autoComplete="new-password"
                         required
                         value={formData.newPassword}
                         onChange={handleInputChange}
-                        className="appearance-none relative block w-full px-4 py-3 border-2 border-gray-200 placeholder-gray-400 text-gray-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+                        onInput={handleInputChange}
+                        className="appearance-none relative block w-full px-4 pr-20 py-3 border-2 border-gray-200 placeholder-gray-400 text-gray-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
                         placeholder="Enter new password"
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword(prev => !prev)}
+                        className="absolute inset-y-0 right-0 px-4 text-sm font-medium text-emerald-700 hover:text-emerald-800"
+                      >
+                        {showNewPassword ? 'Hide' : 'Show'}
+                      </button>
                     </div>
                   </div>
                 )}
@@ -229,9 +255,11 @@ const Auth: React.FC = () => {
                         id="name"
                         name="name"
                         type="text"
+                        autoComplete="name"
                         required={!isLogin}
                         value={formData.name}
                         onChange={handleInputChange}
+                        onInput={handleInputChange}
                         className="appearance-none relative block w-full px-4 py-3 border-2 border-gray-200 placeholder-gray-400 text-gray-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
                         placeholder="Enter your full name"
                       />
@@ -250,9 +278,13 @@ const Auth: React.FC = () => {
                           id="email"
                           name="email"
                           type="email"
+                          autoComplete={isLogin ? 'username' : 'email'}
+                          autoCapitalize="none"
+                          autoCorrect="off"
                           required
                           value={formData.email}
                           onChange={handleInputChange}
+                          onInput={handleInputChange}
                           className="appearance-none relative block w-full px-4 py-3 border-2 border-gray-200 placeholder-gray-400 text-gray-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
                           placeholder="Enter your email"
                         />
@@ -267,13 +299,22 @@ const Auth: React.FC = () => {
                         <input
                           id="password"
                           name="password"
-                          type="password"
+                          type={showPassword ? 'text' : 'password'}
+                          autoComplete={isLogin ? 'current-password' : 'new-password'}
                           required
                           value={formData.password}
                           onChange={handleInputChange}
-                          className="appearance-none relative block w-full px-4 py-3 border-2 border-gray-200 placeholder-gray-400 text-gray-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+                          onInput={handleInputChange}
+                          className="appearance-none relative block w-full px-4 pr-20 py-3 border-2 border-gray-200 placeholder-gray-400 text-gray-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
                           placeholder="Enter your password"
                         />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(prev => !prev)}
+                          className="absolute inset-y-0 right-0 px-4 text-sm font-medium text-emerald-700 hover:text-emerald-800"
+                        >
+                          {showPassword ? 'Hide' : 'Show'}
+                        </button>
                       </div>
                     </div>
                   </>

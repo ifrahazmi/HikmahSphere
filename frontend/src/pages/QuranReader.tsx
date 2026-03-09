@@ -399,6 +399,25 @@ const QuranReader: React.FC = () => {
     return text;
   };
 
+  // IndoPak waqf symbols like ۚ are combining marks and may overlap nearby glyphs.
+  // Attach them to a dotted circle with spacing so they appear clearly between words.
+  const formatIndopakAyahText = (text: string): string => (
+    text
+      .replace(/صلى/g, 'صلی')
+      .replace(/قلى/g, 'قلی')
+      .replace(/([ۚۖۗۘۜ])/g, ' \u25CC$1 ')
+      .replace(/([۩۝])/g, ' $1 ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
+
+  const getActualLineHeight = () => {
+    if (settings.arabicFont === 'indopak-nastaleeq') {
+      return Math.max(settings.lineSpacing, 2.15);
+    }
+    return settings.lineSpacing;
+  };
+
   // Handle ayah click for bookmarking (double-click to open popup)
   const handleAyahClick = (e: React.MouseEvent, surahNum: number, ayahNum: number) => {
     e.preventDefault();
@@ -1373,7 +1392,7 @@ const QuranReader: React.FC = () => {
                     <div className={`p-3 rounded-lg ${getReaderBackgroundClass()}`}>
                       <p
                         className={`${getFontFamilyClass()} leading-loose text-right ${getFontColorClass()}`}
-                        style={{ fontSize: `${getActualFontSize()}px`, lineHeight: settings.lineSpacing }}
+                        style={{ fontSize: `${getActualFontSize()}px`, lineHeight: getActualLineHeight() }}
                         dir="rtl"
                       >
                         {indopakSurah.ayahs.map((ayah, index) => {
@@ -1392,7 +1411,7 @@ const QuranReader: React.FC = () => {
                                 onClick={(e) => handleAyahClick(e, surahData.number, ayahNum)}
                                 className={`cursor-pointer hover:bg-emerald-100 hover:bg-opacity-30 rounded px-1 ${bgClass} ${isSelectedForBookmark ? 'bg-emerald-400 bg-opacity-40 ring-2 ring-emerald-500' : ''}`}
                               >
-                                {ayah.text}
+                                {formatIndopakAyahText(ayah.text)}
                               </span>
                               {' '}
                               <span
@@ -1427,7 +1446,7 @@ const QuranReader: React.FC = () => {
                               <div className="flex items-start justify-between gap-3">
                                 <p
                                   className={`${getFontFamilyClass()} leading-loose text-right ${getFontColorClass()} flex-1`}
-                                  style={{ fontSize: `${getActualFontSize()}px`, lineHeight: settings.lineSpacing }}
+                                  style={{ fontSize: `${getActualFontSize()}px`, lineHeight: getActualLineHeight() }}
                                   dir="rtl"
                                 >
                                   {(() => {
@@ -1441,7 +1460,7 @@ const QuranReader: React.FC = () => {
                                           onClick={(e) => handleAyahClick(e, surahData.number, ayahNum)}
                                           className={`cursor-pointer hover:bg-emerald-100 hover:bg-opacity-30 rounded px-1 ${bgClass}`}
                                         >
-                                          {ayah.text}
+                                          {formatIndopakAyahText(ayah.text)}
                                         </span>
                                         {' '}
                                         <span
@@ -1519,7 +1538,7 @@ const QuranReader: React.FC = () => {
                   <div className={`p-3 rounded-lg ${getReaderBackgroundClass()}`}>
                     <p
                       className={`${getFontFamilyClass()} leading-loose text-right ${getFontColorClass()}`}
-                      style={{ fontSize: `${getActualFontSize()}px`, lineHeight: settings.lineSpacing }}
+                      style={{ fontSize: `${getActualFontSize()}px`, lineHeight: getActualLineHeight() }}
                       dir="rtl"
                     >
                       {surahData.ayahs
@@ -1601,7 +1620,7 @@ const QuranReader: React.FC = () => {
                           <div className="flex items-start justify-between gap-3">
                             <p
                               className={`${getFontFamilyClass()} leading-loose text-right ${getFontColorClass()} flex-1`}
-                              style={{ fontSize: `${getActualFontSize()}px`, lineHeight: settings.lineSpacing }}
+                              style={{ fontSize: `${getActualFontSize()}px`, lineHeight: getActualLineHeight() }}
                               dir="rtl"
                             >
                               {(() => {

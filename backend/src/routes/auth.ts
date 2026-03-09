@@ -73,15 +73,16 @@ router.post('/register', [
     }
 
     const { username, email, password, firstName, lastName } = req.body;
+    const normalizedEmail = String(email).trim().toLowerCase();
 
-    let user = await User.findOne({ $or: [{ email }, { username }] });
+    let user = await User.findOne({ $or: [{ email: normalizedEmail }, { username }] });
     if (user) {
       return res.status(400).json({ status: 'error', message: 'User already exists' });
     }
 
     user = new User({
       username,
-      email,
+      email: normalizedEmail,
       password,
       firstName,
       lastName,
@@ -97,10 +98,10 @@ router.post('/register', [
     await logAnonymousActivity(
       user._id.toString(),
       `${firstName} ${lastName}`,
-      email,
+      normalizedEmail,
       'register',
       'auth',
-      `New user registered: ${email}`,
+      `New user registered: ${normalizedEmail}`,
       req,
       { username, role: user.role }
     );
@@ -137,7 +138,8 @@ router.post('/login', [
     }
 
     const { email, password } = req.body;
-    const user = await User.findOne({ email }).select('+password');
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const user = await User.findOne({ email: normalizedEmail }).select('+password');
     
     if (!user) {
       return res.status(401).json({ status: 'error', message: 'Invalid credentials' });

@@ -786,7 +786,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                 </span>
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <p className="text-sm text-gray-500">Date</p>
                   <p className="font-medium">
@@ -822,9 +822,9 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                   </div>
                 )}
                 {viewingTransaction.senderUpiId && (
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-sm text-gray-500">Sender UPI ID</p>
-                    <p className="font-medium">{viewingTransaction.senderUpiId}</p>
+                    <p className="font-medium break-all">{viewingTransaction.senderUpiId}</p>
                   </div>
                 )}
                 {viewingTransaction.chequeNumber && (
@@ -834,9 +834,9 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                   </div>
                 )}
                 {viewingTransaction.transactionRefId && (
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-sm text-gray-500">Reference ID</p>
-                    <p className="font-mono font-medium">{viewingTransaction.transactionRefId}</p>
+                    <p className="font-mono font-medium break-all text-sm sm:text-base">{viewingTransaction.transactionRefId}</p>
                   </div>
                 )}
                 <div>

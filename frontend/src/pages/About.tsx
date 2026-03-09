@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
 import { useAuth } from '../hooks/useAuth';
 import {
   ArrowDownIcon,
@@ -117,6 +118,19 @@ const About: React.FC = () => {
       window.open(path, '_blank');
     } else {
       navigate(path);
+    }
+  };
+
+  const handleSpiritualFeatureClick = (feature: SpiritualFeature) => {
+    if (feature.disabled) {
+      if (feature.title === 'AI Assistant') {
+        toast.error('AI Assistant is not yet implemented.');
+      }
+      return;
+    }
+
+    if (feature.path) {
+      handleNavigate(feature.path);
     }
   };
 
@@ -363,10 +377,12 @@ const About: React.FC = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {featuresWithConditionalZakat.map((feature, index) => (
-              <div
+              <button
                 key={index}
+                type="button"
+                onClick={() => handleSpiritualFeatureClick(feature)}
                 className={`group relative bg-gradient-to-br from-gray-50 to-white rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-2 border border-gray-100 overflow-hidden ${
-                  feature.disabled ? 'opacity-50 grayscale' : ''
+                  feature.disabled ? 'opacity-50 grayscale cursor-not-allowed' : 'cursor-pointer'
                 } ${visibleSections.has('features') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}
                 style={{ transitionDelay: `${index * 100}ms` }}
               >
@@ -395,7 +411,7 @@ const About: React.FC = () => {
                     </div>
                   )}
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </div>

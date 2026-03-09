@@ -112,7 +112,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
     <nav className={`shadow-lg fixed top-0 left-0 right-0 z-50 transition-colors duration-200 ${
       isDark ? 'bg-gray-800' : 'bg-white'
     }`}>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-[90rem] mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex items-center">
             <Link to="/" className="flex-shrink-0 flex items-center">
@@ -123,7 +123,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                 <span className={`text-xl font-bold ${
                   isDark ? 'text-white' : 'text-gray-900'
                 }`}>HikmahSphere</span>
-                <span className={`ml-2 text-xs font-semibold px-2 py-1 rounded-full ${
+                <span className={`hidden lg:inline-flex ml-1.5 text-[10px] font-semibold px-1.5 py-1 rounded-full ${
                   isDark
                     ? 'bg-emerald-900 text-emerald-300'
                     : 'bg-emerald-100 text-emerald-700'
@@ -134,12 +134,12 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
             </Link>
           </div>
 
-          <div className="hidden md:flex items-center space-x-8">
+          <div className="hidden md:flex flex-1 items-center justify-center gap-2 lg:gap-2.5 xl:gap-3 min-w-0 mx-2 lg:mx-3">
             {navigation.map((item) => (
               <Link
                 key={item.name}
                 to={item.href}
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${
+                className={`px-2.5 lg:px-2.5 py-1.5 rounded-md text-[13px] lg:text-sm font-medium whitespace-nowrap transition-colors duration-200 ${
                   item.current
                     ? isDark
                       ? 'bg-emerald-900 text-emerald-300'
@@ -154,7 +154,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
             ))}
           </div>
 
-          <div className="hidden md:flex items-center space-x-4">
+          <div className="hidden md:flex items-center space-x-2 lg:space-x-3 shrink-0">
             {user ? (
               <>
                 {/* Notification Bell */}
@@ -163,14 +163,14 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                 <div className="relative" ref={profileMenuRef}>
                   <button
                     onClick={() => setIsProfileOpen(!isProfileOpen)}
-                    className={`flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 rounded-md p-2 transition-colors duration-200 ${
+                    className={`flex items-center space-x-1.5 lg:space-x-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 rounded-md p-1.5 lg:p-2 transition-colors duration-200 ${
                       isDark
                         ? 'text-gray-300 hover:text-emerald-400'
                         : 'text-gray-700 hover:text-emerald-600'
                     }`}
                   >
                     <UserIcon className="h-6 w-6" />
-                    <span className="text-sm font-medium">{user.name}</span>
+                    <span className="text-sm font-medium max-w-[110px] lg:max-w-[140px] truncate">{user.name}</span>
                   </button>
 
                   {isProfileOpen && (
