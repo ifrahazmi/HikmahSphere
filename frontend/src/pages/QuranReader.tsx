@@ -15,6 +15,7 @@ import {
   PlayIcon,
   PauseIcon,
   SpeakerWaveIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
 import { useQuran } from '../contexts/QuranContext';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -103,6 +104,16 @@ const QuranReader: React.FC = () => {
 
   // Auto-hide header on scroll
   const [showHeader, setShowHeader] = useState(true);
+  const indopakAyahWarningText =
+    "IndoPak font in Only Arabic mode doesn't support Ayat by Ayat audio. Enable translation mode or change Arabic font.";
+  const showDesktopIndopakAyahWarning =
+    settings.arabicOnlyMode &&
+    settings.arabicFont === 'indopak-nastaleeq' &&
+    settings.audioMode === 'ayah';
+  const showMobileIndopakAyahWarning =
+    tempSettings.arabicOnlyMode &&
+    tempSettings.arabicFont === 'indopak-nastaleeq' &&
+    tempSettings.audioMode === 'ayah';
 
   // Scroll to specific ayah
   const scrollToAyahNumber = (ayahNumber: number) => {
@@ -857,27 +868,32 @@ const QuranReader: React.FC = () => {
                   <label className={`block text-xs font-medium mb-1.5 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
                     Display Mode
                   </label>
-                  <button
-                    onClick={() => updateSettings({ arabicOnlyMode: !settings.arabicOnlyMode })}
-                    className={`w-full flex items-center justify-between p-2 text-sm rounded-md ${
-                      settings.theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
-                    }`}
-                  >
-                    <span className={settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}>
-                      {settings.arabicOnlyMode ? 'Arabic Only' : 'With Translations'}
-                    </span>
-                    <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
-                      settings.arabicOnlyMode 
-                        ? 'bg-emerald-500 border-emerald-500' 
-                        : 'border-gray-400'
-                    }`}>
-                      {settings.arabicOnlyMode && (
-                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                      )}
-                    </div>
-                  </button>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button
+                      onClick={() => updateSettings({ arabicOnlyMode: true })}
+                      className={`p-2 text-xs rounded-md font-medium transition-colors ${
+                        settings.arabicOnlyMode
+                          ? 'bg-emerald-500 text-white'
+                          : settings.theme === 'dark'
+                          ? 'bg-gray-700 text-gray-300'
+                          : 'bg-gray-100 text-gray-700'
+                      }`}
+                    >
+                      Only Arabic
+                    </button>
+                    <button
+                      onClick={() => updateSettings({ arabicOnlyMode: false })}
+                      className={`p-2 text-xs rounded-md font-medium transition-colors ${
+                        !settings.arabicOnlyMode
+                          ? 'bg-emerald-500 text-white'
+                          : settings.theme === 'dark'
+                          ? 'bg-gray-700 text-gray-300'
+                          : 'bg-gray-100 text-gray-700'
+                      }`}
+                    >
+                      With Translation
+                    </button>
+                  </div>
                 </div>
 
                 {/* Font Size */}
@@ -1101,6 +1117,40 @@ const QuranReader: React.FC = () => {
                   </div>
                 )}
 
+                {/* Translations - Display Section */}
+                {!settings.arabicOnlyMode && (
+                  <div>
+                    <label className={`block text-xs font-medium mb-1.5 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                      Translations (max 3)
+                    </label>
+                    <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                      {DEFAULT_TRANSLATIONS.map((trans) => (
+                        <label key={trans.identifier} className="flex items-center text-xs">
+                          <input
+                            type="checkbox"
+                            checked={settings.selectedTranslations.includes(trans.identifier)}
+                            onChange={(e) => {
+                              if (e.target.checked && settings.selectedTranslations.length < 3) {
+                                updateSettings({
+                                  selectedTranslations: [...settings.selectedTranslations, trans.identifier],
+                                });
+                              } else if (!e.target.checked) {
+                                updateSettings({
+                                  selectedTranslations: settings.selectedTranslations.filter((t) => t !== trans.identifier),
+                                });
+                              }
+                            }}
+                            className="mr-1.5"
+                          />
+                          <span className={`${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                            {trans.name}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Audio Settings */}
                 <div>
                   <label className={`block text-xs font-medium mb-1.5 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -1159,43 +1209,33 @@ const QuranReader: React.FC = () => {
                           Complete Surah
                         </button>
                       </div>
+                      {showDesktopIndopakAyahWarning && (
+                        <div className="group relative mt-2">
+                          <div
+                            className={`inline-flex cursor-help items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium ${
+                              settings.theme === 'dark'
+                                ? 'border-amber-500/60 bg-amber-900/30 text-amber-200'
+                                : 'border-amber-300 bg-amber-50 text-amber-700'
+                            }`}
+                            title={indopakAyahWarningText}
+                          >
+                            <ExclamationTriangleIcon className="h-3.5 w-3.5" />
+                            Compatibility warning
+                          </div>
+                          <div
+                            className={`pointer-events-none absolute left-0 top-full z-10 mt-1 w-64 rounded-md px-2 py-1.5 text-[11px] shadow-lg opacity-0 transition-opacity group-hover:opacity-100 ${
+                              settings.theme === 'dark'
+                                ? 'bg-gray-900 text-amber-100'
+                                : 'bg-gray-900 text-white'
+                            }`}
+                          >
+                            {indopakAyahWarningText}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
-
-                {/* Translations - only show if not in Arabic-only mode */}
-                {!settings.arabicOnlyMode && (
-                  <div>
-                    <label className={`block text-xs font-medium mb-1.5 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                      Translations (max 3)
-                    </label>
-                    <div className="space-y-1.5 max-h-32 overflow-y-auto">
-                      {DEFAULT_TRANSLATIONS.map((trans) => (
-                        <label key={trans.identifier} className="flex items-center text-xs">
-                          <input
-                            type="checkbox"
-                            checked={settings.selectedTranslations.includes(trans.identifier)}
-                            onChange={(e) => {
-                              if (e.target.checked && settings.selectedTranslations.length < 3) {
-                                updateSettings({
-                                  selectedTranslations: [...settings.selectedTranslations, trans.identifier],
-                                });
-                              } else if (!e.target.checked) {
-                                updateSettings({
-                                  selectedTranslations: settings.selectedTranslations.filter((t) => t !== trans.identifier),
-                                });
-                              }
-                            }}
-                            className="mr-1.5"
-                          />
-                          <span className={`${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                            {trans.name}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                )}
 
                 {/* Bookmarks */}
                 <div>
@@ -1877,27 +1917,32 @@ const QuranReader: React.FC = () => {
                   <label className={`block text-sm font-medium mb-2 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
                     Display Mode
                   </label>
-                  <button
-                    onClick={() => updateSingleSetting('arabicOnlyMode', !tempSettings.arabicOnlyMode)}
-                    className={`w-full flex items-center justify-between p-3 rounded-lg ${
-                      settings.theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'
-                    }`}
-                  >
-                    <span className={settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}>
-                      {tempSettings.arabicOnlyMode ? 'Arabic Only' : 'With Translations'}
-                    </span>
-                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                      tempSettings.arabicOnlyMode
-                        ? 'bg-emerald-500 border-emerald-500'
-                        : 'border-gray-400'
-                    }`}>
-                      {tempSettings.arabicOnlyMode && (
-                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                      )}
-                    </div>
-                  </button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => updateSingleSetting('arabicOnlyMode', true)}
+                      className={`p-3 text-sm rounded-lg font-medium transition-colors ${
+                        tempSettings.arabicOnlyMode
+                          ? 'bg-emerald-500 text-white'
+                          : settings.theme === 'dark'
+                          ? 'bg-gray-700 text-gray-300'
+                          : 'bg-gray-100 text-gray-700'
+                      }`}
+                    >
+                      Only Arabic
+                    </button>
+                    <button
+                      onClick={() => updateSingleSetting('arabicOnlyMode', false)}
+                      className={`p-3 text-sm rounded-lg font-medium transition-colors ${
+                        !tempSettings.arabicOnlyMode
+                          ? 'bg-emerald-500 text-white'
+                          : settings.theme === 'dark'
+                          ? 'bg-gray-700 text-gray-300'
+                          : 'bg-gray-100 text-gray-700'
+                      }`}
+                    >
+                      With Translation
+                    </button>
+                  </div>
                 </div>
 
                 {/* Font Size */}
@@ -2117,6 +2162,41 @@ const QuranReader: React.FC = () => {
                     </button>
                   </div>
                 )}
+
+                {/* Translations - Display Tab */}
+                {!tempSettings.arabicOnlyMode && (
+                  <div>
+                    <label className={`block text-sm font-medium mb-2 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                      Translations (max 3)
+                    </label>
+                    <div className={`space-y-2 max-h-40 overflow-y-auto rounded-lg p-2 ${settings.theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                      {DEFAULT_TRANSLATIONS.map((trans) => (
+                        <label key={trans.identifier} className="flex items-center text-sm cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={tempSettings.selectedTranslations.includes(trans.identifier)}
+                            onChange={(e) => {
+                              let newTranslations;
+                              if (e.target.checked && tempSettings.selectedTranslations.length < 3) {
+                                newTranslations = [...tempSettings.selectedTranslations, trans.identifier];
+                              } else if (!e.target.checked) {
+                                newTranslations = tempSettings.selectedTranslations.filter((t) => t !== trans.identifier);
+                              } else {
+                                return;
+                              }
+                              setTempSettings({ ...tempSettings, selectedTranslations: newTranslations });
+                              updateSettings({ selectedTranslations: newTranslations });
+                            }}
+                            className="mr-2 w-4 h-4"
+                          />
+                          <span className={settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}>
+                            {trans.name}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </>
             )}
 
@@ -2154,75 +2234,67 @@ const QuranReader: React.FC = () => {
                     </div>
                   </button>
                   {tempSettings.audioEnabled && (
-                    <div className="mt-2 grid grid-cols-2 gap-2">
-                      <button
-                        onClick={() => {
-                          setTempSettings({ ...tempSettings, audioMode: 'ayah' });
-                          updateSettings({ audioMode: 'ayah' });
-                        }}
-                        className={`p-2 text-sm rounded-lg transition-colors ${
-                          tempSettings.audioMode === 'ayah'
-                            ? 'bg-emerald-500 text-white'
-                            : settings.theme === 'dark'
-                            ? 'bg-gray-600 text-gray-300'
-                            : 'bg-gray-200 text-gray-700'
-                        }`}
-                      >
-                        Ayat by Ayat
-                      </button>
-                      <button
-                        onClick={() => {
-                          setTempSettings({ ...tempSettings, audioMode: 'surah' });
-                          updateSettings({ audioMode: 'surah' });
-                        }}
-                        className={`p-2 text-sm rounded-lg transition-colors ${
-                          tempSettings.audioMode === 'surah'
-                            ? 'bg-emerald-500 text-white'
-                            : settings.theme === 'dark'
-                            ? 'bg-gray-600 text-gray-300'
-                            : 'bg-gray-200 text-gray-700'
-                        }`}
-                      >
-                        Complete Surah
-                      </button>
+                    <div className="mt-2 space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => {
+                            setTempSettings({ ...tempSettings, audioMode: 'ayah' });
+                            updateSettings({ audioMode: 'ayah' });
+                          }}
+                          className={`p-2 text-sm rounded-lg transition-colors ${
+                            tempSettings.audioMode === 'ayah'
+                              ? 'bg-emerald-500 text-white'
+                              : settings.theme === 'dark'
+                              ? 'bg-gray-600 text-gray-300'
+                              : 'bg-gray-200 text-gray-700'
+                          }`}
+                        >
+                          Ayat by Ayat
+                        </button>
+                        <button
+                          onClick={() => {
+                            setTempSettings({ ...tempSettings, audioMode: 'surah' });
+                            updateSettings({ audioMode: 'surah' });
+                          }}
+                          className={`p-2 text-sm rounded-lg transition-colors ${
+                            tempSettings.audioMode === 'surah'
+                              ? 'bg-emerald-500 text-white'
+                              : settings.theme === 'dark'
+                              ? 'bg-gray-600 text-gray-300'
+                              : 'bg-gray-200 text-gray-700'
+                          }`}
+                        >
+                          Complete Surah
+                        </button>
+                      </div>
+                      {showMobileIndopakAyahWarning && (
+                        <div className="group relative">
+                          <div
+                            className={`inline-flex cursor-help items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium ${
+                              settings.theme === 'dark'
+                                ? 'border-amber-500/60 bg-amber-900/30 text-amber-200'
+                                : 'border-amber-300 bg-amber-50 text-amber-700'
+                            }`}
+                            title={indopakAyahWarningText}
+                          >
+                            <ExclamationTriangleIcon className="h-4 w-4" />
+                            Compatibility warning
+                          </div>
+                          <div
+                            className={`pointer-events-none absolute left-0 top-full z-10 mt-1 w-72 rounded-md px-2 py-1.5 text-[11px] shadow-lg opacity-0 transition-opacity group-hover:opacity-100 ${
+                              settings.theme === 'dark'
+                                ? 'bg-gray-900 text-amber-100'
+                                : 'bg-gray-900 text-white'
+                            }`}
+                          >
+                            {indopakAyahWarningText}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
 
-                {/* Translations */}
-                {!tempSettings.arabicOnlyMode && (
-                  <div>
-                    <label className={`block text-sm font-medium mb-2 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                      Translations (max 3)
-                    </label>
-                    <div className={`space-y-2 max-h-40 overflow-y-auto rounded-lg p-2 ${settings.theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'}`}>
-                      {DEFAULT_TRANSLATIONS.map((trans) => (
-                        <label key={trans.identifier} className="flex items-center text-sm cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={tempSettings.selectedTranslations.includes(trans.identifier)}
-                            onChange={(e) => {
-                              let newTranslations;
-                              if (e.target.checked && tempSettings.selectedTranslations.length < 3) {
-                                newTranslations = [...tempSettings.selectedTranslations, trans.identifier];
-                              } else if (!e.target.checked) {
-                                newTranslations = tempSettings.selectedTranslations.filter((t) => t !== trans.identifier);
-                              } else {
-                                return;
-                              }
-                              setTempSettings({ ...tempSettings, selectedTranslations: newTranslations });
-                              updateSettings({ selectedTranslations: newTranslations });
-                            }}
-                            className="mr-2 w-4 h-4"
-                          />
-                          <span className={settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}>
-                            {trans.name}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </>
             )}
 

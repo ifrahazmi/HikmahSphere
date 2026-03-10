@@ -20,11 +20,18 @@ interface DhikrDailyTrackerState {
   counts: Record<string, number>;
 }
 
+type ReminderScheduleType = 'periodic' | 'specific';
+
 interface DhikrReminderState {
   enabled: boolean;
   morning: boolean;
   evening: boolean;
   friday: boolean;
+  scheduleType: ReminderScheduleType;
+  periodicIntervalMinutes: number;
+  specificTime: string;
+  includeDhikr: boolean;
+  includeDua: boolean;
 }
 
 interface DhikrSettingsState {
@@ -37,7 +44,14 @@ const DEFAULT_REMINDERS: DhikrReminderState = {
   morning: true,
   evening: true,
   friday: true,
+  scheduleType: 'periodic',
+  periodicIntervalMinutes: 180,
+  specificTime: '08:00',
+  includeDhikr: true,
+  includeDua: true,
 };
+const REMINDER_INTERVAL_OPTIONS = new Set([30, 60, 120, 180, 360]);
+const REMINDER_TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 const DEFAULT_SETTINGS: DhikrSettingsState = {
   darkMode: false,
@@ -111,13 +125,38 @@ const sanitizeReminderPatch = (value: unknown): Partial<DhikrReminderState> | nu
 
   const raw = value as Record<string, unknown>;
   const patch: Partial<DhikrReminderState> = {};
-  const allowedKeys: Array<keyof DhikrReminderState> = ['enabled', 'morning', 'evening', 'friday'];
+  const booleanKeys = [
+    'enabled',
+    'morning',
+    'evening',
+    'friday',
+    'includeDhikr',
+    'includeDua',
+  ] as const;
 
-  for (const key of allowedKeys) {
+  for (const key of booleanKeys) {
     const entry = raw[key];
     if (typeof entry === 'undefined') continue;
     if (typeof entry !== 'boolean') return null;
     patch[key] = entry;
+  }
+
+  if (typeof raw.scheduleType !== 'undefined') {
+    if (raw.scheduleType !== 'periodic' && raw.scheduleType !== 'specific') return null;
+    patch.scheduleType = raw.scheduleType;
+  }
+
+  if (typeof raw.periodicIntervalMinutes !== 'undefined') {
+    const interval = Number(raw.periodicIntervalMinutes);
+    if (!Number.isInteger(interval) || !REMINDER_INTERVAL_OPTIONS.has(interval)) return null;
+    patch.periodicIntervalMinutes = interval;
+  }
+
+  if (typeof raw.specificTime !== 'undefined') {
+    if (typeof raw.specificTime !== 'string') return null;
+    const time = raw.specificTime.trim();
+    if (!REMINDER_TIME_PATTERN.test(time)) return null;
+    patch.specificTime = time;
   }
 
   return patch;

@@ -104,6 +104,11 @@ export interface IUser extends Document {
         morning: boolean;
         evening: boolean;
         friday: boolean;
+        scheduleType: 'periodic' | 'specific';
+        periodicIntervalMinutes: number;
+        specificTime: string;
+        includeDhikr: boolean;
+        includeDua: boolean;
       };
       settings?: {
         darkMode: boolean;
@@ -304,6 +309,23 @@ const UserSchema = new Schema<IUser>({
         morning: { type: Boolean, default: true },
         evening: { type: Boolean, default: true },
         friday: { type: Boolean, default: true },
+        scheduleType: {
+          type: String,
+          enum: ['periodic', 'specific'],
+          default: 'periodic',
+        },
+        periodicIntervalMinutes: {
+          type: Number,
+          enum: [30, 60, 120, 180, 360],
+          default: 180,
+        },
+        specificTime: {
+          type: String,
+          default: '08:00',
+          match: [/^([01]\d|2[0-3]):([0-5]\d)$/, 'Reminder time must be HH:MM (24-hour).'],
+        },
+        includeDhikr: { type: Boolean, default: true },
+        includeDua: { type: Boolean, default: true },
       },
       settings: {
         darkMode: { type: Boolean, default: false },

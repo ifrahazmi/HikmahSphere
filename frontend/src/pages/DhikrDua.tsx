@@ -36,11 +36,24 @@ interface DhikrPreset {
   target: number;
 }
 
+type ReminderScheduleType = 'periodic' | 'specific';
+
 interface ReminderSettings {
   enabled: boolean;
   morning: boolean;
   evening: boolean;
   friday: boolean;
+  scheduleType: ReminderScheduleType;
+  periodicIntervalMinutes: number;
+  specificTime: string;
+  includeDhikr: boolean;
+  includeDua: boolean;
+}
+
+interface ReminderSupportState {
+  supported: boolean;
+  reason: string | null;
+  permission: NotificationPermission | 'unsupported';
 }
 
 interface DailyDhikrTracker {
@@ -71,6 +84,19 @@ const REMINDER_STORAGE_KEY = 'hikmahsphere:dhikr-dua:reminders';
 const REMINDER_LAST_SENT_KEY = 'hikmahsphere:dhikr-dua:reminders:last-sent';
 const DARK_MODE_STORAGE_KEY = 'hikmahsphere:dhikr-dua:dark-mode';
 const TRANSLATION_LANGUAGE_KEY = 'hikmahsphere:dhikr-dua:translation-language';
+const REMINDER_TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
+const REMINDER_INTERVAL_OPTIONS = [30, 60, 120, 180, 360];
+const DEFAULT_REMINDER_SETTINGS: ReminderSettings = {
+  enabled: false,
+  morning: true,
+  evening: true,
+  friday: true,
+  scheduleType: 'periodic',
+  periodicIntervalMinutes: 180,
+  specificTime: '08:00',
+  includeDhikr: true,
+  includeDua: true,
+};
 
 const TASBIH_PRESETS: DhikrPreset[] = [
   { id: 'subhanallah', label: 'SubhanAllah', arabic: 'سُبْحَانَ ٱللَّٰهِ', target: 33 },
@@ -215,11 +241,11 @@ const DhikrDua: React.FC = () => {
     if (typeof window === 'undefined') return true;
     return window.innerWidth >= 768;
   });
-  const [reminders, setReminders] = useState<ReminderSettings>({
-    enabled: false,
-    morning: true,
-    evening: true,
-    friday: true,
+  const [reminders, setReminders] = useState<ReminderSettings>(DEFAULT_REMINDER_SETTINGS);
+  const [reminderSupport, setReminderSupport] = useState<ReminderSupportState>({
+    supported: false,
+    reason: null,
+    permission: 'unsupported',
   });
 
   const selectedPreset = useMemo(
@@ -283,27 +309,109 @@ const DhikrDua: React.FC = () => {
   };
 
   const normalizeReminders = (value: unknown): ReminderSettings => {
-    const defaults: ReminderSettings = {
-      enabled: false,
-      morning: true,
-      evening: true,
-      friday: true,
-    };
-
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return defaults;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return DEFAULT_REMINDER_SETTINGS;
     const raw = value as Record<string, unknown>;
+    const scheduleType = raw.scheduleType === 'specific' ? 'specific' : 'periodic';
+    const periodicIntervalMinutesRaw = Number(raw.periodicIntervalMinutes);
+    const periodicIntervalMinutes = REMINDER_INTERVAL_OPTIONS.includes(periodicIntervalMinutesRaw)
+      ? periodicIntervalMinutesRaw
+      : DEFAULT_REMINDER_SETTINGS.periodicIntervalMinutes;
+    const specificTimeRaw = typeof raw.specificTime === 'string' ? raw.specificTime.trim() : '';
+    const specificTime = REMINDER_TIME_PATTERN.test(specificTimeRaw)
+      ? specificTimeRaw
+      : DEFAULT_REMINDER_SETTINGS.specificTime;
 
     return {
-      enabled: typeof raw.enabled === 'boolean' ? raw.enabled : defaults.enabled,
-      morning: typeof raw.morning === 'boolean' ? raw.morning : defaults.morning,
-      evening: typeof raw.evening === 'boolean' ? raw.evening : defaults.evening,
-      friday: typeof raw.friday === 'boolean' ? raw.friday : defaults.friday,
+      enabled: typeof raw.enabled === 'boolean' ? raw.enabled : DEFAULT_REMINDER_SETTINGS.enabled,
+      morning: typeof raw.morning === 'boolean' ? raw.morning : DEFAULT_REMINDER_SETTINGS.morning,
+      evening: typeof raw.evening === 'boolean' ? raw.evening : DEFAULT_REMINDER_SETTINGS.evening,
+      friday: typeof raw.friday === 'boolean' ? raw.friday : DEFAULT_REMINDER_SETTINGS.friday,
+      scheduleType,
+      periodicIntervalMinutes,
+      specificTime,
+      includeDhikr:
+        typeof raw.includeDhikr === 'boolean'
+          ? raw.includeDhikr
+          : DEFAULT_REMINDER_SETTINGS.includeDhikr,
+      includeDua:
+        typeof raw.includeDua === 'boolean' ? raw.includeDua : DEFAULT_REMINDER_SETTINGS.includeDua,
     };
   };
 
   const normalizeTranslationLanguage = (value: unknown): 'english' | 'urdu' => {
     return value === 'urdu' ? 'urdu' : 'english';
   };
+
+  const hasCustomReminderConfiguration = (settings: ReminderSettings): boolean => {
+    return (
+      settings.enabled !== DEFAULT_REMINDER_SETTINGS.enabled ||
+      settings.scheduleType !== DEFAULT_REMINDER_SETTINGS.scheduleType ||
+      settings.periodicIntervalMinutes !== DEFAULT_REMINDER_SETTINGS.periodicIntervalMinutes ||
+      settings.specificTime !== DEFAULT_REMINDER_SETTINGS.specificTime ||
+      settings.includeDhikr !== DEFAULT_REMINDER_SETTINGS.includeDhikr ||
+      settings.includeDua !== DEFAULT_REMINDER_SETTINGS.includeDua
+    );
+  };
+
+  const getReminderSupportSnapshot = (): ReminderSupportState => {
+    if (typeof window === 'undefined') {
+      return {
+        supported: false,
+        reason: 'Notifications are unavailable in this environment.',
+        permission: 'unsupported',
+      };
+    }
+
+    const hasNotificationApi = 'Notification' in window;
+    const isLocalhost =
+      window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const isSecureOrigin = window.isSecureContext || isLocalhost;
+
+    if (!hasNotificationApi) {
+      return {
+        supported: false,
+        reason: 'This browser/app does not support notifications.',
+        permission: 'unsupported',
+      };
+    }
+
+    if (!isSecureOrigin) {
+      return {
+        supported: false,
+        reason: 'Notifications require HTTPS.',
+        permission: Notification.permission,
+      };
+    }
+
+    if (Notification.permission === 'denied') {
+      return {
+        supported: true,
+        reason: 'Notifications are blocked in browser settings.',
+        permission: Notification.permission,
+      };
+    }
+
+    return {
+      supported: true,
+      reason: null,
+      permission: Notification.permission,
+    };
+  };
+
+  useEffect(() => {
+    const refreshReminderSupport = () => {
+      setReminderSupport(getReminderSupportSnapshot());
+    };
+
+    refreshReminderSupport();
+    window.addEventListener('focus', refreshReminderSupport);
+    document.addEventListener('visibilitychange', refreshReminderSupport);
+
+    return () => {
+      window.removeEventListener('focus', refreshReminderSupport);
+      document.removeEventListener('visibilitychange', refreshReminderSupport);
+    };
+  }, []);
 
   useEffect(() => {
     try {
@@ -334,7 +442,7 @@ const DhikrDua: React.FC = () => {
       const savedReminders = localStorage.getItem(REMINDER_STORAGE_KEY);
       if (savedReminders) {
         const parsed = JSON.parse(savedReminders);
-        setReminders((previous) => ({ ...previous, ...parsed }));
+        setReminders(normalizeReminders(parsed));
       }
 
       const savedDarkMode = localStorage.getItem(DARK_MODE_STORAGE_KEY);
@@ -444,13 +552,17 @@ const DhikrDua: React.FC = () => {
         const remoteDarkMode =
           typeof remoteSettings.darkMode === 'boolean' ? remoteSettings.darkMode : false;
         const remoteTranslation = normalizeTranslationLanguage(remoteSettings.translationLanguage);
+        const hasRemoteReminderState = hasCustomReminderConfiguration(remoteReminders);
+        const hasRemoteSettingsState = remoteDarkMode !== false || remoteTranslation !== 'english';
 
         const hasRemoteState =
           Boolean(remote.updatedAt) ||
           remoteBookmarks.length > 0 ||
           !!remoteLastViewed ||
           !!remoteTasbih ||
-          !!remoteDailyTracker;
+          !!remoteDailyTracker ||
+          hasRemoteReminderState ||
+          hasRemoteSettingsState;
 
         if (hasRemoteState) {
           setBookmarkedIds(remoteBookmarks);
@@ -595,47 +707,96 @@ const DhikrDua: React.FC = () => {
 
   useEffect(() => {
     if (!reminders.enabled) return;
+    if (!reminderSupport.supported) return;
+    if (reminderSupport.permission !== 'granted') return;
+
+    const topicLabel = (() => {
+      if (reminders.includeDhikr && reminders.includeDua) return 'dhikr and dua';
+      if (reminders.includeDhikr) return 'dhikr';
+      if (reminders.includeDua) return 'dua';
+      return '';
+    })();
+
+    if (!topicLabel) return;
 
     const scheduleCheck = () => {
-      if (!('Notification' in window)) return;
-      if (Notification.permission !== 'granted') return;
-
       const now = new Date();
       const today = getTodayKey();
       const hour = now.getHours();
       const minute = now.getMinutes();
-      const day = now.getDay();
 
-      const lastSentRaw = localStorage.getItem(REMINDER_LAST_SENT_KEY);
-      const lastSent: Record<string, string> = lastSentRaw ? JSON.parse(lastSentRaw) : {};
+      let lastSent: Record<string, string> = {};
+      try {
+        const raw = localStorage.getItem(REMINDER_LAST_SENT_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            lastSent = parsed as Record<string, string>;
+          }
+        }
+      } catch {
+        lastSent = {};
+      }
 
-      const send = (key: string, title: string, body: string) => {
-        if (lastSent[key] === today) return;
+      const saveLastSent = () => {
+        localStorage.setItem(REMINDER_LAST_SENT_KEY, JSON.stringify(lastSent));
+      };
+
+      const sendNotification = (key: string, title: string, body: string, oncePerDay: boolean) => {
+        if (oncePerDay && lastSent[key] === today) return;
 
         new Notification(title, {
           body,
           icon: '/logo.png',
           badge: '/logo.png',
         });
-        lastSent[key] = today;
-        localStorage.setItem(REMINDER_LAST_SENT_KEY, JSON.stringify(lastSent));
+
+        lastSent[key] = oncePerDay ? today : new Date().toISOString();
+        saveLastSent();
       };
 
-      if (reminders.morning && hour === 8 && minute === 0) {
-        send('morning', 'Morning Adhkar Reminder', 'Begin your day with dhikr and dua.');
+      if (reminders.scheduleType === 'specific') {
+        const parsedTime = reminders.specificTime.match(REMINDER_TIME_PATTERN);
+        if (!parsedTime) return;
+
+        const targetHour = Number(parsedTime[1]);
+        const targetMinute = Number(parsedTime[2]);
+        if (hour !== targetHour || minute !== targetMinute) return;
+
+        sendNotification(
+          `specific:${reminders.specificTime}`,
+          'Dhikr & Dua Reminder',
+          `It is time for your ${topicLabel}.`,
+          true
+        );
+        return;
       }
-      if (reminders.evening && hour === 18 && minute === 0) {
-        send('evening', 'Evening Adhkar Reminder', 'Take a moment for evening remembrance.');
+
+      const intervalMs = reminders.periodicIntervalMinutes * 60 * 1000;
+      const topicKey = `${Number(reminders.includeDhikr)}${Number(reminders.includeDua)}`;
+      const periodicKey = `periodic:${reminders.periodicIntervalMinutes}:${topicKey}`;
+      const lastSentAt = Date.parse(lastSent[periodicKey] || '');
+
+      if (!Number.isFinite(lastSentAt)) {
+        lastSent[periodicKey] = now.toISOString();
+        saveLastSent();
+        return;
       }
-      if (reminders.friday && day === 5 && hour === 10 && minute === 0) {
-        send('friday', 'Friday Dhikr Reminder', 'Increase salawat and dhikr on Jumu\'ah.');
-      }
+
+      if (now.getTime() - lastSentAt < intervalMs) return;
+
+      sendNotification(
+        periodicKey,
+        'Dhikr & Dua Reminder',
+        `Take a short break for ${topicLabel}.`,
+        false
+      );
     };
 
     scheduleCheck();
     const intervalId = window.setInterval(scheduleCheck, 60000);
     return () => window.clearInterval(intervalId);
-  }, [reminders]);
+  }, [reminders, reminderSupport.permission, reminderSupport.supported]);
 
   useEffect(() => {
     if (dailyTracker.date !== getTodayKey()) {
@@ -1037,20 +1198,82 @@ const DhikrDua: React.FC = () => {
     }
   };
 
-  const requestReminderPermission = async () => {
-    if (!('Notification' in window)) {
-      toast.error('Notifications are not supported in this browser.');
-      return;
+  const requestReminderPermission = async (): Promise<boolean> => {
+    const supportSnapshot = getReminderSupportSnapshot();
+    setReminderSupport(supportSnapshot);
+
+    if (!supportSnapshot.supported) {
+      toast.error(supportSnapshot.reason || 'Notifications are not supported in this browser/app.');
+      return false;
+    }
+
+    if (!reminders.includeDhikr && !reminders.includeDua) {
+      toast.error('Select Dhikr or Dua before enabling reminders.');
+      return false;
+    }
+
+    if (supportSnapshot.permission === 'denied') {
+      toast.error('Notifications are blocked. Enable them from browser/app settings.');
+      return false;
+    }
+
+    if (supportSnapshot.permission === 'granted') {
+      setReminders((previous) => ({ ...previous, enabled: true }));
+      toast.success('Reminder notifications enabled.');
+      return true;
     }
 
     const result = await Notification.requestPermission();
+    const refreshedSupport = getReminderSupportSnapshot();
+    setReminderSupport(refreshedSupport);
+
     if (result === 'granted') {
-      toast.success('Daily adhkar reminders enabled.');
       setReminders((previous) => ({ ...previous, enabled: true }));
-      return;
+      toast.success('Reminders enabled. Choose periodic or specific time below.');
+      return true;
+    }
+
+    if (result === 'denied') {
+      toast.error('Notification permission denied. You can enable it from browser/app settings.');
+      return false;
     }
 
     toast.error('Notification permission was not granted.');
+    return false;
+  };
+
+  const enableReminderNotifications = async () => {
+    await requestReminderPermission();
+  };
+
+  const disableReminderNotifications = () => {
+    setReminders((previous) => ({ ...previous, enabled: false }));
+    toast.success('Reminder notifications disabled.');
+  };
+
+  const handleReminderTypeToggle = (key: 'includeDhikr' | 'includeDua', checked: boolean) => {
+    setReminders((previous) => {
+      const next = { ...previous, [key]: checked };
+      if (!next.includeDhikr && !next.includeDua) {
+        toast.error('At least one reminder type is required.');
+        return previous;
+      }
+      return next;
+    });
+  };
+
+  const handleReminderScheduleTypeChange = (scheduleType: ReminderScheduleType) => {
+    setReminders((previous) => ({ ...previous, scheduleType }));
+  };
+
+  const handleReminderIntervalChange = (value: string) => {
+    const interval = Number(value);
+    if (!REMINDER_INTERVAL_OPTIONS.includes(interval)) return;
+    setReminders((previous) => ({ ...previous, periodicIntervalMinutes: interval }));
+  };
+
+  const handleReminderTimeChange = (value: string) => {
+    setReminders((previous) => ({ ...previous, specificTime: value }));
   };
 
   const pageBg = isDarkMode
@@ -1069,7 +1292,33 @@ const DhikrDua: React.FC = () => {
   const activeSituationLabel = activeSituation === 'all'
     ? 'All situations'
     : SITUATION_FILTERS.find((filter) => filter.id === activeSituation)?.label || 'All situations';
-  const reminderStatus = reminders.enabled ? 'Enabled' : 'Disabled';
+  const canConfigureReminderSettings =
+    reminderSupport.supported && reminderSupport.permission === 'granted';
+  const formatReminderTime = (time: string): string => {
+    const parsed = time.match(REMINDER_TIME_PATTERN);
+    if (!parsed) return time;
+    const sampleDate = new Date();
+    sampleDate.setHours(Number(parsed[1]), Number(parsed[2]), 0, 0);
+    return sampleDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+  const reminderStatus =
+    reminders.enabled && canConfigureReminderSettings
+      ? 'Enabled'
+      : reminders.enabled
+      ? 'Paused (Permission Needed)'
+      : 'Disabled';
+  const reminderScheduleLabel =
+    reminders.scheduleType === 'periodic'
+      ? `Periodic (${reminders.periodicIntervalMinutes} min)`
+      : `Specific Time (${formatReminderTime(reminders.specificTime)})`;
+  const reminderPermissionLabel =
+    reminderSupport.permission === 'unsupported'
+      ? 'Unsupported'
+      : reminderSupport.permission === 'granted'
+      ? 'Granted'
+      : reminderSupport.permission === 'denied'
+      ? 'Denied'
+      : 'Ask';
   const siteUrl = 'https://hikmahsphere.site';
   const duaPageUrl = `${siteUrl}/dhikr-dua`;
   const featuredDuaSchemaItems = DUA_LIBRARY.slice(0, 12).map((dua, index) => ({
@@ -1325,53 +1574,150 @@ const DhikrDua: React.FC = () => {
                     </div>
 
                     <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-amber-100 bg-white'}`}>
-                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
                         <div>
-                          <h3 className={`text-sm font-bold ${headingText}`}>Daily Adhkar Reminder</h3>
-                          <p className={`text-xs ${mutedText}`}>Status: {reminderStatus}</p>
+                          <h3 className={`text-sm font-bold ${headingText}`}>Dhikr &amp; Dua Reminder</h3>
+                          <p className={`text-xs ${mutedText}`}>Status: {reminderStatus} • {reminderScheduleLabel}</p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={requestReminderPermission}
-                          className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white"
-                        >
-                          Enable
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={enableReminderNotifications}
+                            disabled={reminders.enabled}
+                            className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                              reminders.enabled
+                                ? 'cursor-not-allowed bg-emerald-600 text-white'
+                                : isDarkMode
+                                ? 'border border-slate-500 bg-slate-900 text-slate-100'
+                                : 'border border-gray-300 bg-white text-gray-700'
+                            }`}
+                          >
+                            {reminders.enabled ? 'Enabled' : 'Enable'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={disableReminderNotifications}
+                            disabled={!reminders.enabled}
+                            className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                              !reminders.enabled
+                                ? 'cursor-not-allowed bg-rose-600 text-white'
+                                : isDarkMode
+                                ? 'border border-slate-500 bg-slate-900 text-slate-100'
+                                : 'border border-gray-300 bg-white text-gray-700'
+                            }`}
+                          >
+                            {!reminders.enabled ? 'Disabled' : 'Disable'}
+                          </button>
+                        </div>
                       </div>
 
-                      <div className="space-y-2 text-sm">
-                        <label className="flex items-center justify-between gap-2">
-                          <span className={mutedText}>Morning reminder</span>
-                          <input
-                            type="checkbox"
-                            checked={reminders.morning}
-                            onChange={(event) => setReminders((previous) => ({ ...previous, morning: event.target.checked }))}
-                          />
-                        </label>
-                        <label className="flex items-center justify-between gap-2">
-                          <span className={mutedText}>Evening reminder</span>
-                          <input
-                            type="checkbox"
-                            checked={reminders.evening}
-                            onChange={(event) => setReminders((previous) => ({ ...previous, evening: event.target.checked }))}
-                          />
-                        </label>
-                        <label className="flex items-center justify-between gap-2">
-                          <span className={mutedText}>Friday dhikr reminder</span>
-                          <input
-                            type="checkbox"
-                            checked={reminders.friday}
-                            onChange={(event) => setReminders((previous) => ({ ...previous, friday: event.target.checked }))}
-                          />
-                        </label>
-                        <label className="mt-2 flex items-center justify-between gap-2 border-t border-emerald-200 pt-2">
-                          <span className={mutedText}>Master switch</span>
-                          <input
-                            type="checkbox"
-                            checked={reminders.enabled}
-                            onChange={(event) => setReminders((previous) => ({ ...previous, enabled: event.target.checked }))}
-                          />
-                        </label>
+                      <div className={`mb-3 rounded-lg border px-3 py-2 text-xs ${isDarkMode ? 'border-slate-600 bg-slate-900' : 'border-emerald-200 bg-emerald-50'}`}>
+                        <p className={mutedText}>
+                          Support: {reminderSupport.supported ? 'Available' : 'Not Available'} • Permission: {reminderPermissionLabel}
+                        </p>
+                        {reminderSupport.reason && (
+                          <p className={`${mutedText} mt-1`}>{reminderSupport.reason}</p>
+                        )}
+                        {!canConfigureReminderSettings && (
+                          <p className={`${mutedText} mt-1`}>
+                            Grant notification permission to configure reminder type and timing.
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="space-y-3 text-sm">
+                        <div className="grid grid-cols-2 gap-2">
+                          <label className="flex items-center justify-between gap-2 rounded-lg border border-emerald-200 px-3 py-2">
+                            <span className={mutedText}>Dhikr</span>
+                            <input
+                              type="checkbox"
+                              checked={reminders.includeDhikr}
+                              disabled={!canConfigureReminderSettings}
+                              onChange={(event) => handleReminderTypeToggle('includeDhikr', event.target.checked)}
+                            />
+                          </label>
+                          <label className="flex items-center justify-between gap-2 rounded-lg border border-emerald-200 px-3 py-2">
+                            <span className={mutedText}>Dua</span>
+                            <input
+                              type="checkbox"
+                              checked={reminders.includeDua}
+                              disabled={!canConfigureReminderSettings}
+                              onChange={(event) => handleReminderTypeToggle('includeDua', event.target.checked)}
+                            />
+                          </label>
+                        </div>
+
+                        <div>
+                          <p className={`text-xs font-semibold uppercase tracking-wide ${mutedText}`}>Schedule Type</p>
+                          <div className="mt-2 grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              disabled={!canConfigureReminderSettings}
+                              onClick={() => handleReminderScheduleTypeChange('periodic')}
+                              className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                                reminders.scheduleType === 'periodic'
+                                  ? 'border-emerald-600 bg-emerald-600 text-white'
+                                  : isDarkMode
+                                  ? 'border-slate-500 bg-slate-900 text-slate-100'
+                                  : 'border-emerald-200 bg-white text-emerald-700'
+                              }`}
+                            >
+                              Periodic
+                            </button>
+                            <button
+                              type="button"
+                              disabled={!canConfigureReminderSettings}
+                              onClick={() => handleReminderScheduleTypeChange('specific')}
+                              className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                                reminders.scheduleType === 'specific'
+                                  ? 'border-emerald-600 bg-emerald-600 text-white'
+                                  : isDarkMode
+                                  ? 'border-slate-500 bg-slate-900 text-slate-100'
+                                  : 'border-emerald-200 bg-white text-emerald-700'
+                              }`}
+                            >
+                              Specific Time
+                            </button>
+                          </div>
+                        </div>
+
+                        {reminders.scheduleType === 'periodic' ? (
+                          <label className="flex items-center justify-between gap-3">
+                            <span className={mutedText}>Frequency</span>
+                            <select
+                              value={reminders.periodicIntervalMinutes}
+                              disabled={!canConfigureReminderSettings}
+                              onChange={(event) => handleReminderIntervalChange(event.target.value)}
+                              className={`rounded-lg border px-2 py-1 text-sm ${
+                                isDarkMode
+                                  ? 'border-slate-500 bg-slate-900 text-slate-100'
+                                  : 'border-emerald-200 bg-white text-gray-900'
+                              }`}
+                            >
+                              {REMINDER_INTERVAL_OPTIONS.map((minutes) => (
+                                <option key={minutes} value={minutes}>
+                                  Every {minutes} min
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        ) : (
+                          <label className="flex items-center justify-between gap-3">
+                            <span className={mutedText}>Reminder time</span>
+                            <input
+                              type="time"
+                              value={reminders.specificTime}
+                              disabled={!canConfigureReminderSettings}
+                              onChange={(event) => handleReminderTimeChange(event.target.value)}
+                              className={`rounded-lg border px-2 py-1 text-sm ${
+                                isDarkMode
+                                  ? 'border-slate-500 bg-slate-900 text-slate-100'
+                                  : 'border-emerald-200 bg-white text-gray-900'
+                              }`}
+                            />
+                          </label>
+                        )}
+
                       </div>
                     </div>
                   </div>
@@ -1915,7 +2261,7 @@ const DhikrDua: React.FC = () => {
                 <div>
                   <h3 className={`text-base font-bold ${headingText}`}>Reminder & Language</h3>
                   <p className={`text-sm ${mutedText}`}>
-                    {reminderStatus} • Translation: {translationLanguage === 'urdu' ? 'Urdu' : 'English'}
+                    {reminderStatus} • {reminderScheduleLabel} • Translation: {translationLanguage === 'urdu' ? 'Urdu' : 'English'}
                   </p>
                 </div>
                 <button
@@ -1932,13 +2278,36 @@ const DhikrDua: React.FC = () => {
               <div className={`rounded-2xl border p-4 shadow-sm ${cardBg}`}>
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <h3 className={`text-base font-bold ${headingText}`}>Settings</h3>
-                  <button
-                    type="button"
-                    onClick={requestReminderPermission}
-                    className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white"
-                  >
-                    Enable Alerts
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={enableReminderNotifications}
+                      disabled={reminders.enabled}
+                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                        reminders.enabled
+                          ? 'cursor-not-allowed bg-emerald-600 text-white'
+                          : isDarkMode
+                          ? 'border border-slate-500 bg-slate-900 text-slate-100'
+                          : 'border border-gray-300 bg-white text-gray-700'
+                      }`}
+                    >
+                      {reminders.enabled ? 'Enabled' : 'Enable'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={disableReminderNotifications}
+                      disabled={!reminders.enabled}
+                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                        !reminders.enabled
+                          ? 'cursor-not-allowed bg-rose-600 text-white'
+                          : isDarkMode
+                          ? 'border border-slate-500 bg-slate-900 text-slate-100'
+                          : 'border border-gray-300 bg-white text-gray-700'
+                      }`}
+                    >
+                      {!reminders.enabled ? 'Disabled' : 'Disable'}
+                    </button>
+                  </div>
                 </div>
 
                 <div>
@@ -1973,39 +2342,113 @@ const DhikrDua: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="mt-4 space-y-2 text-sm">
-                  <label className="flex items-center justify-between gap-2">
-                    <span className={mutedText}>Morning reminder</span>
-                    <input
-                      type="checkbox"
-                      checked={reminders.morning}
-                      onChange={(event) => setReminders((previous) => ({ ...previous, morning: event.target.checked }))}
-                    />
-                  </label>
-                  <label className="flex items-center justify-between gap-2">
-                    <span className={mutedText}>Evening reminder</span>
-                    <input
-                      type="checkbox"
-                      checked={reminders.evening}
-                      onChange={(event) => setReminders((previous) => ({ ...previous, evening: event.target.checked }))}
-                    />
-                  </label>
-                  <label className="flex items-center justify-between gap-2">
-                    <span className={mutedText}>Friday dhikr reminder</span>
-                    <input
-                      type="checkbox"
-                      checked={reminders.friday}
-                      onChange={(event) => setReminders((previous) => ({ ...previous, friday: event.target.checked }))}
-                    />
-                  </label>
-                  <label className="mt-2 flex items-center justify-between gap-2 border-t border-emerald-200 pt-2">
-                    <span className={mutedText}>Master switch</span>
-                    <input
-                      type="checkbox"
-                      checked={reminders.enabled}
-                      onChange={(event) => setReminders((previous) => ({ ...previous, enabled: event.target.checked }))}
-                    />
-                  </label>
+                <div className={`mt-4 rounded-lg border px-3 py-2 text-xs ${isDarkMode ? 'border-slate-600 bg-slate-900' : 'border-emerald-200 bg-emerald-50'}`}>
+                  <p className={mutedText}>
+                    Support: {reminderSupport.supported ? 'Available' : 'Not Available'} • Permission: {reminderPermissionLabel}
+                  </p>
+                  {reminderSupport.reason && (
+                    <p className={`${mutedText} mt-1`}>{reminderSupport.reason}</p>
+                  )}
+                  {!canConfigureReminderSettings && (
+                    <p className={`${mutedText} mt-1`}>
+                      Grant notification permission to configure reminder type and timing.
+                    </p>
+                  )}
+                </div>
+
+                <div className="mt-4 space-y-3 text-sm">
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="flex items-center justify-between gap-2 rounded-lg border border-emerald-200 px-3 py-2">
+                      <span className={mutedText}>Dhikr</span>
+                      <input
+                        type="checkbox"
+                        checked={reminders.includeDhikr}
+                        disabled={!canConfigureReminderSettings}
+                        onChange={(event) => handleReminderTypeToggle('includeDhikr', event.target.checked)}
+                      />
+                    </label>
+                    <label className="flex items-center justify-between gap-2 rounded-lg border border-emerald-200 px-3 py-2">
+                      <span className={mutedText}>Dua</span>
+                      <input
+                        type="checkbox"
+                        checked={reminders.includeDua}
+                        disabled={!canConfigureReminderSettings}
+                        onChange={(event) => handleReminderTypeToggle('includeDua', event.target.checked)}
+                      />
+                    </label>
+                  </div>
+
+                  <div>
+                    <p className={`text-xs font-semibold uppercase tracking-wide ${mutedText}`}>Schedule Type</p>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        disabled={!canConfigureReminderSettings}
+                        onClick={() => handleReminderScheduleTypeChange('periodic')}
+                        className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                          reminders.scheduleType === 'periodic'
+                            ? 'border-emerald-600 bg-emerald-600 text-white'
+                            : isDarkMode
+                            ? 'border-slate-500 bg-slate-900 text-slate-100'
+                            : 'border-emerald-200 bg-white text-emerald-700'
+                        }`}
+                      >
+                        Periodic
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!canConfigureReminderSettings}
+                        onClick={() => handleReminderScheduleTypeChange('specific')}
+                        className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                          reminders.scheduleType === 'specific'
+                            ? 'border-emerald-600 bg-emerald-600 text-white'
+                            : isDarkMode
+                            ? 'border-slate-500 bg-slate-900 text-slate-100'
+                            : 'border-emerald-200 bg-white text-emerald-700'
+                        }`}
+                      >
+                        Specific Time
+                      </button>
+                    </div>
+                  </div>
+
+                  {reminders.scheduleType === 'periodic' ? (
+                    <label className="flex items-center justify-between gap-3">
+                      <span className={mutedText}>Frequency</span>
+                      <select
+                        value={reminders.periodicIntervalMinutes}
+                        disabled={!canConfigureReminderSettings}
+                        onChange={(event) => handleReminderIntervalChange(event.target.value)}
+                        className={`rounded-lg border px-2 py-1 text-sm ${
+                          isDarkMode
+                            ? 'border-slate-500 bg-slate-900 text-slate-100'
+                            : 'border-emerald-200 bg-white text-gray-900'
+                        }`}
+                      >
+                        {REMINDER_INTERVAL_OPTIONS.map((minutes) => (
+                          <option key={minutes} value={minutes}>
+                            Every {minutes} min
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : (
+                    <label className="flex items-center justify-between gap-3">
+                      <span className={mutedText}>Reminder time</span>
+                      <input
+                        type="time"
+                        value={reminders.specificTime}
+                        disabled={!canConfigureReminderSettings}
+                        onChange={(event) => handleReminderTimeChange(event.target.value)}
+                        className={`rounded-lg border px-2 py-1 text-sm ${
+                          isDarkMode
+                            ? 'border-slate-500 bg-slate-900 text-slate-100'
+                            : 'border-emerald-200 bg-white text-gray-900'
+                        }`}
+                      />
+                    </label>
+                  )}
+
                 </div>
               </div>
             )}

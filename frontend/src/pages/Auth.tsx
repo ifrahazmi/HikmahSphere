@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { useAuth } from '../hooks/useAuth';
 import toast from 'react-hot-toast';
@@ -14,7 +14,7 @@ const Auth: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
 
-  const { login, register } = useAuth();
+  const { login, register, user } = useAuth();
   const navigate = useNavigate();
   
   const [formData, setFormData] = useState({
@@ -87,7 +87,7 @@ const Auth: React.FC = () => {
                     // Use the login function from auth context to properly update state
                     await login(submittedEmail, submittedPassword);
                     toast.success('Successfully logged in!');
-                    navigate('/dashboard');
+                    navigate('/profile', { replace: true });
                 }
             } else {
                 toast.error(data.message || 'Login failed. Please check your credentials.');
@@ -96,7 +96,7 @@ const Auth: React.FC = () => {
         } else {
             await register(submittedName, submittedEmail, submittedPassword);
             toast.success('Account created successfully!');
-            navigate('/dashboard');
+            navigate('/profile', { replace: true });
         }
     } catch (error: any) {
         console.error('Authentication error:', error);
@@ -110,6 +110,10 @@ const Auth: React.FC = () => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
+
+  if (user) {
+    return <Navigate to="/profile" replace />;
+  }
 
   if (loading) {
     return (
