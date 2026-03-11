@@ -27,6 +27,8 @@ import {
   readTrackerFromStorage,
 } from '../utils/salahTracker';
 
+const PROFILE_REFLECTION_IMAGE_SRC = '/Gemini_Generated_Image_b40rclb40rclb40r.png';
+
 const Profile: React.FC = () => {
   const { user: authUser } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
@@ -298,6 +300,21 @@ const Profile: React.FC = () => {
                     "Our Lord, give us good in this world and good in the next world, and save us from the punishment of the Fire."
                   </p>
                   <p className="mt-2 text-xs text-gray-500">- Quran 2:201</p>
+
+                  <div className="mt-4 overflow-hidden rounded-xl border border-emerald-100 bg-white shadow-sm">
+                    <div className="relative">
+                      <img
+                        src={PROFILE_REFLECTION_IMAGE_SRC}
+                        alt="Daily reflection visual"
+                        className="h-52 w-full object-cover sm:h-60"
+                      />
+                      <div className="pointer-events-none absolute inset-x-0 top-2 flex justify-center px-3">
+                        <p className="max-w-full truncate rounded-full bg-black/55 px-3 py-2 text-xs font-semibold text-white shadow-sm">
+                          {authUser.name || 'User'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </section>
