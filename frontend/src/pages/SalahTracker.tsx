@@ -654,7 +654,7 @@ const SalahTracker: React.FC = () => {
 
       const canvas = await html2canvas(exportPreviewRef.current, {
         useCORS: true,
-        background: '#f8fafc',
+        backgroundColor: '#f8fafc',
       });
 
       const blob = await new Promise<Blob | null>((resolve) => {

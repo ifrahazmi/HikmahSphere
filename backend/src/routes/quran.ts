@@ -1,7 +1,8 @@
 import express from 'express';
 import fs from 'fs';
 import path from 'path';
-import { DatabaseSync } from 'node:sqlite';
+import sqlite3 from 'sqlite3';
+import { open, Database } from 'sqlite';
 import { query, validationResult } from 'express-validator';
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth';
 import User from '../models/User';
@@ -39,29 +40,35 @@ interface IndoPakV2VerseRow {
   text: string;
 }
 
-let indopakV2Db: DatabaseSync | null = null;
+type IndoPakV2Db = Database<sqlite3.Database, sqlite3.Statement>;
+let indopakV2DbPromise: Promise<IndoPakV2Db> | null = null;
 
-const getIndoPakV2Db = (): DatabaseSync => {
-  if (indopakV2Db) return indopakV2Db;
+const getIndoPakV2Db = async (): Promise<IndoPakV2Db> => {
+  if (indopakV2DbPromise) return indopakV2DbPromise;
 
   if (!fs.existsSync(INDOPAK_V2_DB_PATH)) {
     throw new Error(`IndoPak Nastaleeq v2 database not found at ${INDOPAK_V2_DB_PATH}`);
   }
 
-  indopakV2Db = new DatabaseSync(INDOPAK_V2_DB_PATH, { readOnly: true });
-  return indopakV2Db;
+  indopakV2DbPromise = open({
+    filename: INDOPAK_V2_DB_PATH,
+    driver: sqlite3.Database,
+    mode: sqlite3.OPEN_READONLY,
+  });
+
+  return indopakV2DbPromise;
 };
 
-const getIndoPakV2SurahRows = (surahNumber: number): IndoPakV2VerseRow[] => {
-  const db = getIndoPakV2Db();
-  const statement = db.prepare(`
+const getIndoPakV2SurahRows = async (surahNumber: number): Promise<IndoPakV2VerseRow[]> => {
+  const db = await getIndoPakV2Db();
+  const rows = await db.all<IndoPakV2VerseRow[]>(`
     SELECT id, verse_key, surah, ayah, text
     FROM verses
     WHERE surah = ?
     ORDER BY ayah ASC
-  `);
+  `, surahNumber);
 
-  return statement.all(surahNumber) as unknown as IndoPakV2VerseRow[];
+  return rows;
 };
 
 const isBookmarkColor = (value: unknown): value is BookmarkColor => {
@@ -370,7 +377,7 @@ router.get('/surah/:number', [
  * @desc    Get specific surah from local IndoPak Nastaleeq v2 SQLite database
  * @access  Public
  */
-router.get('/surah/:number/indopak-v2', optionalAuthMiddleware, (req: any, res: any) => {
+router.get('/surah/:number/indopak-v2', optionalAuthMiddleware, async (req: any, res: any) => {
   try {
     const { number } = req.params;
 
@@ -382,7 +389,7 @@ router.get('/surah/:number/indopak-v2', optionalAuthMiddleware, (req: any, res: 
       });
     }
 
-    const rows = getIndoPakV2SurahRows(surahNum);
+    const rows = await getIndoPakV2SurahRows(surahNum);
 
     if (!rows.length) {
       return res.status(404).json({
