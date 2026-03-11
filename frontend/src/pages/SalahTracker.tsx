@@ -32,6 +32,7 @@ import {
   formatCompactDate,
   formatDateKey,
   formatReadableDate,
+  formatReadableDateTime,
   getAggregatedStats,
   getBestStreak,
   getCurrentStreak,
@@ -162,6 +163,8 @@ const DEFAULT_PRAYER_TIMINGS: PrayerTimings = {
   isha: '19:45',
   midnight: '00:00',
 };
+
+const ADMIN_SINCE_ISO = '2026-02-01T00:00:00';
 
 const nowIso = () => new Date().toISOString();
 
@@ -362,21 +365,49 @@ const SalahTracker: React.FC = () => {
   const selectedQadaCount = useMemo(() => countByStatus(selectedRecord, 'qada'), [selectedRecord]);
   const selectedMissedCount = useMemo(() => countByStatus(selectedRecord, 'missed'), [selectedRecord]);
   const selectedQuranScore = useMemo(() => getQuranScore(selectedRecord), [selectedRecord]);
+  const isAdminProfile =
+    authUser?.role === 'superadmin' || (authUser?.isAdmin === true && authUser?.role !== 'manager');
 
   const prayerWindows = useMemo(() => buildPrayerWindows(prayerTimings), [prayerTimings]);
 
-  const memberSinceDateKey = useMemo(() => {
-    if (!authUser?.createdAt) {
+  const earliestRecordDateKey = useMemo(() => {
+    const keys = Object.keys(records).filter((dateKey) => /^\d{4}-\d{2}-\d{2}$/.test(dateKey));
+    if (keys.length === 0) {
       return todayDateKey;
+    }
+
+    keys.sort();
+    return keys[0];
+  }, [records, todayDateKey]);
+
+  const memberSinceDateKey = useMemo(() => {
+    if (isAdminProfile) {
+      return formatDateKey(new Date(ADMIN_SINCE_ISO));
+    }
+
+    if (!authUser?.createdAt) {
+      return earliestRecordDateKey;
     }
 
     const parsed = new Date(authUser.createdAt);
     if (Number.isNaN(parsed.getTime())) {
-      return todayDateKey;
+      return earliestRecordDateKey;
     }
 
     return formatDateKey(parsed);
-  }, [authUser?.createdAt, todayDateKey]);
+  }, [authUser?.createdAt, earliestRecordDateKey, isAdminProfile]);
+
+  const accountCreatedAtLabel = useMemo(() => {
+    if (isAdminProfile) {
+      return formatReadableDateTime(ADMIN_SINCE_ISO);
+    }
+
+    if (authUser?.createdAt) {
+      return formatReadableDateTime(authUser.createdAt);
+    }
+
+    return formatReadableDateTime(parseDateKey(memberSinceDateKey));
+  }, [authUser?.createdAt, isAdminProfile, memberSinceDateKey]);
 
   const weeklyData = useMemo(() => {
     const anchorDate = parseDateKey(selectedDateKey);
@@ -952,7 +983,7 @@ const SalahTracker: React.FC = () => {
                     {timeSource}
                   </span>
                   <span className="inline-flex items-center gap-1.5 rounded-lg bg-violet-50 px-2.5 py-1.5 text-violet-700">
-                    Tracking from member since {formatReadableDate(memberSinceDateKey)}
+                    Tracking from {isAdminProfile ? 'admin' : 'member'} since {accountCreatedAtLabel}
                   </span>
                 </div>
 
@@ -1358,7 +1389,9 @@ const SalahTracker: React.FC = () => {
                 <p className="mt-1 text-sm text-gray-600">
                   User: {authUser?.name} {authUser?.email ? `(${authUser.email})` : ''}
                 </p>
-                <p className="mt-1 text-sm text-violet-700">Member Since: {formatReadableDate(memberSinceDateKey)}</p>
+                <p className="mt-1 text-sm text-violet-700">
+                  {isAdminProfile ? 'Admin Since' : 'Member Since'}: {accountCreatedAtLabel}
+                </p>
               </div>
 
               <div className="mt-14 max-w-[340px] shrink-0 rounded-xl border border-violet-100 bg-white/80 p-3 text-right">

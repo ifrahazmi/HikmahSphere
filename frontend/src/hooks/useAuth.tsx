@@ -44,9 +44,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const mapUser = (apiUser: any): User => {
+      const firstName = typeof apiUser.firstName === 'string' ? apiUser.firstName.trim() : '';
+      const lastName = typeof apiUser.lastName === 'string' ? apiUser.lastName.trim() : '';
+      const composedName = `${firstName} ${lastName}`.trim();
+      const fallbackName =
+        typeof apiUser.name === 'string' && apiUser.name.trim().length > 0
+          ? apiUser.name.trim()
+          : typeof apiUser.username === 'string' && apiUser.username.trim().length > 0
+            ? apiUser.username.trim()
+            : 'User';
+
       return {
-        id: apiUser._id,
-        name: `${apiUser.firstName} ${apiUser.lastName}`,
+        id: apiUser._id || apiUser.id,
+        name: composedName || fallbackName,
         email: apiUser.email,
         isAdmin: apiUser.isAdmin,
         role: apiUser.role || (apiUser.isAdmin ? 'superadmin' : 'user'), // Map role
@@ -137,8 +147,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         localStorage.setItem('token', data.token);
         if (data.user) {
           localStorage.setItem('user', JSON.stringify(data.user));
-          setUser(mapUser(data.user));
         }
+        await checkAuthStatus();
       } else {
         throw new Error(data.message || 'Login failed');
       }

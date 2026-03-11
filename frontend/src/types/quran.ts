@@ -207,7 +207,7 @@ export const DEFAULT_QURAN_SETTINGS: QuranSettings = {
   arabicOnlyMode: false,
   fontSize: 20,
   theme: 'light',
-  arabicFont: 'indopak-nastaleeq-v2',
+  arabicFont: 'indopak-nastaleeq',
   fontColor: 'default',
   readerBackground: 'default',
   lineSpacing: 2.0,

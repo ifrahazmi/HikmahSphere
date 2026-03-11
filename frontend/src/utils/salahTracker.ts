@@ -118,6 +118,22 @@ export const formatReadableDate = (dateKey: string): string => {
   });
 };
 
+export const formatReadableDateTime = (value: string | Date): string => {
+  const parsed = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return 'Unknown';
+  }
+
+  return parsed.toLocaleString(undefined, {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+};
+
 export const formatCompactDate = (dateKey: string): string => {
   return parseDateKey(dateKey).toLocaleDateString(undefined, {
     weekday: 'short',

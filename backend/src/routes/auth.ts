@@ -114,6 +114,9 @@ router.post('/register', [
         id: user._id.toString(),
         username: user.username,
         email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        createdAt: user.createdAt,
         role: user.role,
         isAdmin: user.isAdmin
       },
@@ -196,6 +199,7 @@ router.post('/login', [
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
+        createdAt: user.createdAt,
         role: user.role,
         isAdmin: user.isAdmin
       },

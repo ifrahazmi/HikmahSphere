@@ -139,7 +139,7 @@ const Auth: React.FC = () => {
         noIndex
         noFollow
       />
-      <div className="min-h-screen flex items-start justify-center bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-950 pt-14 pb-4 sm:items-center sm:py-6 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+      <div className="min-h-screen flex items-start justify-center bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-950 pt-10 pb-4 sm:items-center sm:py-6 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
       {/* Animated Background Pattern */}
       <div className="absolute inset-0 opacity-5">
         <div className="absolute inset-0" style={{

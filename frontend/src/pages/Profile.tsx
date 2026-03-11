@@ -28,6 +28,7 @@ import {
 } from '../utils/salahTracker';
 
 const PROFILE_REFLECTION_IMAGE_SRC = '/Gemini_Generated_Image_b40rclb40rclb40r.png';
+const ADMIN_SINCE_LABEL = 'Feb 1st 2026';
 
 const Profile: React.FC = () => {
   const { user: authUser } = useAuth();
@@ -179,7 +180,12 @@ const Profile: React.FC = () => {
       )
   }
 
-  const memberSince = authUser.createdAt ? new Date(authUser.createdAt).toLocaleDateString() : 'N/A';
+  const isAdminProfile = authUser.role === 'superadmin' || (authUser.isAdmin === true && authUser.role !== 'manager');
+  const memberSince = isAdminProfile
+    ? ADMIN_SINCE_LABEL
+    : authUser.createdAt
+      ? new Date(authUser.createdAt).toLocaleDateString()
+      : 'N/A';
   const locationLabel = [authUser.address?.street, authUser.address?.city, authUser.address?.country]
     .filter(Boolean)
     .join(', ') || 'Not set';
@@ -222,7 +228,7 @@ const Profile: React.FC = () => {
                   <p className="mt-1 truncate text-sm text-gray-600 sm:text-base">{authUser.email}</p>
                   <div className="mt-3 flex flex-wrap items-center justify-center gap-2 sm:justify-start">
                     <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-600 sm:text-sm">
-                      Member since {memberSince}
+                      {isAdminProfile ? 'Admin since' : 'Member since'} {memberSince}
                     </span>
                     {authUser.madhab && (
                       <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold capitalize text-emerald-700 sm:text-sm">
@@ -309,7 +315,7 @@ const Profile: React.FC = () => {
                         className="h-52 w-full object-cover sm:h-60"
                       />
                       <div className="pointer-events-none absolute inset-x-0 top-2 flex justify-center px-3">
-                        <p className="max-w-full truncate rounded-full bg-black/55 px-3 py-2 text-xs font-semibold text-white shadow-sm">
+                        <p className="max-w-full truncate px-1 py-1 text-sm font-semibold text-white [text-shadow:0_2px_6px_rgba(0,0,0,0.75)]">
                           {authUser.name || 'User'}
                         </p>
                       </div>

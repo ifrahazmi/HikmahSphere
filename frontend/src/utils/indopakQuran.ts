@@ -28,6 +28,9 @@ const normalizeIndopakMarks = (text: string): string => (
   text
     .replace(/\u06E1/g, '\u0652') // ARABIC SMALL HIGH DOTLESS HEAD OF KHAH -> SUKUN
     .replace(/\u06DF/g, '\u0652') // ARABIC SMALL HIGH ROUNDED ZERO -> SUKUN
+    // Remove South IndoPak stop symbols requested by user:
+    // U+06D9 (small high lam-alef / looks like لا) and U+06DA (small high jeem / often rendered as ح-like mark)
+    .replace(/[\u06D9\u06DA]/g, '')
 );
 
 /**

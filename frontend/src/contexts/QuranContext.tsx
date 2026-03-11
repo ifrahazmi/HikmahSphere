@@ -14,9 +14,12 @@ import {
 } from '../types/quran';
 
 const QuranContext = createContext<QuranContextType | undefined>(undefined);
+const LEGACY_QURAN_SETTINGS_KEY = 'quranSettings';
+const LEGACY_QURAN_BOOKMARKS_KEY = 'quranBookmarks';
+const LEGACY_QURAN_LAST_READ_KEY = 'quranLastRead';
 
 export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
-  const { isAuthenticated, loading: authLoading } = useAuth();
+  const { isAuthenticated, loading: authLoading, user } = useAuth();
 
   // State
   const [currentSurah, setCurrentSurah] = useState<number | null>(null);
@@ -125,51 +128,56 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     isSurahModeRef.current = isSurahMode;
   }, [isSurahMode]);
   
-  // Settings from localStorage
-  const [settings, setSettings] = useState<QuranSettings>(() => {
-    const saved = localStorage.getItem('quranSettings');
-    return saved ? JSON.parse(saved) : DEFAULT_QURAN_SETTINGS;
-  });
-  
-  // Bookmarks from localStorage
-  const [bookmarks, setBookmarks] = useState<Bookmark[]>(() => {
-    const saved = localStorage.getItem('quranBookmarks');
-    return saved ? JSON.parse(saved) : [];
-  });
-  
-  // Last read from localStorage
-  const [lastRead, setLastRead] = useState<LastRead | null>(() => {
-    const saved = localStorage.getItem('quranLastRead');
-    return saved ? JSON.parse(saved) : null;
-  });
+  const userStorageScope = user?.id || user?.email || 'guest';
+  const userSettingsStorageKey = `quranSettings:${userStorageScope}`;
+  const userBookmarksStorageKey = `quranBookmarks:${userStorageScope}`;
+  const userLastReadStorageKey = `quranLastRead:${userStorageScope}`;
+
+  const [settings, setSettings] = useState<QuranSettings>(DEFAULT_QURAN_SETTINGS);
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+  const [lastRead, setLastRead] = useState<LastRead | null>(null);
 
   const saveSettingsToLocal = useCallback((nextSettings: QuranSettings) => {
-    localStorage.setItem('quranSettings', JSON.stringify(nextSettings));
+    const serialized = JSON.stringify(nextSettings);
+    localStorage.setItem(userSettingsStorageKey, serialized);
+    // Keep legacy key in sync for components that still read the global settings key.
+    localStorage.setItem(LEGACY_QURAN_SETTINGS_KEY, serialized);
     window.dispatchEvent(new Event('quranSettingsChanged'));
-  }, []);
+  }, [userSettingsStorageKey]);
 
   const saveBookmarksToLocal = useCallback((nextBookmarks: Bookmark[]) => {
-    localStorage.setItem('quranBookmarks', JSON.stringify(nextBookmarks));
-  }, []);
+    const serialized = JSON.stringify(nextBookmarks);
+    localStorage.setItem(userBookmarksStorageKey, serialized);
+    if (userStorageScope === 'guest') {
+      localStorage.setItem(LEGACY_QURAN_BOOKMARKS_KEY, serialized);
+    }
+  }, [userBookmarksStorageKey, userStorageScope]);
 
   const saveLastReadToLocal = useCallback((nextLastRead: LastRead | null) => {
     if (!nextLastRead) {
-      localStorage.removeItem('quranLastRead');
+      localStorage.removeItem(userLastReadStorageKey);
+      if (userStorageScope === 'guest') {
+        localStorage.removeItem(LEGACY_QURAN_LAST_READ_KEY);
+      }
       return;
     }
-    localStorage.setItem('quranLastRead', JSON.stringify(nextLastRead));
-  }, []);
+    const serialized = JSON.stringify(nextLastRead);
+    localStorage.setItem(userLastReadStorageKey, serialized);
+    if (userStorageScope === 'guest') {
+      localStorage.setItem(LEGACY_QURAN_LAST_READ_KEY, serialized);
+    }
+  }, [userLastReadStorageKey, userStorageScope]);
 
-  const toDate = (value: unknown): Date => {
+  const toDate = useCallback((value: unknown): Date => {
     if (value instanceof Date) return value;
     if (typeof value === 'string' || typeof value === 'number') {
       const parsed = new Date(value);
       if (!Number.isNaN(parsed.getTime())) return parsed;
     }
     return new Date();
-  };
+  }, []);
 
-  const normalizeBookmarks = (value: unknown): Bookmark[] => {
+  const normalizeBookmarks = useCallback((value: unknown): Bookmark[] => {
     if (!Array.isArray(value)) return [];
     return value
       .map((item, index) => {
@@ -191,9 +199,9 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
         } as Bookmark;
       })
       .filter(Boolean) as Bookmark[];
-  };
+  }, [toDate]);
 
-  const normalizeLastRead = (value: unknown): LastRead | null => {
+  const normalizeLastRead = useCallback((value: unknown): LastRead | null => {
     if (!value || typeof value !== 'object') return null;
     const raw = value as Record<string, unknown>;
     const surahNumber = Number(raw.surahNumber);
@@ -207,7 +215,38 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       surahName,
       timestamp: toDate(raw.timestamp),
     };
-  };
+  }, [toDate]);
+
+  useEffect(() => {
+    const parseJson = (raw: string | null): unknown => {
+      if (!raw) return null;
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return null;
+      }
+    };
+
+    const isGuestScope = userStorageScope === 'guest';
+    const userSettingsRaw = localStorage.getItem(userSettingsStorageKey);
+    const fallbackSettingsRaw = isGuestScope ? localStorage.getItem(LEGACY_QURAN_SETTINGS_KEY) : null;
+    const settingsPayload = parseJson(userSettingsRaw) ?? parseJson(fallbackSettingsRaw);
+    const hydratedSettings =
+      settingsPayload && typeof settingsPayload === 'object'
+        ? ({ ...DEFAULT_QURAN_SETTINGS, ...(settingsPayload as Partial<QuranSettings>) } as QuranSettings)
+        : DEFAULT_QURAN_SETTINGS;
+    setSettings(hydratedSettings);
+
+    const userBookmarksRaw = localStorage.getItem(userBookmarksStorageKey);
+    const fallbackBookmarksRaw = isGuestScope ? localStorage.getItem(LEGACY_QURAN_BOOKMARKS_KEY) : null;
+    const bookmarksPayload = parseJson(userBookmarksRaw) ?? parseJson(fallbackBookmarksRaw);
+    setBookmarks(normalizeBookmarks(bookmarksPayload));
+
+    const userLastReadRaw = localStorage.getItem(userLastReadStorageKey);
+    const fallbackLastReadRaw = isGuestScope ? localStorage.getItem(LEGACY_QURAN_LAST_READ_KEY) : null;
+    const lastReadPayload = parseJson(userLastReadRaw) ?? parseJson(fallbackLastReadRaw);
+    setLastRead(normalizeLastRead(lastReadPayload));
+  }, [userSettingsStorageKey, userBookmarksStorageKey, userLastReadStorageKey, userStorageScope, normalizeBookmarks, normalizeLastRead]);
 
   const syncUserQuranStateToBackend = useCallback(
     async (payload: { settings: QuranSettings; bookmarks: Bookmark[]; lastRead: LastRead | null }) => {

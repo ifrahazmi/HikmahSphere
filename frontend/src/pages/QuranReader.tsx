@@ -104,19 +104,17 @@ const QuranReader: React.FC = () => {
 
   // Auto-hide header on scroll
   const [showHeader, setShowHeader] = useState(true);
-  const isIndopakFont =
-    settings.arabicFont === 'indopak-nastaleeq' || settings.arabicFont === 'indopak-nastaleeq-v2';
-  const isTempIndopakFont =
-    tempSettings.arabicFont === 'indopak-nastaleeq' || tempSettings.arabicFont === 'indopak-nastaleeq-v2';
+  const isLegacyIndopakFont = settings.arabicFont === 'indopak-nastaleeq';
+  const isTempLegacyIndopakFont = tempSettings.arabicFont === 'indopak-nastaleeq';
   const indopakAyahWarningText =
-    "IndoPak fonts in Only Arabic mode don't support Ayat by Ayat audio. Enable translation mode or change Arabic font.";
+    "IndoPak Nastaleeq (v1) in Only Arabic mode doesn't support Ayat by Ayat audio. Enable translation mode or change Arabic font.";
   const showDesktopIndopakAyahWarning =
     settings.arabicOnlyMode &&
-    isIndopakFont &&
+    isLegacyIndopakFont &&
     settings.audioMode === 'ayah';
   const showMobileIndopakAyahWarning =
     tempSettings.arabicOnlyMode &&
-    isTempIndopakFont &&
+    isTempLegacyIndopakFont &&
     tempSettings.audioMode === 'ayah';
 
   // Scroll to specific ayah
@@ -1041,8 +1039,8 @@ const QuranReader: React.FC = () => {
                     }`}
                   >
                     <option value="al-mushaf">Al Mushaf - Authentic Quranic Script</option>
-                    <option value="indopak-nastaleeq">Indopak Nastaleeq - South Asian Style</option>
-                    <option value="indopak-nastaleeq-v2">IndoPak Nastaleeq v2 (Default)</option>
+                    <option value="indopak-nastaleeq">IndoPak Nastaleeq (South India) - Default</option>
+                    <option value="indopak-nastaleeq-v2">IndoPak Nastaleeq v2 - (Tajweed)</option>
                     <option value="amiri">Amiri - Traditional Naskh</option>
                     <option value="scheherazade">Scheherazade - Classic Book Style</option>
                     <option value="noto-naskh">Noto Naskh - Clear & Readable</option>
@@ -2088,8 +2086,8 @@ const QuranReader: React.FC = () => {
                     }`}
                   >
                     <option value="al-mushaf">Al Mushaf - Authentic Quranic Script</option>
-                    <option value="indopak-nastaleeq">Indopak Nastaleeq - South Asian Style</option>
-                    <option value="indopak-nastaleeq-v2">IndoPak Nastaleeq v2 (Default)</option>
+                    <option value="indopak-nastaleeq">IndoPak Nastaleeq (South India) - Default</option>
+                    <option value="indopak-nastaleeq-v2">IndoPak Nastaleeq v2 - (Tajweed)</option>
                     <option value="amiri">Amiri - Traditional Naskh</option>
                     <option value="scheherazade">Scheherazade - Classic Book Style</option>
                     <option value="noto-naskh">Noto Naskh - Clear & Readable</option>
