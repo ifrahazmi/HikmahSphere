@@ -23,6 +23,16 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"/>
   <link rel="apple-touch-icon" sizes="167x167" href="/apple-touch-icon-167x167.png"/>
   <link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon-152x152.png"/>
+  <link rel="apple-touch-startup-image" href="/apple-splash-640-1136.png" media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"/>
+  <link rel="apple-touch-startup-image" href="/apple-splash-750-1334.png" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"/>
+  <link rel="apple-touch-startup-image" href="/apple-splash-828-1792.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"/>
+  <link rel="apple-touch-startup-image" href="/apple-splash-1125-2436.png" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"/>
+  <link rel="apple-touch-startup-image" href="/apple-splash-1170-2532.png" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"/>
+  <link rel="apple-touch-startup-image" href="/apple-splash-1179-2556.png" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"/>
+  <link rel="apple-touch-startup-image" href="/apple-splash-1242-2208.png" media="(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"/>
+  <link rel="apple-touch-startup-image" href="/apple-splash-1242-2688.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"/>
+  <link rel="apple-touch-startup-image" href="/apple-splash-1284-2778.png" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"/>
+  <link rel="apple-touch-startup-image" href="/apple-splash-1290-2796.png" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"/>
   <meta name="author" content="HikmahSphere"/>
 
   <!-- Safe og: fallbacks (Helmet overrides title/description/url/canonical per-page) -->
@@ -164,11 +174,19 @@
       (function () {
         var el = document.getElementById('flo');
         var MAX_WAIT = 4000; // never block the app beyond 4 s
+        var MIN_SHOW = 800; // keep logo visible briefly on app open
+        var startedAt = Date.now();
 
         function hide() {
           if (!el) return;
           el.classList.add('done');
           setTimeout(function () { el && el.parentNode && el.parentNode.removeChild(el); }, 400);
+        }
+
+        function hideWithMinDelay() {
+          var elapsed = Date.now() - startedAt;
+          var wait = Math.max(0, MIN_SHOW - elapsed);
+          setTimeout(hide, wait);
         }
 
         var timer = setTimeout(hide, MAX_WAIT);
@@ -179,7 +197,7 @@
             var ok = ['Amiri', 'Noto Naskh Arabic'].some(function (f) {
               return document.fonts.check('400 16px "' + f + '"');
             });
-            if (ok) { clearTimeout(timer); hide(); }
+            if (ok) { clearTimeout(timer); hideWithMinDelay(); }
             // else let the hard timeout fire — avoids infinite block on slow connections
           });
         }
