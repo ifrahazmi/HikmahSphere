@@ -32,14 +32,17 @@ import {
   formatCompactDate,
   formatDateKey,
   formatReadableDate,
+  getAggregatedStats,
   getBestStreak,
   getCurrentStreak,
+  getDailyActivity,
   getDayScore,
   getLoggedCount,
   getQuranScore,
   getSalahTrackerStorageKey,
   isPerfectDay,
   normalizeDayRecord,
+  normalizeRecords,
   parseDateKey,
   readTrackerFromStorage,
   writeTrackerToStorage,
@@ -162,6 +165,42 @@ const DEFAULT_PRAYER_TIMINGS: PrayerTimings = {
 
 const nowIso = () => new Date().toISOString();
 
+const getIsoTimestamp = (value: string): number => {
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const mergeRecordsByLatest = (localRecords: TrackerRecords, remoteRecords: TrackerRecords): TrackerRecords => {
+  const merged: TrackerRecords = {};
+  const allDateKeys = new Set([...Object.keys(localRecords), ...Object.keys(remoteRecords)]);
+
+  allDateKeys.forEach((dateKey) => {
+    const localRaw = localRecords[dateKey];
+    const remoteRaw = remoteRecords[dateKey];
+
+    if (!localRaw && remoteRaw) {
+      merged[dateKey] = normalizeDayRecord(remoteRaw);
+      return;
+    }
+
+    if (!remoteRaw && localRaw) {
+      merged[dateKey] = normalizeDayRecord(localRaw);
+      return;
+    }
+
+    if (!localRaw || !remoteRaw) return;
+
+    const localDay = normalizeDayRecord(localRaw);
+    const remoteDay = normalizeDayRecord(remoteRaw);
+    const localUpdatedAt = getIsoTimestamp(localDay.updatedAt);
+    const remoteUpdatedAt = getIsoTimestamp(remoteDay.updatedAt);
+
+    merged[dateKey] = localUpdatedAt >= remoteUpdatedAt ? localDay : remoteDay;
+  });
+
+  return merged;
+};
+
 const cleanTimeValue = (value: unknown): string => {
   if (typeof value !== 'string') return '--:--';
 
@@ -233,6 +272,8 @@ const SalahTracker: React.FC = () => {
   const [selectedDateKey, setSelectedDateKey] = useState(todayDateKey);
   const [records, setRecords] = useState<TrackerRecords>({});
   const [isStoreLoaded, setIsStoreLoaded] = useState(false);
+  const [isHydratingRemoteStore, setIsHydratingRemoteStore] = useState(false);
+  const [isRemoteSyncReady, setIsRemoteSyncReady] = useState(false);
   const [prayerTimings, setPrayerTimings] = useState<PrayerTimings>(DEFAULT_PRAYER_TIMINGS);
   const [timeSource, setTimeSource] = useState('Default prayer windows are shown.');
   const [isSyncingTimes, setIsSyncingTimes] = useState(false);
@@ -253,11 +294,60 @@ const SalahTracker: React.FC = () => {
   }, [authUser]);
 
   useEffect(() => {
+    let isCancelled = false;
+
+    const localRecords = readTrackerFromStorage(storageKey);
     setIsStoreLoaded(false);
-    setRecords(readTrackerFromStorage(storageKey));
+    setIsRemoteSyncReady(false);
+    setRecords(localRecords);
     setSelectedDateKey(formatDateKey(new Date()));
     setIsStoreLoaded(true);
-  }, [storageKey]);
+
+    const token = localStorage.getItem('token');
+    if (!authUser?.id || !token) {
+      setIsHydratingRemoteStore(false);
+      setIsRemoteSyncReady(true);
+      return () => {
+        isCancelled = true;
+      };
+    }
+
+    const hydrateRemoteStore = async () => {
+      try {
+        setIsHydratingRemoteStore(true);
+
+        const response = await fetch(`${API_URL}/salah-tracker`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Salah Tracker fetch failed: ${response.status}`);
+        }
+
+        const payload = await response.json();
+        const remoteRecords = normalizeRecords(payload?.data?.records);
+
+        if (!isCancelled) {
+          setRecords((currentRecords) => mergeRecordsByLatest(currentRecords, remoteRecords));
+        }
+      } catch (error) {
+        console.error('Failed to hydrate Salah Tracker from server:', error);
+      } finally {
+        if (!isCancelled) {
+          setIsHydratingRemoteStore(false);
+          setIsRemoteSyncReady(true);
+        }
+      }
+    };
+
+    hydrateRemoteStore();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [authUser?.id, storageKey]);
 
   useEffect(() => {
     if (!isStoreLoaded) return;
@@ -367,6 +457,57 @@ const SalahTracker: React.FC = () => {
 
   const currentStreak = useMemo(() => getCurrentStreak(records, todayDateKey), [records, todayDateKey]);
   const bestStreak = useMemo(() => getBestStreak(records), [records]);
+  const aggregateStats = useMemo(() => getAggregatedStats(records), [records]);
+  const recentActivity = useMemo(() => getDailyActivity(records, 180), [records]);
+
+  useEffect(() => {
+    if (!isStoreLoaded || isHydratingRemoteStore || !isRemoteSyncReady || !authUser?.id) return;
+
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    const syncTimer = window.setTimeout(async () => {
+      try {
+        const response = await fetch(`${API_URL}/salah-tracker`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            version: 2,
+            records,
+            stats: {
+              ...aggregateStats,
+              currentStreak,
+              bestStreak,
+            },
+            activity: recentActivity,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Salah Tracker sync failed: ${response.status}`);
+        }
+      } catch (error) {
+        console.error('Failed to sync Salah Tracker to server:', error);
+      }
+    }, 800);
+
+    return () => {
+      window.clearTimeout(syncTimer);
+    };
+  }, [
+    aggregateStats,
+    authUser?.id,
+    bestStreak,
+    currentStreak,
+    isHydratingRemoteStore,
+    isRemoteSyncReady,
+    isStoreLoaded,
+    recentActivity,
+    records,
+  ]);
 
   const trendChart = useMemo(() => {
     const width = 320;
@@ -1210,22 +1351,24 @@ const SalahTracker: React.FC = () => {
       <div className="pointer-events-none fixed -left-[99999px] top-0 z-[-1]">
         <div ref={exportPreviewRef} className="w-[1080px] rounded-[28px] border border-emerald-100 bg-white p-8 text-gray-900 shadow-2xl">
           <div className="rounded-2xl border border-emerald-100 bg-gradient-to-r from-emerald-50 to-violet-50 p-6">
-            <div>
-              <h2 className="whitespace-nowrap text-[32px] font-bold">HikmahSphere Salah and Quran Tracker Status</h2>
-              <p className="mt-2 text-sm text-gray-600">Date: {formatReadableDate(selectedDateKey)}</p>
-              <p className="mt-1 text-sm text-gray-600">
-                User: {authUser?.name} {authUser?.email ? `(${authUser.email})` : ''}
-              </p>
-              <p className="mt-1 text-sm text-violet-700">Member Since: {formatReadableDate(memberSinceDateKey)}</p>
-            </div>
+            <div className="flex items-start justify-between gap-6">
+              <div className="min-w-0 flex-1">
+                <h2 className="whitespace-nowrap text-[32px] font-bold">HikmahSphere Salah and Quran Tracker Status</h2>
+                <p className="mt-2 text-sm text-gray-600">Date: {formatReadableDate(selectedDateKey)}</p>
+                <p className="mt-1 text-sm text-gray-600">
+                  User: {authUser?.name} {authUser?.email ? `(${authUser.email})` : ''}
+                </p>
+                <p className="mt-1 text-sm text-violet-700">Member Since: {formatReadableDate(memberSinceDateKey)}</p>
+              </div>
 
-            <div className="mt-4 ml-auto max-w-[340px] rounded-xl border border-violet-100 bg-white/80 p-3 text-right">
-              <p className="text-xs italic leading-relaxed text-gray-700">
-                "Indeed, Allah does not guide him who is a transgressor and a liar."
-              </p>
-              <p className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-violet-700">
-                — Surah Ghafir, 40:28
-              </p>
+              <div className="mt-14 max-w-[340px] shrink-0 rounded-xl border border-violet-100 bg-white/80 p-3 text-right">
+                <p className="text-xs italic leading-relaxed text-gray-700">
+                  "Indeed, Allah does not guide him who is a transgressor and a liar."
+                </p>
+                <p className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-violet-700">
+                  — Surah Ghafir, 40:28
+                </p>
+              </div>
             </div>
           </div>
 

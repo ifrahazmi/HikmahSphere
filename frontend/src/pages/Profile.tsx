@@ -248,7 +248,7 @@ const Profile: React.FC = () => {
           </section>
 
           <section className="mb-6">
-            <nav className="flex gap-2 overflow-x-auto pb-1">
+            <nav className="grid grid-cols-3 gap-2 pb-1">
               {tabs.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
@@ -257,14 +257,14 @@ const Profile: React.FC = () => {
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`inline-flex shrink-0 items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition ${
+                    className={`inline-flex min-w-0 items-center justify-center gap-1.5 rounded-xl border px-2 py-2 text-xs font-medium transition sm:gap-2 sm:px-4 sm:text-sm ${
                       isActive
                         ? 'border-emerald-500 bg-emerald-600 text-white shadow-sm'
                         : 'border-gray-200 bg-white text-gray-600 hover:border-emerald-300 hover:text-emerald-700'
                     }`}
                   >
-                    <Icon className="h-4 w-4" />
-                    <span>{tab.name}</span>
+                    <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                    <span className="truncate">{tab.name}</span>
                   </button>
                 );
               })}

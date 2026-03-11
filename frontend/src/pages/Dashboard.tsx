@@ -260,12 +260,12 @@ const Dashboard: React.FC = () => {
                 </button>
             </nav>
 
-            {/* Mobile Tab Navigation - Scrollable Pills */}
-            <div className="md:hidden p-3 border-b border-gray-200 overflow-x-auto">
-                <div className="flex gap-2">
+            {/* Mobile Tab Navigation - Non-scrollable */}
+            <div className="md:hidden p-3 border-b border-gray-200">
+                <div className="grid grid-cols-2 gap-2">
                     <button
                         onClick={() => setActiveTab('overview')}
-                        className={`flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors ${
+                        className={`w-full px-3 py-2.5 text-xs sm:text-sm font-medium rounded-lg text-center leading-tight transition-colors ${
                             activeTab === 'overview'
                                 ? 'bg-emerald-500 text-white shadow-md'
                                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -277,36 +277,35 @@ const Dashboard: React.FC = () => {
                         <>
                             <button
                                 onClick={() => setActiveTab('users')}
-                                className={`flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
+                                className={`w-full px-3 py-2.5 text-xs sm:text-sm font-medium rounded-lg text-center leading-tight transition-colors ${
                                     activeTab === 'users'
                                         ? 'bg-emerald-500 text-white shadow-md'
                                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                 }`}
                             >
-                                👥 Users
+                                User Management
                             </button>
                             <button
                                 onClick={() => setActiveTab('zakat')}
-                                className={`flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                                className={`w-full px-3 py-2.5 text-xs sm:text-sm font-medium rounded-lg text-center leading-tight transition-colors ${
                                     activeTab === 'zakat'
                                         ? 'bg-emerald-500 text-white shadow-md'
                                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                 }`}
                             >
-                                <BuildingLibraryIcon className="w-4 h-4" />
-                                Zakat
+                                Zakat Management
                             </button>
                         </>
                     )}
                     <button
                         onClick={() => setActiveTab('notifications')}
-                        className={`flex-shrink-0 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
+                        className={`w-full px-3 py-2.5 text-xs sm:text-sm font-medium rounded-lg text-center leading-tight transition-colors ${
                             activeTab === 'notifications'
                                 ? 'bg-emerald-500 text-white shadow-md'
                                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                         }`}
                     >
-                        🔔 Notifications
+                        Notifications
                     </button>
                 </div>
             </div>
@@ -415,9 +414,9 @@ const Dashboard: React.FC = () => {
                             const event = new CustomEvent('export-zakat-csv');
                             window.dispatchEvent(event);
                         }}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium shadow-md"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-xs font-medium shadow-sm"
                     >
-                        <DocumentArrowDownIcon className="h-5 w-5" />
+                        <DocumentArrowDownIcon className="h-4 w-4" />
                         Export CSV
                     </button>
                     <button
@@ -425,9 +424,9 @@ const Dashboard: React.FC = () => {
                             const event = new CustomEvent('export-zakat-json');
                             window.dispatchEvent(event);
                         }}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-md"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs font-medium shadow-sm"
                     >
-                        <DocumentArrowDownIcon className="h-5 w-5" />
+                        <DocumentArrowDownIcon className="h-4 w-4" />
                         Export JSON
                     </button>
                 </div>

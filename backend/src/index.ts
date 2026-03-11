@@ -21,6 +21,7 @@ import communityRoutes from './routes/community';
 import notificationRoutes from './routes/notifications'; // Import notification routes
 import supportRoutes from './routes/support'; // Import support routes
 import activityRoutes from './routes/activity'; // Import activity log routes
+import salahTrackerRoutes from './routes/salahTracker';
 
 // Load environment variables
 // Use __dirname to resolve paths correctly regardless of whether running from src/ or dist/
@@ -114,7 +115,8 @@ app.get('/', (req, res) => {
       quran: '/api/quran',
       dhikr: '/api/dhikr',
       zakat: '/api/zakat',
-      community: '/api/community'
+      community: '/api/community',
+      salahTracker: '/api/salah-tracker',
     },
     documentation: `http://localhost:${process.env.PORT || 5000}/docs`
   });
@@ -138,6 +140,7 @@ app.get(['/api', '/api/'], (req, res) => {
       notifications: '/api/notifications',
       support: '/api/support',
       activity: '/api/activity',
+      salahTracker: '/api/salah-tracker',
     },
   });
 });
@@ -227,6 +230,7 @@ app.use('/api/community', communityRoutes);
 app.use('/api/notifications', notificationRoutes); // Use notification routes
 app.use('/api/support', supportRoutes); // Use support routes
 app.use('/api/activity', activityRoutes); // Use activity log routes
+app.use('/api/salah-tracker', salahTrackerRoutes);
 
 // Admin Routes for User Management (Restricted to Super Admin)
 // Get All Users

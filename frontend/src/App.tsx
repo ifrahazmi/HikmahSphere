@@ -13,6 +13,7 @@ import Footer from './components/Footer';
 import LoadingSpinner from './components/LoadingSpinner';
 import ProtectedRoute from './components/ProtectedRoute'; // Import ProtectedRoute
 import RamadanElitePopup from './components/RamadanElitePopup'; // Ramadan Popup
+import InstallAppPrompt from './components/InstallAppPrompt';
 
 // Pages
 import Home from './pages/Home';
@@ -175,6 +176,9 @@ const AppContent: React.FC = () => {
 
       {/* Ramadan Elite Popup */}
       <RamadanElitePopup />
+
+      {/* PWA Install Prompt */}
+      <InstallAppPrompt />
 
       {/* Global Notifications */}
       <Toaster />

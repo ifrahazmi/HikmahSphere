@@ -1,6 +1,7 @@
 {
   "short_name": "HikmahSphere",
   "name": "HikmahSphere - The Unified Islamic Digital Platform",
+  "id": "/",
   "icons": [
     {
       "src": "favicon.ico",
@@ -10,16 +11,19 @@
     {
       "src": "logo.png",
       "type": "image/png",
-      "sizes": "192x192"
+      "sizes": "499x500",
+      "purpose": "any"
     },
     {
-      "src": "small_logo.jpeg",
+      "src": "logo-home_big.png",
       "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "998x1000",
+      "purpose": "any"
     }
   ],
-  "start_url": ".",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "theme_color": "#000000",
+  "theme_color": "#059669",
   "background_color": "#ffffff"
 }

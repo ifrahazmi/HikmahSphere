@@ -1214,6 +1214,44 @@ const PrayerTimes: React.FC = () => {
   const effectiveHijriReadable = effectiveHijriDate?.readable
     || (effectiveHijriDate ? `${effectiveHijriDate.day} ${effectiveHijriDate.month.en} ${effectiveHijriDate.year}` : baseHijriReadable);
 
+  const toMinutes = (timeStr?: string): number | null => {
+    if (!timeStr) return null;
+    const parsed = parseTimeString(timeStr);
+    if (!parsed) return null;
+    return parsed.hours * 60 + parsed.minutes;
+  };
+
+  const formatMinutesForDisplay = (totalMinutes: number): string => {
+    const minutesPerDay = 24 * 60;
+    const normalized = ((Math.round(totalMinutes) % minutesPerDay) + minutesPerDay) % minutesPerDay;
+    const hours = Math.floor(normalized / 60);
+    const minutes = normalized % 60;
+    const hhmm = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    return formatTimeForDisplay(hhmm);
+  };
+
+  const sunriseMinutes = toMinutes(activePrayerData?.times?.Sunrise);
+  const dhuhrMinutes = toMinutes(activePrayerData?.times?.Dhuhr);
+  const maghribMinutes = toMinutes(activePrayerData?.times?.Maghrib);
+  const fajrMinutes = toMinutes(activePrayerData?.times?.Fajr);
+
+  const duhaStartDisplay = sunriseMinutes === null ? null : formatMinutesForDisplay(sunriseMinutes + 20);
+  const duhaEndDisplay = dhuhrMinutes === null ? null : formatMinutesForDisplay(dhuhrMinutes - 10);
+
+  let lastThirdRangeDisplay: string | null = null;
+  if (maghribMinutes !== null && fajrMinutes !== null) {
+    const minutesPerDay = 24 * 60;
+    const adjustedFajr = fajrMinutes <= maghribMinutes ? fajrMinutes + minutesPerDay : fajrMinutes;
+    const nightDuration = adjustedFajr - maghribMinutes;
+
+    if (nightDuration > 0) {
+      const lastThirdStart = adjustedFajr - nightDuration / 3;
+      const lastThirdStartDisplay = formatMinutesForDisplay(lastThirdStart);
+      const fajrDisplay = formatTimeForDisplay(activePrayerData?.times?.Fajr || '00:00');
+      lastThirdRangeDisplay = `${lastThirdStartDisplay} - ${fajrDisplay}`;
+    }
+  }
+
   // Define prayers list based on active Islamic day.
   const prayers = activePrayerData ? [
     { name: 'Fajr', time: activePrayerData.times?.Fajr, arabic: 'الفجر', description: 'Dawn Prayer', icon: MoonIcon },
@@ -1936,6 +1974,36 @@ const PrayerTimes: React.FC = () => {
                                       </div>
                                     )}
                                 </div>
+                            ) : prayer.name === 'Sunrise' ? (
+                              <div className="flex flex-col gap-1">
+                                {isCurrentPrayer && (
+                                  <div>
+                                    <span className="text-[10px] sm:text-xs font-medium text-emerald-600 uppercase tracking-wide font-bold">● Now</span>
+                                    <p className="text-sm font-bold text-emerald-700">Prayer Time</p>
+                                  </div>
+                                )}
+                                {duhaStartDisplay && (
+                                  <div className={`${isCurrentPrayer ? 'mt-1 pt-1 border-t border-gray-100' : ''}`}>
+                                    <span className="text-xs font-medium text-gray-500">Duha Starts</span>
+                                    <p className="text-sm font-bold text-emerald-600">{duhaStartDisplay}</p>
+                                  </div>
+                                )}
+                              </div>
+                            ) : prayer.name === 'Dhuhr' ? (
+                              <div className="flex flex-col gap-1">
+                                {isCurrentPrayer && (
+                                  <div>
+                                    <span className="text-[10px] sm:text-xs font-medium text-emerald-600 uppercase tracking-wide font-bold">● Now</span>
+                                    <p className="text-sm font-bold text-emerald-700">Prayer Time</p>
+                                  </div>
+                                )}
+                                {duhaEndDisplay && (
+                                  <div className={`${isCurrentPrayer ? 'mt-1 pt-1 border-t border-gray-100' : ''}`}>
+                                    <span className="text-xs font-medium text-gray-500">Duha Ends</span>
+                                    <p className="text-sm font-bold text-emerald-600">{duhaEndDisplay}</p>
+                                  </div>
+                                )}
+                              </div>
                             ) : prayer.name === 'Isha' ? (
                               <div className="flex flex-col gap-1">
                                 {isCurrentPrayer && (
@@ -1948,6 +2016,12 @@ const PrayerTimes: React.FC = () => {
                                   <div className={`${isCurrentPrayer ? 'mt-1 pt-1 border-t border-gray-100' : ''}`}>
                                     <span className="text-xs font-medium text-gray-500">Islamic Midnight</span>
                                     <p className="text-sm font-bold text-emerald-600">{formatTimeForDisplay(activePrayerData.times.Midnight)}</p>
+                                  </div>
+                                )}
+                                {lastThirdRangeDisplay && (
+                                  <div className={`${activePrayerData?.times?.Midnight ? 'mt-1 pt-1 border-t border-gray-100' : ''}`}>
+                                    <span className="text-xs font-medium text-gray-500">Last Third of Night</span>
+                                    <p className="text-sm font-bold text-emerald-600">{lastThirdRangeDisplay}</p>
                                   </div>
                                 )}
                               </div>
