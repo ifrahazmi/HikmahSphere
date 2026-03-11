@@ -104,15 +104,19 @@ const QuranReader: React.FC = () => {
 
   // Auto-hide header on scroll
   const [showHeader, setShowHeader] = useState(true);
+  const isIndopakFont =
+    settings.arabicFont === 'indopak-nastaleeq' || settings.arabicFont === 'indopak-nastaleeq-v2';
+  const isTempIndopakFont =
+    tempSettings.arabicFont === 'indopak-nastaleeq' || tempSettings.arabicFont === 'indopak-nastaleeq-v2';
   const indopakAyahWarningText =
-    "IndoPak font in Only Arabic mode doesn't support Ayat by Ayat audio. Enable translation mode or change Arabic font.";
+    "IndoPak fonts in Only Arabic mode don't support Ayat by Ayat audio. Enable translation mode or change Arabic font.";
   const showDesktopIndopakAyahWarning =
     settings.arabicOnlyMode &&
-    settings.arabicFont === 'indopak-nastaleeq' &&
+    isIndopakFont &&
     settings.audioMode === 'ayah';
   const showMobileIndopakAyahWarning =
     tempSettings.arabicOnlyMode &&
-    tempSettings.arabicFont === 'indopak-nastaleeq' &&
+    isTempIndopakFont &&
     tempSettings.audioMode === 'ayah';
 
   // Scroll to specific ayah
@@ -399,6 +403,7 @@ const QuranReader: React.FC = () => {
     const fontMap: Record<string, string> = {
       'al-mushaf': 'font-al-mushaf',
       'indopak-nastaleeq': 'font-indopak-nastaleeq',
+      'indopak-nastaleeq-v2': 'font-indopak-nastaleeq-v2',
       'amiri': 'font-arabic',
       'scheherazade': 'font-scheherazade',
       'noto-naskh': 'font-noto-naskh',
@@ -459,6 +464,12 @@ const QuranReader: React.FC = () => {
     return text;
   };
 
+  // IndoPak v2 DB includes private-use ayah marker glyphs (e.g. U+F500+).
+  // Remove them completely from display text for v2 rendering.
+  const stripIndopakV2AyahEndMarker = (text: string): string => (
+    text.replace(/[\uF500-\uF8FF]+/g, '')
+  );
+
   const INDO_PAK_MARKERS = new Set(['ۚ', 'ۖ', 'ۗ', 'ۘ', 'ۜ', '۩', '۝', 'مـ', 'صلی', 'قلی']);
   const COMBINING_WAQF_MARKERS = new Set(['ۚ', 'ۖ', 'ۗ', 'ۘ', 'ۜ']);
   const markerSplitPattern = /(مـ|صلی|قلی|[ۚۖۗۘۜ۩۝])/g;
@@ -492,7 +503,7 @@ const QuranReader: React.FC = () => {
   };
 
   const getActualLineHeight = () => {
-    if (settings.arabicFont === 'indopak-nastaleeq') {
+    if (settings.arabicFont === 'indopak-nastaleeq' || settings.arabicFont === 'indopak-nastaleeq-v2') {
       return Math.max(settings.lineSpacing, 2.15);
     }
     return settings.lineSpacing;
@@ -1029,8 +1040,9 @@ const QuranReader: React.FC = () => {
                         : 'bg-white border-gray-300 text-gray-900'
                     }`}
                   >
-                    <option value="al-mushaf">Al Mushaf - Authentic Quranic Script (Default)</option>
+                    <option value="al-mushaf">Al Mushaf - Authentic Quranic Script</option>
                     <option value="indopak-nastaleeq">Indopak Nastaleeq - South Asian Style</option>
+                    <option value="indopak-nastaleeq-v2">IndoPak Nastaleeq v2 (Default)</option>
                     <option value="amiri">Amiri - Traditional Naskh</option>
                     <option value="scheherazade">Scheherazade - Classic Book Style</option>
                     <option value="noto-naskh">Noto Naskh - Clear & Readable</option>
@@ -1674,7 +1686,9 @@ const QuranReader: React.FC = () => {
                                 onClick={(e) => handleAyahClick(e, surahData.number, ayah.numberInSurah)}
                                 className={`cursor-pointer hover:bg-emerald-100 hover:bg-opacity-30 rounded px-1 ${bgClass} ${isSelectedForBookmark ? 'bg-emerald-400 bg-opacity-40 ring-2 ring-emerald-500' : ''}`}
                               >
-                                {removeBismillah(ayah.text, surahData.number, ayah.numberInSurah)}
+                                {settings.arabicFont === 'indopak-nastaleeq-v2'
+                                  ? stripIndopakV2AyahEndMarker(ayah.text)
+                                  : removeBismillah(ayah.text, surahData.number, ayah.numberInSurah)}
                               </span>
                               {' '}
                               {/* Play button for Arabic-only mode - BEFORE ayah number */}
@@ -1753,7 +1767,9 @@ const QuranReader: React.FC = () => {
                                       onClick={(e) => handleAyahClick(e, surahData.number, ayah.numberInSurah)}
                                       className={`cursor-pointer hover:bg-emerald-100 hover:bg-opacity-30 rounded px-1 ${bgClass} ${isSelectedForBookmark ? 'bg-emerald-400 bg-opacity-40 ring-2 ring-emerald-500' : ''}`}
                                     >
-                                      {removeBismillah(ayah.text, surahData.number, ayah.numberInSurah)}
+                                      {settings.arabicFont === 'indopak-nastaleeq-v2'
+                                        ? stripIndopakV2AyahEndMarker(ayah.text)
+                                        : removeBismillah(ayah.text, surahData.number, ayah.numberInSurah)}
                                     </span>
                                     {' '}
                                     <span
@@ -2071,8 +2087,9 @@ const QuranReader: React.FC = () => {
                         : 'bg-white border-gray-300 text-gray-900'
                     }`}
                   >
-                    <option value="al-mushaf">Al Mushaf - Authentic Quranic Script (Default)</option>
+                    <option value="al-mushaf">Al Mushaf - Authentic Quranic Script</option>
                     <option value="indopak-nastaleeq">Indopak Nastaleeq - South Asian Style</option>
+                    <option value="indopak-nastaleeq-v2">IndoPak Nastaleeq v2 (Default)</option>
                     <option value="amiri">Amiri - Traditional Naskh</option>
                     <option value="scheherazade">Scheherazade - Classic Book Style</option>
                     <option value="noto-naskh">Noto Naskh - Clear & Readable</option>

@@ -114,6 +114,21 @@ code {
   text-rendering: optimizeLegibility;
 }
 
+@font-face {
+  font-family: 'IndoPak Nastaleeq v2';
+  src: url('./data/Al Qalam Quran Majeed 1 Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+.font-indopak-nastaleeq-v2 {
+  font-family: 'IndoPak Nastaleeq v2', 'Indopak Nastaleeq', 'Noto Naskh Arabic', serif;
+  font-variant-ligatures: contextual common-ligatures;
+  font-feature-settings: "mark" 1, "mkmk" 1, "calt" 1;
+  text-rendering: optimizeLegibility;
+}
+
 .indopak-waqf-marker {
   display: inline-block;
   font-family: 'Noto Naskh Arabic', 'Amiri', serif;

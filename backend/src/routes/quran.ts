@@ -1,4 +1,7 @@
 import express from 'express';
+import fs from 'fs';
+import path from 'path';
+import { DatabaseSync } from 'node:sqlite';
 import { query, validationResult } from 'express-validator';
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth';
 import User from '../models/User';
@@ -7,6 +10,7 @@ const router = express.Router();
 
 // Al-Quran Cloud API Configuration
 const QURAN_API_BASE = 'https://api.alquran.cloud/v1';
+const INDOPAK_V2_DB_PATH = path.resolve(__dirname, '..', 'data', 'indopak-nastaleeq_v2.db');
 
 type BookmarkColor = 'emerald' | 'blue' | 'purple' | 'amber' | 'rose';
 
@@ -26,6 +30,39 @@ interface UserStateLastRead {
   surahName?: string;
   timestamp: Date;
 }
+
+interface IndoPakV2VerseRow {
+  id: number;
+  verse_key: string;
+  surah: number;
+  ayah: number;
+  text: string;
+}
+
+let indopakV2Db: DatabaseSync | null = null;
+
+const getIndoPakV2Db = (): DatabaseSync => {
+  if (indopakV2Db) return indopakV2Db;
+
+  if (!fs.existsSync(INDOPAK_V2_DB_PATH)) {
+    throw new Error(`IndoPak Nastaleeq v2 database not found at ${INDOPAK_V2_DB_PATH}`);
+  }
+
+  indopakV2Db = new DatabaseSync(INDOPAK_V2_DB_PATH, { readOnly: true });
+  return indopakV2Db;
+};
+
+const getIndoPakV2SurahRows = (surahNumber: number): IndoPakV2VerseRow[] => {
+  const db = getIndoPakV2Db();
+  const statement = db.prepare(`
+    SELECT id, verse_key, surah, ayah, text
+    FROM verses
+    WHERE surah = ?
+    ORDER BY ayah ASC
+  `);
+
+  return statement.all(surahNumber) as unknown as IndoPakV2VerseRow[];
+};
 
 const isBookmarkColor = (value: unknown): value is BookmarkColor => {
   return typeof value === 'string' && ['emerald', 'blue', 'purple', 'amber', 'rose'].includes(value);
@@ -324,6 +361,51 @@ router.get('/surah/:number', [
       status: 'error',
       message: 'Failed to fetch surah',
       details: error.message
+    });
+  }
+});
+
+/**
+ * @route   GET /api/quran/surah/:number/indopak-v2
+ * @desc    Get specific surah from local IndoPak Nastaleeq v2 SQLite database
+ * @access  Public
+ */
+router.get('/surah/:number/indopak-v2', optionalAuthMiddleware, (req: any, res: any) => {
+  try {
+    const { number } = req.params;
+
+    const surahNum = parseInt(number, 10);
+    if (isNaN(surahNum) || surahNum < 1 || surahNum > 114) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid surah number. Must be between 1 and 114',
+      });
+    }
+
+    const rows = getIndoPakV2SurahRows(surahNum);
+
+    if (!rows.length) {
+      return res.status(404).json({
+        status: 'error',
+        message: `No ayahs found for Surah ${surahNum} in IndoPak Nastaleeq v2 database`,
+      });
+    }
+
+    return res.json({
+      status: 'success',
+      data: {
+        fontName: 'IndoPak Nastaleeq v2',
+        source: 'indopak-nastaleeq_v2.db',
+        surah: surahNum,
+        rows,
+      },
+    });
+  } catch (error: any) {
+    console.error('IndoPak Nastaleeq v2 API error:', error.message);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch IndoPak Nastaleeq v2 surah data',
+      details: error.message,
     });
   }
 });

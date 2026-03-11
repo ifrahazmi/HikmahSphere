@@ -19,7 +19,7 @@
     "type-check": "tsc --noEmit",
     "clean": "rm -rf dist",
     "prebuild": "npm run clean",
-    "postbuild": "cp package.json dist/",
+    "postbuild": "cp package.json dist/ && mkdir -p dist/data && cp src/data/indopak-nastaleeq_v2.db dist/data/indopak-nastaleeq_v2.db",
     "docker:build": "docker build -t hikmahsphere-backend .",
     "docker:run": "docker run -p 5000:5000 hikmahsphere-backend"
   },

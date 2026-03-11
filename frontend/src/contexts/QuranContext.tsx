@@ -351,7 +351,44 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       
       if (data.status === 'success') {
         // First edition is always Arabic
-        setSurahData(data.data[0]);
+        let arabicEdition: SurahData = data.data[0];
+
+        if (settings.arabicFont === 'indopak-nastaleeq-v2') {
+          try {
+            const indopakV2Response = await fetch(`${API_URL}/quran/surah/${surahNumber}/indopak-v2`);
+            const indopakV2Data = await indopakV2Response.json();
+
+            if (indopakV2Data.status === 'success' && Array.isArray(indopakV2Data.data?.rows)) {
+              const ayahTextMap = new Map<number, string>();
+
+              indopakV2Data.data.rows.forEach((row: { ayah: number; text: string }) => {
+                if (typeof row.ayah === 'number' && typeof row.text === 'string') {
+                  ayahTextMap.set(row.ayah, row.text);
+                }
+              });
+
+              if (ayahTextMap.size > 0) {
+                arabicEdition = {
+                  ...arabicEdition,
+                  edition: {
+                    ...arabicEdition.edition,
+                    identifier: 'indopak.nastaleeq.v2',
+                    name: 'IndoPak Nastaleeq v2',
+                    englishName: 'IndoPak Nastaleeq v2',
+                  },
+                  ayahs: arabicEdition.ayahs.map((ayah) => ({
+                    ...ayah,
+                    text: ayahTextMap.get(ayah.numberInSurah) ?? ayah.text,
+                  })),
+                };
+              }
+            }
+          } catch (indopakError) {
+            console.error('Failed to load IndoPak Nastaleeq v2 data:', indopakError);
+          }
+        }
+
+        setSurahData(arabicEdition);
         
         if (settings.arabicOnlyMode) {
           // In Arabic-only mode, clear translations and transliteration
@@ -379,7 +416,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     } finally {
       setLoading(false);
     }
-  }, [settings.selectedTranslations, settings.showTransliteration, settings.arabicOnlyMode]);
+  }, [settings.selectedTranslations, settings.showTransliteration, settings.arabicOnlyMode, settings.arabicFont]);
 
   // Update settings and reload if necessary
   const updateSettings = useCallback((newSettings: Partial<QuranSettings>) => {
@@ -1122,7 +1159,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       loadSurahData(currentSurah);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.showTransliteration, settings.arabicOnlyMode, JSON.stringify(settings.selectedTranslations)]);
+  }, [settings.showTransliteration, settings.arabicOnlyMode, settings.arabicFont, JSON.stringify(settings.selectedTranslations)]);
 
   const value: QuranContextType = {
     currentSurah,
