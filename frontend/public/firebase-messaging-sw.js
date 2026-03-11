@@ -1,10 +1,11 @@
 // Give the service worker access to Firebase Messaging.
 // Note that you can only use Firebase Messaging here. Other Firebase libraries
 // are not available in the service worker.
-importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js');
+// Version 10.x adds iOS 16.4+ web push (APNs) support.
+importScripts('https://www.gstatic.com/firebasejs/10.7.2/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/10.7.2/firebase-messaging-compat.js');
 
-const CACHE_NAME = 'hikmahsphere-app-v1';
+const CACHE_NAME = 'hikmahsphere-app-v2';
 const APP_SHELL = ['/', '/index.html', '/manifest.json', '/logo.png', '/favicon.ico'];
 
 // Initialize the Firebase app in the service worker by passing in
@@ -181,5 +182,49 @@ self.addEventListener('notificationclick', function(event) {
 
       return undefined;
     })
+  );
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// iOS 16.4+ PWA fallback: Firebase Messaging compat (10.x) internally registers
+// its own `push` listener, which should handle iOS web push notifications.
+// However, if a raw `push` event is NOT handled by Firebase (e.g. the payload
+// doesn't conform to FCM format), this secondary handler will catch it.
+//
+// We use a SharedWorker-style flag written synchronously via postMessage back
+// to ourselves to avoid double-notifications; but the simpler and safer approach
+// is to check `event.data` and act only if there is no `gcm_message_id` field
+// (which FCM always sets – indicating Firebase did NOT handle it).
+// ──────────────────────────────────────────────────────────────────────────────
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+
+  let payload;
+  try {
+    payload = event.data.json();
+  } catch (e) {
+    return; // Not JSON – ignore
+  }
+
+  // FCM-handled messages always contain `gcm_message_id`; Firebase Messaging
+  // compat will have already shown the notification for those.  We only handle
+  // raw web-push payloads that Firebase did NOT intercept (non-FCM format).
+  if (payload?.gcm_message_id || payload?.['google.c.sender.id']) return;
+
+  const title = payload?.notification?.title || payload?.data?.title || 'HikmahSphere';
+  const body  = payload?.notification?.body  || payload?.data?.body  || '';
+  const normalizedPayload = createNotificationPayload(payload);
+
+  event.waitUntil(
+    Promise.all([
+      broadcastToOpenClients({ type: APP_MESSAGE_TYPE, payload: normalizedPayload }).catch(() => {}),
+      self.registration.showNotification(title, {
+        body,
+        icon: '/small_logo.jpeg',
+        badge: '/small_logo.jpeg',
+        vibrate: [200, 100, 200],
+        data: { url: payload?.data?.url || '/', notificationPayload: normalizedPayload },
+      }),
+    ])
   );
 });

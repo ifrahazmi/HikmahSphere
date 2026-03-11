@@ -755,11 +755,23 @@ const DhikrDua: React.FC = () => {
       const sendNotification = (key: string, title: string, body: string, oncePerDay: boolean) => {
         if (oncePerDay && lastSent[key] === today) return;
 
-        new Notification(title, {
+        // On iOS PWA (and Android PWA), `new Notification()` is not allowed from
+        // the page context – we must route through the service worker registration.
+        const options: NotificationOptions = {
           body,
           icon: '/logo.png',
           badge: '/logo.png',
-        });
+        };
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.ready
+            .then((registration) => registration.showNotification(title, options))
+            .catch(() => {
+              // Fallback for environments where SW is not ready
+              try { new Notification(title, options); } catch (_) {}
+            });
+        } else {
+          try { new Notification(title, options); } catch (_) {}
+        }
 
         lastSent[key] = oncePerDay ? today : new Date().toISOString();
         saveLastSent();

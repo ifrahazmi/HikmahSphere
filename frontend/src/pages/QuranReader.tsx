@@ -67,6 +67,8 @@ const QuranReader: React.FC = () => {
     color?: 'emerald' | 'blue' | 'purple' | 'amber' | 'rose';
   } | null>(null);
   const [selectedAyahForBookmark, setSelectedAyahForBookmark] = useState<{surah: number, ayah: number} | null>(null);
+  // Track visual viewport for iOS keyboard-aware bookmark modal positioning
+  const [bookmarkModalViewport, setBookmarkModalViewport] = useState<{ height: number; offsetTop: number } | null>(null);
 
   // Indopak Quran data state
   const [indopakData, setIndopakData] = useState<Map<number, IndopakSurah> | null>(null);
@@ -238,11 +240,13 @@ const QuranReader: React.FC = () => {
   }, []);
 
   // Lock background scroll while any front overlay/modal is open.
+  // NOTE: bookmarkConfirm is intentionally excluded — locking the body (position:fixed)
+  // breaks Android PWA keyboard positioning for the bookmark modal's note input.
+  // The full-screen backdrop already prevents accidental background interaction.
   useEffect(() => {
     const shouldLockBody =
       showMobileSettings ||
-      showSurahSearch ||
-      Boolean(bookmarkConfirm);
+      showSurahSearch;
 
     if (shouldLockBody) {
       if (lockedScrollYRef.current !== null) return;
@@ -268,7 +272,7 @@ const QuranReader: React.FC = () => {
       document.body.style.overflow = '';
       window.scrollTo(0, restoreScrollY);
     }
-  }, [showMobileSettings, showSurahSearch, bookmarkConfirm]);
+  }, [showMobileSettings, showSurahSearch]);
 
   useEffect(() => {
     return () => {
@@ -556,6 +560,36 @@ const QuranReader: React.FC = () => {
     }, 100);
     
     return () => clearTimeout(timeoutId);
+  }, [bookmarkConfirm]);
+
+  // Track visual viewport height/offset so the mobile bookmark modal stays
+  // above the on-screen keyboard on both iOS and Android PWA.
+  // Android Chrome fires `window.resize` when the keyboard opens; iOS fires
+  // `visualViewport.resize`.  We listen to all three events for full coverage.
+  useEffect(() => {
+    if (!bookmarkConfirm) {
+      setBookmarkModalViewport(null);
+      return;
+    }
+    const vv = window.visualViewport;
+    const update = () => {
+      if (vv) {
+        setBookmarkModalViewport({ height: vv.height, offsetTop: vv.offsetTop });
+      } else {
+        // Fallback: use window.innerHeight (works on Android when visualViewport is absent)
+        setBookmarkModalViewport({ height: window.innerHeight, offsetTop: 0 });
+      }
+    };
+    update();
+    vv?.addEventListener('resize', update);
+    vv?.addEventListener('scroll', update);
+    // Fallback for Android Chrome which fires window resize on keyboard open/close
+    window.addEventListener('resize', update);
+    return () => {
+      vv?.removeEventListener('resize', update);
+      vv?.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
   }, [bookmarkConfirm]);
 
   const timelineMax = Math.max(audioDuration, audioCurrentTime, 1);
@@ -2460,9 +2494,13 @@ const QuranReader: React.FC = () => {
       {/* Bookmark Confirmation Popup */}
       {bookmarkConfirm && (
         <>
-          {/* Mobile - Centered Modal */}
+          {/* Mobile - Centered Modal (viewport-aware for iOS keyboard) */}
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50 backdrop-blur-sm lg:hidden"
+            className="fixed inset-x-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50 backdrop-blur-sm lg:hidden"
+            style={{
+              top: bookmarkModalViewport?.offsetTop ?? 0,
+              height: bookmarkModalViewport ? `${bookmarkModalViewport.height}px` : '100dvh',
+            }}
             onClick={(e) => {
               setBookmarkConfirm(null);
             }}
@@ -2471,6 +2509,7 @@ const QuranReader: React.FC = () => {
               className={`relative w-full max-w-sm rounded-xl shadow-2xl border-2 border-emerald-500 p-4 ${
                 settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'
               }`}
+              style={{ overflowY: 'auto', maxHeight: '90%' }}
               onClick={(e) => e.stopPropagation()}
             >
               {/* Close button for mobile */}
@@ -2503,7 +2542,6 @@ const QuranReader: React.FC = () => {
                           ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
                           : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
                       }`}
-                      autoFocus
                     />
                   </div>
 

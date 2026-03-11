@@ -85,74 +85,93 @@ export const getPushSupportInfo = async (): Promise<PushSupportInfo> => {
 // Request permission and get token
 export const requestForToken = async () => {
   console.log('Checking messaging support...');
-  const msg = await messagingPromise;
   const supportInfo = await getPushSupportInfo();
 
   if (supportInfo.limitations.length > 0) {
     supportInfo.limitations.forEach((limitation) => console.warn(`[Push Support] ${limitation}`));
   }
 
-  if (!msg) {
-    console.warn("Messaging not supported/initialized. Attempting to request permission natively for debugging...");
-    // Fallback: Request permission anyway so users can still see native browser behavior.
-    if ('Notification' in window) {
-      try {
-        const permission = await Notification.requestPermission();
-        console.log(`Native notification permission result: ${permission}`);
-      } catch (e) {
-        console.error("Native permission request failed:", e);
-      }
-    }
+  // On iOS standalone PWA, `isSupported()` may return false even though iOS 16.4+
+  // supports web push.  Re-try initialising messaging after permission is granted.
+  let msg = await messagingPromise;
+
+  if (!('Notification' in window)) {
+    console.warn('Notification API not available.');
     return null;
   }
 
-  console.log('Requesting permission for Firebase...');
+  console.log('Requesting notification permission...');
+  let permission: NotificationPermission;
   try {
-    const permission = await Notification.requestPermission();
-    if (permission === 'granted') {
-        console.log('Notification permission granted.');
+    permission = await Notification.requestPermission();
+  } catch (e) {
+    console.error('Permission request failed:', e);
+    return null;
+  }
 
-        const vapidKey = process.env.REACT_APP_FIREBASE_VAPID_KEY || 'BMKXPfAlQOob4fha6L9Pos9_rcJxMsdCr-Z2uR0FrVOHqhMXTTD1qg133D5AN2klLzFIg8ii0iMEqccgdfSLLTY';
+  if (permission !== 'granted') {
+    console.log('Notification permission denied.');
+    return null;
+  }
 
-        const currentToken = await getToken(msg, { vapidKey });
+  console.log('Notification permission granted.');
 
-        if (currentToken) {
-          return currentToken;
-        } else {
-          console.log('No registration token available. Request permission to generate one.');
-          if (supportInfo.isIOS && !supportInfo.isStandalone) {
-            console.warn('Install HikmahSphere to Home Screen on iPhone/iPad, then allow notifications.');
-          }
-          return null;
-        }
-    } else {
-        console.log('Notification permission denied.');
-        return null;
+  // If Firebase Messaging wasn't supported at init time (common on iOS),
+  // try to initialise it now that we have permission and a service worker.
+  if (!msg) {
+    try {
+      const { isSupported: isSup, getMessaging: getMsg } = await import('firebase/messaging');
+      if (await isSup()) {
+        msg = getMsg(app);
+        messaging = msg;
+        console.log('Firebase Messaging (re)initialised after permission grant.');
+      }
+    } catch (e) {
+      console.warn('Could not (re)initialise Firebase Messaging:', e);
     }
+  }
+
+  if (!msg) {
+    console.warn('Firebase Messaging unavailable; push notifications may not work on this device.');
+    return null;
+  }
+
+  try {
+    const vapidKey = process.env.REACT_APP_FIREBASE_VAPID_KEY || 'BMKXPfAlQOob4fha6L9Pos9_rcJxMsdCr-Z2uR0FrVOHqhMXTTD1qg133D5AN2klLzFIg8ii0iMEqccgdfSLLTY';
+    const currentToken = await getToken(msg, { vapidKey });
+
+    if (currentToken) {
+      return currentToken;
+    }
+
+    console.log('No registration token available.');
+    if (supportInfo.isIOS && !supportInfo.isStandalone) {
+      console.warn('Install HikmahSphere to Home Screen on iPhone/iPad, then allow notifications.');
+    }
+    return null;
   } catch (err) {
-    console.error('An error occurred while retrieving token. ', err);
+    console.error('An error occurred while retrieving token.', err);
     return null;
   }
 };
 
-// Handle incoming messages - now accepts a callback
-export const onMessageListener = (callback: (payload: MessagePayload) => void) => {
-  // Wait for messaging to initialize if it hasn't
-  if (messaging) {
-    return onMessage(messaging, (payload) => {
-      callback(payload);
-    });
-  } else {
-    messagingPromise.then(msg => {
-      if (msg) {
-        onMessage(msg, (payload) => {
-          callback(payload);
-        });
-      }
-    });
-    // Return dummy unsubscribe since we can't return the real one synchronously if not ready
-    return () => {}; 
-  }
+// Handle incoming foreground messages.
+// Always waits for the async messaging initialisation so the unsubscribe
+// function returned is reliable (fixes a cleanup bug where messaging was
+// not yet initialised when the listener was registered).
+export const onMessageListener = (callback: (payload: MessagePayload) => void): (() => void) => {
+  let unsubscribe: (() => void) | null = null;
+  let cancelled = false;
+
+  messagingPromise.then(msg => {
+    if (cancelled || !msg) return;
+    unsubscribe = onMessage(msg, callback);
+  });
+
+  return () => {
+    cancelled = true;
+    if (unsubscribe) unsubscribe();
+  };
 };
 
 export { messaging, app, analytics };
