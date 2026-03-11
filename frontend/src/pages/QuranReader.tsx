@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   BookOpenIcon,
   MagnifyingGlassIcon,
@@ -45,7 +45,6 @@ const QuranReader: React.FC = () => {
     isAudioLoading,
     currentPlayingAyah,
     currentPlayingSurah,
-    audioProgress,
     audioDuration,
     audioCurrentTime,
     currentQueueIndex,
@@ -94,6 +93,7 @@ const QuranReader: React.FC = () => {
   const [showSurahSearch, setShowSurahSearch] = useState(false);
   const [tempSettings, setTempSettings] = useState(settings);
   const [selectedAyahForPlay, setSelectedAyahForPlay] = useState<{surah: number, ayah: number} | null>(null);
+  const lockedScrollYRef = useRef<number | null>(null);
   
   // Enhanced mobile search state
   const [searchFilter, setSearchFilter] = useState<'all' | 'surah' | 'juz' | 'page'>('all');
@@ -232,6 +232,55 @@ const QuranReader: React.FC = () => {
 
     return () => {
       window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
+  // Lock background scroll while any front overlay/modal is open.
+  useEffect(() => {
+    const shouldLockBody =
+      showMobileSettings ||
+      showSurahSearch ||
+      Boolean(bookmarkConfirm);
+
+    if (shouldLockBody) {
+      if (lockedScrollYRef.current !== null) return;
+
+      lockedScrollYRef.current = window.scrollY;
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${lockedScrollYRef.current}px`;
+      document.body.style.left = '0';
+      document.body.style.right = '0';
+      document.body.style.width = '100%';
+      document.body.style.overflow = 'hidden';
+      return;
+    }
+
+    if (lockedScrollYRef.current !== null) {
+      const restoreScrollY = lockedScrollYRef.current;
+      lockedScrollYRef.current = null;
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.left = '';
+      document.body.style.right = '';
+      document.body.style.width = '';
+      document.body.style.overflow = '';
+      window.scrollTo(0, restoreScrollY);
+    }
+  }, [showMobileSettings, showSurahSearch, bookmarkConfirm]);
+
+  useEffect(() => {
+    return () => {
+      if (lockedScrollYRef.current !== null) {
+        const restoreScrollY = lockedScrollYRef.current;
+        lockedScrollYRef.current = null;
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.left = '';
+        document.body.style.right = '';
+        document.body.style.width = '';
+        document.body.style.overflow = '';
+        window.scrollTo(0, restoreScrollY);
+      }
     };
   }, []);
 
@@ -420,6 +469,9 @@ const QuranReader: React.FC = () => {
     const normalizedText = text
       .replace(/صلى/g, 'صلی')
       .replace(/قلى/g, 'قلی')
+      // Remove qaf/tah-style stop symbols requested by user (IndoPak-only path).
+      .replace(/[\u0615\u06D7\u08D7]/g, '') // small-high tah / qaf variants
+      .replace(/[\uE01C\uE021]/g, '') // qaf/tah stop glyphs encoded in IndoPak private-use area
       .replace(/\s+/g, ' ')
       .trim();
 
@@ -496,6 +548,15 @@ const QuranReader: React.FC = () => {
     
     return () => clearTimeout(timeoutId);
   }, [bookmarkConfirm]);
+
+  const timelineMax = Math.max(audioDuration, audioCurrentTime, 1);
+  const timelineValue = Math.min(audioCurrentTime, timelineMax);
+  const formatPlayerTime = (seconds: number) => {
+    const safe = Number.isFinite(seconds) && seconds > 0 ? seconds : 0;
+    const min = Math.floor(safe / 60);
+    const sec = Math.floor(safe % 60).toString().padStart(2, '0');
+    return `${min}:${sec}`;
+  };
 
   return (
     <>
@@ -2655,23 +2716,20 @@ const QuranReader: React.FC = () => {
               {(isPlaying || isPaused) && (
                 <div className="flex items-center gap-3">
                   <span className={`text-xs w-10 ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                    {Math.floor(audioCurrentTime / 60)}:{Math.floor(audioCurrentTime % 60).toString().padStart(2, '0')}
+                    {formatPlayerTime(audioCurrentTime)}
                   </span>
-                  <div
-                    className="flex-1 h-1.5 bg-gray-300 rounded-full overflow-hidden cursor-pointer"
-                    onClick={(e) => {
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      const percent = (e.clientX - rect.left) / rect.width;
-                      seekAudio(percent * audioDuration);
-                    }}
-                  >
-                    <div
-                      className="h-full bg-emerald-500 transition-all duration-300"
-                      style={{ width: `${audioProgress}%` }}
-                    />
-                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={timelineMax}
+                    step={1}
+                    value={timelineValue}
+                    onChange={(e) => seekAudio(Number(e.target.value))}
+                    className="h-1.5 flex-1 cursor-pointer appearance-none rounded-lg bg-gray-300 accent-emerald-500"
+                    aria-label="Seek audio position"
+                  />
                   <span className={`text-xs w-10 text-right ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                    {Math.floor(audioDuration / 60)}:{Math.floor(audioDuration % 60).toString().padStart(2, '0')}
+                    {formatPlayerTime(audioDuration)}
                   </span>
                 </div>
               )}
@@ -2785,23 +2843,20 @@ const QuranReader: React.FC = () => {
               {/* Progress Bar */}
               <div className="flex items-center gap-3">
                 <span className={`text-xs w-10 ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                  {Math.floor(audioCurrentTime / 60)}:{Math.floor(audioCurrentTime % 60).toString().padStart(2, '0')}
+                  {formatPlayerTime(audioCurrentTime)}
                 </span>
-                <div
-                  className="flex-1 h-1.5 bg-gray-300 rounded-full overflow-hidden cursor-pointer"
-                  onClick={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const percent = (e.clientX - rect.left) / rect.width;
-                    seekAudio(percent * audioDuration);
-                  }}
-                >
-                  <div
-                    className="h-full bg-emerald-500 transition-all duration-300"
-                    style={{ width: `${audioProgress}%` }}
-                  />
-                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={timelineMax}
+                  step={1}
+                  value={timelineValue}
+                  onChange={(e) => seekAudio(Number(e.target.value))}
+                  className="h-1.5 flex-1 cursor-pointer appearance-none rounded-lg bg-gray-300 accent-emerald-500"
+                  aria-label="Seek audio position"
+                />
                 <span className={`text-xs w-10 text-right ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                  {Math.floor(audioDuration / 60)}:{Math.floor(audioDuration % 60).toString().padStart(2, '0')}
+                  {formatPlayerTime(audioDuration)}
                 </span>
               </div>
             </div>

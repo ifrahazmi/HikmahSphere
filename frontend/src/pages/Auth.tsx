@@ -139,7 +139,7 @@ const Auth: React.FC = () => {
         noIndex
         noFollow
       />
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-950 py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+      <div className="min-h-screen flex items-start justify-center bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-950 pt-14 pb-4 sm:items-center sm:py-6 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
       {/* Animated Background Pattern */}
       <div className="absolute inset-0 opacity-5">
         <div className="absolute inset-0" style={{
@@ -206,7 +206,7 @@ const Auth: React.FC = () => {
         <div className="w-full lg:w-1/2 max-w-md">
           <div className="bg-white rounded-3xl shadow-2xl p-8 backdrop-blur-sm bg-white/95">
             <div>
-              <div className="lg:hidden mx-auto h-20 w-20 flex items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 shadow-lg overflow-hidden p-2 mb-4">
+              <div className="lg:hidden mx-auto h-20 w-20 flex items-center justify-center rounded-full bg-white shadow-lg overflow-hidden p-2 mb-4">
                 <img src="/logo.png" alt="HikmahSphere Logo" className="h-full w-full object-cover rounded-full" />
               </div>
               <h2 className="text-center text-3xl font-bold text-gray-900">

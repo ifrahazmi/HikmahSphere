@@ -6,6 +6,7 @@ import {
   Bars3Icon,
   XMarkIcon,
   UserIcon,
+  CalendarDaysIcon,
   Cog6ToothIcon,
   ArrowRightOnRectangleIcon
 } from '@heroicons/react/24/outline';
@@ -189,6 +190,19 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                         <UserIcon className="h-4 w-4 mr-2" />
                         Profile
                       </Link>
+
+                      <Link
+                        to="/salah-tracker"
+                        className={`flex items-center px-4 py-2 text-sm ${
+                          isDark
+                            ? 'text-gray-300 hover:bg-gray-600'
+                            : 'text-gray-700 hover:bg-gray-100'
+                        }`}
+                        onClick={() => setIsProfileOpen(false)}
+                      >
+                        <CalendarDaysIcon className="h-4 w-4 mr-2" />
+                        Salah Tracker
+                      </Link>
                       
                       {/* Dashboard only for Super Admin */}
                       {isSuperAdmin && (
@@ -300,6 +314,17 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                     onClick={() => setIsOpen(false)}
                   >
                     Profile
+                  </Link>
+                  <Link
+                    to="/salah-tracker"
+                    className={`block px-3 py-2 text-base font-medium transition-colors duration-200 ${
+                      isDark
+                        ? 'text-gray-300 hover:text-emerald-400 hover:bg-gray-700'
+                        : 'text-gray-700 hover:text-emerald-600 hover:bg-emerald-50'
+                    }`}
+                    onClick={() => setIsOpen(false)}
+                  >
+                    Salah Tracker
                   </Link>
                   {isSuperAdmin && (
                     <Link

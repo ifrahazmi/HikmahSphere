@@ -33,6 +33,8 @@ interface DhikrPreset {
   id: string;
   label: string;
   arabic: string;
+  transliteration?: string;
+  compact?: boolean;
   target: number;
 }
 
@@ -104,6 +106,14 @@ const TASBIH_PRESETS: DhikrPreset[] = [
   { id: 'allahu-akbar', label: 'Allahu Akbar', arabic: 'ٱللَّٰهُ أَكْبَر', target: 34 },
   { id: 'astaghfirullah', label: 'Astaghfirullah', arabic: 'أَسْتَغْفِرُ ٱللَّٰهَ', target: 100 },
   { id: 'la-ilaha-illa-allah', label: 'La ilaha illa Allah', arabic: 'لَا إِلَٰهَ إِلَّا ٱللَّٰهُ', target: 100 },
+  {
+    id: 'allahumma-innaka-afuwwun',
+    label: "Allahumma innaka 'afuwwun",
+    arabic: 'اللَّهُمَّ إِنَّكَ عَفُوٌّ تُحِبُّ الْعَفْوَ فَاعْفُ عَنِّي',
+    transliteration: "Allahumma innaka 'afuwwun tuhibbul 'afwa fa'fu 'anni.",
+    compact: true,
+    target: 100,
+  },
 ];
 
 const createEmptyDailyCounts = (): Record<string, number> => {
@@ -2114,7 +2124,7 @@ const DhikrDua: React.FC = () => {
                     >
                       {TASBIH_PRESETS.map((preset) => (
                         <option key={preset.id} value={preset.id}>
-                          {preset.label}   {preset.arabic}
+                          {preset.label}
                         </option>
                       ))}
                     </select>
@@ -2123,12 +2133,17 @@ const DhikrDua: React.FC = () => {
                   <div className={`mt-5 rounded-2xl border p-4 ${isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-emerald-100 bg-emerald-50/60'}`}>
                     <div className="text-center">
                       <p className="text-sm font-semibold text-emerald-700">Current Dhikr</p>
-                      <p className={`mt-1 text-lg font-semibold ${headingText}`}>{selectedPreset.label}</p>
-                      <p className={`mt-1 font-indopak-nastaleeq text-3xl ${
+                      <p className={`mt-1 font-semibold ${selectedPreset.compact ? 'text-sm' : 'text-lg'} ${headingText}`}>{selectedPreset.label}</p>
+                      <p className={`mt-1 font-indopak-nastaleeq ${selectedPreset.compact ? 'text-xl leading-relaxed' : 'text-3xl'} ${
                         isDarkMode ? 'text-emerald-100' : 'text-emerald-900'
                       }`}>
                         {selectedPreset.arabic}
                       </p>
+                      {selectedPreset.transliteration && (
+                        <p className={`mt-2 text-[11px] leading-relaxed ${mutedText}`}>
+                          {selectedPreset.transliteration}
+                        </p>
+                      )}
                     </div>
 
                     <button
@@ -2143,7 +2158,9 @@ const DhikrDua: React.FC = () => {
                       <div>
                         <p className="text-5xl font-bold">{tasbihCount}</p>
                         <p className="mt-1 text-sm font-semibold">Tap to Count</p>
-                        <p className="mt-2 text-xs">{selectedPreset.label}</p>
+                        <p className={`mx-auto mt-2 max-w-[11rem] break-words px-1 leading-tight ${selectedPreset.compact ? 'text-[10px]' : 'text-xs'}`}>
+                          {selectedPreset.label}
+                        </p>
                       </div>
                     </button>
 

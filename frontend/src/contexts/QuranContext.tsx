@@ -41,7 +41,8 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
 
   const DEFAULT_QURAN_TITLE = 'Quran Reader with Audio, Transliteration and Translation | HikmahSphere';
   const PLAYER_BRAND_TITLE = 'Hikmah Sphere - A Unified Islamic Digital Platform';
-  const PREFETCH_LOOKAHEAD_AYAHS = 5;
+  const PREFETCH_LOOKAHEAD_AYAHS = 10;
+  const SURAH_DURATION_FALLBACK_PER_AYAH = 7;
 
   // Audio ref
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
@@ -62,11 +63,42 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
   const isBismillahRef = React.useRef(false);
   const ayahAudioUrlMapRef = React.useRef<Map<number, string>>(new Map());
   const prefetchedAyahAudioRef = React.useRef<Map<number, HTMLAudioElement>>(new Map());
+  const prefetchedAyahFetchRef = React.useRef<Set<number>>(new Set());
 
   // Stable refs for audio event handlers (delegates to latest handler via ref)
   const handleAudioEndedFnRef = React.useRef<() => void>(() => {});
   const handleAudioTimeUpdateFnRef = React.useRef<() => void>(() => {});
   const stopAudioRef = React.useRef<() => void>(() => {});
+
+  const getSafeDuration = useCallback((value: number, fallback: number) => {
+    if (Number.isFinite(value) && value > 0) return value;
+    return fallback;
+  }, []);
+
+  const getProjectedSurahDuration = useCallback((currentTrackDuration: number) => {
+    const queueLength = ayahAudioQueueRef.current.length;
+    if (!queueLength) {
+      return getSafeDuration(currentTrackDuration, SURAH_DURATION_FALLBACK_PER_AYAH);
+    }
+
+    const completedAyahs = isBismillahRef.current
+      ? 0
+      : Math.max(0, Math.min(currentQueueIndexRef.current, queueLength));
+    const observedAverage =
+      completedAyahs > 0
+        ? cumulativeTimeRef.current / completedAyahs
+        : SURAH_DURATION_FALLBACK_PER_AYAH;
+    const estimatedAyahDuration = Math.max(
+      SURAH_DURATION_FALLBACK_PER_AYAH,
+      getSafeDuration(observedAverage, SURAH_DURATION_FALLBACK_PER_AYAH)
+    );
+    const safeCurrentTrackDuration = getSafeDuration(currentTrackDuration, estimatedAyahDuration);
+    const remainingAyahs = isBismillahRef.current
+      ? queueLength
+      : Math.max(0, queueLength - (currentQueueIndexRef.current + 1));
+
+    return cumulativeTimeRef.current + safeCurrentTrackDuration + remainingAyahs * estimatedAyahDuration;
+  }, [SURAH_DURATION_FALLBACK_PER_AYAH, getSafeDuration]);
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -489,6 +521,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       audio.load();
     });
     prefetchedAyahAudioRef.current.clear();
+    prefetchedAyahFetchRef.current.clear();
     ayahAudioUrlMapRef.current.clear();
   }, []);
 
@@ -511,6 +544,14 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       prefetchAudio.src = audioUrl;
       prefetchAudio.load();
       prefetchedAyahAudioRef.current.set(ayahNumber, prefetchAudio);
+
+      if (!prefetchedAyahFetchRef.current.has(ayahNumber)) {
+        prefetchedAyahFetchRef.current.add(ayahNumber);
+        void fetch(audioUrl, { cache: 'force-cache' }).catch(() => {
+          // Allow retry if this background prefetch request fails.
+          prefetchedAyahFetchRef.current.delete(ayahNumber);
+        });
+      }
     }
 
     const cleanupBefore = Math.max(0, fromQueueIndex - 1);
@@ -547,6 +588,18 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       audio.addEventListener('canplaythrough', () => setIsAudioLoading(false));
       audio.addEventListener('waiting', () => setIsAudioLoading(true));
       audio.addEventListener('playing', () => setIsAudioLoading(false));
+      audio.addEventListener('play', () => {
+        setIsPlaying(true);
+        setIsPaused(false);
+      });
+      audio.addEventListener('pause', () => {
+        if (audio.ended) return;
+        setIsPlaying(false);
+        if (audio.currentTime > 0) {
+          pausedTimeRef.current = audio.currentTime;
+          setIsPaused(true);
+        }
+      });
       audio.addEventListener('error', (e) => {
         console.error('❌ Audio error:', e);
         setIsAudioLoading(false);
@@ -735,6 +788,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
         const ayahs = data.data[0].ayahs;
         const audioQueue = ayahs.map((ayah: Ayah) => ayah.numberInSurah);
         const audioUrlMap = new Map<number, string>();
+        const hasBismillah = surahNumber !== 1 && surahNumber !== 9;
         ayahs.forEach((ayah: Ayah) => {
           if (ayah.audio) {
             audioUrlMap.set(ayah.numberInSurah, ayah.audio);
@@ -743,8 +797,9 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
 
         console.log('🎵 Audio queue created:', audioQueue);
 
-        // Estimate total duration (average 5 seconds per ayah as fallback)
-        const estimatedTotalDuration = ayahs.length * 5;
+        // Start with a conservative estimate so the timer does not end before playback.
+        const estimatedTotalDuration =
+          (ayahs.length + (hasBismillah ? 1 : 0)) * SURAH_DURATION_FALLBACK_PER_AYAH;
         setTotalSurahDuration(estimatedTotalDuration);
         totalSurahDurationRef.current = estimatedTotalDuration;
 
@@ -765,7 +820,6 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
         // For Surah 9 (At-Tawbah), no Bismillah
         // For Surah 1 (Al-Fatiha), Bismillah is part of Ayah 1
         // For other surahs (2-8, 10-114), play Bismillah first
-        const hasBismillah = surahNumber !== 1 && surahNumber !== 9;
         prefetchUpcomingAyahs(0);
 
         if (hasBismillah) {
@@ -849,11 +903,84 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
   }, [isPlaying, isPaused]);
 
   const seekAudio = useCallback((time: number) => {
-    if (audioRef.current) {
-      audioRef.current.currentTime = time;
-      setAudioCurrentTime(time);
+    if (!audioRef.current) return;
+
+    if (isSurahModeRef.current) {
+      const currentTrackDuration = getSafeDuration(audioRef.current.duration, 0);
+      const relativeTime = Math.max(0, time - cumulativeTimeRef.current);
+      audioRef.current.currentTime = Math.min(relativeTime, currentTrackDuration || relativeTime);
+      setAudioCurrentTime(cumulativeTimeRef.current + audioRef.current.currentTime);
+      return;
     }
-  }, []);
+
+    audioRef.current.currentTime = time;
+    setAudioCurrentTime(time);
+  }, [getSafeDuration]);
+
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    const mediaSession = navigator.mediaSession;
+    const setMediaAction = (
+      action: MediaSessionAction,
+      handler: MediaSessionActionHandler | null
+    ) => {
+      try {
+        mediaSession.setActionHandler(action, handler);
+      } catch (error) {
+        // Some browsers do not support every action type.
+        console.debug(`Media session action '${action}' not supported`, error);
+      }
+    };
+
+    setMediaAction('play', () => {
+      if (isPaused) {
+        resumeAyah();
+        return;
+      }
+
+      const audio = audioRef.current;
+      if (!audio) return;
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((error) => {
+          console.error('❌ MediaSession play failed:', error);
+        });
+      }
+    });
+
+    setMediaAction('pause', () => {
+      pauseAyah();
+    });
+
+    setMediaAction('stop', () => {
+      stopAudio();
+    });
+
+    setMediaAction('seekto', (details) => {
+      if (typeof details.seekTime === 'number') {
+        seekAudio(details.seekTime);
+      }
+    });
+
+    setMediaAction('seekforward', (details) => {
+      const skip = details.seekOffset ?? 10;
+      seekAudio(audioCurrentTime + skip);
+    });
+
+    setMediaAction('seekbackward', (details) => {
+      const skip = details.seekOffset ?? 10;
+      seekAudio(Math.max(0, audioCurrentTime - skip));
+    });
+
+    return () => {
+      setMediaAction('play', null);
+      setMediaAction('pause', null);
+      setMediaAction('stop', null);
+      setMediaAction('seekto', null);
+      setMediaAction('seekforward', null);
+      setMediaAction('seekbackward', null);
+    };
+  }, [audioCurrentTime, isPaused, pauseAyah, resumeAyah, seekAudio, stopAudio]);
 
   // Handle audio events
   const handleAudioTimeUpdate = useCallback(() => {
@@ -861,21 +988,32 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       const currentTime = audioRef.current.currentTime;
       const duration = audioRef.current.duration;
       
-      // For surah mode, use cumulative time
+      // For surah mode, project total duration from live playback data.
       if (isSurahModeRef.current) {
         const totalTime = cumulativeTimeRef.current + currentTime;
-        console.log('⏱️ Time update (surah mode):', totalTime.toFixed(1), '/', totalSurahDurationRef.current.toFixed(1));
+        const projectedDuration = Math.max(getProjectedSurahDuration(duration), totalTime, 1);
+        const queueLength = ayahAudioQueueRef.current.length;
+        const remainingAyahs = isBismillahRef.current
+          ? queueLength
+          : Math.max(0, queueLength - (currentQueueIndexRef.current + 1));
+        const rawProgress = (totalTime / projectedDuration) * 100;
+        const safeProgress = remainingAyahs > 0 ? Math.min(rawProgress, 99.5) : Math.min(rawProgress, 100);
+
+        console.log('⏱️ Time update (surah mode):', totalTime.toFixed(1), '/', projectedDuration.toFixed(1));
         setAudioCurrentTime(totalTime);
-        setAudioDuration(totalSurahDurationRef.current);
-        setAudioProgress((totalTime / totalSurahDurationRef.current) * 100);
+        setAudioDuration(projectedDuration);
+        setTotalSurahDuration(projectedDuration);
+        totalSurahDurationRef.current = projectedDuration;
+        setAudioProgress(safeProgress);
       } else {
-        console.log('⏱️ Time update (ayah mode):', currentTime.toFixed(1), '/', duration.toFixed(1));
+        const safeDuration = getSafeDuration(duration, 1);
+        console.log('⏱️ Time update (ayah mode):', currentTime.toFixed(1), '/', safeDuration.toFixed(1));
         setAudioCurrentTime(currentTime);
-        setAudioDuration(duration);
-        setAudioProgress((currentTime / duration) * 100);
+        setAudioDuration(safeDuration);
+        setAudioProgress(Math.min((currentTime / safeDuration) * 100, 100));
       }
     }
-  }, []);
+  }, [getProjectedSurahDuration, getSafeDuration]);
 
   const handleAudioEnded = useCallback(async () => {
     console.log('🎵 Audio ended - Queue:', ayahAudioQueueRef.current, 'Current Index:', currentQueueIndexRef.current);
@@ -886,6 +1024,14 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     // Check if Bismillah just finished
     if (isBismillahRef.current && isSurahModeRef.current && currentPlayingSurahRef.current) {
       console.log('🎵 Bismillah finished, continuing to ayah 1 of surah', currentPlayingSurahRef.current);
+      const introDuration = getSafeDuration(audioRef.current?.duration || 0, 0);
+      if (introDuration > 0) {
+        const newCumulativeTime = cumulativeTimeRef.current + introDuration;
+        setCumulativeTime(newCumulativeTime);
+        cumulativeTimeRef.current = newCumulativeTime;
+        setAudioCurrentTime(newCumulativeTime);
+      }
+
       isBismillahRef.current = false; // Reset Bismillah flag
       
       const surahNum = currentPlayingSurahRef.current;
@@ -915,8 +1061,9 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       
       // Add current ayah duration to cumulative time
       if (audioRef.current) {
-        const newCumulativeTime = cumulativeTimeRef.current + audioRef.current.duration;
-        console.log('🎵 Adding', audioRef.current.duration.toFixed(1), 's to cumulative time:', cumulativeTimeRef.current.toFixed(1), '->', newCumulativeTime.toFixed(1));
+        const ayahDuration = getSafeDuration(audioRef.current.duration, 0);
+        const newCumulativeTime = cumulativeTimeRef.current + ayahDuration;
+        console.log('🎵 Adding', ayahDuration.toFixed(1), 's to cumulative time:', cumulativeTimeRef.current.toFixed(1), '->', newCumulativeTime.toFixed(1));
         setCumulativeTime(newCumulativeTime);
         cumulativeTimeRef.current = newCumulativeTime;
       }
@@ -934,7 +1081,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       // Stop when done (or in ayat-by-ayat mode)
       stopAudio();
     }
-  }, [playAyah, stopAudio, settings.reciter]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [getSafeDuration, playAyah, stopAudio, settings.reciter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep handler refs in sync so the persistent audio element's delegated listeners always call latest
   useEffect(() => {

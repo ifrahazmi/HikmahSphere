@@ -655,6 +655,28 @@ const BASE_MANUAL_DUAS: DuaEntry[] = [
     tags: ['evil eye', 'protection', 'children'],
     situationTags: ['evil-eye', 'protection', 'health'],
   },
+  {
+    id: 'manual-dua-allahumma-innaka-afuwwun',
+    slug: 'dua-allahumma-innaka-afuwwun',
+    categoryId: 'ramadan',
+    title: "Forgiveness in Ramadan",
+    shortDescription: 'A powerful dua for forgiveness, especially in Ramadan nights.',
+    sectionTitle: 'Ramadan Duas',
+    arabic: 'اللَّهُمَّ إِنَّكَ عَفُوٌّ تُحِبُّ الْعَفْوَ فَاعْفُ عَنِّي',
+    transliteration: "Allahumma innaka 'afuwwun tuhibbul 'afwa fa'fu 'anni.",
+    translation: 'O Allah, You are Most Forgiving, and You love forgiveness, so forgive me.',
+    translationUrdu: 'اے اللہ! بے شک تو بہت معاف کرنے والا ہے اور معافی کو پسند کرتا ہے، پس مجھے معاف فرما دے۔',
+    virtue: 'The Prophet ﷺ taught this dua to recite while seeking forgiveness in blessed nights.',
+    reference: {
+      source: 'Jami at-Tirmidhi',
+      book: 'Book of Supplications',
+      hadithNumber: '3513',
+      grade: 'Sahih',
+      notes: 'Reported from Aishah (RA), especially associated with Laylatul Qadr.',
+    },
+    tags: ['forgiveness', 'ramadan', 'laylatul qadr'],
+    situationTags: ['forgiveness', 'evening'],
+  },
 ];
 
 const PRIORITY_HAJJ_UMRAH_DUAS: DuaEntry[] = [
