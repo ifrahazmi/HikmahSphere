@@ -1,5 +1,6 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { API_URL } from '../config';
+import { getPushDeviceId, getStoredPushToken, storePushToken } from '../firebase';
 
 interface User {
   id: string;
@@ -198,6 +199,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const logout = () => {
+    const authToken = localStorage.getItem('token');
+    const pushToken = getStoredPushToken();
+    const deviceId = getPushDeviceId();
+
+    if (authToken && (pushToken || deviceId)) {
+      void fetch(`${API_URL}/notifications/token`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({
+          token: pushToken,
+          deviceId,
+        }),
+      }).catch((error) => {
+        console.error('Failed to remove FCM token during logout:', error);
+      });
+    }
+
+    storePushToken(null);
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setUser(null);

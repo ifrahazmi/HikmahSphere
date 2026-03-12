@@ -27,6 +27,8 @@ firebase.initializeApp(firebaseConfig);
 // messages.
 const messaging = firebase.messaging();
 const APP_MESSAGE_TYPE = 'HIKMAH_BACKGROUND_NOTIFICATION';
+const RECENT_NOTIFICATION_TTL_MS = 60 * 1000;
+const recentNotificationIds = new Map();
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -104,6 +106,27 @@ const createNotificationPayload = (payload) => {
   };
 };
 
+const isDuplicateNotification = (notificationId) => {
+  if (!notificationId) {
+    return false;
+  }
+
+  const now = Date.now();
+
+  for (const [storedNotificationId, storedTimestamp] of recentNotificationIds.entries()) {
+    if (now - storedTimestamp > RECENT_NOTIFICATION_TTL_MS) {
+      recentNotificationIds.delete(storedNotificationId);
+    }
+  }
+
+  if (recentNotificationIds.has(notificationId)) {
+    return true;
+  }
+
+  recentNotificationIds.set(notificationId, now);
+  return false;
+};
+
 const broadcastToOpenClients = async (message) => {
   const clientList = await clients.matchAll({
     type: 'window',
@@ -118,6 +141,9 @@ const broadcastToOpenClients = async (message) => {
 messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw.js] Received background message ', payload);
   const normalizedPayload = createNotificationPayload(payload);
+  if (isDuplicateNotification(normalizedPayload.id)) {
+    return;
+  }
   const notificationTitle = normalizedPayload.title;
   const targetUrl = payload?.data?.url || '/';
 
@@ -218,6 +244,10 @@ self.addEventListener('push', (event) => {
   const title = payload?.notification?.title || payload?.data?.title || 'HikmahSphere';
   const body  = payload?.notification?.body  || payload?.data?.body  || '';
   const normalizedPayload = createNotificationPayload(payload);
+
+  if (isDuplicateNotification(normalizedPayload.id)) {
+    return;
+  }
 
   event.waitUntil(
     Promise.all([

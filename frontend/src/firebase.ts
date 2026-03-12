@@ -3,6 +3,9 @@ import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
 import { getMessaging, getToken, onMessage, MessagePayload, isSupported, Messaging } from "firebase/messaging";
 
+const PUSH_DEVICE_ID_KEY = 'hikmah_push_device_id';
+const PUSH_TOKEN_KEY = 'hikmah_push_token';
+
 // Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyBNOcMgr3VPJKvNWfeXSMCg81QOEyfeEdo",
@@ -46,6 +49,32 @@ const isStandalonePWA = (): boolean => {
   const displayModeStandalone = window.matchMedia('(display-mode: standalone)').matches;
   const navigatorStandalone = (window.navigator as any).standalone === true;
   return displayModeStandalone || navigatorStandalone;
+};
+
+export const getPushDeviceId = (): string => {
+  const existingDeviceId = localStorage.getItem(PUSH_DEVICE_ID_KEY);
+  if (existingDeviceId) {
+    return existingDeviceId;
+  }
+
+  const generatedDeviceId =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `device-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+  localStorage.setItem(PUSH_DEVICE_ID_KEY, generatedDeviceId);
+  return generatedDeviceId;
+};
+
+export const getStoredPushToken = (): string | null => localStorage.getItem(PUSH_TOKEN_KEY);
+
+export const storePushToken = (token: string | null) => {
+  if (!token) {
+    localStorage.removeItem(PUSH_TOKEN_KEY);
+    return;
+  }
+
+  localStorage.setItem(PUSH_TOKEN_KEY, token);
 };
 
 export interface PushSupportInfo {

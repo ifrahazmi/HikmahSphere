@@ -109,6 +109,21 @@ export const sendNotification = async (token: string, title: string, body: strin
     }
 };
 
+const normalizeNotificationData = (data?: Record<string, unknown>): Record<string, string> => {
+    if (!data || typeof data !== 'object') {
+        return {};
+    }
+
+    return Object.entries(data).reduce<Record<string, string>>((accumulator, [key, value]) => {
+        if (typeof value === 'undefined' || value === null) {
+            return accumulator;
+        }
+
+        accumulator[key] = typeof value === 'string' ? value : JSON.stringify(value);
+        return accumulator;
+    }, {});
+};
+
 export const sendMulticastNotification = async (tokens: string[], title: string, body: string, data?: any) => {
     if (!admin.apps.length) {
          throw new Error("Firebase Admin not initialized. Check server logs.");
@@ -116,13 +131,13 @@ export const sendMulticastNotification = async (tokens: string[], title: string,
     
     if (!tokens || tokens.length === 0) {
         console.warn("⚠️ [Firebase] No tokens provided for multicast.");
-        return { successCount: 0, failureCount: 0 };
+        return { successCount: 0, failureCount: 0, responses: [] };
     }
 
     try {
         const message: admin.messaging.MulticastMessage = {
             notification: { title, body },
-            data: data || {},
+            data: normalizeNotificationData(data),
             tokens: tokens
         };
 

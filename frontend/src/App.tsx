@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { Toaster } from 'react-hot-toast';
-import { requestForToken, getPushSupportInfo } from './firebase';
+import { requestForToken, getPushSupportInfo, getPushDeviceId, storePushToken } from './firebase';
 import axios from 'axios'; // Import axios
 import { toast } from 'react-hot-toast';
 
@@ -95,11 +95,16 @@ const AppContent: React.FC = () => {
         
         if (token) {
             console.log("FCM Token Generated:", token);
+            storePushToken(token);
             const authToken = localStorage.getItem('token');
             if (authToken) {
                 try {
                     await axios.post(`${API_URL}/notifications/token`, 
-                        { token },
+                        {
+                          token,
+                          deviceId: getPushDeviceId(),
+                          userAgent: navigator.userAgent,
+                        },
                         { headers: { Authorization: `Bearer ${authToken}` } }
                     );
                     console.log("✅ FCM Token saved to backend");
@@ -107,6 +112,8 @@ const AppContent: React.FC = () => {
                     console.error("❌ Failed to save FCM token to backend:", apiError);
                 }
             }
+        } else {
+            storePushToken(null);
         }
       } catch (err) {
         console.error('Error getting token:', err);

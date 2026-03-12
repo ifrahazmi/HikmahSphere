@@ -16,6 +16,12 @@ export interface IUser extends Document {
   isBlocked: boolean;
   requiresPasswordChange: boolean;
   fcmTokens?: string[]; // Added FCM Tokens field
+  notificationDevices?: Array<{
+    deviceId: string;
+    token: string;
+    userAgent?: string;
+    updatedAt: Date;
+  }>;
   location?: {
     city: string;
     country: string;
@@ -200,6 +206,26 @@ const UserSchema = new Schema<IUser>({
     default: false,
   },
   fcmTokens: [{ type: String }], // Array of FCM tokens for multi-device support
+  notificationDevices: [{
+    deviceId: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    token: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    userAgent: {
+      type: String,
+      trim: true,
+    },
+    updatedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  }],
   dateOfBirth: {
     type: Date,
     validate: {

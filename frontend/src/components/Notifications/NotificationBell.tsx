@@ -98,7 +98,7 @@ const NotificationBell: React.FC = () => {
 
         {/* Dropdown Panel */}
         {isOpen && (
-          <div className="absolute right-0 mt-3 w-80 md:w-96 bg-white rounded-xl shadow-2xl ring-1 ring-black ring-opacity-5 transform origin-top-right transition-all z-50 overflow-hidden border border-emerald-100">
+          <div className="fixed inset-x-3 top-20 z-50 overflow-hidden rounded-2xl border border-emerald-100 bg-white shadow-2xl ring-1 ring-black ring-opacity-5 transition-all sm:absolute sm:right-0 sm:top-full sm:mt-3 sm:w-96 sm:inset-x-auto sm:rounded-xl">
             {/* Header */}
             <div className="px-4 py-3 bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-100 flex justify-between items-center">
               <h3 className="text-sm font-semibold text-emerald-900 flex items-center gap-2">
@@ -119,7 +119,7 @@ const NotificationBell: React.FC = () => {
             </div>
 
             {/* List */}
-            <div className="max-h-[60vh] overflow-y-auto custom-scrollbar">
+            <div className="max-h-[calc(100dvh-10rem)] overflow-y-auto custom-scrollbar sm:max-h-[60vh]">
               {notifications.length === 0 ? (
                 <div className="px-4 py-8 text-center text-gray-500">
                   <MailOpen className="w-12 h-12 mx-auto text-gray-300 mb-2" />
@@ -190,15 +190,15 @@ const NotificationBell: React.FC = () => {
       {/* History Modal */}
       {showHistory && (
         <div 
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-opacity"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm transition-opacity sm:p-4"
           onClick={() => setShowHistory(false)}
         >
           <div 
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl h-[85vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+            className="flex h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-2xl animate-in zoom-in-95 duration-200 sm:h-[85vh] sm:max-w-2xl sm:rounded-2xl"
             onClick={e => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-4 sm:px-6">
               <div className="flex items-center gap-3">
                   {selectedNotification ? (
                     <button 
@@ -227,11 +227,11 @@ const NotificationBell: React.FC = () => {
             </div>
 
             {/* Modal Content */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar bg-gray-50/30 relative">
+            <div className="relative flex-1 overflow-y-auto bg-gray-50/30 custom-scrollbar">
               {selectedNotification ? (
                 // Detail View
-                <div className="p-6 md:p-8 animate-in slide-in-from-right-4 duration-300">
-                   <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden">
+                <div className="animate-in slide-in-from-right-4 duration-300 p-4 sm:p-6 md:p-8">
+                   <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-5 shadow-sm sm:p-8">
                       {/* Decorative background element */}
                       <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50 rounded-bl-full -mr-10 -mt-10 opacity-50" />
 
@@ -267,10 +267,10 @@ const NotificationBell: React.FC = () => {
                       </div>
                       
                       {/* Actions */}
-                      <div className="mt-10 pt-6 border-t border-gray-100 flex justify-between items-center relative z-10">
+                      <div className="relative z-10 mt-10 flex flex-col gap-3 border-t border-gray-100 pt-6 sm:flex-row sm:items-center sm:justify-between">
                         <button 
                             onClick={() => setSelectedNotification(null)}
-                            className="text-sm text-gray-500 hover:text-gray-800 font-medium px-4 py-2 hover:bg-gray-100 rounded-lg transition-colors"
+                            className="rounded-lg px-4 py-2 text-left text-sm font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
                         >
                             Back to list
                         </button>
@@ -280,7 +280,7 @@ const NotificationBell: React.FC = () => {
                                 setSelectedNotification(null);
                                 toast.success('Message deleted');
                             }}
-                            className="flex items-center gap-2 px-5 py-2.5 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 font-medium rounded-lg transition-colors border border-transparent hover:border-red-100"
+                            className="flex items-center gap-2 rounded-lg border border-transparent px-5 py-2.5 text-sm font-medium text-red-600 transition-colors hover:border-red-100 hover:bg-red-50 hover:text-red-700"
                         >
                             <Trash2 className="w-4 h-4" />
                             Delete Message
@@ -290,7 +290,7 @@ const NotificationBell: React.FC = () => {
                 </div>
               ) : (
                 // List View
-                <div className="p-4 md:p-6 space-y-3 min-h-full">
+                <div className="min-h-full space-y-3 p-4 md:p-6">
                     {notifications.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-full text-gray-400 py-20">
                             <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
@@ -304,7 +304,7 @@ const NotificationBell: React.FC = () => {
                             <div 
                                 key={n.id} 
                                 onClick={() => openNotificationDetail(n)} 
-                                className={`group p-5 rounded-xl border cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md bg-white relative overflow-hidden ${
+                                className={`group relative overflow-hidden rounded-xl border bg-white p-4 transition-all duration-200 cursor-pointer active:scale-[0.99] sm:p-5 sm:hover:-translate-y-0.5 sm:hover:shadow-md ${
                                     n.read ? 'border-gray-100' : 'border-emerald-200 shadow-sm ring-1 ring-emerald-50'
                                 }`}
                             >

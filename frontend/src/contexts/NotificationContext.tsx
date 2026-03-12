@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { onMessageListener } from '../firebase';
 import { toast } from 'react-hot-toast';
 import { MessagePayload } from 'firebase/messaging';
@@ -85,6 +85,7 @@ const createNotificationFromServiceWorkerPayload = (payload: BackgroundNotificat
 
 export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [notifications, setNotifications] = useState<Notification[]>(parseStoredNotifications);
+  const processedNotificationIdsRef = useRef(new Set(parseStoredNotifications().map((notification) => notification.id)));
 
   const unreadCount = notifications.filter(n => !n.read).length;
   const addNotification = useCallback((newNotification: Notification) => {
@@ -94,6 +95,15 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
       }
       return [newNotification, ...prev];
     });
+  }, []);
+
+  const shouldProcessNotification = useCallback((notificationId: string) => {
+    if (processedNotificationIdsRef.current.has(notificationId)) {
+      return false;
+    }
+
+    processedNotificationIdsRef.current.add(notificationId);
+    return true;
   }, []);
 
   const playNotificationSound = useCallback(() => {
@@ -133,10 +143,15 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
   useEffect(() => {
     const unsubscribe = onMessageListener((payload: MessagePayload) => {
       console.log('Received foreground message in Context: ', payload);
+      const notification = createNotificationFromPayload(payload);
+
+      if (!shouldProcessNotification(notification.id)) {
+        return;
+      }
 
       playNotificationSound();
       showNativeNotification(payload);
-      addNotification(createNotificationFromPayload(payload));
+      addNotification(notification);
 
       if (document.visibilityState !== 'visible') {
         return;
@@ -192,7 +207,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, [addNotification, playNotificationSound, showNativeNotification]);
+  }, [addNotification, playNotificationSound, shouldProcessNotification, showNativeNotification]);
 
   useEffect(() => {
     if (!('serviceWorker' in navigator)) {
@@ -205,6 +220,11 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
       }
 
       const notificationFromSw = createNotificationFromServiceWorkerPayload(event.data.payload);
+
+      if (!shouldProcessNotification(notificationFromSw.id)) {
+        return;
+      }
+
       addNotification(notificationFromSw);
     };
 
@@ -213,7 +233,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     return () => {
       navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
     };
-  }, [addNotification]);
+  }, [addNotification, shouldProcessNotification]);
 
   const markAsRead = (id: string) => {
     setNotifications(prev => 
