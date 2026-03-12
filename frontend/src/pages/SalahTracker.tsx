@@ -22,10 +22,12 @@ import { useAuth } from '../hooks/useAuth';
 import { API_URL } from '../config';
 import {
   PRAYER_KEYS,
+  PRAYER_EXEMPTION_REASON_LABEL,
   QURAN_STATUS_LABEL,
   QuranStatus,
   PrayerName,
   PrayerStatus,
+  STORAGE_VERSION,
   TrackerRecords,
   addDays,
   countByStatus,
@@ -40,8 +42,10 @@ import {
   getDayScore,
   getLoggedCount,
   getQuranScore,
+  getRequiredPrayerCount,
   getSalahTrackerStorageKey,
   isPerfectDay,
+  isPrayerExemptDay,
   normalizeDayRecord,
   normalizeRecords,
   parseDateKey,
@@ -239,7 +243,9 @@ const buildPrayerWindows = (timings: PrayerTimings): Record<PrayerName, PrayerWi
   isha: { start: timings.isha, end: timings.midnight },
 });
 
-const getPrayerHeatmapTone = (score: number): string => {
+const getPrayerHeatmapTone = (score: number | null, isExempt: boolean): string => {
+  if (isExempt) return 'border-fuchsia-200 bg-fuchsia-100';
+  if (score === null) return 'border-gray-200 bg-gray-100';
   if (score >= 100) return 'border-teal-200 bg-teal-500';
   if (score >= 75) return 'border-emerald-200 bg-emerald-400';
   if (score >= 45) return 'border-amber-200 bg-amber-300';
@@ -358,6 +364,9 @@ const SalahTracker: React.FC = () => {
   }, [records, storageKey, isStoreLoaded]);
 
   const selectedRecord = useMemo(() => normalizeDayRecord(records[selectedDateKey]), [records, selectedDateKey]);
+  const isFemaleUser = authUser?.gender?.toLowerCase() === 'female';
+  const isSelectedPrayerExempt = useMemo(() => isPrayerExemptDay(selectedRecord), [selectedRecord]);
+  const selectedRequiredPrayerCount = useMemo(() => getRequiredPrayerCount(selectedRecord), [selectedRecord]);
 
   const selectedScore = useMemo(() => getDayScore(selectedRecord), [selectedRecord]);
   const selectedLoggedCount = useMemo(() => getLoggedCount(selectedRecord), [selectedRecord]);
@@ -420,7 +429,9 @@ const SalahTracker: React.FC = () => {
       return {
         dateKey,
         label: date.toLocaleDateString(undefined, { weekday: 'short' }),
-        prayerScore: getDayScore(dayRecord),
+        prayerScore: isPrayerExemptDay(dayRecord) ? null : getDayScore(dayRecord),
+        isPrayerExempt: isPrayerExemptDay(dayRecord),
+        prayerExemptionReason: dayRecord.prayerExemptionReason,
         quranScore: getQuranScore(dayRecord),
       };
     });
@@ -446,8 +457,10 @@ const SalahTracker: React.FC = () => {
 
       return {
         dateKey,
-        score: getDayScore(dayRecord),
+        score: isPrayerExemptDay(dayRecord) ? null : getDayScore(dayRecord),
         perfect: isPerfectDay(dayRecord),
+        isPrayerExempt: isPrayerExemptDay(dayRecord),
+        prayerExemptionReason: dayRecord.prayerExemptionReason,
       };
     });
   }, [records, todayDateKey]);
@@ -469,8 +482,13 @@ const SalahTracker: React.FC = () => {
   }, [records, todayDateKey]);
 
   const weeklyPrayerConsistency = useMemo(() => {
-    const total = weeklyData.reduce((sum, day) => sum + day.prayerScore, 0);
-    return Math.round(total / weeklyData.length);
+    const eligibleDays = weeklyData.filter((day) => !day.isPrayerExempt && day.prayerScore !== null);
+    if (eligibleDays.length === 0) {
+      return 0;
+    }
+
+    const total = eligibleDays.reduce((sum, day) => sum + (day.prayerScore ?? 0), 0);
+    return Math.round(total / eligibleDays.length);
   }, [weeklyData]);
 
   const weeklyQuranConsistency = useMemo(() => {
@@ -478,9 +496,21 @@ const SalahTracker: React.FC = () => {
     return Math.round(total / weeklyData.length);
   }, [weeklyData]);
 
+  const weeklyExemptPrayerDays = useMemo(() => {
+    return weeklyData.filter((day) => day.isPrayerExempt).length;
+  }, [weeklyData]);
+
   const perfectDaysInPrayerHeatmap = useMemo(() => {
     return prayerHeatmapData.filter((day) => day.perfect).length;
   }, [prayerHeatmapData]);
+
+  const exemptPrayerDaysInHeatmap = useMemo(() => {
+    return prayerHeatmapData.filter((day) => day.isPrayerExempt).length;
+  }, [prayerHeatmapData]);
+
+  const eligiblePrayerDaysInHeatmap = useMemo(() => {
+    return prayerHeatmapData.length - exemptPrayerDaysInHeatmap;
+  }, [exemptPrayerDaysInHeatmap, prayerHeatmapData.length]);
 
   const quranReadDaysInHeatmap = useMemo(() => {
     return quranHeatmapData.filter((day) => day.status !== 'none').length;
@@ -506,7 +536,7 @@ const SalahTracker: React.FC = () => {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            version: 2,
+            version: STORAGE_VERSION,
             records,
             stats: {
               ...aggregateStats,
@@ -547,30 +577,34 @@ const SalahTracker: React.FC = () => {
     const innerWidth = width - padding * 2;
     const innerHeight = height - padding * 2;
 
-    const buildPoints = (scores: number[]): string => {
+    const buildPoints = (scores: Array<number | null>): string => {
       if (scores.length === 0) return '';
-      if (scores.length === 1) {
-        const y = padding + innerHeight * (1 - clamp(scores[0], 0, 100) / 100);
-        return `${padding},${y.toFixed(2)}`;
-      }
-
-      return scores
+      const points = scores
         .map((score, index) => {
+          if (score === null) return null;
           const x = padding + (innerWidth / (scores.length - 1)) * index;
           const y = padding + innerHeight * (1 - clamp(score, 0, 100) / 100);
           return `${x.toFixed(2)},${y.toFixed(2)}`;
         })
-        .join(' ');
+        .filter((point): point is string => point !== null);
+
+      if (points.length === 0) return '';
+      if (points.length === 1) return points[0];
+
+      return points.join(' ');
     };
 
     const prayerScores = weeklyData.map((day) => day.prayerScore);
     const quranScores = weeklyData.map((day) => day.quranScore);
 
-    const buildDots = (scores: number[], colorClass: string) => {
-      return scores.map((score, index) => {
+    const buildDots = (scores: Array<number | null>, colorClass: string) => {
+      return scores.flatMap((score, index) => {
+        if (score === null) {
+          return [];
+        }
         const x = padding + (innerWidth / Math.max(1, scores.length - 1)) * index;
         const y = padding + innerHeight * (1 - clamp(score, 0, 100) / 100);
-        return <circle key={`${colorClass}-${index}`} cx={x} cy={y} r={3} className={colorClass} />;
+        return [<circle key={`${colorClass}-${index}`} cx={x} cy={y} r={3} className={colorClass} />];
       });
     };
 
@@ -725,6 +759,10 @@ const SalahTracker: React.FC = () => {
   );
 
   const handleStatusChange = (prayerName: PrayerName, status: PrayerStatus) => {
+    if (isSelectedPrayerExempt) {
+      return;
+    }
+
     updateSelectedRecord((current) => ({
       ...current,
       prayers: {
@@ -739,6 +777,10 @@ const SalahTracker: React.FC = () => {
   };
 
   const handlePrayerNoteChange = (prayerName: PrayerName, note: string) => {
+    if (isSelectedPrayerExempt) {
+      return;
+    }
+
     updateSelectedRecord((current) => ({
       ...current,
       prayers: {
@@ -770,7 +812,27 @@ const SalahTracker: React.FC = () => {
     }));
   };
 
+  const handlePrayerExemptionToggle = () => {
+    const nextReason = isSelectedPrayerExempt ? 'none' : 'menstruation';
+
+    updateSelectedRecord((current) => ({
+      ...current,
+      prayerExemptionReason: nextReason,
+      updatedAt: nowIso(),
+    }));
+
+    toast.success(
+      nextReason === 'menstruation'
+        ? 'This day is now excluded from Salah streaks and prayer percentages.'
+        : 'Prayer tracking is active again for this day.',
+    );
+  };
+
   const handleMarkAllPrayed = () => {
+    if (isSelectedPrayerExempt) {
+      return;
+    }
+
     updateSelectedRecord((current) => {
       const nextPrayers = { ...current.prayers };
 
@@ -1000,35 +1062,62 @@ const SalahTracker: React.FC = () => {
               <div className="rounded-2xl border border-emerald-100 bg-white/95 p-5 shadow-sm">
                 <p className="text-sm font-medium uppercase tracking-wide text-gray-500">Selected Day Score</p>
                 <div className="mt-4 flex items-center gap-4">
-                  <div
-                    className="relative h-32 w-44 rounded-full sm:h-36 sm:w-100"
-                    style={{
-                      background: `conic-gradient(#059669 ${selectedScore}%, #d1fae5 ${selectedScore}% 100%)`,
-                    }}
-                  >
-                    <div className="absolute inset-2 flex items-center justify-center rounded-full bg-white">
-                      <span className="text-2xl font-bold leading-none text-gray-900 sm:text-3xl">{selectedScore}%</span>
-                    </div>
-                  </div>
+                  {isSelectedPrayerExempt ? (
+                    <>
+                      <div className="flex h-32 w-32 items-center justify-center rounded-full border-[10px] border-fuchsia-200 bg-fuchsia-50 text-center sm:h-36 sm:w-36">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-fuchsia-700">Salah</p>
+                          <p className="mt-1 text-2xl font-bold leading-none text-fuchsia-800">Exempt</p>
+                        </div>
+                      </div>
 
-                  <div className="space-y-2 text-sm text-gray-600">
-                    <p className="inline-flex items-center gap-2 rounded-lg bg-emerald-50 px-2.5 py-1 text-emerald-700">
-                      <CheckCircleIcon className="h-4 w-4" />
-                      Prayed: {selectedPrayedCount}
-                    </p>
-                    <p className="inline-flex items-center gap-2 rounded-lg bg-amber-50 px-2.5 py-1 text-amber-700">
-                      <ClockIcon className="h-4 w-4" />
-                      Qada: {selectedQadaCount}
-                    </p>
-                    <p className="inline-flex items-center gap-2 rounded-lg bg-rose-50 px-2.5 py-1 text-rose-700">
-                      <XCircleIcon className="h-4 w-4" />
-                      Missed: {selectedMissedCount}
-                    </p>
-                    <p className="inline-flex items-center gap-2 rounded-lg bg-violet-50 px-2.5 py-1 text-violet-700">
-                      <BookOpenIcon className="h-4 w-4" />
-                      Quran: {selectedQuranScore}% ({QURAN_STATUS_LABEL[selectedRecord.quran.status]})
-                    </p>
-                  </div>
+                      <div className="space-y-2 text-sm text-gray-600">
+                        <p className="inline-flex items-center gap-2 rounded-lg bg-fuchsia-50 px-2.5 py-1 text-fuchsia-700">
+                          <MoonIcon className="h-4 w-4" />
+                          {PRAYER_EXEMPTION_REASON_LABEL[selectedRecord.prayerExemptionReason]}
+                        </p>
+                        <p className="max-w-sm text-sm leading-relaxed text-gray-600">
+                          Salah streaks, prayer percentages, and heatmaps skip this date. Quran logging stays available.
+                        </p>
+                        <p className="inline-flex items-center gap-2 rounded-lg bg-violet-50 px-2.5 py-1 text-violet-700">
+                          <BookOpenIcon className="h-4 w-4" />
+                          Quran: {selectedQuranScore}% ({QURAN_STATUS_LABEL[selectedRecord.quran.status]})
+                        </p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div
+                        className="relative h-32 w-44 rounded-full sm:h-36 sm:w-100"
+                        style={{
+                          background: `conic-gradient(#059669 ${selectedScore}%, #d1fae5 ${selectedScore}% 100%)`,
+                        }}
+                      >
+                        <div className="absolute inset-2 flex items-center justify-center rounded-full bg-white">
+                          <span className="text-2xl font-bold leading-none text-gray-900 sm:text-3xl">{selectedScore}%</span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 text-sm text-gray-600">
+                        <p className="inline-flex items-center gap-2 rounded-lg bg-emerald-50 px-2.5 py-1 text-emerald-700">
+                          <CheckCircleIcon className="h-4 w-4" />
+                          Prayed: {selectedPrayedCount}
+                        </p>
+                        <p className="inline-flex items-center gap-2 rounded-lg bg-amber-50 px-2.5 py-1 text-amber-700">
+                          <ClockIcon className="h-4 w-4" />
+                          Qada: {selectedQadaCount}
+                        </p>
+                        <p className="inline-flex items-center gap-2 rounded-lg bg-rose-50 px-2.5 py-1 text-rose-700">
+                          <XCircleIcon className="h-4 w-4" />
+                          Missed: {selectedMissedCount}
+                        </p>
+                        <p className="inline-flex items-center gap-2 rounded-lg bg-violet-50 px-2.5 py-1 text-violet-700">
+                          <BookOpenIcon className="h-4 w-4" />
+                          Quran: {selectedQuranScore}% ({QURAN_STATUS_LABEL[selectedRecord.quran.status]})
+                        </p>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -1037,8 +1126,12 @@ const SalahTracker: React.FC = () => {
           <section className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <article className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Completed Log</p>
-              <p className="mt-2 text-3xl font-bold text-gray-900">{selectedLoggedCount}/5</p>
-              <p className="mt-1 text-sm text-gray-600">Prayers marked for selected day</p>
+              <p className="mt-2 text-3xl font-bold text-gray-900">
+                {isSelectedPrayerExempt ? 'Exempt' : `${selectedLoggedCount}/${selectedRequiredPrayerCount}`}
+              </p>
+              <p className="mt-1 text-sm text-gray-600">
+                {isSelectedPrayerExempt ? 'Prayer obligation paused for selected day' : 'Prayers marked for selected day'}
+              </p>
             </article>
 
             <article className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
@@ -1048,6 +1141,9 @@ const SalahTracker: React.FC = () => {
                 {currentStreak}
               </p>
               <p className="mt-1 text-sm text-gray-600">Consecutive active salah days</p>
+              {aggregateStats.prayerExemptDays > 0 && (
+                <p className="mt-2 text-xs text-fuchsia-700">{aggregateStats.prayerExemptDays} exempt day(s) skipped</p>
+              )}
             </article>
 
             <article className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
@@ -1060,21 +1156,57 @@ const SalahTracker: React.FC = () => {
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">7-Day Averages</p>
               <p className="mt-2 text-lg font-bold text-gray-900">Salah {weeklyPrayerConsistency}%</p>
               <p className="mt-1 text-lg font-bold text-violet-700">Quran {weeklyQuranConsistency}%</p>
+              {weeklyExemptPrayerDays > 0 && (
+                <p className="mt-2 text-xs text-fuchsia-700">{weeklyExemptPrayerDays} exempt day(s) removed from weekly Salah averages.</p>
+              )}
             </article>
           </section>
 
           <section className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-[1.9fr_1fr]">
             <div className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-lg sm:p-6">
+              {isFemaleUser && (
+                <section className="mb-5 rounded-2xl border border-fuchsia-100 bg-gradient-to-r from-fuchsia-50 via-white to-rose-50 p-4">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <h2 className="text-base font-semibold text-gray-900">Menstrual Cycle Status</h2>
+                      <p className="mt-1 text-sm text-gray-600">
+                        One tap marks this date as prayer-exempt. Salah streaks and prayer percentages will skip it.
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={handlePrayerExemptionToggle}
+                      className={`inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                        isSelectedPrayerExempt
+                          ? 'bg-fuchsia-600 text-white shadow-sm hover:bg-fuchsia-700'
+                          : 'border border-fuchsia-200 bg-white text-fuchsia-700 hover:bg-fuchsia-50'
+                      }`}
+                    >
+                      {isSelectedPrayerExempt ? 'Marked as Exempt Day' : 'Mark as Menstrual Cycle Day'}
+                    </button>
+                  </div>
+                </section>
+              )}
+
               <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="text-xl font-bold text-gray-900">Prayer Checklist</h2>
-                  <p className="text-sm text-gray-600">Status, note, and precise prayer window for each salah.</p>
+                  <p className="text-sm text-gray-600">
+                    {isSelectedPrayerExempt
+                      ? 'Prayer logging is paused for this day because it is marked as exempt.'
+                      : 'Status, note, and precise prayer window for each salah.'}
+                  </p>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
                   <button
                     onClick={handleMarkAllPrayed}
-                    className="rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+                    disabled={isSelectedPrayerExempt}
+                    className={`rounded-xl px-3 py-2 text-sm font-semibold shadow-sm transition ${
+                      isSelectedPrayerExempt
+                        ? 'cursor-not-allowed bg-gray-200 text-gray-500'
+                        : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                    }`}
                   >
                     Mark All Prayed
                   </button>
@@ -1109,8 +1241,14 @@ const SalahTracker: React.FC = () => {
                           <div>
                             <div className="flex flex-wrap items-center gap-2">
                               <h3 className="text-base font-semibold text-gray-900">{prayer.label}</h3>
-                              <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_META[entry.status].badge}`}>
-                                {STATUS_META[entry.status].label}
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                  isSelectedPrayerExempt
+                                    ? 'bg-fuchsia-100 text-fuchsia-700'
+                                    : STATUS_META[entry.status].badge
+                                }`}
+                              >
+                                {isSelectedPrayerExempt ? 'Exempt' : STATUS_META[entry.status].label}
                               </span>
                             </div>
 
@@ -1130,8 +1268,11 @@ const SalahTracker: React.FC = () => {
                               <button
                                 key={status}
                                 onClick={() => handleStatusChange(prayer.key, status)}
+                                disabled={isSelectedPrayerExempt}
                                 className={`rounded-lg border px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
-                                  isActive
+                                  isSelectedPrayerExempt
+                                    ? 'cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400'
+                                    : isActive
                                     ? STATUS_META[status].activeButton
                                     : 'border-gray-200 bg-white text-gray-600 hover:border-emerald-300 hover:text-emerald-700'
                                 }`}
@@ -1144,7 +1285,12 @@ const SalahTracker: React.FC = () => {
                           {entry.status !== 'pending' && (
                             <button
                               onClick={() => handleStatusChange(prayer.key, 'pending')}
-                              className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500 transition hover:border-gray-300 hover:text-gray-700"
+                              disabled={isSelectedPrayerExempt}
+                              className={`rounded-lg border px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
+                                isSelectedPrayerExempt
+                                  ? 'cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400'
+                                  : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                              }`}
                             >
                               Clear
                             </button>
@@ -1157,8 +1303,17 @@ const SalahTracker: React.FC = () => {
                           type="text"
                           value={entry.note}
                           onChange={(event) => handlePrayerNoteChange(prayer.key, event.target.value)}
-                          placeholder="Optional note (jama'ah, late due to travel, etc.)"
-                          className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                          disabled={isSelectedPrayerExempt}
+                          placeholder={
+                            isSelectedPrayerExempt
+                              ? 'Prayer notes are paused while this day is marked exempt.'
+                              : 'Optional note (jama\'ah, late due to travel, etc.)'
+                          }
+                          className={`w-full rounded-xl border px-3 py-2 text-sm outline-none transition ${
+                            isSelectedPrayerExempt
+                              ? 'cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400'
+                              : 'border-gray-200 text-gray-700 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100'
+                          }`}
                         />
                       </div>
                     </article>
@@ -1212,7 +1367,9 @@ const SalahTracker: React.FC = () => {
             <aside className="space-y-6">
               <section className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm">
                 <h3 className="text-lg font-semibold text-gray-900">Weekly Trend (Salah + Quran)</h3>
-                <p className="mt-1 text-sm text-gray-600">Live day-by-day ups and downs. Green = Salah, Purple = Quran.</p>
+                <p className="mt-1 text-sm text-gray-600">
+                  Live day-by-day ups and downs. Green = Salah, Purple = Quran, Pink = prayer-exempt.
+                </p>
                 <p className="mt-1 text-xs text-gray-500">Range: {weeklyRangeLabel}</p>
 
                 <div className="mt-2 flex items-center gap-3 text-xs">
@@ -1223,6 +1380,10 @@ const SalahTracker: React.FC = () => {
                   <span className="inline-flex items-center gap-1 text-violet-700">
                     <span className="h-2.5 w-2.5 rounded-full bg-violet-500" />
                     Quran
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-fuchsia-700">
+                    <span className="h-2.5 w-2.5 rounded-full bg-fuchsia-300" />
+                    Exempt
                   </span>
                 </div>
 
@@ -1265,7 +1426,9 @@ const SalahTracker: React.FC = () => {
                     {weeklyData.map((day) => (
                       <div key={day.dateKey} className="text-center">
                         <p className="text-[11px] font-medium text-gray-500">{day.label}</p>
-                        <p className="text-[10px] text-emerald-700">{day.prayerScore}%</p>
+                        <p className={`text-[10px] ${day.isPrayerExempt ? 'text-fuchsia-700' : 'text-emerald-700'}`}>
+                          {day.isPrayerExempt ? 'Exempt' : `${day.prayerScore}%`}
+                        </p>
                         <p className="text-[10px] text-violet-700">{day.quranScore}%</p>
                       </div>
                     ))}
@@ -1275,17 +1438,28 @@ const SalahTracker: React.FC = () => {
 
               <section className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm">
                 <h3 className="text-lg font-semibold text-gray-900">Salah Heatmap (30 Days)</h3>
-                <p className="mt-1 text-sm text-gray-600">Perfect days: {perfectDaysInPrayerHeatmap}/30</p>
+                <p className="mt-1 text-sm text-gray-600">
+                  Perfect days: {perfectDaysInPrayerHeatmap}/{eligiblePrayerDaysInHeatmap || 0}
+                  {exemptPrayerDaysInHeatmap > 0 ? ` • ${exemptPrayerDaysInHeatmap} exempt` : ''}
+                </p>
 
                 <div className="mt-4 grid grid-cols-10 gap-1.5">
                   {prayerHeatmapData.map((day) => (
                     <div
                       key={day.dateKey}
-                      className={`h-5 w-full rounded border ${getPrayerHeatmapTone(day.score)}`}
-                      title={`${day.dateKey}: ${day.score}%`}
+                      className={`h-5 w-full rounded border ${getPrayerHeatmapTone(day.score, day.isPrayerExempt)}`}
+                      title={
+                        day.isPrayerExempt
+                          ? `${day.dateKey}: ${PRAYER_EXEMPTION_REASON_LABEL[day.prayerExemptionReason]}`
+                          : `${day.dateKey}: ${day.score}%`
+                      }
                     />
                   ))}
                 </div>
+
+                {exemptPrayerDaysInHeatmap > 0 && (
+                  <p className="mt-3 text-[11px] text-fuchsia-700">Pink blocks are excluded from Salah scoring and streaks.</p>
+                )}
               </section>
 
               <section className="rounded-3xl border border-violet-100 bg-white p-5 shadow-sm">
@@ -1414,18 +1588,28 @@ const SalahTracker: React.FC = () => {
                   <div key={`export-week-${day.dateKey}`} className="rounded-xl border border-gray-100 bg-gray-50 p-2 text-center">
                     <p className="text-xs font-semibold text-gray-500">{day.label}</p>
                     <div className="mt-2 flex h-24 items-end justify-center gap-1">
-                      <div
-                        className="w-3 rounded-t bg-emerald-500"
-                        style={{ height: `${Math.max(8, day.prayerScore)}%` }}
-                        title={`Salah ${day.prayerScore}%`}
-                      />
+                      {day.isPrayerExempt ? (
+                        <div
+                          className="w-3 rounded-t bg-fuchsia-300"
+                          style={{ height: '24%' }}
+                          title={PRAYER_EXEMPTION_REASON_LABEL[day.prayerExemptionReason]}
+                        />
+                      ) : (
+                        <div
+                          className="w-3 rounded-t bg-emerald-500"
+                          style={{ height: `${Math.max(8, day.prayerScore ?? 0)}%` }}
+                          title={`Salah ${day.prayerScore}%`}
+                        />
+                      )}
                       <div
                         className="w-3 rounded-t bg-violet-500"
                         style={{ height: `${Math.max(8, day.quranScore)}%` }}
                         title={`Quran ${day.quranScore}%`}
                       />
                     </div>
-                    <p className="mt-2 text-[11px] text-emerald-700">S {day.prayerScore}%</p>
+                    <p className={`mt-2 text-[11px] ${day.isPrayerExempt ? 'text-fuchsia-700' : 'text-emerald-700'}`}>
+                      {day.isPrayerExempt ? 'S Exempt' : `S ${day.prayerScore}%`}
+                    </p>
                     <p className="text-[11px] text-violet-700">Q {day.quranScore}%</p>
                   </div>
                 ))}
@@ -1464,11 +1648,18 @@ const SalahTracker: React.FC = () => {
                 {prayerHeatmapData.map((day) => (
                   <div
                     key={`export-salah-${day.dateKey}`}
-                    className={`h-6 rounded border ${getPrayerHeatmapTone(day.score)}`}
-                    title={`${day.dateKey}: ${day.score}%`}
+                    className={`h-6 rounded border ${getPrayerHeatmapTone(day.score, day.isPrayerExempt)}`}
+                    title={
+                      day.isPrayerExempt
+                        ? `${day.dateKey}: ${PRAYER_EXEMPTION_REASON_LABEL[day.prayerExemptionReason]}`
+                        : `${day.dateKey}: ${day.score}%`
+                    }
                   />
                 ))}
               </div>
+              {exemptPrayerDaysInHeatmap > 0 && (
+                <p className="mt-3 text-sm text-fuchsia-700">Pink blocks are excluded from Salah scoring and streaks.</p>
+              )}
             </section>
           )}
 

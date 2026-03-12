@@ -9,6 +9,7 @@ const MAX_RECORDS = 4000;
 const MAX_ACTIVITY_ITEMS = 365;
 const DATE_KEY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const ALLOWED_QURAN_STATUS = new Set(['none', 'read', 'translation', 'tafseer']);
+const ALLOWED_PRAYER_EXEMPTION_REASONS = new Set(['none', 'menstruation']);
 
 interface TrackerActivityInput {
   dateKey: string;
@@ -19,6 +20,8 @@ interface TrackerActivityInput {
   prayerScore: number;
   quranScore: number;
   quranStatus: 'none' | 'read' | 'translation' | 'tafseer';
+  isPrayerExempt: boolean;
+  prayerExemptionReason: 'none' | 'menstruation';
   note: string;
   hasAnyActivity: boolean;
 }
@@ -75,6 +78,10 @@ const normalizeActivity = (value: unknown): TrackerActivityInput[] => {
     const quranStatus = ALLOWED_QURAN_STATUS.has(quranStatusRaw)
       ? (quranStatusRaw as TrackerActivityInput['quranStatus'])
       : 'none';
+    const prayerExemptionReasonRaw = String(raw.prayerExemptionReason || 'none');
+    const prayerExemptionReason = ALLOWED_PRAYER_EXEMPTION_REASONS.has(prayerExemptionReasonRaw)
+      ? (prayerExemptionReasonRaw as TrackerActivityInput['prayerExemptionReason'])
+      : 'none';
 
     normalized.push({
       dateKey,
@@ -85,6 +92,8 @@ const normalizeActivity = (value: unknown): TrackerActivityInput[] => {
       prayerScore: clamp(Math.round(toFiniteNumber(raw.prayerScore, 0)), 0, 100),
       quranScore: clamp(Math.round(toFiniteNumber(raw.quranScore, 0)), 0, 100),
       quranStatus,
+      isPrayerExempt: Boolean(raw.isPrayerExempt),
+      prayerExemptionReason,
       note: typeof raw.note === 'string' ? raw.note.slice(0, 3000) : '',
       hasAnyActivity: Boolean(raw.hasAnyActivity),
     });
@@ -107,7 +116,7 @@ router.get('/', authMiddleware, async (req: any, res: Response) => {
       return res.json({
         status: 'success',
         data: {
-          version: 2,
+          version: 3,
           records: {},
           stats: {},
           activity: [],
@@ -119,7 +128,7 @@ router.get('/', authMiddleware, async (req: any, res: Response) => {
     return res.json({
       status: 'success',
       data: {
-        version: tracker.version ?? 2,
+        version: tracker.version ?? 3,
         records: tracker.records ?? {},
         stats: tracker.stats ?? {},
         activity: tracker.activity ?? [],
@@ -162,7 +171,7 @@ router.put(
 
       const userId = (req as any).user?.userId;
       const parsedVersion = Number(req.body.version);
-      const version = Number.isInteger(parsedVersion) && parsedVersion >= 1 && parsedVersion <= 50 ? parsedVersion : 2;
+      const version = Number.isInteger(parsedVersion) && parsedVersion >= 1 && parsedVersion <= 50 ? parsedVersion : 3;
 
       const records = normalizeRecords(req.body.records);
       const stats = normalizeStats(req.body.stats);

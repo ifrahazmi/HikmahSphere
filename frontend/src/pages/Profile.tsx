@@ -9,6 +9,7 @@ import {
   BookOpenIcon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
+  MoonIcon,
   XCircleIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../hooks/useAuth';
@@ -16,6 +17,7 @@ import toast from 'react-hot-toast';
 import PageSEO from '../components/PageSEO';
 import { API_URL } from '../config';
 import {
+  PRAYER_EXEMPTION_REASON_LABEL,
   QURAN_STATUS_LABEL,
   filterRecordsFromDate,
   formatCompactDate,
@@ -370,8 +372,12 @@ const Profile: React.FC = () => {
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="text-sm font-semibold text-gray-900 sm:text-base">{formatCompactDate(item.dateKey)}</p>
                         <div className="flex items-center gap-2">
-                          <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">
-                            Salah {item.prayerScore}%
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                              item.isPrayerExempt ? 'bg-fuchsia-100 text-fuchsia-700' : 'bg-emerald-100 text-emerald-700'
+                            }`}
+                          >
+                            {item.isPrayerExempt ? 'Salah Exempt' : `Salah ${item.prayerScore}%`}
                           </span>
                           <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-700">
                             Quran {item.quranScore}%
@@ -380,23 +386,32 @@ const Profile: React.FC = () => {
                       </div>
 
                       <div className="mt-3 flex flex-wrap items-center gap-2">
-                        <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
-                          <CheckCircleIcon className="h-3.5 w-3.5" />
-                          Prayed: {item.prayed}/5
-                        </span>
-                        <span className="inline-flex items-center gap-1 rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
-                          <ExclamationTriangleIcon className="h-3.5 w-3.5" />
-                          Qada: {item.qada}
-                        </span>
-                        <span className="inline-flex items-center gap-1 rounded-lg bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700">
-                          <XCircleIcon className="h-3.5 w-3.5" />
-                          Missed: {item.missed}
-                        </span>
+                        {item.isPrayerExempt ? (
+                          <span className="inline-flex items-center gap-1 rounded-lg bg-fuchsia-50 px-2.5 py-1 text-xs font-medium text-fuchsia-700">
+                            <MoonIcon className="h-3.5 w-3.5" />
+                            {PRAYER_EXEMPTION_REASON_LABEL[item.prayerExemptionReason]}
+                          </span>
+                        ) : (
+                          <>
+                            <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                              <CheckCircleIcon className="h-3.5 w-3.5" />
+                              Prayed: {item.prayed}/5
+                            </span>
+                            <span className="inline-flex items-center gap-1 rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+                              <ExclamationTriangleIcon className="h-3.5 w-3.5" />
+                              Qada: {item.qada}
+                            </span>
+                            <span className="inline-flex items-center gap-1 rounded-lg bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700">
+                              <XCircleIcon className="h-3.5 w-3.5" />
+                              Missed: {item.missed}
+                            </span>
+                          </>
+                        )}
                         <span className="inline-flex items-center gap-1 rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
                           <BookOpenIcon className="h-3.5 w-3.5" />
                           {QURAN_STATUS_LABEL[item.quranStatus]}
                         </span>
-                        {item.pending > 0 && (
+                        {!item.isPrayerExempt && item.pending > 0 && (
                           <span className="inline-flex items-center gap-1 rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
                             Pending: {item.pending}
                           </span>

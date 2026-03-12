@@ -1,6 +1,7 @@
 export type PrayerName = 'fajr' | 'dhuhr' | 'asr' | 'maghrib' | 'isha';
 export type PrayerStatus = 'pending' | 'prayed' | 'qada' | 'missed';
 export type QuranStatus = 'none' | 'read' | 'translation' | 'tafseer';
+export type PrayerExemptionReason = 'none' | 'menstruation';
 
 export interface PrayerEntry {
   status: PrayerStatus;
@@ -16,6 +17,7 @@ export interface QuranEntry {
 export interface DayRecord {
   prayers: Record<PrayerName, PrayerEntry>;
   quran: QuranEntry;
+  prayerExemptionReason: PrayerExemptionReason;
   dailyNote: string;
   updatedAt: string;
 }
@@ -36,6 +38,7 @@ export interface TrackerAggregate {
   trackedDays: number;
   activeDays: number;
   perfectDays: number;
+  prayerExemptDays: number;
   prayersPrayed: number;
   prayersQada: number;
   prayersMissed: number;
@@ -54,14 +57,16 @@ export interface DailyActivityItem {
   qada: number;
   missed: number;
   pending: number;
-  prayerScore: number;
+  prayerScore: number | null;
   quranScore: number;
   quranStatus: QuranStatus;
+  isPrayerExempt: boolean;
+  prayerExemptionReason: PrayerExemptionReason;
   hasAnyActivity: boolean;
   note: string;
 }
 
-export const STORAGE_VERSION = 2;
+export const STORAGE_VERSION = 3;
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
 export const PRAYER_KEYS: PrayerName[] = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
@@ -85,6 +90,11 @@ export const QURAN_STATUS_LABEL: Record<QuranStatus, string> = {
   read: 'Read (Arabic)',
   translation: 'Read + Translation',
   tafseer: 'Read + Tafseer',
+};
+
+export const PRAYER_EXEMPTION_REASON_LABEL: Record<PrayerExemptionReason, string> = {
+  none: 'Prayer Required',
+  menstruation: 'Menstrual Cycle',
 };
 
 const nowIso = (): string => new Date().toISOString();
@@ -151,6 +161,10 @@ const isQuranStatus = (value: unknown): value is QuranStatus => {
   return value === 'none' || value === 'read' || value === 'translation' || value === 'tafseer';
 };
 
+const isPrayerExemptionReason = (value: unknown): value is PrayerExemptionReason => {
+  return value === 'none' || value === 'menstruation';
+};
+
 const createEmptyPrayerEntry = (): PrayerEntry => ({
   status: 'pending',
   note: '',
@@ -170,6 +184,7 @@ export const createDefaultDayRecord = (): DayRecord => {
       status: 'none',
       updatedAt: nowIso(),
     },
+    prayerExemptionReason: 'none',
     dailyNote: '',
     updatedAt: nowIso(),
   };
@@ -185,6 +200,7 @@ export const normalizeDayRecord = (value: unknown): DayRecord => {
   const unsafeValue = value as {
     prayers?: Record<string, any>;
     quran?: { status?: unknown; updatedAt?: unknown };
+    prayerExemptionReason?: unknown;
     dailyNote?: unknown;
     updatedAt?: unknown;
   };
@@ -209,6 +225,9 @@ export const normalizeDayRecord = (value: unknown): DayRecord => {
       status: isQuranStatus(quranStatus) ? quranStatus : 'none',
       updatedAt: typeof unsafeValue.quran?.updatedAt === 'string' ? unsafeValue.quran.updatedAt : nowIso(),
     },
+    prayerExemptionReason: isPrayerExemptionReason(unsafeValue.prayerExemptionReason)
+      ? unsafeValue.prayerExemptionReason
+      : 'none',
     dailyNote: typeof unsafeValue.dailyNote === 'string' ? unsafeValue.dailyNote : '',
     updatedAt: typeof unsafeValue.updatedAt === 'string' ? unsafeValue.updatedAt : nowIso(),
   };
@@ -264,19 +283,39 @@ export const writeTrackerToStorage = (storageKey: string, records: TrackerRecord
   }
 };
 
+export const isPrayerExemptDay = (dayRecord: DayRecord): boolean => {
+  return dayRecord.prayerExemptionReason !== 'none';
+};
+
+export const getRequiredPrayerCount = (dayRecord: DayRecord): number => {
+  return isPrayerExemptDay(dayRecord) ? 0 : PRAYER_KEYS.length;
+};
+
 export const getLoggedCount = (dayRecord: DayRecord): number => {
+  if (isPrayerExemptDay(dayRecord)) {
+    return 0;
+  }
+
   return PRAYER_KEYS.reduce((count, prayerKey) => {
     return dayRecord.prayers[prayerKey].status === 'pending' ? count : count + 1;
   }, 0);
 };
 
 export const countByStatus = (dayRecord: DayRecord, status: PrayerStatus): number => {
+  if (isPrayerExemptDay(dayRecord)) {
+    return 0;
+  }
+
   return PRAYER_KEYS.reduce((count, prayerKey) => {
     return dayRecord.prayers[prayerKey].status === status ? count + 1 : count;
   }, 0);
 };
 
 export const getDayScore = (dayRecord: DayRecord): number => {
+  if (isPrayerExemptDay(dayRecord)) {
+    return 0;
+  }
+
   const score = PRAYER_KEYS.reduce((sum, prayerKey) => {
     return sum + SCORE_BY_STATUS[dayRecord.prayers[prayerKey].status];
   }, 0);
@@ -289,10 +328,18 @@ export const getQuranScore = (dayRecord: DayRecord): number => {
 };
 
 export const isActiveDay = (dayRecord: DayRecord): boolean => {
+  if (isPrayerExemptDay(dayRecord)) {
+    return false;
+  }
+
   return PRAYER_KEYS.every((prayerKey) => dayRecord.prayers[prayerKey].status !== 'pending');
 };
 
 export const isPerfectDay = (dayRecord: DayRecord): boolean => {
+  if (isPrayerExemptDay(dayRecord)) {
+    return false;
+  }
+
   return PRAYER_KEYS.every((prayerKey) => dayRecord.prayers[prayerKey].status === 'prayed');
 };
 
@@ -307,8 +354,14 @@ export const getCurrentStreak = (records: TrackerRecords, fromDateKey: string): 
   while (true) {
     const key = formatDateKey(cursor);
     const day = records[key];
+    const normalizedDay = day ? normalizeDayRecord(day) : null;
 
-    if (!day || !isActiveDay(normalizeDayRecord(day))) {
+    if (normalizedDay && isPrayerExemptDay(normalizedDay)) {
+      cursor = addDays(cursor, -1);
+      continue;
+    }
+
+    if (!normalizedDay || !isActiveDay(normalizedDay)) {
       break;
     }
 
@@ -320,28 +373,37 @@ export const getCurrentStreak = (records: TrackerRecords, fromDateKey: string): 
 };
 
 export const getBestStreak = (records: TrackerRecords): number => {
-  const activeDateKeys = Object.keys(records)
-    .filter((key) => isActiveDay(normalizeDayRecord(records[key])))
-    .sort();
+  const dateKeys = Object.keys(records).sort();
 
-  if (activeDateKeys.length === 0) {
+  if (dateKeys.length === 0) {
     return 0;
   }
 
-  let best = 1;
-  let current = 1;
+  const firstDate = parseDateKey(dateKeys[0]);
+  const lastDate = parseDateKey(dateKeys[dateKeys.length - 1]);
 
-  for (let i = 1; i < activeDateKeys.length; i += 1) {
-    const previousDate = parseDateKey(activeDateKeys[i - 1]);
-    const currentDate = parseDateKey(activeDateKeys[i]);
-    const diff = Math.round((currentDate.getTime() - previousDate.getTime()) / DAY_MS);
+  let best = 0;
+  let current = 0;
+  let cursor = firstDate;
 
-    if (diff === 1) {
+  while (cursor.getTime() <= lastDate.getTime()) {
+    const key = formatDateKey(cursor);
+    const rawDay = records[key];
+    const day = rawDay ? normalizeDayRecord(rawDay) : null;
+
+    if (day && isPrayerExemptDay(day)) {
+      cursor = addDays(cursor, 1);
+      continue;
+    }
+
+    if (day && isActiveDay(day)) {
       current += 1;
       best = Math.max(best, current);
     } else {
-      current = 1;
+      current = 0;
     }
+
+    cursor = addDays(cursor, 1);
   }
 
   return best;
@@ -367,6 +429,7 @@ export const getAggregatedStats = (records: TrackerRecords): TrackerAggregate =>
       trackedDays: 0,
       activeDays: 0,
       perfectDays: 0,
+      prayerExemptDays: 0,
       prayersPrayed: 0,
       prayersQada: 0,
       prayersMissed: 0,
@@ -382,6 +445,7 @@ export const getAggregatedStats = (records: TrackerRecords): TrackerAggregate =>
 
   let activeDays = 0;
   let perfectDays = 0;
+  let prayerExemptDays = 0;
   let prayersPrayed = 0;
   let prayersQada = 0;
   let prayersMissed = 0;
@@ -394,6 +458,10 @@ export const getAggregatedStats = (records: TrackerRecords): TrackerAggregate =>
 
   dateKeys.forEach((dateKey) => {
     const day = normalizeDayRecord(records[dateKey]);
+
+    if (isPrayerExemptDay(day)) {
+      prayerExemptDays += 1;
+    }
 
     if (isActiveDay(day)) {
       activeDays += 1;
@@ -422,16 +490,19 @@ export const getAggregatedStats = (records: TrackerRecords): TrackerAggregate =>
     quranScoreTotal += getQuranScore(day);
   });
 
+  const eligiblePrayerDays = dateKeys.length - prayerExemptDays;
+
   return {
-    trackedDays: dateKeys.length,
+    trackedDays: eligiblePrayerDays,
     activeDays,
     perfectDays,
+    prayerExemptDays,
     prayersPrayed,
     prayersQada,
     prayersMissed,
     prayersPending,
     prayersLogged: prayersPrayed + prayersQada + prayersMissed,
-    averagePrayerScore: Math.round(prayerScoreTotal / dateKeys.length),
+    averagePrayerScore: eligiblePrayerDays > 0 ? Math.round(prayerScoreTotal / eligiblePrayerDays) : 0,
     quranReadDays,
     quranTranslationDays,
     quranTafseerDays,
@@ -443,13 +514,18 @@ export const getDailyActivity = (records: TrackerRecords, limit = 30): DailyActi
   return Object.entries(records)
     .map(([dateKey, rawDay]) => {
       const day = normalizeDayRecord(rawDay);
+      const isPrayerExempt = isPrayerExemptDay(day);
       const prayed = countByStatus(day, 'prayed');
       const qada = countByStatus(day, 'qada');
       const missed = countByStatus(day, 'missed');
       const pending = countByStatus(day, 'pending');
-      const prayerScore = getDayScore(day);
+      const prayerScore = isPrayerExempt ? null : getDayScore(day);
       const quranScore = getQuranScore(day);
-      const hasAnyActivity = prayed + qada + missed > 0 || day.quran.status !== 'none' || day.dailyNote.trim().length > 0;
+      const hasAnyActivity =
+        isPrayerExempt ||
+        prayed + qada + missed > 0 ||
+        day.quran.status !== 'none' ||
+        day.dailyNote.trim().length > 0;
 
       return {
         dateKey,
@@ -460,6 +536,8 @@ export const getDailyActivity = (records: TrackerRecords, limit = 30): DailyActi
         prayerScore,
         quranScore,
         quranStatus: day.quran.status,
+        isPrayerExempt,
+        prayerExemptionReason: day.prayerExemptionReason,
         hasAnyActivity,
         note: day.dailyNote,
       };

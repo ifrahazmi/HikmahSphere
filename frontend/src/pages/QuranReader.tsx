@@ -20,8 +20,76 @@ import {
 import { useQuran } from '../contexts/QuranContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import PageSEO from '../components/PageSEO';
-import { DEFAULT_TRANSLATIONS } from '../types/quran';
+import { BOOKMARK_COLOR_OPTIONS, type BookmarkColor, DEFAULT_TRANSLATIONS } from '../types/quran';
 import { getIndopakQuranData, getIndopakSurah, type IndopakSurah } from '../utils/indopakQuran';
+
+const BOOKMARK_COLOR_CLASS_MAP: Record<
+  BookmarkColor,
+  {
+    background: string;
+    border: string;
+    list: string;
+    swatch: string;
+    selection: string;
+  }
+> = {
+  emerald: {
+    background: 'bg-emerald-300 bg-opacity-50',
+    border: 'border-emerald-600 text-emerald-600',
+    list: 'border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20',
+    swatch: 'bg-emerald-600',
+    selection: 'ring-2 ring-emerald-500',
+  },
+  red: {
+    background: 'bg-red-300 bg-opacity-50',
+    border: 'border-red-600 text-red-600',
+    list: 'border-red-600 bg-red-50 dark:bg-red-900/20',
+    swatch: 'bg-red-600',
+    selection: 'ring-2 ring-red-500',
+  },
+  teal: {
+    background: 'bg-teal-300 bg-opacity-50',
+    border: 'border-teal-600 text-teal-600',
+    list: 'border-teal-600 bg-teal-50 dark:bg-teal-900/20',
+    swatch: 'bg-teal-600',
+    selection: 'ring-2 ring-teal-500',
+  },
+  indigo: {
+    background: 'bg-indigo-300 bg-opacity-50',
+    border: 'border-indigo-600 text-indigo-600',
+    list: 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/20',
+    swatch: 'bg-indigo-600',
+    selection: 'ring-2 ring-indigo-500',
+  },
+  blue: {
+    background: 'bg-blue-300 bg-opacity-50',
+    border: 'border-blue-600 text-blue-600',
+    list: 'border-blue-600 bg-blue-50 dark:bg-blue-900/20',
+    swatch: 'bg-blue-600',
+    selection: 'ring-2 ring-blue-500',
+  },
+  purple: {
+    background: 'bg-purple-300 bg-opacity-50',
+    border: 'border-purple-600 text-purple-600',
+    list: 'border-purple-600 bg-purple-50 dark:bg-purple-900/20',
+    swatch: 'bg-purple-600',
+    selection: 'ring-2 ring-purple-500',
+  },
+  amber: {
+    background: 'bg-amber-300 bg-opacity-50',
+    border: 'border-amber-600 text-amber-600',
+    list: 'border-amber-600 bg-amber-50 dark:bg-amber-900/20',
+    swatch: 'bg-amber-600',
+    selection: 'ring-2 ring-amber-500',
+  },
+  rose: {
+    background: 'bg-rose-300 bg-opacity-50',
+    border: 'border-rose-600 text-rose-600',
+    list: 'border-rose-600 bg-rose-50 dark:bg-rose-900/20',
+    swatch: 'bg-rose-600',
+    selection: 'ring-2 ring-rose-500',
+  },
+};
 
 const QuranReader: React.FC = () => {
   const {
@@ -64,7 +132,7 @@ const QuranReader: React.FC = () => {
     x: number;
     y: number;
     note?: string;
-    color?: 'emerald' | 'blue' | 'purple' | 'amber' | 'rose';
+    color?: BookmarkColor;
   } | null>(null);
   const [selectedAyahForBookmark, setSelectedAyahForBookmark] = useState<{surah: number, ayah: number} | null>(null);
   // Track visual viewport for iOS keyboard-aware bookmark modal positioning
@@ -355,35 +423,42 @@ const QuranReader: React.FC = () => {
   };
 
   // Get bookmark color for a specific ayah
-  const getBookmarkColor = (surahNum: number, ayahNum: number): string | undefined => {
+  const getBookmarkColor = (surahNum: number, ayahNum: number): BookmarkColor | undefined => {
     const bookmark = bookmarks.find(b => b.surahNumber === surahNum && b.ayahNumber === ayahNum);
     return bookmark?.color;
   };
 
   // Get background class based on bookmark color
-  const getBookmarkBackgroundClass = (color?: string): string => {
+  const getBookmarkBackgroundClass = (color?: BookmarkColor): string => {
     if (!color) return '';
-    const colorMap = {
-      emerald: 'bg-emerald-300 bg-opacity-50',
-      blue: 'bg-blue-300 bg-opacity-50',
-      purple: 'bg-purple-300 bg-opacity-50',
-      amber: 'bg-amber-300 bg-opacity-50',
-      rose: 'bg-rose-300 bg-opacity-50',
-    };
-    return colorMap[color] || '';
+    return BOOKMARK_COLOR_CLASS_MAP[color]?.background || '';
   };
 
   // Get border color class based on bookmark color
-  const getBookmarkBorderClass = (color?: string): string => {
+  const getBookmarkBorderClass = (color?: BookmarkColor): string => {
     if (!color) return 'border-emerald-600 text-emerald-600';
-    const colorMap = {
-      emerald: 'border-emerald-600 text-emerald-600',
-      blue: 'border-blue-600 text-blue-600',
-      purple: 'border-purple-600 text-purple-600',
-      amber: 'border-amber-600 text-amber-600',
-      rose: 'border-rose-600 text-rose-600',
-    };
-    return colorMap[color] || 'border-emerald-600 text-emerald-600';
+    return BOOKMARK_COLOR_CLASS_MAP[color]?.border || 'border-emerald-600 text-emerald-600';
+  };
+
+  const getBookmarkSelectionClass = (color?: BookmarkColor): string => {
+    if (!color) return 'bg-emerald-400 bg-opacity-40 ring-2 ring-emerald-500';
+    return BOOKMARK_COLOR_CLASS_MAP[color]?.selection || '';
+  };
+
+  const getBookmarkHoverClass = (color?: BookmarkColor): string => {
+    if (color) return '';
+    return 'hover:bg-emerald-100 hover:bg-opacity-30';
+  };
+
+  const getBookmarkListClass = (color?: BookmarkColor): string => {
+    if (!color) {
+      return settings.theme === 'dark' ? 'border-gray-600 bg-gray-700' : 'border-gray-300 bg-gray-50';
+    }
+    return BOOKMARK_COLOR_CLASS_MAP[color]?.list || '';
+  };
+
+  const getBookmarkSwatchClass = (color: BookmarkColor): string => {
+    return BOOKMARK_COLOR_CLASS_MAP[color]?.swatch || 'bg-emerald-600';
   };
 
   // Get font color class based on settings
@@ -1353,14 +1428,7 @@ const QuranReader: React.FC = () => {
                       bookmarks.map((bookmark) => (
                         <div
                           key={bookmark.id}
-                          className={`p-2 rounded-md border-l-4 ${
-                            bookmark.color === 'emerald' ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20' :
-                            bookmark.color === 'blue' ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' :
-                            bookmark.color === 'purple' ? 'border-purple-600 bg-purple-50 dark:bg-purple-900/20' :
-                            bookmark.color === 'amber' ? 'border-amber-600 bg-amber-50 dark:bg-amber-900/20' :
-                            bookmark.color === 'rose' ? 'border-rose-600 bg-rose-50 dark:bg-rose-900/20' :
-                            settings.theme === 'dark' ? 'border-gray-600 bg-gray-700' : 'border-gray-300 bg-gray-50'
-                          }`}
+                          className={`p-2 rounded-md border-l-4 ${getBookmarkListClass(bookmark.color)}`}
                         >
                           <div className="flex items-start justify-between">
                             <button
@@ -1571,7 +1639,7 @@ const QuranReader: React.FC = () => {
                             <span key={ayahNum}>
                               <span
                                 onClick={(e) => handleAyahClick(e, surahData.number, ayahNum)}
-                                className={`cursor-pointer hover:bg-emerald-100 hover:bg-opacity-30 rounded px-1 ${bgClass} ${isSelectedForBookmark ? 'bg-emerald-400 bg-opacity-40 ring-2 ring-emerald-500' : ''}`}
+                                className={`cursor-pointer rounded px-1 ${getBookmarkHoverClass(bookmarkColor)} ${bgClass} ${isSelectedForBookmark ? getBookmarkSelectionClass(bookmarkColor) : ''}`}
                               >
                                 {formatIndopakAyahText(ayah.text, `indopak-inline-${ayahNum}`)}
                               </span>
@@ -1615,12 +1683,15 @@ const QuranReader: React.FC = () => {
                                     const bookmarkColor = getBookmarkColor(surahData.number, ayahNum);
                                     const bgClass = getBookmarkBackgroundClass(bookmarkColor);
                                     const borderClass = getBookmarkBorderClass(bookmarkColor);
+                                    const isSelectedForBookmark =
+                                      selectedAyahForBookmark?.surah === surahData.number &&
+                                      selectedAyahForBookmark?.ayah === ayahNum;
 
                                     return (
                                       <>
                                         <span
                                           onClick={(e) => handleAyahClick(e, surahData.number, ayahNum)}
-                                          className={`cursor-pointer hover:bg-emerald-100 hover:bg-opacity-30 rounded px-1 ${bgClass}`}
+                                          className={`cursor-pointer rounded px-1 ${getBookmarkHoverClass(bookmarkColor)} ${bgClass} ${isSelectedForBookmark ? getBookmarkSelectionClass(bookmarkColor) : ''}`}
                                         >
                                           {formatIndopakAyahText(ayah.text, `indopak-block-${ayahNum}`)}
                                         </span>
@@ -1716,7 +1787,7 @@ const QuranReader: React.FC = () => {
                             <span key={ayah.numberInSurah}>
                               <span
                                 onClick={(e) => handleAyahClick(e, surahData.number, ayah.numberInSurah)}
-                                className={`cursor-pointer hover:bg-emerald-100 hover:bg-opacity-30 rounded px-1 ${bgClass} ${isSelectedForBookmark ? 'bg-emerald-400 bg-opacity-40 ring-2 ring-emerald-500' : ''}`}
+                                className={`cursor-pointer rounded px-1 ${getBookmarkHoverClass(bookmarkColor)} ${bgClass} ${isSelectedForBookmark ? getBookmarkSelectionClass(bookmarkColor) : ''}`}
                               >
                                 {settings.arabicFont === 'indopak-nastaleeq-v2'
                                   ? stripIndopakV2AyahEndMarker(ayah.text)
@@ -1797,7 +1868,7 @@ const QuranReader: React.FC = () => {
                                   <>
                                     <span
                                       onClick={(e) => handleAyahClick(e, surahData.number, ayah.numberInSurah)}
-                                      className={`cursor-pointer hover:bg-emerald-100 hover:bg-opacity-30 rounded px-1 ${bgClass} ${isSelectedForBookmark ? 'bg-emerald-400 bg-opacity-40 ring-2 ring-emerald-500' : ''}`}
+                                      className={`cursor-pointer rounded px-1 ${getBookmarkHoverClass(bookmarkColor)} ${bgClass} ${isSelectedForBookmark ? getBookmarkSelectionClass(bookmarkColor) : ''}`}
                                     >
                                       {settings.arabicFont === 'indopak-nastaleeq-v2'
                                         ? stripIndopakV2AyahEndMarker(ayah.text)
@@ -2422,14 +2493,7 @@ const QuranReader: React.FC = () => {
                       bookmarks.map((bookmark) => (
                         <div
                           key={bookmark.id}
-                          className={`p-3 rounded-lg border-l-4 ${
-                            bookmark.color === 'emerald' ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20' :
-                            bookmark.color === 'blue' ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' :
-                            bookmark.color === 'purple' ? 'border-purple-600 bg-purple-50 dark:bg-purple-900/20' :
-                            bookmark.color === 'amber' ? 'border-amber-600 bg-amber-50 dark:bg-amber-900/20' :
-                            bookmark.color === 'rose' ? 'border-rose-600 bg-rose-50 dark:bg-rose-900/20' :
-                            settings.theme === 'dark' ? 'border-gray-600 bg-gray-700' : 'border-gray-300 bg-gray-50'
-                          }`}
+                          className={`p-3 rounded-lg border-l-4 ${getBookmarkListClass(bookmark.color)}`}
                         >
                           <div className="flex items-start justify-between">
                             <button
@@ -2551,19 +2615,13 @@ const QuranReader: React.FC = () => {
                       Highlight Color
                     </label>
                     <div className="flex gap-2 flex-wrap">
-                      {(['emerald', 'blue', 'purple', 'amber', 'rose'] as const).map((color) => (
+                      {BOOKMARK_COLOR_OPTIONS.map((color) => (
                         <button
                           key={color}
                           onClick={() => setBookmarkConfirm({ ...bookmarkConfirm, color })}
                           className={`w-9 h-9 rounded-lg border-2 transition-all transform hover:scale-110 ${
                             bookmarkConfirm.color === color ? 'border-gray-900 scale-110' : 'border-transparent'
-                          } ${
-                            color === 'emerald' ? 'bg-emerald-600' :
-                            color === 'blue' ? 'bg-blue-600' :
-                            color === 'purple' ? 'bg-purple-600' :
-                            color === 'amber' ? 'bg-amber-600' :
-                            'bg-rose-600'
-                          }`}
+                          } ${getBookmarkSwatchClass(color)}`}
                           title={color}
                         />
                       ))}
@@ -2644,19 +2702,13 @@ const QuranReader: React.FC = () => {
                     Highlight Color
                   </label>
                   <div className="flex gap-2">
-                    {(['emerald', 'blue', 'purple', 'amber', 'rose'] as const).map((color) => (
+                    {BOOKMARK_COLOR_OPTIONS.map((color) => (
                       <button
                         key={color}
                         onClick={() => setBookmarkConfirm({ ...bookmarkConfirm, color })}
                         className={`w-8 h-8 rounded-lg border-2 transition-all transform hover:scale-110 ${
                           bookmarkConfirm.color === color ? 'border-gray-900 scale-110' : 'border-transparent'
-                        } ${
-                          color === 'emerald' ? 'bg-emerald-600' :
-                          color === 'blue' ? 'bg-blue-600' :
-                          color === 'purple' ? 'bg-purple-600' :
-                          color === 'amber' ? 'bg-amber-600' :
-                          'bg-rose-600'
-                        }`}
+                        } ${getBookmarkSwatchClass(color)}`}
                         title={color}
                       />
                     ))}

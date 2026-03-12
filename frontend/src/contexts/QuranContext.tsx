@@ -8,6 +8,8 @@ import {
   QuranContextType,
   QuranSettings,
   Bookmark,
+  BookmarkColor,
+  BOOKMARK_COLORS,
   LastRead,
   SearchResult,
   DEFAULT_QURAN_SETTINGS,
@@ -195,7 +197,10 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
           surahName,
           timestamp: toDate(raw.timestamp),
           note: typeof raw.note === 'string' ? raw.note : undefined,
-          color: typeof raw.color === 'string' ? raw.color as Bookmark['color'] : undefined,
+          color:
+            typeof raw.color === 'string' && BOOKMARK_COLORS.includes(raw.color as BookmarkColor)
+              ? (raw.color as BookmarkColor)
+              : undefined,
         } as Bookmark;
       })
       .filter(Boolean) as Bookmark[];
@@ -494,7 +499,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
   }, [currentSurah, goToSurah]);
 
   // Bookmarks
-  const addBookmark = useCallback((surah: number, ayah: number, note?: string, color?: 'emerald' | 'blue' | 'purple' | 'amber' | 'rose') => {
+  const addBookmark = useCallback((surah: number, ayah: number, note?: string, color?: BookmarkColor) => {
     const surahInfo = surahs.find(s => s.number === surah);
     if (!surahInfo) return;
 

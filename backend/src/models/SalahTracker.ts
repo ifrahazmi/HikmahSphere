@@ -1,6 +1,7 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 type QuranStatus = 'none' | 'read' | 'translation' | 'tafseer';
+type PrayerExemptionReason = 'none' | 'menstruation';
 
 export interface ISalahTrackerActivity {
   dateKey: string;
@@ -11,6 +12,8 @@ export interface ISalahTrackerActivity {
   prayerScore: number;
   quranScore: number;
   quranStatus: QuranStatus;
+  isPrayerExempt: boolean;
+  prayerExemptionReason: PrayerExemptionReason;
   note: string;
   hasAnyActivity: boolean;
 }
@@ -74,6 +77,15 @@ const SalahTrackerActivitySchema = new Schema<ISalahTrackerActivity>(
       enum: ['none', 'read', 'translation', 'tafseer'],
       default: 'none',
     },
+    isPrayerExempt: {
+      type: Boolean,
+      default: false,
+    },
+    prayerExemptionReason: {
+      type: String,
+      enum: ['none', 'menstruation'],
+      default: 'none',
+    },
     note: {
       type: String,
       default: '',
@@ -98,7 +110,7 @@ const SalahTrackerSchema = new Schema<ISalahTracker>(
     },
     version: {
       type: Number,
-      default: 2,
+      default: 3,
       min: 1,
       max: 50,
     },

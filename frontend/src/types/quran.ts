@@ -99,6 +99,29 @@ export interface QuranSettings {
   audioMode: 'ayah' | 'surah';     // 'ayah' for ayat-by-ayat, 'surah' for complete surah
 }
 
+export const BOOKMARK_COLORS = [
+  'emerald',
+  'red',
+  'teal',
+  'indigo',
+  'blue',
+  'purple',
+  'amber',
+  'rose',
+] as const;
+
+export type BookmarkColor = (typeof BOOKMARK_COLORS)[number];
+
+export const BOOKMARK_COLOR_OPTIONS = [
+  'red',
+  'teal',
+  'indigo',
+  'blue',
+  'purple',
+  'amber',
+  'rose',
+] as const satisfies readonly BookmarkColor[];
+
 export interface Bookmark {
   id: string;
   surahNumber: number;
@@ -106,7 +129,7 @@ export interface Bookmark {
   surahName: string;
   timestamp: Date;
   note?: string;
-  color?: 'emerald' | 'blue' | 'purple' | 'amber' | 'rose';
+  color?: BookmarkColor;
 }
 
 export interface LastRead {
@@ -137,7 +160,7 @@ export interface QuranContextType {
   // Reading history
   bookmarks: Bookmark[];
   lastRead: LastRead | null;
-  addBookmark: (surah: number, ayah: number, note?: string, color?: 'emerald' | 'blue' | 'purple' | 'amber' | 'rose') => void;
+  addBookmark: (surah: number, ayah: number, note?: string, color?: BookmarkColor) => void;
   removeBookmark: (id: string) => void;
   updateLastRead: (surah: number, ayah: number) => void;
   

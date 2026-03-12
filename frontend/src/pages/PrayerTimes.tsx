@@ -10,14 +10,16 @@ import {
   CloudIcon,
   BoltIcon,
   Cog6ToothIcon,
+  InformationCircleIcon,
   CalendarDaysIcon,
   SparklesIcon,
   BookOpenIcon,
   ShareIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../hooks/useAuth';
 import LoadingSpinner from '../components/LoadingSpinner';
-import IslamicCalendar from '../components/IslamicCalendar';
+import IslamicCalendar from '../components/PrayerTimesIslamicCalendar';
 import PageSEO from '../components/PageSEO';
 import { API_URL } from '../config';
 import { IslamicReminder, getCurrentPrayerWindow, selectReminder } from '../data/islamicReminders';
@@ -27,6 +29,19 @@ interface HijriDate {
   month: { number: number; en: string };
   year: string;
   readable?: string;
+}
+
+interface ExtraPrayerTimingCard {
+  key: 'tahajjud' | 'ishraq' | 'duha';
+  title: string;
+  badge: string;
+  badgeClassName: string;
+  rakats: string;
+  time: string;
+  range: string;
+  summary: string;
+  details: string;
+  accentClassName: string;
 }
 
 const HIJRI_MONTH_NAMES: Record<number, string> = {
@@ -176,6 +191,7 @@ const PrayerTimes: React.FC = () => {
   const [cityQuery, setCityQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [showSearch, setShowSearch] = useState(false);
+  const [showExtraPrayerInfo, setShowExtraPrayerInfo] = useState(false);
 
   // View mode and settings
   const [viewMode, setViewMode] = useState<'daily' | 'monthly' | 'ramadan'>('daily');
@@ -208,6 +224,7 @@ const PrayerTimes: React.FC = () => {
   const [selectedRatio, setSelectedRatio] = useState<'story' | 'post'>('story');
   const duaImageRef = useRef<HTMLDivElement>(null);
   const hadithImageRef = useRef<HTMLDivElement>(null);
+  const extraPrayerInfoRef = useRef<HTMLDivElement>(null);
 
   // Countdown timer states
   const [currentPrayerIndex, setCurrentPrayerIndex] = useState(-1);
@@ -220,6 +237,46 @@ const PrayerTimes: React.FC = () => {
   const hasScrolledRef = useRef(false);
   const prayersContainerRef = useRef<HTMLDivElement>(null);
   const hijriFetchRequestIdRef = useRef(0);
+
+  useEffect(() => {
+    if (!showExtraPrayerInfo) return;
+
+    const handlePointerOutside = (event: PointerEvent) => {
+      if (!extraPrayerInfoRef.current?.contains(event.target as Node)) {
+        setShowExtraPrayerInfo(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', handlePointerOutside);
+    return () => document.removeEventListener('pointerdown', handlePointerOutside);
+  }, [showExtraPrayerInfo]);
+
+  useEffect(() => {
+    if (!showExtraPrayerInfo || typeof window === 'undefined') return;
+
+    const scrollY = window.scrollY;
+    const { body, documentElement } = document;
+    const previousBodyOverflow = body.style.overflow;
+    const previousBodyPosition = body.style.position;
+    const previousBodyTop = body.style.top;
+    const previousBodyWidth = body.style.width;
+    const previousHtmlOverflow = documentElement.style.overflow;
+
+    documentElement.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
+    body.style.position = 'fixed';
+    body.style.top = `-${scrollY}px`;
+    body.style.width = '100%';
+
+    return () => {
+      documentElement.style.overflow = previousHtmlOverflow;
+      body.style.overflow = previousBodyOverflow;
+      body.style.position = previousBodyPosition;
+      body.style.top = previousBodyTop;
+      body.style.width = previousBodyWidth;
+      window.scrollTo({ top: scrollY, left: 0, behavior: 'auto' });
+    };
+  }, [showExtraPrayerInfo]);
 
   const resolveLocationDetails = useCallback(async (lat: number, lon: number) => {
     try {
@@ -1235,10 +1292,16 @@ const PrayerTimes: React.FC = () => {
   const maghribMinutes = toMinutes(activePrayerData?.times?.Maghrib);
   const fajrMinutes = toMinutes(activePrayerData?.times?.Fajr);
 
-  const duhaStartDisplay = sunriseMinutes === null ? null : formatMinutesForDisplay(sunriseMinutes + 20);
+  const ishraqStartMinutes = sunriseMinutes === null ? null : sunriseMinutes + 20;
+  const duhaStartMinutes = ishraqStartMinutes;
+
   const duhaEndDisplay = dhuhrMinutes === null ? null : formatMinutesForDisplay(dhuhrMinutes - 10);
+  const ishraqTimeDisplay = ishraqStartMinutes === null ? null : formatMinutesForDisplay(ishraqStartMinutes);
+  const duhaTimeDisplay = duhaStartMinutes === null ? null : formatMinutesForDisplay(duhaStartMinutes);
 
   let lastThirdRangeDisplay: string | null = null;
+  let tahajjudStartDisplay: string | null = null;
+  let tahajjudEndDisplay: string | null = null;
   if (maghribMinutes !== null && fajrMinutes !== null) {
     const minutesPerDay = 24 * 60;
     const adjustedFajr = fajrMinutes <= maghribMinutes ? fajrMinutes + minutesPerDay : fajrMinutes;
@@ -1248,9 +1311,116 @@ const PrayerTimes: React.FC = () => {
       const lastThirdStart = adjustedFajr - nightDuration / 3;
       const lastThirdStartDisplay = formatMinutesForDisplay(lastThirdStart);
       const fajrDisplay = formatTimeForDisplay(activePrayerData?.times?.Fajr || '00:00');
+      tahajjudStartDisplay = lastThirdStartDisplay;
+      tahajjudEndDisplay = fajrDisplay;
       lastThirdRangeDisplay = `${lastThirdStartDisplay} - ${fajrDisplay}`;
     }
   }
+
+  const extraPrayerTimingCards: ExtraPrayerTimingCard[] = [
+    {
+      key: 'ishraq',
+      title: 'Ishraq',
+      badge: 'Early Duha',
+      badgeClassName: 'bg-amber-100 text-amber-700',
+      rakats: 'Usually 2 Rakats',
+      time: ishraqTimeDisplay || 'Unavailable',
+      range: ishraqTimeDisplay ? `Begins around ${ishraqTimeDisplay}, about 15-20 minutes after sunrise` : 'Begins about 15-20 minutes after sunrise',
+      summary: 'The earliest time of the morning voluntary prayer',
+      details: 'Many classical Sunni scholars describe Ishraq as the early time of Duha. It is commonly prayed as 2 rakats after waiting for the sun to rise properly, often after dhikr following Fajr.',
+      accentClassName: 'border-amber-200 bg-gradient-to-br from-white to-amber-50/70',
+    },
+    {
+      key: 'duha',
+      title: 'Duha (Chasht)',
+      badge: 'Sunnah',
+      badgeClassName: 'bg-sky-100 text-sky-700',
+      rakats: '2-8+ Rakats',
+      time: duhaTimeDisplay || 'Unavailable',
+      range: duhaTimeDisplay && duhaEndDisplay ? `${duhaTimeDisplay} to ${duhaEndDisplay}` : 'After Ishraq until shortly before Dhuhr',
+      summary: 'Chasht is the South Asian name for Duha prayer',
+      details: 'Duha is the same morning voluntary prayer whose earliest time is often called Ishraq. It continues until about 10-15 minutes before Dhuhr, and its prayer fulfills the charity due on the joints of the body in the hadith.',
+      accentClassName: 'border-sky-200 bg-gradient-to-br from-white to-sky-50/70',
+    },
+    {
+      key: 'tahajjud',
+      title: 'Tahajjud',
+      badge: 'Night Prayer',
+      badgeClassName: 'bg-violet-100 text-violet-700',
+      rakats: '2+ Rakats',
+      time: tahajjudStartDisplay || 'Unavailable',
+      range: tahajjudStartDisplay && tahajjudEndDisplay ? `${tahajjudStartDisplay} to ${tahajjudEndDisplay}` : 'Last part of the night before Fajr',
+      summary: 'Offered in the last third of the night',
+      details: 'Tahajjud is prayed after sleeping and before Fajr. Even two rakats in this quiet time are deeply rewarding and ideal for dua.',
+      accentClassName: 'border-violet-200 bg-gradient-to-br from-white to-violet-50/70',
+    },
+  ];
+
+  const extraPrayerInfoContent = (
+    <>
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-gray-900">Extra Prayer Times</p>
+          <p className="mt-1 text-xs text-gray-500">Simple guidance for Ishraq, Duha, Chasht, and Tahajjud.</p>
+        </div>
+        <button
+          onClick={() => setShowExtraPrayerInfo(false)}
+          className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          aria-label="Close prayer guide"
+        >
+          <XMarkIcon className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="mb-3 rounded-xl border border-emerald-100 bg-emerald-50 p-3">
+        <p className="text-xs leading-relaxed text-emerald-900">
+          According to many classical Sunni scholars, Ishraq and Duha are not two different obligatory prayers.
+          Ishraq refers to praying this voluntary morning salah in its earliest time, while Duha continues later in
+          the morning. Chasht is a South Asian name for Duha.
+        </p>
+        <div className="mt-3 rounded-lg bg-white/80 p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Simple Timeline</p>
+          <div className="mt-2 space-y-1 text-xs font-medium text-gray-700">
+            <p>Sunrise</p>
+            <p>↓ wait 15-20 minutes</p>
+            <p>Ishraq prayer</p>
+            <p>↓</p>
+            <p>Duha prayer time continues</p>
+            <p>↓</p>
+            <p>Ends before Dhuhr</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {extraPrayerTimingCards.map((prayer) => (
+          <div key={prayer.key} className={`rounded-xl border p-3 ${prayer.accentClassName}`}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-semibold text-gray-900">{prayer.title}</p>
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${prayer.badgeClassName}`}>
+                    {prayer.badge}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-gray-600">{prayer.summary}</p>
+              </div>
+              <div className="rounded-lg bg-white px-2.5 py-2 text-right shadow-sm">
+                <p className="text-sm font-bold text-emerald-700">{prayer.time}</p>
+                <p className="text-[11px] text-gray-500">{prayer.rakats}</p>
+              </div>
+            </div>
+            <p className="mt-2 text-xs font-medium text-emerald-700">{prayer.range}</p>
+            <p className="mt-1 text-xs leading-relaxed text-gray-600">{prayer.details}</p>
+          </div>
+        ))}
+      </div>
+
+      <p className="mt-3 text-[11px] leading-relaxed text-gray-500">
+        For detailed rulings about rakats, local timings, or specific madhhab questions, consult a qualified scholar.
+      </p>
+    </>
+  );
 
   // Define prayers list based on active Islamic day.
   const prayers = activePrayerData ? [
@@ -1313,7 +1483,7 @@ const PrayerTimes: React.FC = () => {
       <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6">
         {/* Header Section */}
         <div className="max-w-4xl mx-auto text-center mb-6 sm:mb-8">
-          <div className="flex items-center justify-center gap-3 sm:gap-4 mb-4 sm:mb-6">
+	          <div className="flex items-center justify-center gap-3 sm:gap-4 mb-4 sm:mb-6">
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900">Prayer Times</h1>
             <button
               onClick={() => setShowSettings(!showSettings)}
@@ -1323,6 +1493,40 @@ const PrayerTimes: React.FC = () => {
             >
               <Cog6ToothIcon className="h-5 w-5 sm:h-6 sm:w-6 text-gray-600" />
             </button>
+		            <div
+		              ref={extraPrayerInfoRef}
+		              className="relative"
+		            >
+		              <button
+		                onClick={() => setShowExtraPrayerInfo((prev) => !prev)}
+		                className="p-2 sm:p-2.5 rounded-full border border-emerald-200 bg-white hover:bg-emerald-50 transition-colors shadow-md"
+		                title="About extra prayer times"
+		                aria-label="About extra prayer times"
+	                  aria-expanded={showExtraPrayerInfo}
+                    type="button"
+		              >
+	                <InformationCircleIcon className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-700" />
+	              </button>
+	
+	              {showExtraPrayerInfo && (
+	                <>
+	                  <div
+	                    className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm sm:hidden"
+	                    onClick={() => setShowExtraPrayerInfo(false)}
+	                  >
+	                    <div
+	                      className="absolute inset-x-3 bottom-3 max-h-[82vh] overflow-y-auto rounded-3xl border border-emerald-100 bg-white p-4 text-left shadow-2xl"
+	                      onClick={(event) => event.stopPropagation()}
+	                    >
+	                      {extraPrayerInfoContent}
+	                    </div>
+	                  </div>
+	                  <div className="absolute left-1/2 top-full z-30 mt-3 hidden w-[min(92vw,24rem)] -translate-x-1/2 rounded-2xl border border-emerald-100 bg-white p-4 text-left shadow-2xl sm:block">
+	                    {extraPrayerInfoContent}
+	                  </div>
+	                </>
+	              )}
+	            </div>
             {/* Test scroll button - only visible on mobile in development mode */}
             {process.env.NODE_ENV === 'development' && (
               <button
@@ -1395,10 +1599,20 @@ const PrayerTimes: React.FC = () => {
           {/* Settings Panel - Mobile Optimized */}
           {showSettings && (
             <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 mb-4 sm:mb-6 text-left animate-fade-in-down">
-              <h3 className="font-semibold text-base sm:text-lg mb-4 flex items-center">
-                <Cog6ToothIcon className="h-5 w-5 mr-2" />
-                Prayer Calculation Settings
-              </h3>
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3 className="font-semibold text-base sm:text-lg flex items-center">
+                  <Cog6ToothIcon className="h-5 w-5 mr-2" />
+                  Prayer Calculation Settings
+                </h3>
+                <button
+                  onClick={() => setShowSettings(false)}
+                  className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                  aria-label="Close settings"
+                  title="Close settings"
+                >
+                  <XMarkIcon className="h-5 w-5" />
+                </button>
+              </div>
               <div className="grid grid-cols-1 gap-4">
                 {/* Calculation Method */}
                 <div>
@@ -1810,8 +2024,8 @@ const PrayerTimes: React.FC = () => {
         )}
 
         {/* Main Content Grid: Prayer Cards + Calendar */}
-        {viewMode === 'daily' && (
-        <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8 max-w-6xl mx-auto">
+	        {viewMode === 'daily' && (
+	        <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8 max-w-6xl mx-auto">
           {/* Prayer Cards Column */}
           <div className="xl:col-span-3" ref={prayersContainerRef}>
              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 h-full">
@@ -1825,6 +2039,7 @@ const PrayerTimes: React.FC = () => {
                 const isCurrentPrayer = index === currentPrayerIndex;
                 const isNextPrayer = index === nextPrayerIndex;
                 const isPastPrayer = index < currentPrayerIndex;
+                const hasTopBadge = isCurrentPrayer || (isNextPrayer && !isCurrentPrayer);
 
                 // Calculate total seconds for countdown display
                 const totalSeconds = countdown.hours * 3600 + countdown.minutes * 60 + countdown.seconds;
@@ -1844,6 +2059,7 @@ const PrayerTimes: React.FC = () => {
                         ${!isCurrentPrayer && !prayer.isSecondary ? 'border-emerald-500 hover:shadow-lg' : ''}
                         ${!isCurrentPrayer && prayer.isSecondary ? 'border-orange-200' : ''}
                         ${isNextPrayer && !isNextDay ? 'ring-2 ring-emerald-400 ring-offset-2' : ''}
+                        ${hasTopBadge ? 'pt-7 sm:pt-8' : ''}
                       `}
                     >
                     {/* Current Prayer Badge */}
@@ -1867,7 +2083,7 @@ const PrayerTimes: React.FC = () => {
                       </div>
                     )}
 
-                    <div className={isCurrentPrayer ? 'mt-2' : ''}>
+                    <div>
                         <div className="flex items-start justify-between mb-3">
                             <div className="flex items-center flex-1 min-w-0">
                             <prayer.icon className={`h-5 w-5 sm:h-6 sm:w-6 mr-2 sm:mr-3 flex-shrink-0 
@@ -1904,7 +2120,7 @@ const PrayerTimes: React.FC = () => {
                     </div>
 
                     {/* Footer Section: Fasting Info & Weather */}
-                    <div className="mt-4 flex items-end justify-between border-t border-gray-50 pt-3 min-h-[auto] sm:min-h-[auto]">
+                    <div className="mt-4 flex min-h-[92px] items-end justify-between border-t border-gray-50 pt-3 sm:min-h-[104px]">
                         {/* Left Side: Fasting Info or Countdown */}
                         <div className="flex-1 min-w-0">
                             {isNextPrayer && !isCurrentPrayer ? (
@@ -1982,10 +2198,16 @@ const PrayerTimes: React.FC = () => {
                                     <p className="text-sm font-bold text-emerald-700">Prayer Time</p>
                                   </div>
                                 )}
-                                {duhaStartDisplay && (
+                                {ishraqTimeDisplay && (
                                   <div className={`${isCurrentPrayer ? 'mt-1 pt-1 border-t border-gray-100' : ''}`}>
-                                    <span className="text-xs font-medium text-gray-500">Duha Starts</span>
-                                    <p className="text-sm font-bold text-emerald-600">{duhaStartDisplay}</p>
+                                    <span className="text-xs font-medium text-gray-500">Ishraq Starts</span>
+                                    <p className="text-sm font-bold text-emerald-600">{ishraqTimeDisplay}</p>
+                                  </div>
+                                )}
+                                {duhaTimeDisplay && (
+                                  <div className={`${ishraqTimeDisplay ? 'mt-1 pt-1 border-t border-gray-100' : ''}`}>
+                                    <span className="text-xs font-medium text-gray-500">Duha Begins</span>
+                                    <p className="text-sm font-bold text-emerald-600">{duhaTimeDisplay}</p>
                                   </div>
                                 )}
                               </div>
@@ -2020,7 +2242,7 @@ const PrayerTimes: React.FC = () => {
                                 )}
                                 {lastThirdRangeDisplay && (
                                   <div className={`${activePrayerData?.times?.Midnight ? 'mt-1 pt-1 border-t border-gray-100' : ''}`}>
-                                    <span className="text-xs font-medium text-gray-500">Last Third of Night</span>
+                                    <span className="text-xs font-medium text-gray-500">Tahajjud Time</span>
                                     <p className="text-sm font-bold text-emerald-600">{lastThirdRangeDisplay}</p>
                                   </div>
                                 )}
@@ -2066,6 +2288,7 @@ const PrayerTimes: React.FC = () => {
             <IslamicCalendar whiteDays={activeFastingData?.white_days || fastingData?.white_days} todayHijri={effectiveHijriDate || prayerData?.date?.hijri} />
           </div>
         </div>
+
         )}
 
         {/* Ramadan View - Mobile Optimized */}
