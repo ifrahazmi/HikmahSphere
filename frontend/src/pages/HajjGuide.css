@@ -1,0 +1,79 @@
+.hajj-guide-page {
+  background:
+    radial-gradient(circle at top left, rgba(5, 150, 105, 0.08), transparent 30%),
+    radial-gradient(circle at top right, rgba(217, 119, 6, 0.08), transparent 24%),
+    linear-gradient(180deg, #f7fcf9 0%, #ffffff 42%, #fffcf4 100%);
+}
+
+.hajj-guide-hero-pattern {
+  background-image:
+    radial-gradient(circle at 18% 18%, rgba(217, 119, 6, 0.18), transparent 16%),
+    radial-gradient(circle at 82% 12%, rgba(5, 150, 105, 0.14), transparent 20%),
+    linear-gradient(135deg, rgba(5, 150, 105, 0.1), rgba(255, 255, 255, 0.95));
+}
+
+.hajj-guide-infographic-frame {
+  background:
+    linear-gradient(180deg, rgba(255, 251, 235, 0.95), rgba(255, 255, 255, 0.98)),
+    linear-gradient(135deg, rgba(5, 150, 105, 0.08), transparent);
+}
+
+.hajj-guide-step-card {
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.06);
+}
+
+.hajj-guide-logo-glow {
+  box-shadow: 0 18px 40px rgba(4, 120, 87, 0.12);
+}
+
+.hajj-guide-overlay {
+  animation: hajj-guide-fade-in 180ms ease-out;
+}
+
+.hajj-guide-modal {
+  animation: hajj-guide-modal-enter 220ms ease-out;
+}
+
+.hajj-guide-guide-shell {
+  background: linear-gradient(180deg, #f6faf7 0%, #ffffff 100%);
+}
+
+.hajj-guide-image-stage {
+  touch-action: none;
+  cursor: grab;
+}
+
+.hajj-guide-image-stage:active {
+  cursor: grabbing;
+}
+
+.hajj-guide-page-image {
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.12);
+  max-width: none;
+}
+
+.hajj-guide-page-viewer {
+  width: 100%;
+}
+
+@keyframes hajj-guide-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes hajj-guide-modal-enter {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}

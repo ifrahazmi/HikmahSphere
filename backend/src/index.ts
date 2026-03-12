@@ -22,6 +22,7 @@ import notificationRoutes from './routes/notifications'; // Import notification 
 import supportRoutes from './routes/support'; // Import support routes
 import activityRoutes from './routes/activity'; // Import activity log routes
 import salahTrackerRoutes from './routes/salahTracker';
+import hajjGuideRoutes from './routes/hajjGuide';
 
 // Load environment variables
 // Use __dirname to resolve paths correctly regardless of whether running from src/ or dist/
@@ -76,7 +77,8 @@ const limiter = rateLimit({
   },
   validate: {
       xForwardedForHeader: false, // Disable validation if we trust proxy logic is complex
-  }
+  },
+  skip: (req) => req.path.startsWith('/api/hajj-guide/images'),
 });
 
 app.use(limiter);
@@ -117,6 +119,7 @@ app.get('/', (req, res) => {
       zakat: '/api/zakat',
       community: '/api/community',
       salahTracker: '/api/salah-tracker',
+      hajjGuide: '/api/hajj-guide',
     },
     documentation: `http://localhost:${process.env.PORT || 5000}/docs`
   });
@@ -141,6 +144,7 @@ app.get(['/api', '/api/'], (req, res) => {
       support: '/api/support',
       activity: '/api/activity',
       salahTracker: '/api/salah-tracker',
+      hajjGuide: '/api/hajj-guide',
     },
   });
 });
@@ -231,6 +235,7 @@ app.use('/api/notifications', notificationRoutes); // Use notification routes
 app.use('/api/support', supportRoutes); // Use support routes
 app.use('/api/activity', activityRoutes); // Use activity log routes
 app.use('/api/salah-tracker', salahTrackerRoutes);
+app.use('/api/hajj-guide', hajjGuideRoutes);
 
 // Admin Routes for User Management (Restricted to Super Admin)
 // Get All Users

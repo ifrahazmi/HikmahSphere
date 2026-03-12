@@ -76,6 +76,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
     { name: 'Quran', href: '/quran', current: location.pathname === '/quran' },
     { name: 'Zakat', href: '/zakat', current: location.pathname === '/zakat' },
     { name: 'Community', href: '/community', current: location.pathname === '/community' },
+    { name: 'Hajj Guide', href: '/hajj-guide', current: location.pathname === '/hajj-guide' },
     { name: 'Contact', href: '/contact', current: location.pathname === '/contact' },
   ];
 
@@ -135,12 +136,12 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
             </Link>
           </div>
 
-          <div className="hidden md:flex flex-1 items-center justify-center gap-2 lg:gap-2.5 xl:gap-3 min-w-0 mx-2 lg:mx-3">
+          <div className="hidden lg:flex flex-1 items-center justify-center gap-1.5 xl:gap-2 min-w-0 mx-2 lg:mx-3">
             {navigation.map((item) => (
               <Link
                 key={item.name}
                 to={item.href}
-                className={`px-2.5 lg:px-2.5 py-1.5 rounded-md text-[13px] lg:text-sm font-medium whitespace-nowrap transition-colors duration-200 ${
+                className={`px-2 py-1.5 rounded-md text-xs xl:text-sm font-medium whitespace-nowrap transition-colors duration-200 ${
                   item.current
                     ? isDark
                       ? 'bg-emerald-900 text-emerald-300'
@@ -155,7 +156,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
             ))}
           </div>
 
-          <div className="hidden md:flex items-center space-x-2 lg:space-x-3 shrink-0">
+          <div className="hidden lg:flex items-center space-x-2 lg:space-x-3 shrink-0">
             {user ? (
               <>
                 {/* Notification Bell */}
@@ -245,7 +246,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
             )}
           </div>
 
-          <div className="md:hidden flex items-center gap-2">
+          <div className="lg:hidden flex items-center gap-2">
             {/* Mobile Notification Bell */}
             {user && <NotificationBell />}
             
@@ -268,7 +269,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
       </div>
 
       {isOpen && (
-        <div className="md:hidden">
+        <div className="lg:hidden">
           <div className={`px-2 pt-2 pb-3 space-y-1 sm:px-3 border-t transition-colors duration-200 ${
             isDark ? 'bg-gray-800 border-gray-700' : 'bg-white'
           }`}>

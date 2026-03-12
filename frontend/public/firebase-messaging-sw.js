@@ -5,7 +5,7 @@
 importScripts('https://www.gstatic.com/firebasejs/10.7.2/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.2/firebase-messaging-compat.js');
 
-const CACHE_NAME = 'hikmahsphere-app-v2';
+const CACHE_NAME = 'hikmahsphere-app-v3';
 const APP_SHELL = ['/', '/index.html', '/manifest.json', '/logo.png', '/favicon.ico'];
 
 // Initialize the Firebase app in the service worker by passing in
@@ -56,6 +56,10 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/api/')) return;
+
+  // Let the browser handle PDF and worker files natively to avoid
+  // corruption or "Failed to fetch" errors inside pdfjs / web workers.
+  if (url.pathname.endsWith('.pdf') || url.pathname.endsWith('.mjs')) return;
 
   if (request.mode === 'navigate') {
     event.respondWith(

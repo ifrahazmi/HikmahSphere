@@ -80,6 +80,7 @@ const Footer: React.FC = () => {
               <li><Link to="/quran" className="text-gray-300 hover:text-emerald-400">Quran Reader</Link></li>
               <li><Link to="/zakat" className="text-gray-300 hover:text-emerald-400">Zakat Center</Link></li>
               <li><Link to="/community" className="text-gray-300 hover:text-emerald-400">Community</Link></li>
+              <li><Link to="/hajj-guide" className="text-gray-300 hover:text-emerald-400">Hajj Guide</Link></li>
               <li><Link to="/contact" className="text-gray-300 hover:text-emerald-400">Contact & Support</Link></li> {/* Added Contact Link */}
             </ul>
           </div>

@@ -29,6 +29,7 @@ import Profile from './pages/Profile';
 import SalahTracker from './pages/SalahTracker';
 import About from './pages/About';
 import Contact from './pages/Contact'; // Import Contact page
+import HajjGuide from './pages/HajjGuide';
 
 // Hooks
 import { useAuth, AuthProvider } from './hooks/useAuth';
@@ -131,6 +132,7 @@ const AppContent: React.FC = () => {
           <Route path="/" element={<Home />} />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} /> {/* Add Contact Route */}
+          <Route path="/hajj-guide" element={<HajjGuide />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/prayers" element={<PrayerTimes />} />
           <Route path="/quran" element={
