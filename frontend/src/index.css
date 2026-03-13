@@ -160,6 +160,14 @@ code {
   font-family: 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif;
 }
 
+.quran-urdu-translation {
+  font-family: 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif;
+  direction: rtl;
+  text-align: right;
+  line-height: 2.2;
+  letter-spacing: 0.02em;
+}
+
 /* Justified Arabic Text for Better Alignment */
 .arabic-justified {
   text-align: justify;

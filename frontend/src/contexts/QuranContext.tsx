@@ -69,6 +69,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
   const ayahAudioUrlMapRef = React.useRef<Map<number, string>>(new Map());
   const prefetchedAyahAudioRef = React.useRef<Map<number, HTMLAudioElement>>(new Map());
   const prefetchedAyahFetchRef = React.useRef<Set<number>>(new Set());
+  const surahEditionsCacheRef = useRef<Map<string, SurahData[]>>(new Map());
 
   // Stable refs for audio event handlers (delegates to latest handler via ref)
   const handleAudioEndedFnRef = React.useRef<() => void>(() => {});
@@ -387,6 +388,35 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
         }
         editions.push(...settings.selectedTranslations);
       }
+
+      const cacheKey = `${surahNumber}|${settings.arabicOnlyMode ? 'arabic' : 'mixed'}|${settings.showTransliteration ? 'translit' : 'plain'}|${settings.arabicFont === 'indopak-nastaleeq-v2' ? 'indopak-v2' : 'standard'}|${settings.selectedTranslations.join(',')}`;
+
+      const applyLoadedEditions = (loadedEditions: SurahData[]) => {
+        // First edition is always Arabic
+        setSurahData(loadedEditions[0]);
+
+        if (settings.arabicOnlyMode) {
+          setTransliteration(null);
+          setTranslations([]);
+          return;
+        }
+
+        let startIndex = 1;
+        if (settings.showTransliteration && loadedEditions[1]?.edition?.type === 'transliteration') {
+          setTransliteration(loadedEditions[1]);
+          startIndex = 2;
+        } else {
+          setTransliteration(null);
+        }
+
+        setTranslations(loadedEditions.slice(startIndex));
+      };
+
+      const cachedEditions = surahEditionsCacheRef.current.get(cacheKey);
+      if (cachedEditions) {
+        applyLoadedEditions(cachedEditions);
+        return;
+      }
       
       const response = await fetch(
         `${API_URL}/quran/surah/${surahNumber}/editions?editions=${editions.join(',')}`
@@ -394,8 +424,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       const data = await response.json();
       
       if (data.status === 'success') {
-        // First edition is always Arabic
-        let arabicEdition: SurahData = data.data[0];
+        let fetchedEditions: SurahData[] = data.data;
 
         if (settings.arabicFont === 'indopak-nastaleeq-v2') {
           try {
@@ -412,19 +441,22 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
               });
 
               if (ayahTextMap.size > 0) {
-                arabicEdition = {
-                  ...arabicEdition,
-                  edition: {
-                    ...arabicEdition.edition,
-                    identifier: 'indopak.nastaleeq.v2',
-                    name: 'IndoPak Nastaleeq v2',
-                    englishName: 'IndoPak Nastaleeq v2',
+                fetchedEditions = [
+                  {
+                    ...fetchedEditions[0],
+                    edition: {
+                      ...fetchedEditions[0].edition,
+                      identifier: 'indopak.nastaleeq.v2',
+                      name: 'IndoPak Nastaleeq v2',
+                      englishName: 'IndoPak Nastaleeq v2',
+                    },
+                    ayahs: fetchedEditions[0].ayahs.map((ayah) => ({
+                      ...ayah,
+                      text: ayahTextMap.get(ayah.numberInSurah) ?? ayah.text,
+                    })),
                   },
-                  ayahs: arabicEdition.ayahs.map((ayah) => ({
-                    ...ayah,
-                    text: ayahTextMap.get(ayah.numberInSurah) ?? ayah.text,
-                  })),
-                };
+                  ...fetchedEditions.slice(1),
+                ];
               }
             }
           } catch (indopakError) {
@@ -432,25 +464,15 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
           }
         }
 
-        setSurahData(arabicEdition);
-        
-        if (settings.arabicOnlyMode) {
-          // In Arabic-only mode, clear translations and transliteration
-          setTransliteration(null);
-          setTranslations([]);
-        } else {
-          // Check if transliteration is included
-          let startIndex = 1;
-          if (settings.showTransliteration && data.data[1]?.edition?.type === 'transliteration') {
-            setTransliteration(data.data[1]);
-            startIndex = 2;
-          } else {
-            setTransliteration(null);
+        surahEditionsCacheRef.current.set(cacheKey, fetchedEditions);
+        if (surahEditionsCacheRef.current.size > 18) {
+          const oldestKey = surahEditionsCacheRef.current.keys().next().value;
+          if (oldestKey) {
+            surahEditionsCacheRef.current.delete(oldestKey);
           }
-          
-          // Rest are translations
-          setTranslations(data.data.slice(startIndex));
         }
+
+        applyLoadedEditions(fetchedEditions);
       } else {
         setError('Failed to load surah data');
       }

@@ -195,13 +195,25 @@ export interface QuranContextType {
   seekAudio: (time: number) => void;
 }
 
+export const DEFAULT_ENGLISH_TRANSLATION = {
+  identifier: 'en.sahih',
+  name: 'Saheeh International',
+  language: 'English',
+} as const;
+
+export const DEFAULT_URDU_TRANSLATION = {
+  identifier: 'ur.jalandhry',
+  name: 'Urdu - Fateh Muhammad Jalandhry',
+  language: 'Urdu',
+} as const;
+
 // Default translations configuration
 export const DEFAULT_TRANSLATIONS = [
-  { identifier: 'en.sahih', name: 'Sahih International', language: 'English' },
+  DEFAULT_ENGLISH_TRANSLATION,
   { identifier: 'en.pickthall', name: 'Pickthall', language: 'English' },
   { identifier: 'en.yusufali', name: 'Yusuf Ali', language: 'English' },
   { identifier: 'ar.alafasy', name: 'Arabic (Alafasy)', language: 'Arabic' },
-  { identifier: 'ur.jalandhry', name: 'Fateh Muhammad Jalandhry', language: 'Urdu' },
+  DEFAULT_URDU_TRANSLATION,
   { identifier: 'hi.farooq', name: 'Muhammad Farooq Khan & Ahmed', language: 'Hindi' },
   { identifier: 'fr.hamidullah', name: 'Muhammad Hamidullah', language: 'French' },
   { identifier: 'es.cortes', name: 'Julio Cortes', language: 'Spanish' },
@@ -225,7 +237,7 @@ export const AVAILABLE_RECITERS = [
 
 // Default settings
 export const DEFAULT_QURAN_SETTINGS: QuranSettings = {
-  selectedTranslations: ['en.sahih'],
+  selectedTranslations: [DEFAULT_URDU_TRANSLATION.identifier],
   showTransliteration: false,
   arabicOnlyMode: false,
   fontSize: 20,

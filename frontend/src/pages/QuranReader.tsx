@@ -20,7 +20,13 @@ import {
 import { useQuran } from '../contexts/QuranContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import PageSEO from '../components/PageSEO';
-import { BOOKMARK_COLOR_OPTIONS, type BookmarkColor, DEFAULT_TRANSLATIONS } from '../types/quran';
+import {
+  BOOKMARK_COLOR_OPTIONS,
+  type BookmarkColor,
+  DEFAULT_ENGLISH_TRANSLATION,
+  DEFAULT_TRANSLATIONS,
+  DEFAULT_URDU_TRANSLATION,
+} from '../types/quran';
 import { getIndopakQuranData, getIndopakSurah, type IndopakSurah } from '../utils/indopakQuran';
 
 const BOOKMARK_COLOR_CLASS_MAP: Record<
@@ -584,6 +590,140 @@ const QuranReader: React.FC = () => {
       return Math.max(settings.lineSpacing, 2.15);
     }
     return settings.lineSpacing;
+  };
+
+  const getTranslationDefinition = (identifier: string) => {
+    return DEFAULT_TRANSLATIONS.find((translation) => translation.identifier === identifier);
+  };
+
+  const hasLanguageTranslationEnabled = (language: 'English' | 'Urdu') => {
+    return settings.selectedTranslations.some((identifier) => getTranslationDefinition(identifier)?.language === language);
+  };
+
+  const togglePrimaryTranslation = (
+    language: 'English' | 'Urdu',
+    fallbackIdentifier: string
+  ) => {
+    const hasLanguageEnabled = hasLanguageTranslationEnabled(language);
+
+    if (settings.arabicOnlyMode && hasLanguageEnabled) {
+      updateSettings({ arabicOnlyMode: false });
+      return;
+    }
+
+    if (hasLanguageEnabled) {
+      updateSettings({
+        selectedTranslations: settings.selectedTranslations.filter(
+          (identifier) => getTranslationDefinition(identifier)?.language !== language
+        ),
+      });
+      return;
+    }
+
+    let nextTranslations = [...settings.selectedTranslations];
+    if (nextTranslations.length >= 3) {
+      const removableIndex = nextTranslations.findIndex((identifier) => {
+        const translationLanguage = getTranslationDefinition(identifier)?.language;
+        return translationLanguage !== 'English' && translationLanguage !== 'Urdu';
+      });
+
+      if (removableIndex >= 0) {
+        nextTranslations.splice(removableIndex, 1);
+      } else {
+        nextTranslations = nextTranslations.slice(0, 2);
+      }
+    }
+
+    if (!nextTranslations.includes(fallbackIdentifier)) {
+      nextTranslations.push(fallbackIdentifier);
+    }
+
+    updateSettings({
+      arabicOnlyMode: false,
+      selectedTranslations: nextTranslations,
+    });
+  };
+
+  const orderedTranslations = [...translations].sort((first, second) => {
+    const priority = (language: string) => {
+      if (language === 'ur') return 0;
+      if (language === 'en') return 1;
+      return 2;
+    };
+
+    return priority(first.edition.language) - priority(second.edition.language);
+  });
+
+  const renderAyahTranslations = (ayahIndex: number) => {
+    const ayahTranslations = orderedTranslations
+      .map((translation) => {
+        const text = translation.ayahs[ayahIndex]?.text?.trim();
+        if (!text) return null;
+
+        const isUrdu = translation.edition.language === 'ur';
+        const isEnglish = translation.edition.language === 'en';
+        const label = isUrdu
+          ? 'Urdu Translation'
+          : isEnglish
+          ? 'English Translation'
+          : translation.edition.name;
+
+        return {
+          key: `${translation.edition.identifier}-${ayahIndex}`,
+          label,
+          text,
+          isUrdu,
+          direction: translation.edition.direction || (isUrdu ? 'rtl' : 'ltr'),
+        };
+      })
+      .filter(Boolean) as Array<{
+      key: string;
+      label: string;
+      text: string;
+      isUrdu: boolean;
+      direction: 'ltr' | 'rtl';
+    }>;
+
+    if (ayahTranslations.length === 0) {
+      return null;
+    }
+
+    return ayahTranslations.map((translation) => (
+      <div
+        key={translation.key}
+        className={`mb-3 rounded-2xl border p-4 sm:p-5 ${
+          translation.isUrdu
+            ? settings.theme === 'dark'
+              ? 'border-emerald-900/70 bg-emerald-950/20'
+              : 'border-emerald-100 bg-emerald-50/80'
+            : settings.theme === 'dark'
+            ? 'border-gray-700 bg-gray-900/30'
+            : 'border-slate-200 bg-slate-50'
+        }`}
+      >
+        <p
+          className={`mb-2 text-[11px] font-semibold uppercase tracking-[0.24em] ${
+            settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+          }`}
+        >
+          {translation.label}
+        </p>
+        <p
+          dir={translation.direction}
+          className={
+            translation.isUrdu
+              ? `quran-urdu-translation text-[1.4rem] sm:text-[1.6rem] ${
+                  settings.theme === 'dark' ? 'text-gray-100' : 'text-gray-800'
+                }`
+              : `text-sm leading-7 sm:text-base ${
+                  settings.theme === 'dark' ? 'text-gray-200' : 'text-gray-700'
+                }`
+          }
+        >
+          {translation.text}
+        </p>
+      </div>
+    ));
   };
 
   // Handle ayah click for bookmarking (double-click to open popup)
@@ -1417,6 +1557,41 @@ const QuranReader: React.FC = () => {
                   )}
                 </div>
 
+                {/* Translations - only show if not in Arabic-only mode */}
+                {!settings.arabicOnlyMode && (
+                  <div>
+                    <label className={`block text-xs font-medium mb-1.5 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                      Translations (max 3)
+                    </label>
+                    <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                      {DEFAULT_TRANSLATIONS.map((trans) => (
+                        <label key={trans.identifier} className="flex items-center text-xs">
+                          <input
+                            type="checkbox"
+                            checked={settings.selectedTranslations.includes(trans.identifier)}
+                            onChange={(e) => {
+                              if (e.target.checked && settings.selectedTranslations.length < 3) {
+                                updateSettings({
+                                  selectedTranslations: [...settings.selectedTranslations, trans.identifier],
+                                });
+                              } else if (!e.target.checked) {
+                                updateSettings({
+                                  selectedTranslations: settings.selectedTranslations.filter((t) => t !== trans.identifier),
+                                });
+                              }
+                            }}
+                            className="mr-1.5"
+                          />
+                          <span className={`${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                            {trans.name}
+                            {trans.identifier === DEFAULT_URDU_TRANSLATION.identifier ? ' (Recommended Urdu)' : ''}
+                            {trans.identifier === DEFAULT_ENGLISH_TRANSLATION.identifier ? ' (Default English)' : ''}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {/* Bookmarks */}
                 <div>
                   <label className={`block text-xs font-medium mb-1.5 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -1505,6 +1680,74 @@ const QuranReader: React.FC = () => {
                     </div>
                   </div>
                 )}
+
+                <div
+                  className={`mb-6 rounded-2xl border px-4 py-4 sm:px-5 ${
+                    settings.theme === 'dark'
+                      ? 'border-emerald-900/60 bg-emerald-950/10'
+                      : 'border-emerald-100 bg-gradient-to-r from-emerald-50 via-white to-teal-50'
+                  }`}
+                >
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p
+                        className={`text-[11px] font-semibold uppercase tracking-[0.26em] ${
+                          settings.theme === 'dark' ? 'text-emerald-300' : 'text-emerald-700'
+                        }`}
+                      >
+                        Reading Layers
+                      </p>
+                      <p className={`mt-2 text-sm ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                        Arabic stays primary. Enable the Urdu translation for a simple trusted reading flow, and add
+                        English only when needed.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <span
+                        className={`inline-flex items-center rounded-full border px-4 py-2 text-sm font-semibold ${
+                          settings.theme === 'dark'
+                            ? 'border-emerald-700 bg-emerald-500/15 text-emerald-100'
+                            : 'border-emerald-200 bg-emerald-600 text-white'
+                        }`}
+                      >
+                        Arabic
+                      </span>
+                      <button
+                        type="button"
+                        aria-pressed={!settings.arabicOnlyMode && hasLanguageTranslationEnabled('Urdu')}
+                        onClick={() => togglePrimaryTranslation('Urdu', DEFAULT_URDU_TRANSLATION.identifier)}
+                        className={`inline-flex items-center rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${
+                          !settings.arabicOnlyMode && hasLanguageTranslationEnabled('Urdu')
+                            ? settings.theme === 'dark'
+                              ? 'border-emerald-500 bg-emerald-500 text-white'
+                              : 'border-emerald-600 bg-emerald-600 text-white'
+                            : settings.theme === 'dark'
+                            ? 'border-gray-700 bg-gray-800 text-gray-200 hover:border-emerald-500'
+                            : 'border-gray-200 bg-white text-gray-700 hover:border-emerald-400'
+                        }`}
+                      >
+                        Urdu
+                      </button>
+                      <button
+                        type="button"
+                        aria-pressed={!settings.arabicOnlyMode && hasLanguageTranslationEnabled('English')}
+                        onClick={() => togglePrimaryTranslation('English', DEFAULT_ENGLISH_TRANSLATION.identifier)}
+                        className={`inline-flex items-center rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${
+                          !settings.arabicOnlyMode && hasLanguageTranslationEnabled('English')
+                            ? settings.theme === 'dark'
+                              ? 'border-sky-500 bg-sky-500 text-white'
+                              : 'border-sky-600 bg-sky-600 text-white'
+                            : settings.theme === 'dark'
+                            ? 'border-gray-700 bg-gray-800 text-gray-200 hover:border-sky-500'
+                            : 'border-gray-200 bg-white text-gray-700 hover:border-sky-400'
+                        }`}
+                      >
+                        English
+                      </button>
+                    </div>
+                  </div>
+                </div>
 
                 {/* Desktop Top Audio Player Card - Only visible in Complete Surah mode */}
                 {settings.audioEnabled && settings.audioMode === 'surah' && (
@@ -1641,7 +1884,10 @@ const QuranReader: React.FC = () => {
                                 onClick={(e) => handleAyahClick(e, surahData.number, ayahNum)}
                                 className={`cursor-pointer rounded px-1 ${getBookmarkHoverClass(bookmarkColor)} ${bgClass} ${isSelectedForBookmark ? getBookmarkSelectionClass(bookmarkColor) : ''}`}
                               >
-                                {formatIndopakAyahText(ayah.text, `indopak-inline-${ayahNum}`)}
+                                {formatIndopakAyahText(
+                                  removeBismillah(ayah.text, surahData.number, ayahNum),
+                                  `indopak-inline-${ayahNum}`
+                                )}
                               </span>
                               {' '}
                               <span
@@ -1659,23 +1905,26 @@ const QuranReader: React.FC = () => {
                   ) : (
                     /* Separate Indopak ayahs with translations */
                     <div className="space-y-4">
-                      {indopakSurah.ayahs.map((ayah, index) => {
+                      {indopakSurah.ayahs.map((ayah) => {
                         const ayahNum = ayah.ayah;
                         const isFirstAyahFatiha = surahData?.number === 1 && ayahNum === 1;
+                        if (isFirstAyahFatiha) return null;
                         
                         return (
                           <div
                             key={ayahNum}
                             id={`ayah-${ayahNum}`}
-                            className={`pb-3 border-b last:border-b-0 ${
-                              settings.theme === 'dark' ? 'border-gray-700' : 'border-gray-100'
+                            className={`pb-5 border-b last:border-b-0 ${
+                              settings.theme === 'dark' ? 'border-gray-700/80' : 'border-emerald-100'
                             }`}
                           >
                             {/* Arabic Text */}
-                            <div className={`mb-2 p-3 rounded-lg ${getReaderBackgroundClass()}`}>
-                              <div className="flex items-start justify-between gap-3">
+                            <div className={`relative mb-4 overflow-hidden rounded-2xl p-4 sm:p-6 ${getReaderBackgroundClass()}`}>
+                              <div className="mx-auto max-w-4xl">
                                 <p
-                                  className={`${getFontFamilyClass()} leading-loose text-right ${getFontColorClass()} flex-1`}
+                                  className={`${getFontFamilyClass()} block text-center leading-loose ${getFontColorClass()} ${
+                                    settings.audioEnabled && settings.audioMode === 'ayah' && currentSurah ? 'px-10 sm:px-14' : ''
+                                  }`}
                                   style={{ fontSize: `${getActualFontSize()}px`, lineHeight: getActualLineHeight() }}
                                   dir="rtl"
                                 >
@@ -1693,11 +1942,13 @@ const QuranReader: React.FC = () => {
                                           onClick={(e) => handleAyahClick(e, surahData.number, ayahNum)}
                                           className={`cursor-pointer rounded px-1 ${getBookmarkHoverClass(bookmarkColor)} ${bgClass} ${isSelectedForBookmark ? getBookmarkSelectionClass(bookmarkColor) : ''}`}
                                         >
-                                          {formatIndopakAyahText(ayah.text, `indopak-block-${ayahNum}`)}
+                                          {formatIndopakAyahText(
+                                            removeBismillah(ayah.text, surahData.number, ayahNum),
+                                            `indopak-block-${ayahNum}`
+                                          )}
                                         </span>
                                         {' '}
                                         <span
-                                          id={`ayah-${ayahNum}`}
                                           className={`inline-flex items-center justify-center w-6 h-6 rounded-full border-2 text-xs font-bold mx-1 ${borderClass}`}
                                         >
                                           {ayahNum}
@@ -1706,40 +1957,40 @@ const QuranReader: React.FC = () => {
                                     );
                                   })()}
                                 </p>
-                                
-                                {/* Audio Play Button - only show if audio is enabled and in ayah mode */}
-                                {settings.audioEnabled && settings.audioMode === 'ayah' && currentSurah && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      if (isPlaying && currentPlayingAyah === ayahNum) {
-                                        pauseAyah();
-                                      } else {
-                                        playAyah(currentSurah, ayahNum);
-                                      }
-                                    }}
-                                    className={`p-2 rounded-full transition-colors flex-shrink-0 ${
-                                      isPlaying && currentPlayingAyah === ayahNum
-                                        ? 'bg-emerald-500 text-white'
-                                        : settings.theme === 'dark'
-                                        ? 'bg-gray-700 hover:bg-gray-600 text-emerald-400'
-                                        : 'bg-emerald-100 hover:bg-emerald-200 text-emerald-600'
-                                    }`}
-                                    title={isPlaying && currentPlayingAyah === ayahNum ? 'Pause' : 'Play'}
-                                  >
-                                    {isPlaying && currentPlayingAyah === ayahNum ? (
-                                      <PauseIcon className="h-4 w-4" />
-                                    ) : (
-                                      <PlayIcon className="h-4 w-4" />
-                                    )}
-                                  </button>
-                                )}
                               </div>
+
+                              {/* Audio Play Button - only show if audio is enabled and in ayah mode */}
+                              {settings.audioEnabled && settings.audioMode === 'ayah' && currentSurah && (
+                                <button
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    if (isPlaying && currentPlayingAyah === ayahNum) {
+                                      pauseAyah();
+                                    } else {
+                                      playAyah(currentSurah, ayahNum);
+                                    }
+                                  }}
+                                  className={`absolute right-3 top-3 p-2 rounded-full transition-colors ${
+                                    isPlaying && currentPlayingAyah === ayahNum
+                                      ? 'bg-emerald-500 text-white'
+                                      : settings.theme === 'dark'
+                                      ? 'bg-gray-700 hover:bg-gray-600 text-emerald-400'
+                                      : 'bg-white/80 hover:bg-white text-emerald-600 shadow-sm'
+                                  }`}
+                                  title={isPlaying && currentPlayingAyah === ayahNum ? 'Pause' : 'Play'}
+                                >
+                                  {isPlaying && currentPlayingAyah === ayahNum ? (
+                                    <PauseIcon className="h-4 w-4" />
+                                  ) : (
+                                    <PlayIcon className="h-4 w-4" />
+                                  )}
+                                </button>
+                              )}
                             </div>
 
                             {/* Transliteration */}
-                            {settings.showTransliteration && transliteration && !isFirstAyahFatiha && (
+                            {settings.showTransliteration && transliteration && (
                               <div className="mb-2">
                                 <p className={`text-xs font-medium mb-1 ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
                                   Transliteration
@@ -1751,16 +2002,7 @@ const QuranReader: React.FC = () => {
                             )}
 
                             {/* Translations */}
-                            {translations.map((translation, idx) => (
-                              <div key={idx} className="mb-2">
-                                <p className={`text-xs font-medium mb-1 ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                                  {translation.edition.name}
-                                </p>
-                                <p className={`text-sm leading-relaxed ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                                  {translation.ayahs[ayahNum - 1]?.text}
-                                </p>
-                              </div>
-                            ))}
+                            {renderAyahTranslations(ayahNum - 1)}
                           </div>
                         );
                       })}
@@ -1844,17 +2086,20 @@ const QuranReader: React.FC = () => {
                       .map((ayah) => (
                       <div
                         key={ayah.numberInSurah}
-                        className={`pb-3 border-b last:border-b-0 ${
-                          settings.theme === 'dark' ? 'border-gray-700' : 'border-gray-100'
+                        id={`ayah-${ayah.numberInSurah}`}
+                        className={`pb-5 border-b last:border-b-0 ${
+                          settings.theme === 'dark' ? 'border-gray-700/80' : 'border-emerald-100'
                         }`}
                       >
                         {/* Arabic Text with inline ayah number */}
                         <div
-                          className={`mb-2 p-3 rounded-lg ${getReaderBackgroundClass()}`}
+                          className={`relative mb-4 overflow-hidden rounded-2xl p-4 sm:p-6 ${getReaderBackgroundClass()}`}
                         >
-                          <div className="flex items-start justify-between gap-3">
+                          <div className="mx-auto max-w-4xl">
                             <p
-                              className={`${getFontFamilyClass()} leading-loose text-right ${getFontColorClass()} flex-1`}
+                              className={`${getFontFamilyClass()} block text-center leading-loose ${getFontColorClass()} ${
+                                settings.audioEnabled && settings.audioMode === 'ayah' && currentSurah ? 'px-10 sm:px-14' : ''
+                              }`}
                               style={{ fontSize: `${getActualFontSize()}px`, lineHeight: getActualLineHeight() }}
                               dir="rtl"
                             >
@@ -1876,7 +2121,6 @@ const QuranReader: React.FC = () => {
                                     </span>
                                     {' '}
                                     <span
-                                      id={`ayah-${ayah.numberInSurah}`}
                                       className={`inline-flex items-center justify-center w-6 h-6 rounded-full border-2 text-xs font-bold mx-1 ${borderClass}`}
                                     >
                                       {ayah.numberInSurah}
@@ -1885,38 +2129,36 @@ const QuranReader: React.FC = () => {
                                 );
                               })()}
                             </p>
-                            
-                            {/* Audio Play Button - only show if audio is enabled and in ayah mode */}
-                            {settings.audioEnabled && settings.audioMode === 'ayah' && currentSurah && (
-                              <div className="flex items-center gap-2">
-                                <button
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    if (isPlaying && currentPlayingAyah === ayah.numberInSurah) {
-                                      pauseAyah();
-                                    } else {
-                                      playAyah(currentSurah, ayah.numberInSurah);
-                                    }
-                                  }}
-                                  className={`p-2 rounded-full transition-colors ${
-                                    isPlaying && currentPlayingAyah === ayah.numberInSurah
-                                      ? 'bg-emerald-500 text-white'
-                                      : settings.theme === 'dark'
-                                      ? 'bg-gray-700 hover:bg-gray-600 text-emerald-400'
-                                      : 'bg-emerald-100 hover:bg-emerald-200 text-emerald-600'
-                                  }`}
-                                  title={isPlaying && currentPlayingAyah === ayah.numberInSurah ? 'Pause' : 'Play Ayah'}
-                                >
-                                  {isPlaying && currentPlayingAyah === ayah.numberInSurah ? (
-                                    <PauseIcon className="h-4 w-4" />
-                                  ) : (
-                                    <PlayIcon className="h-4 w-4" />
-                                  )}
-                                </button>
-                              </div>
-                            )}
                           </div>
+
+                          {/* Audio Play Button - only show if audio is enabled and in ayah mode */}
+                          {settings.audioEnabled && settings.audioMode === 'ayah' && currentSurah && (
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                if (isPlaying && currentPlayingAyah === ayah.numberInSurah) {
+                                  pauseAyah();
+                                } else {
+                                  playAyah(currentSurah, ayah.numberInSurah);
+                                }
+                              }}
+                              className={`absolute right-3 top-3 p-2 rounded-full transition-colors ${
+                                isPlaying && currentPlayingAyah === ayah.numberInSurah
+                                  ? 'bg-emerald-500 text-white'
+                                  : settings.theme === 'dark'
+                                  ? 'bg-gray-700 hover:bg-gray-600 text-emerald-400'
+                                  : 'bg-white/80 hover:bg-white text-emerald-600 shadow-sm'
+                              }`}
+                              title={isPlaying && currentPlayingAyah === ayah.numberInSurah ? 'Pause' : 'Play Ayah'}
+                            >
+                              {isPlaying && currentPlayingAyah === ayah.numberInSurah ? (
+                                <PauseIcon className="h-4 w-4" />
+                              ) : (
+                                <PlayIcon className="h-4 w-4" />
+                              )}
+                            </button>
+                          )}
                         </div>
 
                         {/* Transliteration - only if not Arabic-only mode */}
@@ -1932,16 +2174,7 @@ const QuranReader: React.FC = () => {
                         )}
 
                         {/* Translations */}
-                        {translations.map((translation, idx) => (
-                          <div key={idx} className="mb-2">
-                            <p className={`text-xs font-medium mb-1 ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                              {translation.edition.name}
-                            </p>
-                            <p className={`text-sm leading-relaxed ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                              {translation.ayahs[ayah.numberInSurah - 1]?.text}
-                            </p>
-                          </div>
-                        ))}
+                        {renderAyahTranslations(ayah.numberInSurah - 1)}
                       </div>
                     ))}
                   </div>
@@ -2476,6 +2709,42 @@ const QuranReader: React.FC = () => {
                   )}
                 </div>
 
+                {/* Translations */}
+                {!tempSettings.arabicOnlyMode && (
+                  <div>
+                    <label className={`block text-sm font-medium mb-2 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                      Translations (max 3)
+                    </label>
+                    <div className={`space-y-2 max-h-40 overflow-y-auto rounded-lg p-2 ${settings.theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                      {DEFAULT_TRANSLATIONS.map((trans) => (
+                        <label key={trans.identifier} className="flex items-center text-sm cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={tempSettings.selectedTranslations.includes(trans.identifier)}
+                            onChange={(e) => {
+                              let newTranslations;
+                              if (e.target.checked && tempSettings.selectedTranslations.length < 3) {
+                                newTranslations = [...tempSettings.selectedTranslations, trans.identifier];
+                              } else if (!e.target.checked) {
+                                newTranslations = tempSettings.selectedTranslations.filter((t) => t !== trans.identifier);
+                              } else {
+                                return;
+                              }
+                              setTempSettings({ ...tempSettings, selectedTranslations: newTranslations });
+                              updateSettings({ selectedTranslations: newTranslations });
+                            }}
+                            className="mr-2 w-4 h-4"
+                          />
+                          <span className={settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}>
+                            {trans.name}
+                            {trans.identifier === DEFAULT_URDU_TRANSLATION.identifier ? ' (Recommended Urdu)' : ''}
+                            {trans.identifier === DEFAULT_ENGLISH_TRANSLATION.identifier ? ' (Default English)' : ''}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </>
             )}
 
