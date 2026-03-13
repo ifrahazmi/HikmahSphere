@@ -59,7 +59,7 @@ const createNotificationFromPayload = (payload: MessagePayload): Notification =>
   const generatedId = `fcm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
   return {
-    id: payload.messageId || payload.data?.notificationId || generatedId,
+    id: payload.data?.notificationId || payload.messageId || generatedId,
     title: payload.notification?.title || payload.data?.title || 'New Notification',
     body: payload.notification?.body || payload.data?.body || '',
     timestamp: new Date().toISOString(),
@@ -125,6 +125,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
       const options: NotificationOptions = {
         body: payload.notification?.body || payload.data?.body || '',
         icon: '/small_logo.jpeg',
+        tag: payload.data?.notificationId || payload.messageId || undefined,
         data: payload.data
       };
       try {

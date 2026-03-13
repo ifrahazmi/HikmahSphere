@@ -2028,9 +2028,7 @@ const QuranReader: React.FC = () => {
                             <div className={`relative mb-4 overflow-hidden rounded-2xl p-4 sm:p-6 ${getReaderBackgroundClass()}`}>
                               <div className="w-full">
                                 <p
-                                  className={`${getFontFamilyClass()} block text-right leading-loose ${getFontColorClass()} ${
-                                    settings.audioEnabled && settings.audioMode === 'ayah' && currentSurah ? 'pl-10 sm:pl-14' : ''
-                                  }`}
+                                  className={`${getFontFamilyClass()} block text-right leading-loose ${getFontColorClass()}`}
                                   style={{ fontSize: `${getActualFontSize()}px`, lineHeight: getActualLineHeight() }}
                                   dir="rtl"
                                 >
@@ -2044,6 +2042,36 @@ const QuranReader: React.FC = () => {
 
                                     return (
                                       <>
+                                        {settings.audioEnabled && settings.audioMode === 'ayah' && currentSurah && (
+                                          <>
+                                            <button
+                                              onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                if (isPlaying && currentPlayingAyah === ayahNum) {
+                                                  pauseAyah();
+                                                } else {
+                                                  playAyah(currentSurah, ayahNum);
+                                                }
+                                              }}
+                                              className={`inline-flex h-7 w-7 align-middle items-center justify-center rounded-full mx-1 transition-colors ${
+                                                isPlaying && currentPlayingAyah === ayahNum
+                                                  ? 'bg-emerald-500 text-white'
+                                                  : settings.theme === 'dark'
+                                                  ? 'bg-gray-700 hover:bg-gray-600 text-emerald-400'
+                                                  : 'bg-white text-emerald-600 shadow-sm hover:bg-emerald-50'
+                                              }`}
+                                              title={isPlaying && currentPlayingAyah === ayahNum ? 'Pause' : 'Play'}
+                                            >
+                                              {isPlaying && currentPlayingAyah === ayahNum ? (
+                                                <PauseIcon className="h-4 w-4" />
+                                              ) : (
+                                                <PlayIcon className="h-4 w-4" />
+                                              )}
+                                            </button>
+                                            {' '}
+                                          </>
+                                        )}
                                         <span
                                           onClick={(e) => handleAyahClick(e, surahData.number, ayahNum)}
                                           className={`cursor-pointer rounded px-1 ${getBookmarkHoverClass(bookmarkColor)} ${bgClass} ${isSelectedForBookmark ? getBookmarkSelectionClass(bookmarkColor) : ''}`}
@@ -2064,35 +2092,6 @@ const QuranReader: React.FC = () => {
                                   })()}
                                 </p>
                               </div>
-
-                              {/* Audio Play Button - only show if audio is enabled and in ayah mode */}
-                              {settings.audioEnabled && settings.audioMode === 'ayah' && currentSurah && (
-                                <button
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    if (isPlaying && currentPlayingAyah === ayahNum) {
-                                      pauseAyah();
-                                    } else {
-                                      playAyah(currentSurah, ayahNum);
-                                    }
-                                  }}
-                                  className={`absolute right-3 top-3 p-2 rounded-full transition-colors ${
-                                    isPlaying && currentPlayingAyah === ayahNum
-                                      ? 'bg-emerald-500 text-white'
-                                      : settings.theme === 'dark'
-                                      ? 'bg-gray-700 hover:bg-gray-600 text-emerald-400'
-                                      : 'bg-white/80 hover:bg-white text-emerald-600 shadow-sm'
-                                  }`}
-                                  title={isPlaying && currentPlayingAyah === ayahNum ? 'Pause' : 'Play'}
-                                >
-                                  {isPlaying && currentPlayingAyah === ayahNum ? (
-                                    <PauseIcon className="h-4 w-4" />
-                                  ) : (
-                                    <PlayIcon className="h-4 w-4" />
-                                  )}
-                                </button>
-                              )}
                             </div>
 
                             {/* Transliteration */}
@@ -2203,9 +2202,7 @@ const QuranReader: React.FC = () => {
                         >
                           <div className="w-full">
                             <p
-                              className={`${getFontFamilyClass()} block text-right leading-loose ${getFontColorClass()} ${
-                                settings.audioEnabled && settings.audioMode === 'ayah' && currentSurah ? 'pl-10 sm:pl-14' : ''
-                              }`}
+                              className={`${getFontFamilyClass()} block text-right leading-loose ${getFontColorClass()}`}
                               style={{ fontSize: `${getActualFontSize()}px`, lineHeight: getActualLineHeight() }}
                               dir="rtl"
                             >
@@ -2217,6 +2214,36 @@ const QuranReader: React.FC = () => {
 
                                 return (
                                   <>
+                                    {settings.audioEnabled && settings.audioMode === 'ayah' && currentSurah && (
+                                      <>
+                                        <button
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            if (isPlaying && currentPlayingAyah === ayah.numberInSurah) {
+                                              pauseAyah();
+                                            } else {
+                                              playAyah(currentSurah, ayah.numberInSurah);
+                                            }
+                                          }}
+                                          className={`inline-flex h-7 w-7 align-middle items-center justify-center rounded-full mx-1 transition-colors ${
+                                            isPlaying && currentPlayingAyah === ayah.numberInSurah
+                                              ? 'bg-emerald-500 text-white'
+                                              : settings.theme === 'dark'
+                                              ? 'bg-gray-700 hover:bg-gray-600 text-emerald-400'
+                                              : 'bg-white text-emerald-600 shadow-sm hover:bg-emerald-50'
+                                          }`}
+                                          title={isPlaying && currentPlayingAyah === ayah.numberInSurah ? 'Pause' : 'Play Ayah'}
+                                        >
+                                          {isPlaying && currentPlayingAyah === ayah.numberInSurah ? (
+                                            <PauseIcon className="h-4 w-4" />
+                                          ) : (
+                                            <PlayIcon className="h-4 w-4" />
+                                          )}
+                                        </button>
+                                        {' '}
+                                      </>
+                                    )}
                                     <span
                                       onClick={(e) => handleAyahClick(e, surahData.number, ayah.numberInSurah)}
                                       className={`cursor-pointer rounded px-1 ${getBookmarkHoverClass(bookmarkColor)} ${bgClass} ${isSelectedForBookmark ? getBookmarkSelectionClass(bookmarkColor) : ''}`}
@@ -2236,35 +2263,6 @@ const QuranReader: React.FC = () => {
                               })()}
                             </p>
                           </div>
-
-                          {/* Audio Play Button - only show if audio is enabled and in ayah mode */}
-                          {settings.audioEnabled && settings.audioMode === 'ayah' && currentSurah && (
-                            <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                if (isPlaying && currentPlayingAyah === ayah.numberInSurah) {
-                                  pauseAyah();
-                                } else {
-                                  playAyah(currentSurah, ayah.numberInSurah);
-                                }
-                              }}
-                              className={`absolute right-3 top-3 p-2 rounded-full transition-colors ${
-                                isPlaying && currentPlayingAyah === ayah.numberInSurah
-                                  ? 'bg-emerald-500 text-white'
-                                  : settings.theme === 'dark'
-                                  ? 'bg-gray-700 hover:bg-gray-600 text-emerald-400'
-                                  : 'bg-white/80 hover:bg-white text-emerald-600 shadow-sm'
-                              }`}
-                              title={isPlaying && currentPlayingAyah === ayah.numberInSurah ? 'Pause' : 'Play Ayah'}
-                            >
-                              {isPlaying && currentPlayingAyah === ayah.numberInSurah ? (
-                                <PauseIcon className="h-4 w-4" />
-                              ) : (
-                                <PlayIcon className="h-4 w-4" />
-                              )}
-                            </button>
-                          )}
                         </div>
 
                         {/* Transliteration - only if not Arabic-only mode */}

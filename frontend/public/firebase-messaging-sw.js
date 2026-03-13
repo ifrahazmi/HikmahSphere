@@ -94,7 +94,7 @@ self.addEventListener('fetch', (event) => {
 });
 
 const createNotificationPayload = (payload) => {
-  const id = payload?.messageId || payload?.data?.notificationId || `sw-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const id = payload?.data?.notificationId || payload?.messageId || `sw-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   return {
     id,
     messageId: payload?.messageId,
@@ -157,6 +157,8 @@ messaging.onBackgroundMessage((payload) => {
   const notificationOptions = {
     body: normalizedPayload.body,
     icon: '/small_logo.jpeg',
+    tag: normalizedPayload.id,
+    renotify: false,
     vibrate: [200, 100, 200],
     data: {
       url: targetUrl,
@@ -256,6 +258,8 @@ self.addEventListener('push', (event) => {
         body,
         icon: '/small_logo.jpeg',
         badge: '/small_logo.jpeg',
+        tag: normalizedPayload.id,
+        renotify: false,
         vibrate: [200, 100, 200],
         data: { url: payload?.data?.url || '/', notificationPayload: normalizedPayload },
       }),
