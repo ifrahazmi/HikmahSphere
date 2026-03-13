@@ -25,7 +25,6 @@ import {
   type BookmarkColor,
   DEFAULT_ENGLISH_TRANSLATION,
   DEFAULT_TRANSLATIONS,
-  DEFAULT_URDU_TRANSLATION,
 } from '../types/quran';
 import { getIndopakQuranData, getIndopakSurah, type IndopakSurah } from '../utils/indopakQuran';
 
@@ -596,52 +595,137 @@ const QuranReader: React.FC = () => {
     return DEFAULT_TRANSLATIONS.find((translation) => translation.identifier === identifier);
   };
 
-  const hasLanguageTranslationEnabled = (language: 'English' | 'Urdu') => {
-    return settings.selectedTranslations.some((identifier) => getTranslationDefinition(identifier)?.language === language);
+  const translationOptions = DEFAULT_TRANSLATIONS.filter(
+    (translation) => translation.language === 'English' || translation.language === 'Urdu'
+  );
+
+  const getSingleTranslationSelection = (identifiers: string[]) => {
+    const firstSupportedTranslation = identifiers.find((identifier) => {
+      const translationLanguage = getTranslationDefinition(identifier)?.language;
+      return translationLanguage === 'English' || translationLanguage === 'Urdu';
+    });
+
+    return firstSupportedTranslation ? [firstSupportedTranslation] : [DEFAULT_ENGLISH_TRANSLATION.identifier];
   };
 
-  const togglePrimaryTranslation = (
-    language: 'English' | 'Urdu',
-    fallbackIdentifier: string
-  ) => {
-    const hasLanguageEnabled = hasLanguageTranslationEnabled(language);
+  const activeTranslationIdentifier = getSingleTranslationSelection(settings.selectedTranslations)[0];
+  const activeTempTranslationIdentifier = getSingleTranslationSelection(tempSettings.selectedTranslations)[0];
 
-    if (settings.arabicOnlyMode && hasLanguageEnabled) {
-      updateSettings({ arabicOnlyMode: false });
+  const formatTranslationLanguage = (language: string) => {
+    if (language === 'en' || language === 'English') return 'English';
+    if (language === 'ur' || language === 'Urdu') return 'Urdu';
+    return language;
+  };
+
+  const getTranslationOptionLabel = (translation: {
+    identifier?: string;
+    language: string;
+    name: string;
+  }) => {
+    const language = formatTranslationLanguage(translation.language);
+    const translationName = translation.identifier
+      ? getTranslationDefinition(translation.identifier)?.name ?? translation.name
+      : translation.name;
+
+    return `${language} - ${translationName}`;
+  };
+
+  const setDesktopDisplayMode = (arabicOnlyMode: boolean) => {
+    if (arabicOnlyMode) {
+      updateSettings({ arabicOnlyMode: true });
       return;
-    }
-
-    if (hasLanguageEnabled) {
-      updateSettings({
-        selectedTranslations: settings.selectedTranslations.filter(
-          (identifier) => getTranslationDefinition(identifier)?.language !== language
-        ),
-      });
-      return;
-    }
-
-    let nextTranslations = [...settings.selectedTranslations];
-    if (nextTranslations.length >= 3) {
-      const removableIndex = nextTranslations.findIndex((identifier) => {
-        const translationLanguage = getTranslationDefinition(identifier)?.language;
-        return translationLanguage !== 'English' && translationLanguage !== 'Urdu';
-      });
-
-      if (removableIndex >= 0) {
-        nextTranslations.splice(removableIndex, 1);
-      } else {
-        nextTranslations = nextTranslations.slice(0, 2);
-      }
-    }
-
-    if (!nextTranslations.includes(fallbackIdentifier)) {
-      nextTranslations.push(fallbackIdentifier);
     }
 
     updateSettings({
       arabicOnlyMode: false,
-      selectedTranslations: nextTranslations,
+      selectedTranslations: [DEFAULT_ENGLISH_TRANSLATION.identifier],
     });
+  };
+
+  const setMobileDisplayMode = (arabicOnlyMode: boolean) => {
+    if (arabicOnlyMode) {
+      const updatedSettings = { ...tempSettings, arabicOnlyMode: true };
+      setTempSettings(updatedSettings);
+      updateSettings({ arabicOnlyMode: true });
+      return;
+    }
+
+    const updatedSettings = {
+      ...tempSettings,
+      arabicOnlyMode: false,
+      selectedTranslations: [DEFAULT_ENGLISH_TRANSLATION.identifier],
+    };
+
+    setTempSettings(updatedSettings);
+    updateSettings({
+      arabicOnlyMode: false,
+      selectedTranslations: [DEFAULT_ENGLISH_TRANSLATION.identifier],
+    });
+  };
+
+  const selectDesktopTranslation = (identifier: string) => {
+    updateSettings({
+      arabicOnlyMode: false,
+      selectedTranslations: [identifier],
+    });
+  };
+
+  const selectMobileTranslation = (identifier: string) => {
+    const updatedSettings = {
+      ...tempSettings,
+      arabicOnlyMode: false,
+      selectedTranslations: [identifier],
+    };
+
+    setTempSettings(updatedSettings);
+    updateSettings({
+      arabicOnlyMode: false,
+      selectedTranslations: [identifier],
+    });
+  };
+
+  const renderTranslationSelector = ({
+    selectedIdentifier,
+    onChange,
+    size,
+  }: {
+    selectedIdentifier: string;
+    onChange: (identifier: string) => void;
+    size: 'desktop' | 'mobile';
+  }) => {
+    const labelClass =
+      size === 'desktop'
+        ? `block text-xs font-medium mb-1.5 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`
+        : `block text-sm font-medium mb-2 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`;
+    const selectClass =
+      size === 'desktop'
+        ? `w-full rounded-md border px-2 py-2 text-xs ${
+            settings.theme === 'dark'
+              ? 'border-gray-600 bg-gray-700 text-white'
+              : 'border-gray-300 bg-white text-gray-900'
+          }`
+        : `w-full rounded-lg border px-3 py-3 text-sm ${
+            settings.theme === 'dark'
+              ? 'border-gray-600 bg-gray-700 text-white'
+              : 'border-gray-300 bg-white text-gray-900'
+          }`;
+
+    return (
+      <div>
+        <label className={labelClass}>Translation</label>
+        <select
+          value={selectedIdentifier}
+          onChange={(e) => onChange(e.target.value)}
+          className={selectClass}
+        >
+          {translationOptions.map((translation) => (
+            <option key={translation.identifier} value={translation.identifier}>
+              {getTranslationOptionLabel(translation)}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
   };
 
   const orderedTranslations = [...translations].sort((first, second) => {
@@ -661,16 +745,9 @@ const QuranReader: React.FC = () => {
         if (!text) return null;
 
         const isUrdu = translation.edition.language === 'ur';
-        const isEnglish = translation.edition.language === 'en';
-        const label = isUrdu
-          ? 'Urdu Translation'
-          : isEnglish
-          ? 'English Translation'
-          : translation.edition.name;
 
         return {
           key: `${translation.edition.identifier}-${ayahIndex}`,
-          label,
           text,
           isUrdu,
           direction: translation.edition.direction || (isUrdu ? 'rtl' : 'ltr'),
@@ -678,7 +755,6 @@ const QuranReader: React.FC = () => {
       })
       .filter(Boolean) as Array<{
       key: string;
-      label: string;
       text: string;
       isUrdu: boolean;
       direction: 'ltr' | 'rtl';
@@ -692,30 +768,18 @@ const QuranReader: React.FC = () => {
       <div
         key={translation.key}
         className={`mb-3 rounded-2xl border p-4 sm:p-5 ${
-          translation.isUrdu
-            ? settings.theme === 'dark'
-              ? 'border-emerald-900/70 bg-emerald-950/20'
-              : 'border-emerald-100 bg-emerald-50/80'
-            : settings.theme === 'dark'
-            ? 'border-gray-700 bg-gray-900/30'
-            : 'border-slate-200 bg-slate-50'
+          settings.theme === 'dark' ? 'border-gray-700 bg-gray-900/30' : 'border-slate-200 bg-slate-50'
         }`}
       >
         <p
-          className={`mb-2 text-[11px] font-semibold uppercase tracking-[0.24em] ${
-            settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-          }`}
-        >
-          {translation.label}
-        </p>
-        <p
           dir={translation.direction}
+          style={{ fontSize: `${settings.translationFontSize}px` }}
           className={
             translation.isUrdu
-              ? `quran-urdu-translation text-[1.4rem] sm:text-[1.6rem] ${
+              ? `quran-urdu-translation ${
                   settings.theme === 'dark' ? 'text-gray-100' : 'text-gray-800'
                 }`
-              : `text-sm leading-7 sm:text-base ${
+              : `text-left leading-8 ${
                   settings.theme === 'dark' ? 'text-gray-200' : 'text-gray-700'
                 }`
           }
@@ -901,8 +965,7 @@ const QuranReader: React.FC = () => {
                 {/* Display Mode Toggle */}
                 <button
                   onClick={() => {
-                    const newArabicOnlyMode = !settings.arabicOnlyMode;
-                    updateSettings({ ...settings, arabicOnlyMode: newArabicOnlyMode });
+                    setDesktopDisplayMode(!settings.arabicOnlyMode);
                   }}
                   className={`p-2.5 rounded-xl transition-all active:scale-95 ${
                     settings.arabicOnlyMode
@@ -1189,7 +1252,7 @@ const QuranReader: React.FC = () => {
                   </label>
                   <div className="grid grid-cols-2 gap-1.5">
                     <button
-                      onClick={() => updateSettings({ arabicOnlyMode: true })}
+                      onClick={() => setDesktopDisplayMode(true)}
                       className={`p-2 text-xs rounded-md font-medium transition-colors ${
                         settings.arabicOnlyMode
                           ? 'bg-emerald-500 text-white'
@@ -1201,7 +1264,7 @@ const QuranReader: React.FC = () => {
                       Only Arabic
                     </button>
                     <button
-                      onClick={() => updateSettings({ arabicOnlyMode: false })}
+                      onClick={() => setDesktopDisplayMode(false)}
                       className={`p-2 text-xs rounded-md font-medium transition-colors ${
                         !settings.arabicOnlyMode
                           ? 'bg-emerald-500 text-white'
@@ -1237,6 +1300,34 @@ const QuranReader: React.FC = () => {
                     />
                     <button
                       onClick={() => updateSettings({ fontSize: Math.min(38, settings.fontSize + 2) })}
+                      className={`p-1.5 rounded-md ${settings.theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'}`}
+                    >
+                      <PlusIcon className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className={`block text-xs font-medium mb-1.5 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Translation Size: {settings.translationFontSize}px
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => updateSettings({ translationFontSize: Math.max(14, settings.translationFontSize - 1) })}
+                      className={`p-1.5 rounded-md ${settings.theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'}`}
+                    >
+                      <MinusIcon className="h-3 w-3" />
+                    </button>
+                    <input
+                      type="range"
+                      min="14"
+                      max="26"
+                      value={settings.translationFontSize}
+                      onChange={(e) => updateSettings({ translationFontSize: parseInt(e.target.value) })}
+                      className="flex-1"
+                    />
+                    <button
+                      onClick={() => updateSettings({ translationFontSize: Math.min(26, settings.translationFontSize + 1) })}
                       className={`p-1.5 rounded-md ${settings.theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'}`}
                     >
                       <PlusIcon className="h-3 w-3" />
@@ -1437,39 +1528,11 @@ const QuranReader: React.FC = () => {
                   </div>
                 )}
 
-                {/* Translations - Display Section */}
-                {!settings.arabicOnlyMode && (
-                  <div>
-                    <label className={`block text-xs font-medium mb-1.5 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                      Translations (max 3)
-                    </label>
-                    <div className="space-y-1.5 max-h-32 overflow-y-auto">
-                      {DEFAULT_TRANSLATIONS.map((trans) => (
-                        <label key={trans.identifier} className="flex items-center text-xs">
-                          <input
-                            type="checkbox"
-                            checked={settings.selectedTranslations.includes(trans.identifier)}
-                            onChange={(e) => {
-                              if (e.target.checked && settings.selectedTranslations.length < 3) {
-                                updateSettings({
-                                  selectedTranslations: [...settings.selectedTranslations, trans.identifier],
-                                });
-                              } else if (!e.target.checked) {
-                                updateSettings({
-                                  selectedTranslations: settings.selectedTranslations.filter((t) => t !== trans.identifier),
-                                });
-                              }
-                            }}
-                            className="mr-1.5"
-                          />
-                          <span className={`${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                            {trans.name}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                {renderTranslationSelector({
+                  selectedIdentifier: activeTranslationIdentifier,
+                  onChange: selectDesktopTranslation,
+                  size: 'desktop',
+                })}
 
                 {/* Audio Settings */}
                 <div>
@@ -1557,41 +1620,6 @@ const QuranReader: React.FC = () => {
                   )}
                 </div>
 
-                {/* Translations - only show if not in Arabic-only mode */}
-                {!settings.arabicOnlyMode && (
-                  <div>
-                    <label className={`block text-xs font-medium mb-1.5 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                      Translations (max 3)
-                    </label>
-                    <div className="space-y-1.5 max-h-32 overflow-y-auto">
-                      {DEFAULT_TRANSLATIONS.map((trans) => (
-                        <label key={trans.identifier} className="flex items-center text-xs">
-                          <input
-                            type="checkbox"
-                            checked={settings.selectedTranslations.includes(trans.identifier)}
-                            onChange={(e) => {
-                              if (e.target.checked && settings.selectedTranslations.length < 3) {
-                                updateSettings({
-                                  selectedTranslations: [...settings.selectedTranslations, trans.identifier],
-                                });
-                              } else if (!e.target.checked) {
-                                updateSettings({
-                                  selectedTranslations: settings.selectedTranslations.filter((t) => t !== trans.identifier),
-                                });
-                              }
-                            }}
-                            className="mr-1.5"
-                          />
-                          <span className={`${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                            {trans.name}
-                            {trans.identifier === DEFAULT_URDU_TRANSLATION.identifier ? ' (Recommended Urdu)' : ''}
-                            {trans.identifier === DEFAULT_ENGLISH_TRANSLATION.identifier ? ' (Default English)' : ''}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                )}
                 {/* Bookmarks */}
                 <div>
                   <label className={`block text-xs font-medium mb-1.5 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -1680,74 +1708,6 @@ const QuranReader: React.FC = () => {
                     </div>
                   </div>
                 )}
-
-                <div
-                  className={`mb-6 rounded-2xl border px-4 py-4 sm:px-5 ${
-                    settings.theme === 'dark'
-                      ? 'border-emerald-900/60 bg-emerald-950/10'
-                      : 'border-emerald-100 bg-gradient-to-r from-emerald-50 via-white to-teal-50'
-                  }`}
-                >
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p
-                        className={`text-[11px] font-semibold uppercase tracking-[0.26em] ${
-                          settings.theme === 'dark' ? 'text-emerald-300' : 'text-emerald-700'
-                        }`}
-                      >
-                        Reading Layers
-                      </p>
-                      <p className={`mt-2 text-sm ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                        Arabic stays primary. Enable the Urdu translation for a simple trusted reading flow, and add
-                        English only when needed.
-                      </p>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      <span
-                        className={`inline-flex items-center rounded-full border px-4 py-2 text-sm font-semibold ${
-                          settings.theme === 'dark'
-                            ? 'border-emerald-700 bg-emerald-500/15 text-emerald-100'
-                            : 'border-emerald-200 bg-emerald-600 text-white'
-                        }`}
-                      >
-                        Arabic
-                      </span>
-                      <button
-                        type="button"
-                        aria-pressed={!settings.arabicOnlyMode && hasLanguageTranslationEnabled('Urdu')}
-                        onClick={() => togglePrimaryTranslation('Urdu', DEFAULT_URDU_TRANSLATION.identifier)}
-                        className={`inline-flex items-center rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${
-                          !settings.arabicOnlyMode && hasLanguageTranslationEnabled('Urdu')
-                            ? settings.theme === 'dark'
-                              ? 'border-emerald-500 bg-emerald-500 text-white'
-                              : 'border-emerald-600 bg-emerald-600 text-white'
-                            : settings.theme === 'dark'
-                            ? 'border-gray-700 bg-gray-800 text-gray-200 hover:border-emerald-500'
-                            : 'border-gray-200 bg-white text-gray-700 hover:border-emerald-400'
-                        }`}
-                      >
-                        Urdu
-                      </button>
-                      <button
-                        type="button"
-                        aria-pressed={!settings.arabicOnlyMode && hasLanguageTranslationEnabled('English')}
-                        onClick={() => togglePrimaryTranslation('English', DEFAULT_ENGLISH_TRANSLATION.identifier)}
-                        className={`inline-flex items-center rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${
-                          !settings.arabicOnlyMode && hasLanguageTranslationEnabled('English')
-                            ? settings.theme === 'dark'
-                              ? 'border-sky-500 bg-sky-500 text-white'
-                              : 'border-sky-600 bg-sky-600 text-white'
-                            : settings.theme === 'dark'
-                            ? 'border-gray-700 bg-gray-800 text-gray-200 hover:border-sky-500'
-                            : 'border-gray-200 bg-white text-gray-700 hover:border-sky-400'
-                        }`}
-                      >
-                        English
-                      </button>
-                    </div>
-                  </div>
-                </div>
 
                 {/* Desktop Top Audio Player Card - Only visible in Complete Surah mode */}
                 {settings.audioEnabled && settings.audioMode === 'surah' && (
@@ -1920,10 +1880,10 @@ const QuranReader: React.FC = () => {
                           >
                             {/* Arabic Text */}
                             <div className={`relative mb-4 overflow-hidden rounded-2xl p-4 sm:p-6 ${getReaderBackgroundClass()}`}>
-                              <div className="mx-auto max-w-4xl">
+                              <div className="w-full">
                                 <p
-                                  className={`${getFontFamilyClass()} block text-center leading-loose ${getFontColorClass()} ${
-                                    settings.audioEnabled && settings.audioMode === 'ayah' && currentSurah ? 'px-10 sm:px-14' : ''
+                                  className={`${getFontFamilyClass()} block text-right leading-loose ${getFontColorClass()} ${
+                                    settings.audioEnabled && settings.audioMode === 'ayah' && currentSurah ? 'pl-10 sm:pl-14' : ''
                                   }`}
                                   style={{ fontSize: `${getActualFontSize()}px`, lineHeight: getActualLineHeight() }}
                                   dir="rtl"
@@ -2095,10 +2055,10 @@ const QuranReader: React.FC = () => {
                         <div
                           className={`relative mb-4 overflow-hidden rounded-2xl p-4 sm:p-6 ${getReaderBackgroundClass()}`}
                         >
-                          <div className="mx-auto max-w-4xl">
+                          <div className="w-full">
                             <p
-                              className={`${getFontFamilyClass()} block text-center leading-loose ${getFontColorClass()} ${
-                                settings.audioEnabled && settings.audioMode === 'ayah' && currentSurah ? 'px-10 sm:px-14' : ''
+                              className={`${getFontFamilyClass()} block text-right leading-loose ${getFontColorClass()} ${
+                                settings.audioEnabled && settings.audioMode === 'ayah' && currentSurah ? 'pl-10 sm:pl-14' : ''
                               }`}
                               style={{ fontSize: `${getActualFontSize()}px`, lineHeight: getActualLineHeight() }}
                               dir="rtl"
@@ -2332,7 +2292,7 @@ const QuranReader: React.FC = () => {
                   </label>
                   <div className="grid grid-cols-2 gap-2">
                     <button
-                      onClick={() => updateSingleSetting('arabicOnlyMode', true)}
+                      onClick={() => setMobileDisplayMode(true)}
                       className={`p-3 text-sm rounded-lg font-medium transition-colors ${
                         tempSettings.arabicOnlyMode
                           ? 'bg-emerald-500 text-white'
@@ -2344,7 +2304,7 @@ const QuranReader: React.FC = () => {
                       Only Arabic
                     </button>
                     <button
-                      onClick={() => updateSingleSetting('arabicOnlyMode', false)}
+                      onClick={() => setMobileDisplayMode(false)}
                       className={`p-3 text-sm rounded-lg font-medium transition-colors ${
                         !tempSettings.arabicOnlyMode
                           ? 'bg-emerald-500 text-white'
@@ -2380,6 +2340,34 @@ const QuranReader: React.FC = () => {
                     />
                     <button
                       onClick={() => updateSingleSetting('fontSize', Math.min(38, tempSettings.fontSize + 2))}
+                      className={`p-2 rounded-lg ${settings.theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'}`}
+                    >
+                      <PlusIcon className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Translation Size: {tempSettings.translationFontSize}px
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => updateSingleSetting('translationFontSize', Math.max(14, tempSettings.translationFontSize - 1))}
+                      className={`p-2 rounded-lg ${settings.theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'}`}
+                    >
+                      <MinusIcon className="h-4 w-4" />
+                    </button>
+                    <input
+                      type="range"
+                      min="14"
+                      max="26"
+                      value={tempSettings.translationFontSize}
+                      onChange={(e) => updateSingleSetting('translationFontSize', parseInt(e.target.value))}
+                      className="flex-1 h-2"
+                    />
+                    <button
+                      onClick={() => updateSingleSetting('translationFontSize', Math.min(26, tempSettings.translationFontSize + 1))}
                       className={`p-2 rounded-lg ${settings.theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'}`}
                     >
                       <PlusIcon className="h-4 w-4" />
@@ -2577,40 +2565,11 @@ const QuranReader: React.FC = () => {
                   </div>
                 )}
 
-                {/* Translations - Display Tab */}
-                {!tempSettings.arabicOnlyMode && (
-                  <div>
-                    <label className={`block text-sm font-medium mb-2 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                      Translations (max 3)
-                    </label>
-                    <div className={`space-y-2 max-h-40 overflow-y-auto rounded-lg p-2 ${settings.theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'}`}>
-                      {DEFAULT_TRANSLATIONS.map((trans) => (
-                        <label key={trans.identifier} className="flex items-center text-sm cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={tempSettings.selectedTranslations.includes(trans.identifier)}
-                            onChange={(e) => {
-                              let newTranslations;
-                              if (e.target.checked && tempSettings.selectedTranslations.length < 3) {
-                                newTranslations = [...tempSettings.selectedTranslations, trans.identifier];
-                              } else if (!e.target.checked) {
-                                newTranslations = tempSettings.selectedTranslations.filter((t) => t !== trans.identifier);
-                              } else {
-                                return;
-                              }
-                              setTempSettings({ ...tempSettings, selectedTranslations: newTranslations });
-                              updateSettings({ selectedTranslations: newTranslations });
-                            }}
-                            className="mr-2 w-4 h-4"
-                          />
-                          <span className={settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}>
-                            {trans.name}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                {renderTranslationSelector({
+                  selectedIdentifier: activeTempTranslationIdentifier,
+                  onChange: selectMobileTranslation,
+                  size: 'mobile',
+                })}
               </>
             )}
 
@@ -2709,42 +2668,6 @@ const QuranReader: React.FC = () => {
                   )}
                 </div>
 
-                {/* Translations */}
-                {!tempSettings.arabicOnlyMode && (
-                  <div>
-                    <label className={`block text-sm font-medium mb-2 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                      Translations (max 3)
-                    </label>
-                    <div className={`space-y-2 max-h-40 overflow-y-auto rounded-lg p-2 ${settings.theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'}`}>
-                      {DEFAULT_TRANSLATIONS.map((trans) => (
-                        <label key={trans.identifier} className="flex items-center text-sm cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={tempSettings.selectedTranslations.includes(trans.identifier)}
-                            onChange={(e) => {
-                              let newTranslations;
-                              if (e.target.checked && tempSettings.selectedTranslations.length < 3) {
-                                newTranslations = [...tempSettings.selectedTranslations, trans.identifier];
-                              } else if (!e.target.checked) {
-                                newTranslations = tempSettings.selectedTranslations.filter((t) => t !== trans.identifier);
-                              } else {
-                                return;
-                              }
-                              setTempSettings({ ...tempSettings, selectedTranslations: newTranslations });
-                              updateSettings({ selectedTranslations: newTranslations });
-                            }}
-                            className="mr-2 w-4 h-4"
-                          />
-                          <span className={settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}>
-                            {trans.name}
-                            {trans.identifier === DEFAULT_URDU_TRANSLATION.identifier ? ' (Recommended Urdu)' : ''}
-                            {trans.identifier === DEFAULT_ENGLISH_TRANSLATION.identifier ? ' (Default English)' : ''}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </>
             )}
 

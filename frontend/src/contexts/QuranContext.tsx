@@ -13,6 +13,7 @@ import {
   LastRead,
   SearchResult,
   DEFAULT_QURAN_SETTINGS,
+  DEFAULT_TRANSLATIONS,
 } from '../types/quran';
 
 const QuranContext = createContext<QuranContextType | undefined>(undefined);
@@ -223,6 +224,39 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     };
   }, [toDate]);
 
+  const normalizeSelectedTranslations = useCallback((value: unknown): string[] => {
+    const supportedTranslations = new Set(
+      DEFAULT_TRANSLATIONS
+        .filter((translation) => translation.language === 'English' || translation.language === 'Urdu')
+        .map((translation) => translation.identifier)
+    );
+
+    if (!Array.isArray(value)) {
+      return [...DEFAULT_QURAN_SETTINGS.selectedTranslations];
+    }
+
+    const firstSupportedTranslation = value.find(
+      (translation): translation is string =>
+        typeof translation === 'string' && supportedTranslations.has(translation)
+    );
+
+    return firstSupportedTranslation
+      ? [firstSupportedTranslation]
+      : [...DEFAULT_QURAN_SETTINGS.selectedTranslations];
+  }, []);
+
+  const normalizeSettings = useCallback((value: unknown): QuranSettings => {
+    const mergedSettings =
+      value && typeof value === 'object'
+        ? ({ ...DEFAULT_QURAN_SETTINGS, ...(value as Partial<QuranSettings>) } as QuranSettings)
+        : { ...DEFAULT_QURAN_SETTINGS };
+
+    return {
+      ...mergedSettings,
+      selectedTranslations: normalizeSelectedTranslations(mergedSettings.selectedTranslations),
+    };
+  }, [normalizeSelectedTranslations]);
+
   useEffect(() => {
     const parseJson = (raw: string | null): unknown => {
       if (!raw) return null;
@@ -237,10 +271,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     const userSettingsRaw = localStorage.getItem(userSettingsStorageKey);
     const fallbackSettingsRaw = isGuestScope ? localStorage.getItem(LEGACY_QURAN_SETTINGS_KEY) : null;
     const settingsPayload = parseJson(userSettingsRaw) ?? parseJson(fallbackSettingsRaw);
-    const hydratedSettings =
-      settingsPayload && typeof settingsPayload === 'object'
-        ? ({ ...DEFAULT_QURAN_SETTINGS, ...(settingsPayload as Partial<QuranSettings>) } as QuranSettings)
-        : DEFAULT_QURAN_SETTINGS;
+    const hydratedSettings = normalizeSettings(settingsPayload);
     setSettings(hydratedSettings);
 
     const userBookmarksRaw = localStorage.getItem(userBookmarksStorageKey);
@@ -252,7 +283,15 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     const fallbackLastReadRaw = isGuestScope ? localStorage.getItem(LEGACY_QURAN_LAST_READ_KEY) : null;
     const lastReadPayload = parseJson(userLastReadRaw) ?? parseJson(fallbackLastReadRaw);
     setLastRead(normalizeLastRead(lastReadPayload));
-  }, [userSettingsStorageKey, userBookmarksStorageKey, userLastReadStorageKey, userStorageScope, normalizeBookmarks, normalizeLastRead]);
+  }, [
+    userSettingsStorageKey,
+    userBookmarksStorageKey,
+    userLastReadStorageKey,
+    userStorageScope,
+    normalizeBookmarks,
+    normalizeLastRead,
+    normalizeSettings,
+  ]);
 
   const syncUserQuranStateToBackend = useCallback(
     async (payload: { settings: QuranSettings; bookmarks: Bookmark[]; lastRead: LastRead | null }) => {
@@ -311,10 +350,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
 
         if (hasRemoteState) {
           if (remoteSettings && typeof remoteSettings === 'object') {
-            const mergedSettings = {
-              ...DEFAULT_QURAN_SETTINGS,
-              ...remoteSettings,
-            } as QuranSettings;
+            const mergedSettings = normalizeSettings(remoteSettings);
             setSettings(mergedSettings);
             saveSettingsToLocal(mergedSettings);
           }
@@ -487,11 +523,11 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
   // Update settings and reload if necessary
   const updateSettings = useCallback((newSettings: Partial<QuranSettings>) => {
     setSettings(prev => {
-      const updated = { ...prev, ...newSettings };
+      const updated = normalizeSettings({ ...prev, ...newSettings });
       saveSettingsToLocal(updated);
       return updated;
     });
-  }, [saveSettingsToLocal]);
+  }, [normalizeSettings, saveSettingsToLocal]);
 
   // Navigation
   const goToSurah = useCallback((surahNumber: number) => {

@@ -81,10 +81,11 @@ export interface SearchResult {
 }
 
 export interface QuranSettings {
-  selectedTranslations: string[];  // Edition identifiers (up to 3)
+  selectedTranslations: string[];  // Single active translation identifier stored as a one-item array
   showTransliteration: boolean;
   arabicOnlyMode: boolean;         // Show only Arabic text
   fontSize: number;                // 14-38px
+  translationFontSize: number;     // 14-26px
   theme: 'light' | 'dark';
   arabicFont: 'al-mushaf' | 'indopak-nastaleeq' | 'indopak-nastaleeq-v2' | 'amiri' | 'scheherazade' | 'noto-naskh' | 'cairo' | 'lateef' | 'reem-kufi';
   fontColor: 'default' | 'emerald' | 'blue' | 'amber' | 'rose';
@@ -203,22 +204,26 @@ export const DEFAULT_ENGLISH_TRANSLATION = {
 
 export const DEFAULT_URDU_TRANSLATION = {
   identifier: 'ur.jalandhry',
-  name: 'Urdu - Fateh Muhammad Jalandhry',
+  name: 'Fateh Muhammad Jalandhury',
   language: 'Urdu',
 } as const;
 
 // Default translations configuration
 export const DEFAULT_TRANSLATIONS = [
   DEFAULT_ENGLISH_TRANSLATION,
+  { identifier: 'en.itani', name: "Clear Qur'an - Talal Itani", language: 'English' },
+  { identifier: 'en.asad', name: 'Muhammad Asad', language: 'English' },
+  { identifier: 'en.arberry', name: 'A. J. Arberry', language: 'English' },
   { identifier: 'en.pickthall', name: 'Pickthall', language: 'English' },
   { identifier: 'en.yusufali', name: 'Yusuf Ali', language: 'English' },
-  { identifier: 'ar.alafasy', name: 'Arabic (Alafasy)', language: 'Arabic' },
+  { identifier: 'en.maududi', name: 'Abul Ala Maududi', language: 'English' },
+  { identifier: 'en.hilali', name: 'Hilali & Khan', language: 'English' },
+  { identifier: 'en.wahiduddin', name: 'Wahiduddin Khan', language: 'English' },
+  { identifier: 'en.ahmedali', name: 'Ahmed Ali', language: 'English' },
   DEFAULT_URDU_TRANSLATION,
-  { identifier: 'hi.farooq', name: 'Muhammad Farooq Khan & Ahmed', language: 'Hindi' },
-  { identifier: 'fr.hamidullah', name: 'Muhammad Hamidullah', language: 'French' },
-  { identifier: 'es.cortes', name: 'Julio Cortes', language: 'Spanish' },
-  { identifier: 'id.indonesian', name: 'Bahasa Indonesia', language: 'Indonesian' },
-  { identifier: 'tr.diyanet', name: 'Diyanet İşleri', language: 'Turkish' },
+  { identifier: 'ur.junagarhi', name: 'Muhammad Junagarhi', language: 'Urdu' },
+  { identifier: 'ur.maududi', name: "Abul A'ala Maududi", language: 'Urdu' },
+  { identifier: 'ur.ahmedali', name: 'Ahmed Ali', language: 'Urdu' },
 ];
 
 // Available Reciters for Audio Playback
@@ -237,10 +242,11 @@ export const AVAILABLE_RECITERS = [
 
 // Default settings
 export const DEFAULT_QURAN_SETTINGS: QuranSettings = {
-  selectedTranslations: [DEFAULT_URDU_TRANSLATION.identifier],
+  selectedTranslations: [DEFAULT_ENGLISH_TRANSLATION.identifier],
   showTransliteration: false,
   arabicOnlyMode: false,
   fontSize: 20,
+  translationFontSize: 20,
   theme: 'light',
   arabicFont: 'indopak-nastaleeq',
   fontColor: 'default',
