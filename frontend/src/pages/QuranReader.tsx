@@ -118,10 +118,13 @@ const QuranReader: React.FC = () => {
     isAudioLoading,
     currentPlayingAyah,
     currentPlayingSurah,
+    currentPlaybackTrack,
+    canSeekAudio,
     audioDuration,
     audioCurrentTime,
     currentQueueIndex,
     playAyah,
+    playTranslationAyah,
     pauseAyah,
     resumeAyah,
     stopAyah,
@@ -617,6 +620,14 @@ const QuranReader: React.FC = () => {
     return language;
   };
 
+  const activeTranslationDefinition = getTranslationDefinition(activeTranslationIdentifier);
+  const activeTranslationAudioLabel = activeTranslationDefinition
+    ? `${formatTranslationLanguage(activeTranslationDefinition.language)} - ${activeTranslationDefinition.name}`
+    : 'Selected translation';
+  const supportedTranslationAudioIdentifiers = new Set(['en.sahih', 'ur.jalandhry']);
+  const isActiveTranslationAudioSupported = supportedTranslationAudioIdentifiers.has(activeTranslationIdentifier);
+  const isActiveTempTranslationAudioSupported = supportedTranslationAudioIdentifiers.has(activeTempTranslationIdentifier);
+
   const getTranslationOptionLabel = (translation: {
     identifier?: string;
     language: string;
@@ -738,7 +749,51 @@ const QuranReader: React.FC = () => {
     return priority(first.edition.language) - priority(second.edition.language);
   });
 
+  const getNowPlayingTitle = () => {
+    if (currentPlayingSurah && surahs[currentPlayingSurah - 1]) {
+      const surahName = surahs[currentPlayingSurah - 1].englishName;
+
+      if (currentPlaybackTrack === 'translation') {
+        return `${surahName} - Translation of Ayah ${currentPlayingAyah || currentQueueIndex + 1}`;
+      }
+
+      if (currentPlaybackTrack === 'bismillah') {
+        return `${surahName} - Bismillah`;
+      }
+
+      return `${surahName} - Ayah ${currentPlayingAyah || currentQueueIndex + 1}`;
+    }
+
+    if (selectedAyahForPlay && surahs[selectedAyahForPlay.surah - 1]) {
+      return `Selected: ${surahs[selectedAyahForPlay.surah - 1].englishName} ${selectedAyahForPlay.ayah}`;
+    }
+
+    if (surahData) {
+      return `${surahData.englishName} - ${surahData.name}`;
+    }
+
+    return 'Select a Surah';
+  };
+
+  const getNowPlayingMeta = () => {
+    if (currentPlaybackTrack === 'translation') {
+      return `${activeTranslationAudioLabel} voice`;
+    }
+
+    if (currentPlaybackTrack === 'bismillah') {
+      return 'Opening basmalah';
+    }
+
+    if (surahData) {
+      return `${surahData.numberOfAyahs} Ayahs • ${surahData.revelationType}`;
+    }
+
+    return '';
+  };
+
   const renderAyahTranslations = (ayahIndex: number) => {
+    const ayahNumber = ayahIndex + 1;
+    const translationSurahNumber = currentSurah ?? surahData?.number;
     const ayahTranslations = orderedTranslations
       .map((translation) => {
         const text = translation.ayahs[ayahIndex]?.text?.trim();
@@ -748,6 +803,7 @@ const QuranReader: React.FC = () => {
 
         return {
           key: `${translation.edition.identifier}-${ayahIndex}`,
+          identifier: translation.edition.identifier,
           text,
           isUrdu,
           direction: translation.edition.direction || (isUrdu ? 'rtl' : 'ltr'),
@@ -755,6 +811,7 @@ const QuranReader: React.FC = () => {
       })
       .filter(Boolean) as Array<{
       key: string;
+      identifier: string;
       text: string;
       isUrdu: boolean;
       direction: 'ltr' | 'rtl';
@@ -764,30 +821,85 @@ const QuranReader: React.FC = () => {
       return null;
     }
 
-    return ayahTranslations.map((translation) => (
-      <div
-        key={translation.key}
-        className={`mb-3 rounded-2xl border p-4 sm:p-5 ${
-          settings.theme === 'dark' ? 'border-gray-700 bg-gray-900/30' : 'border-slate-200 bg-slate-50'
-        }`}
-      >
-        <p
-          dir={translation.direction}
-          style={{ fontSize: `${settings.translationFontSize}px` }}
-          className={
-            translation.isUrdu
-              ? `quran-urdu-translation ${
-                  settings.theme === 'dark' ? 'text-gray-100' : 'text-gray-800'
-                }`
-              : `text-left leading-8 ${
-                  settings.theme === 'dark' ? 'text-gray-200' : 'text-gray-700'
-                }`
-          }
+    return ayahTranslations.map((translation) => {
+      const isCurrentTranslationTrack =
+        currentPlaybackTrack === 'translation' &&
+        currentPlayingSurah === translationSurahNumber &&
+        currentPlayingAyah === ayahNumber &&
+        translation.identifier === activeTranslationIdentifier;
+
+      return (
+        <div
+          key={translation.key}
+          className={`mb-3 rounded-2xl border p-4 sm:p-5 ${
+            settings.theme === 'dark' ? 'border-gray-700 bg-gray-900/30' : 'border-slate-200 bg-slate-50'
+          }`}
         >
-          {translation.text}
-        </p>
-      </div>
-    ));
+          {settings.audioEnabled &&
+            settings.translationAudioEnabled &&
+            settings.audioMode === 'ayah' &&
+            translationSurahNumber &&
+            isActiveTranslationAudioSupported && (
+            <div className="mb-3 flex justify-end">
+              <button
+                onClick={() => {
+                  if (isCurrentTranslationTrack && isPlaying) {
+                    pauseAyah();
+                    return;
+                  }
+
+                  if (isCurrentTranslationTrack && isPaused) {
+                    resumeAyah();
+                    return;
+                  }
+
+                  void playTranslationAyah(translationSurahNumber, ayahNumber);
+                }}
+                className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  isCurrentTranslationTrack && isPlaying
+                    ? 'bg-amber-500 text-white hover:bg-amber-600'
+                    : isCurrentTranslationTrack && isPaused
+                    ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                    : settings.theme === 'dark'
+                    ? 'bg-gray-800 text-emerald-300 hover:bg-gray-700'
+                    : 'bg-white text-emerald-700 hover:bg-emerald-50'
+                }`}
+                title="Play translation audio"
+              >
+                {isCurrentTranslationTrack && isPlaying ? (
+                  <PauseIcon className="h-3.5 w-3.5" />
+                ) : (
+                  <SpeakerWaveIcon className="h-3.5 w-3.5" />
+                )}
+                <span>
+                  {isCurrentTranslationTrack && isPlaying
+                    ? 'Pause translation'
+                    : isCurrentTranslationTrack && isPaused
+                    ? 'Resume translation'
+                    : 'Play translation'}
+                </span>
+              </button>
+            </div>
+          )}
+
+          <p
+            dir={translation.direction}
+            style={{ fontSize: `${settings.translationFontSize}px` }}
+            className={
+              translation.isUrdu
+                ? `quran-urdu-translation ${
+                    settings.theme === 'dark' ? 'text-gray-100' : 'text-gray-800'
+                  }`
+                : `text-left leading-8 ${
+                    settings.theme === 'dark' ? 'text-gray-200' : 'text-gray-700'
+                  }`
+            }
+          >
+            {translation.text}
+          </p>
+        </div>
+      );
+    });
   };
 
   // Handle ayah click for bookmarking (double-click to open popup)
@@ -1592,6 +1704,47 @@ const QuranReader: React.FC = () => {
                           Complete Surah
                         </button>
                       </div>
+                      {!settings.arabicOnlyMode && (
+                        <div className="space-y-1.5">
+                          <label className={`block text-xs ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                            Translation Audio
+                          </label>
+                          <button
+                            onClick={() => updateSettings({ translationAudioEnabled: !settings.translationAudioEnabled })}
+                            className={`w-full flex items-center justify-between p-2 text-sm rounded-md ${
+                              settings.theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'
+                            }`}
+                          >
+                            <span className={settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}>
+                              {settings.translationAudioEnabled ? 'Enabled' : 'Disabled'}
+                            </span>
+                            <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
+                              settings.translationAudioEnabled
+                                ? 'bg-emerald-500 border-emerald-500'
+                                : 'border-gray-400'
+                            }`}>
+                              {settings.translationAudioEnabled && (
+                                <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                            </div>
+                          </button>
+                          <p className={`text-[11px] leading-relaxed ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                            Recorded translation audio is currently available for Urdu - Fateh Muhammad Jalandhry and English - Saheeh International.
+                          </p>
+                          {!isActiveTranslationAudioSupported && (
+                            <p className={`text-[11px] leading-relaxed ${settings.theme === 'dark' ? 'text-amber-300' : 'text-amber-700'}`}>
+                              The currently selected translation does not have recorded audio yet.
+                            </p>
+                          )}
+                          <p className={`text-[11px] leading-relaxed ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                            {settings.audioMode === 'ayah'
+                              ? 'In Ayat by Ayat mode, tap the Arabic ayah for recitation and the translation card for that ayah.'
+                              : 'In Complete Surah mode, the selected translation plays automatically after each Arabic ayah.'}
+                          </p>
+                        </div>
+                      )}
                       {showDesktopIndopakAyahWarning && (
                         <div className="group relative mt-2">
                           <div
@@ -1738,17 +1891,10 @@ const QuranReader: React.FC = () => {
                           </div>
                           <div>
                             <h3 className={`text-base font-bold ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                              {currentPlayingSurah && surahs[currentPlayingSurah - 1]
-                                ? `${surahs[currentPlayingSurah - 1].englishName} - Ayah ${currentPlayingAyah || currentQueueIndex + 1}`
-                                : selectedAyahForPlay && surahs[selectedAyahForPlay.surah - 1]
-                                ? `Selected: ${surahs[selectedAyahForPlay.surah - 1].englishName} ${selectedAyahForPlay.ayah}`
-                                : surahData
-                                ? `${surahData.englishName} - ${surahData.name}`
-                                : 'Select a Surah'
-                              }
+                              {getNowPlayingTitle()}
                             </h3>
                             <p className={`text-sm ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-                              {surahData && `${surahData.numberOfAyahs} Ayahs • ${surahData.revelationType}`}
+                              {getNowPlayingMeta()}
                               {isAudioLoading && <span className="ml-2 text-blue-500">(Loading...)</span>}
                               {isPaused && <span className="ml-2 text-amber-500">(Paused)</span>}
                               {selectedAyahForPlay && !isPlaying && !isPaused && <span className="ml-2 text-emerald-500">Ready to play</span>}
@@ -2640,6 +2786,51 @@ const QuranReader: React.FC = () => {
                           Complete Surah
                         </button>
                       </div>
+                      {!tempSettings.arabicOnlyMode && (
+                        <div className="space-y-2">
+                          <label className={`block text-sm font-medium ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                            Translation Audio
+                          </label>
+                          <button
+                            onClick={() => {
+                              const newValue = !tempSettings.translationAudioEnabled;
+                              setTempSettings({ ...tempSettings, translationAudioEnabled: newValue });
+                              updateSettings({ translationAudioEnabled: newValue });
+                            }}
+                            className={`w-full flex items-center justify-between p-3 rounded-lg ${
+                              settings.theme === 'dark' ? 'bg-gray-700' : 'bg-gray-50'
+                            }`}
+                          >
+                            <span className={settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}>
+                              {tempSettings.translationAudioEnabled ? 'Enabled' : 'Disabled'}
+                            </span>
+                            <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                              tempSettings.translationAudioEnabled
+                                ? 'bg-emerald-500 border-emerald-500'
+                                : 'border-gray-400'
+                            }`}>
+                              {tempSettings.translationAudioEnabled && (
+                                <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                            </div>
+                          </button>
+                          <p className={`text-xs leading-relaxed ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                            Recorded translation audio is currently available for Urdu - Fateh Muhammad Jalandhry and English - Saheeh International.
+                          </p>
+                          {!isActiveTempTranslationAudioSupported && (
+                            <p className={`text-xs leading-relaxed ${settings.theme === 'dark' ? 'text-amber-300' : 'text-amber-700'}`}>
+                              The currently selected translation does not have recorded audio yet.
+                            </p>
+                          )}
+                          <p className={`text-xs leading-relaxed ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                            {tempSettings.audioMode === 'ayah'
+                              ? 'In Ayat by Ayat mode, tap the Arabic ayah for recitation and the translation card for that ayah.'
+                              : 'In Complete Surah mode, the selected translation plays automatically after each Arabic ayah.'}
+                          </p>
+                        </div>
+                      )}
                       {showMobileIndopakAyahWarning && (
                         <div className="group relative">
                           <div
@@ -2986,8 +3177,8 @@ const QuranReader: React.FC = () => {
               <div className="flex items-center gap-2 mb-1">
                 <SpeakerWaveIcon className="h-4 w-4 text-emerald-500 flex-shrink-0" />
                 <p className={`text-sm font-medium truncate ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                  {currentPlayingSurah && surahs[currentPlayingSurah - 1]
-                    ? `${surahs[currentPlayingSurah - 1].englishName} - Ayah ${currentPlayingAyah || currentQueueIndex + 1}`
+                  {currentPlayingSurah || currentPlaybackTrack
+                    ? getNowPlayingTitle()
                     : selectedAyahForPlay && surahs[selectedAyahForPlay.surah - 1]
                     ? `Selected: ${surahs[selectedAyahForPlay.surah - 1].englishName} ${selectedAyahForPlay.ayah}`
                     : surahData
@@ -2996,10 +3187,12 @@ const QuranReader: React.FC = () => {
                     ? 'Loading audio...'
                     : isPaused
                     ? 'Paused'
-                    : 'Select Surah'
-                  }
+                    : 'Select Surah'}
                   {isAudioLoading && <span className="ml-2 text-xs">(Buffering)</span>}
                   {isPaused && <span className="ml-2 text-xs text-amber-500">(Paused)</span>}
+                  {currentPlaybackTrack === 'translation' && !isAudioLoading && (
+                    <span className="ml-2 text-xs text-emerald-500">(Translation)</span>
+                  )}
                   {selectedAyahForPlay && !isPlaying && !isPaused && !isAudioLoading && (
                     <span className="ml-2 text-xs text-emerald-500">Click play to listen</span>
                   )}
@@ -3011,24 +3204,30 @@ const QuranReader: React.FC = () => {
 
               {/* Progress Bar - Only show when playing or paused */}
               {(isPlaying || isPaused) && (
-                <div className="flex items-center gap-3">
-                  <span className={`text-xs w-10 ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                    {formatPlayerTime(audioCurrentTime)}
-                  </span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={timelineMax}
-                    step={1}
-                    value={timelineValue}
-                    onChange={(e) => seekAudio(Number(e.target.value))}
-                    className="h-1.5 flex-1 cursor-pointer appearance-none rounded-lg bg-gray-300 accent-emerald-500"
-                    aria-label="Seek audio position"
-                  />
-                  <span className={`text-xs w-10 text-right ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                    {formatPlayerTime(audioDuration)}
-                  </span>
-                </div>
+                canSeekAudio ? (
+                  <div className="flex items-center gap-3">
+                    <span className={`text-xs w-10 ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                      {formatPlayerTime(audioCurrentTime)}
+                    </span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={timelineMax}
+                      step={1}
+                      value={timelineValue}
+                      onChange={(e) => seekAudio(Number(e.target.value))}
+                      className="h-1.5 flex-1 cursor-pointer appearance-none rounded-lg bg-gray-300 accent-emerald-500"
+                      aria-label="Seek audio position"
+                    />
+                    <span className={`text-xs w-10 text-right ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                      {formatPlayerTime(audioDuration)}
+                    </span>
+                  </div>
+                ) : (
+                  <p className={`text-xs ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                    Translation voice follows your selected translation and cannot be scrubbed.
+                  </p>
+                )
               )}
               
               {/* Play Button - Show when not started yet */}
@@ -3124,38 +3323,46 @@ const QuranReader: React.FC = () => {
               <div className="flex items-center gap-2 mb-1">
                 <SpeakerWaveIcon className="h-4 w-4 text-emerald-500 flex-shrink-0" />
                 <p className={`text-sm font-medium truncate ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                  {currentPlayingSurah && surahs[currentPlayingSurah - 1]
-                    ? `${surahs[currentPlayingSurah - 1].englishName} - Ayah ${currentPlayingAyah || currentQueueIndex + 1}`
+                  {currentPlayingSurah || currentPlaybackTrack
+                    ? getNowPlayingTitle()
                     : isAudioLoading
                     ? 'Loading audio...'
                     : isPaused
                     ? 'Paused'
-                    : 'Playing...'
-                  }
+                    : 'Playing...'}
                   {isAudioLoading && <span className="ml-2 text-xs">(Buffering)</span>}
                   {isPaused && <span className="ml-2 text-xs text-amber-500">(Paused)</span>}
+                  {currentPlaybackTrack === 'translation' && !isAudioLoading && (
+                    <span className="ml-2 text-xs text-emerald-500">(Translation)</span>
+                  )}
                 </p>
               </div>
 
               {/* Progress Bar */}
-              <div className="flex items-center gap-3">
-                <span className={`text-xs w-10 ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                  {formatPlayerTime(audioCurrentTime)}
-                </span>
-                <input
-                  type="range"
-                  min={0}
-                  max={timelineMax}
-                  step={1}
-                  value={timelineValue}
-                  onChange={(e) => seekAudio(Number(e.target.value))}
-                  className="h-1.5 flex-1 cursor-pointer appearance-none rounded-lg bg-gray-300 accent-emerald-500"
-                  aria-label="Seek audio position"
-                />
-                <span className={`text-xs w-10 text-right ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                  {formatPlayerTime(audioDuration)}
-                </span>
-              </div>
+              {canSeekAudio ? (
+                <div className="flex items-center gap-3">
+                  <span className={`text-xs w-10 ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                    {formatPlayerTime(audioCurrentTime)}
+                  </span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={timelineMax}
+                    step={1}
+                    value={timelineValue}
+                    onChange={(e) => seekAudio(Number(e.target.value))}
+                    className="h-1.5 flex-1 cursor-pointer appearance-none rounded-lg bg-gray-300 accent-emerald-500"
+                    aria-label="Seek audio position"
+                  />
+                  <span className={`text-xs w-10 text-right ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                    {formatPlayerTime(audioDuration)}
+                  </span>
+                </div>
+              ) : (
+                <p className={`text-xs ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                  Translation voice follows your selected translation and cannot be scrubbed.
+                </p>
+              )}
             </div>
 
             {/* Stop Button */}

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { toast } from 'react-hot-toast';
 import { API_URL } from '../config';
 import { useAuth } from '../hooks/useAuth';
 import {
@@ -17,6 +18,18 @@ import {
 } from '../types/quran';
 
 const QuranContext = createContext<QuranContextType | undefined>(undefined);
+const TRANSLATION_AUDIO_SOURCES: Record<string, { baseUrl: string; label: string; provider: string }> = {
+  'ur.jalandhry': {
+    baseUrl: 'https://everyayah.com/data/translations/urdu_shamshad_ali_khan_46kbps',
+    label: 'Urdu - Fateh Muhammad Jalandhry',
+    provider: 'EveryAyah',
+  },
+  'en.sahih': {
+    baseUrl: 'https://everyayah.com/data/English/Sahih_Intnl_Ibrahim_Walk_192kbps',
+    label: 'English - Saheeh International',
+    provider: 'EveryAyah',
+  },
+};
 const LEGACY_QURAN_SETTINGS_KEY = 'quranSettings';
 const LEGACY_QURAN_BOOKMARKS_KEY = 'quranBookmarks';
 const LEGACY_QURAN_LAST_READ_KEY = 'quranLastRead';
@@ -39,6 +52,8 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
   const [isAudioLoading, setIsAudioLoading] = useState(false);
   const [currentPlayingAyah, setCurrentPlayingAyah] = useState<number | null>(null);
   const [currentPlayingSurah, setCurrentPlayingSurah] = useState<number | null>(null);
+  const [currentPlaybackTrack, setCurrentPlaybackTrack] = useState<'arabic' | 'translation' | 'bismillah' | null>(null);
+  const [canSeekAudio, setCanSeekAudio] = useState(true);
   const [audioProgress, setAudioProgress] = useState(0);
   const [audioDuration, setAudioDuration] = useState(0);
   const [audioCurrentTime, setAudioCurrentTime] = useState(0);
@@ -49,6 +64,8 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
   const PLAYER_BRAND_TITLE = 'Hikmah Sphere - A Unified Islamic Digital Platform';
   const PREFETCH_LOOKAHEAD_AYAHS = 10;
   const SURAH_DURATION_FALLBACK_PER_AYAH = 7;
+  const TRANSLATION_SPEECH_SECONDS_PER_WORD = 0.72;
+  const TRANSLATION_AUDIO_LOG_PREFIX = '[TranslationAudio]';
 
   // Audio ref
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
@@ -62,6 +79,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
   const ayahAudioQueueRef = React.useRef<number[]>([]);
   const currentQueueIndexRef = React.useRef(0);
   const currentPlayingSurahRef = React.useRef<number | null>(null);
+  const currentPlaybackTrackRef = React.useRef<'arabic' | 'translation' | 'bismillah' | null>(null);
   const cumulativeTimeRef = React.useRef(0);
   const totalSurahDurationRef = React.useRef(0);
   const isSurahModeRef = React.useRef(false);
@@ -71,11 +89,29 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
   const prefetchedAyahAudioRef = React.useRef<Map<number, HTMLAudioElement>>(new Map());
   const prefetchedAyahFetchRef = React.useRef<Set<number>>(new Set());
   const surahEditionsCacheRef = useRef<Map<string, SurahData[]>>(new Map());
+  const translationSurahCacheRef = useRef<Map<string, SurahData>>(new Map());
+  const translationPlaybackContextRef = useRef<{
+    surahNumber: number;
+    ayahNumber: number;
+    continueSurahMode?: boolean;
+    nextQueueIndex?: number | null;
+  } | null>(null);
 
   // Stable refs for audio event handlers (delegates to latest handler via ref)
   const handleAudioEndedFnRef = React.useRef<() => void>(() => {});
+  const handleAudioErrorFnRef = React.useRef<() => void>(() => {});
   const handleAudioTimeUpdateFnRef = React.useRef<() => void>(() => {});
   const stopAudioRef = React.useRef<() => void>(() => {});
+
+  const userStorageScope = user?.id || user?.email || 'guest';
+  const userSettingsStorageKey = `quranSettings:${userStorageScope}`;
+  const userBookmarksStorageKey = `quranBookmarks:${userStorageScope}`;
+  const userLastReadStorageKey = `quranLastRead:${userStorageScope}`;
+
+  const [settings, setSettings] = useState<QuranSettings>(DEFAULT_QURAN_SETTINGS);
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+  const [lastRead, setLastRead] = useState<LastRead | null>(null);
+  const selectedTranslationsDependency = settings.selectedTranslations.join('|');
 
   const getSafeDuration = useCallback((value: number, fallback: number) => {
     if (Number.isFinite(value) && value > 0) return value;
@@ -107,6 +143,97 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     return cumulativeTimeRef.current + safeCurrentTrackDuration + remainingAyahs * estimatedAyahDuration;
   }, [SURAH_DURATION_FALLBACK_PER_AYAH, getSafeDuration]);
 
+  const getTranslationAudioConfig = useCallback((identifier?: string | null) => {
+    if (!identifier) return null;
+    return TRANSLATION_AUDIO_SOURCES[identifier] ?? null;
+  }, []);
+
+  const getTranslationAudioUrl = useCallback((identifier: string | null | undefined, surahNumber: number, ayahNumber: number) => {
+    const config = getTranslationAudioConfig(identifier);
+    if (!config) return null;
+
+    const surahId = String(surahNumber).padStart(3, '0');
+    const ayahId = String(ayahNumber).padStart(3, '0');
+    return `${config.baseUrl}/${surahId}${ayahId}.mp3`;
+  }, [getTranslationAudioConfig]);
+
+  const estimateTranslationDuration = useCallback((text: string) => {
+    const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+    return Math.max(3, wordCount * TRANSLATION_SPEECH_SECONDS_PER_WORD);
+  }, [TRANSLATION_SPEECH_SECONDS_PER_WORD]);
+
+  const cancelTranslationSpeech = useCallback(() => {
+    console.log(`${TRANSLATION_AUDIO_LOG_PREFIX} Clearing translation playback context.`);
+    translationPlaybackContextRef.current = null;
+
+    if (currentPlaybackTrackRef.current === 'translation' && audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+  }, [TRANSLATION_AUDIO_LOG_PREFIX]);
+
+  const getSelectedTranslationData = useCallback(async (surahNumber: number) => {
+    const selectedTranslationIdentifier = settings.selectedTranslations[0];
+    if (!selectedTranslationIdentifier) {
+      console.warn(`${TRANSLATION_AUDIO_LOG_PREFIX} No selected translation identifier was found.`);
+      return null;
+    }
+
+    const activeTranslation = translations.find(
+      (translation) =>
+        translation.number === surahNumber &&
+        translation.edition.identifier === selectedTranslationIdentifier
+    );
+    if (activeTranslation) {
+      console.log(`${TRANSLATION_AUDIO_LOG_PREFIX} Using translation already loaded in reader state.`, {
+        surahNumber,
+        identifier: selectedTranslationIdentifier,
+      });
+      return activeTranslation;
+    }
+
+    const cacheKey = `${surahNumber}|${selectedTranslationIdentifier}`;
+    const cachedTranslation = translationSurahCacheRef.current.get(cacheKey);
+    if (cachedTranslation) {
+      console.log(`${TRANSLATION_AUDIO_LOG_PREFIX} Using cached translation data.`, {
+        surahNumber,
+        identifier: selectedTranslationIdentifier,
+      });
+      return cachedTranslation;
+    }
+
+    try {
+      console.log(`${TRANSLATION_AUDIO_LOG_PREFIX} Fetching translation data from API.`, {
+        surahNumber,
+        identifier: selectedTranslationIdentifier,
+      });
+      const response = await fetch(
+        `${API_URL}/quran/surah/${surahNumber}/editions?editions=${selectedTranslationIdentifier}`
+      );
+      const data = await response.json();
+
+      if (data.status === 'success' && data.data[0]) {
+        translationSurahCacheRef.current.set(cacheKey, data.data[0]);
+        if (translationSurahCacheRef.current.size > 24) {
+          const oldestKey = translationSurahCacheRef.current.keys().next().value;
+          if (oldestKey) {
+            translationSurahCacheRef.current.delete(oldestKey);
+          }
+        }
+
+        return data.data[0] as SurahData;
+      }
+    } catch (translationError) {
+      console.error(`${TRANSLATION_AUDIO_LOG_PREFIX} Failed to load translation audio text:`, translationError);
+    }
+
+    console.warn(`${TRANSLATION_AUDIO_LOG_PREFIX} Translation data could not be resolved.`, {
+      surahNumber,
+      identifier: selectedTranslationIdentifier,
+    });
+    return null;
+  }, [TRANSLATION_AUDIO_LOG_PREFIX, settings.selectedTranslations, translations]);
+
   // Keep refs in sync with state
   useEffect(() => {
     ayahAudioQueueRef.current = ayahAudioQueue;
@@ -121,6 +248,10 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
   }, [currentPlayingSurah]);
 
   useEffect(() => {
+    currentPlaybackTrackRef.current = currentPlaybackTrack;
+  }, [currentPlaybackTrack]);
+
+  useEffect(() => {
     cumulativeTimeRef.current = cumulativeTime;
   }, [cumulativeTime]);
 
@@ -132,15 +263,6 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     isSurahModeRef.current = isSurahMode;
   }, [isSurahMode]);
   
-  const userStorageScope = user?.id || user?.email || 'guest';
-  const userSettingsStorageKey = `quranSettings:${userStorageScope}`;
-  const userBookmarksStorageKey = `quranBookmarks:${userStorageScope}`;
-  const userLastReadStorageKey = `quranLastRead:${userStorageScope}`;
-
-  const [settings, setSettings] = useState<QuranSettings>(DEFAULT_QURAN_SETTINGS);
-  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
-  const [lastRead, setLastRead] = useState<LastRead | null>(null);
-
   const saveSettingsToLocal = useCallback((nextSettings: QuranSettings) => {
     const serialized = JSON.stringify(nextSettings);
     localStorage.setItem(userSettingsStorageKey, serialized);
@@ -251,9 +373,18 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
         ? ({ ...DEFAULT_QURAN_SETTINGS, ...(value as Partial<QuranSettings>) } as QuranSettings)
         : { ...DEFAULT_QURAN_SETTINGS };
 
+    const legacyTranslationAudioMode =
+      value && typeof value === 'object' && 'translationAudioMode' in (value as Record<string, unknown>)
+        ? (value as Record<string, unknown>).translationAudioMode
+        : null;
+
     return {
       ...mergedSettings,
       selectedTranslations: normalizeSelectedTranslations(mergedSettings.selectedTranslations),
+      translationAudioEnabled:
+        typeof mergedSettings.translationAudioEnabled === 'boolean'
+          ? mergedSettings.translationAudioEnabled
+          : legacyTranslationAudioMode === 'after-arabic',
     };
   }, [normalizeSelectedTranslations]);
 
@@ -629,12 +760,21 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     return surahs.find((s) => s.number === surahNumber)?.englishName || `Surah ${surahNumber}`;
   }, [surahs]);
 
-  const updateNowPlayingMetadata = useCallback((surahNumber: number | null, ayahNumber: number | null) => {
+  const updateNowPlayingMetadata = useCallback((
+    surahNumber: number | null,
+    ayahNumber: number | null,
+    track: 'arabic' | 'translation' | 'bismillah' = 'arabic'
+  ) => {
     if (!surahNumber) return;
 
     const safeAyah = ayahNumber && ayahNumber > 0 ? ayahNumber : 1;
     const surahName = getSurahDisplayName(surahNumber);
-    const trackTitle = `${surahName} - Ayah ${safeAyah}`;
+    const trackTitle =
+      track === 'translation'
+        ? `${surahName} - Translation of Ayah ${safeAyah}`
+        : track === 'bismillah'
+        ? `${surahName} - Bismillah`
+        : `${surahName} - Ayah ${safeAyah}`;
     const fullTitle = `${trackTitle} | ${PLAYER_BRAND_TITLE}`;
 
     document.title = fullTitle;
@@ -642,8 +782,8 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     if ('mediaSession' in navigator) {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: fullTitle,
-        artist: 'Quran Audio',
-        album: 'Quran Audio',
+        artist: track === 'translation' ? 'Quran Translation Audio' : 'Quran Audio',
+        album: track === 'translation' ? 'Quran Translation Audio' : 'Quran Audio',
         artwork: [
           { src: '/logo.png', sizes: '96x96', type: 'image/png' },
           { src: '/logo.png', sizes: '192x192', type: 'image/png' },
@@ -741,7 +881,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       });
       audio.addEventListener('error', (e) => {
         console.error('❌ Audio error:', e);
-        setIsAudioLoading(false);
+        handleAudioErrorFnRef.current();
       });
     }
     return audioRef.current;
@@ -750,6 +890,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
   // Audio playback implementation
   const stopAudio = useCallback(() => {
     console.log('🛑 Stopping audio playback');
+    cancelTranslationSpeech();
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
@@ -760,6 +901,8 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     setIsAudioLoading(false);
     setCurrentPlayingAyah(null);
     setCurrentPlayingSurah(null);
+    setCurrentPlaybackTrack(null);
+    setCanSeekAudio(true);
     setAudioProgress(0);
     setAudioDuration(0);
     setAudioCurrentTime(0);
@@ -780,7 +923,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       navigator.mediaSession.metadata = null;
       navigator.mediaSession.playbackState = 'none';
     }
-  }, [clearPrefetchedAyahs, DEFAULT_QURAN_TITLE]);
+  }, [cancelTranslationSpeech, clearPrefetchedAyahs, DEFAULT_QURAN_TITLE]);
 
   // Keep stopAudioRef in sync
   useEffect(() => {
@@ -795,6 +938,10 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
   ) => {
     try {
       console.log('🎵 Playing ayah:', surahNumber, ':', ayahNumber, 'isContinuing:', isContinuing);
+      cancelTranslationSpeech();
+      setIsAudioLoading(true);
+      setCurrentPlaybackTrack('arabic');
+      setCanSeekAudio(true);
 
       let audioUrl = preResolvedAudioUrl || ayahAudioUrlMapRef.current.get(ayahNumber);
 
@@ -829,7 +976,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
 
       setCurrentPlayingSurah(surahNumber);
       setCurrentPlayingAyah(ayahNumber);
-      updateNowPlayingMetadata(surahNumber, ayahNumber);
+      updateNowPlayingMetadata(surahNumber, ayahNumber, 'arabic');
 
       if (isSurahModeRef.current && ayahAudioQueueRef.current.length > 0) {
         const currentIndex = ayahAudioQueueRef.current.indexOf(ayahNumber);
@@ -860,12 +1007,199 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       setIsPlaying(false);
       setIsAudioLoading(false);
     }
-  }, [settings.reciter, initAudioElement, prefetchUpcomingAyahs, updateNowPlayingMetadata]);
+  }, [cancelTranslationSpeech, settings.reciter, initAudioElement, prefetchUpcomingAyahs, updateNowPlayingMetadata]);
+
+  const playNextAyahInQueue = useCallback(async (surahNumber: number | null, nextIndex: number) => {
+    if (!surahNumber) {
+      stopAudio();
+      return;
+    }
+
+    const nextAyahNumber = ayahAudioQueueRef.current[nextIndex];
+    if (!nextAyahNumber) {
+      stopAudio();
+      return;
+    }
+
+    setCurrentQueueIndex(nextIndex);
+    currentQueueIndexRef.current = nextIndex;
+    await playAyah(surahNumber, nextAyahNumber, true, ayahAudioUrlMapRef.current.get(nextAyahNumber));
+  }, [playAyah, stopAudio]);
+
+  const handleTranslationPlaybackFailure = useCallback(async (
+    reason: string,
+    details?: Record<string, unknown>,
+    toastMessage?: string
+  ) => {
+    const playbackContext = translationPlaybackContextRef.current;
+
+    console.warn(`${TRANSLATION_AUDIO_LOG_PREFIX} Translation audio failed.`, {
+      reason,
+      ...details,
+      playbackContext,
+    });
+
+    translationPlaybackContextRef.current = null;
+    setIsAudioLoading(false);
+    setIsPlaying(false);
+    setIsPaused(false);
+    setCurrentPlaybackTrack(null);
+    setCanSeekAudio(true);
+
+    if (!playbackContext?.continueSurahMode) {
+      setCurrentPlayingAyah(null);
+      setCurrentPlayingSurah(null);
+    }
+
+    if (toastMessage) {
+      toast.error(toastMessage);
+    }
+
+    if (playbackContext?.continueSurahMode && typeof playbackContext.nextQueueIndex === 'number') {
+      await playNextAyahInQueue(playbackContext.surahNumber, playbackContext.nextQueueIndex);
+      return;
+    }
+
+    if (playbackContext?.continueSurahMode) {
+      stopAudio();
+    }
+  }, [TRANSLATION_AUDIO_LOG_PREFIX, playNextAyahInQueue, stopAudio]);
+
+  const startTranslationPlayback = useCallback(async (
+    surahNumber: number,
+    ayahNumber: number,
+    options?: { continueSurahMode?: boolean; nextQueueIndex?: number | null }
+  ) => {
+    console.log(`${TRANSLATION_AUDIO_LOG_PREFIX} Translation playback requested.`, {
+      surahNumber,
+      ayahNumber,
+      continueSurahMode: !!options?.continueSurahMode,
+      nextQueueIndex: options?.nextQueueIndex ?? null,
+      selectedTranslation: settings.selectedTranslations[0] ?? null,
+    });
+
+    const selectedTranslationIdentifier = settings.selectedTranslations[0];
+    if (!selectedTranslationIdentifier || settings.arabicOnlyMode) {
+      console.warn(`${TRANSLATION_AUDIO_LOG_PREFIX} Translation playback aborted before start.`, {
+        selectedTranslationIdentifier,
+        arabicOnlyMode: settings.arabicOnlyMode,
+      });
+      return false;
+    }
+
+    const translationAudioConfig = getTranslationAudioConfig(selectedTranslationIdentifier);
+    if (!translationAudioConfig) {
+      console.warn(`${TRANSLATION_AUDIO_LOG_PREFIX} No recorded translation audio source is configured for this translation.`, {
+        selectedTranslationIdentifier,
+      });
+      toast.error('Recorded translation audio is currently available for Urdu - Fateh Muhammad Jalandhry and English - Saheeh International only.');
+      return false;
+    }
+
+    const translationAudioUrl = getTranslationAudioUrl(selectedTranslationIdentifier, surahNumber, ayahNumber);
+    if (!translationAudioUrl) {
+      console.warn(`${TRANSLATION_AUDIO_LOG_PREFIX} Failed to construct translation audio URL.`, {
+        selectedTranslationIdentifier,
+        surahNumber,
+        ayahNumber,
+      });
+      return false;
+    }
+
+    cancelTranslationSpeech();
+    translationPlaybackContextRef.current = {
+      surahNumber,
+      ayahNumber,
+      continueSurahMode: options?.continueSurahMode,
+      nextQueueIndex: options?.nextQueueIndex ?? null,
+    };
+
+    const audio = initAudioElement();
+    audio.pause();
+    audio.preload = 'auto';
+    audio.src = translationAudioUrl;
+    audio.load();
+
+    setIsAudioLoading(true);
+    setCurrentPlaybackTrack('translation');
+    setCanSeekAudio(true);
+    setCurrentPlayingSurah(surahNumber);
+    setCurrentPlayingAyah(ayahNumber);
+    updateNowPlayingMetadata(surahNumber, ayahNumber, 'translation');
+
+    console.log(`${TRANSLATION_AUDIO_LOG_PREFIX} Prepared translation audio track.`, {
+      surahNumber,
+      ayahNumber,
+      translationIdentifier: selectedTranslationIdentifier,
+      provider: translationAudioConfig.provider,
+      label: translationAudioConfig.label,
+      translationAudioUrl,
+    });
+
+    try {
+      console.log(`${TRANSLATION_AUDIO_LOG_PREFIX} Starting translation audio playback.`, {
+        surahNumber,
+        ayahNumber,
+        translationAudioUrl,
+      });
+
+      await audio.play();
+      return true;
+    } catch (error) {
+      console.error(`${TRANSLATION_AUDIO_LOG_PREFIX} Translation audio play() failed.`, {
+        surahNumber,
+        ayahNumber,
+        translationAudioUrl,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      await handleTranslationPlaybackFailure(
+        'play-promise-rejected',
+        {
+          surahNumber,
+          ayahNumber,
+          translationAudioUrl,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        'Translation audio failed to play.'
+      );
+      return false;
+    }
+  }, [
+    TRANSLATION_AUDIO_LOG_PREFIX,
+    cancelTranslationSpeech,
+    getTranslationAudioConfig,
+    getTranslationAudioUrl,
+    handleTranslationPlaybackFailure,
+    initAudioElement,
+    settings.arabicOnlyMode,
+    settings.selectedTranslations,
+    updateNowPlayingMetadata,
+  ]);
+
+  const playTranslationAyah = useCallback(async (surahNumber: number, ayahNumber: number) => {
+    console.log(`${TRANSLATION_AUDIO_LOG_PREFIX} Manual translation playback triggered.`, {
+      surahNumber,
+      ayahNumber,
+      selectedTranslation: settings.selectedTranslations[0] ?? null,
+      audioMode: settings.audioMode,
+      translationAudioEnabled: settings.translationAudioEnabled,
+    });
+
+    const didStartPlayback = await startTranslationPlayback(surahNumber, ayahNumber);
+
+    if (!didStartPlayback) {
+      console.warn(`${TRANSLATION_AUDIO_LOG_PREFIX} Manual translation playback request did not start.`);
+      setIsAudioLoading(false);
+      setIsPlaying(false);
+      setIsPaused(false);
+    }
+  }, [TRANSLATION_AUDIO_LOG_PREFIX, settings.audioMode, settings.selectedTranslations, settings.translationAudioEnabled, startTranslationPlayback]);
 
   // Play Bismillah separately (for surahs 2-8, 10-114)
   const playBismillah = useCallback(async (surahNumber: number) => {
     try {
       console.log('🎵 Playing Bismillah for Surah', surahNumber);
+      cancelTranslationSpeech();
       
       // Store the surah number for continuation after Bismillah
       currentPlayingSurahRef.current = surahNumber;
@@ -883,7 +1217,9 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       audio.load();
       
       setCurrentPlayingAyah(0); // Mark as Bismillah
-      updateNowPlayingMetadata(surahNumber, 1);
+      setCurrentPlaybackTrack('bismillah');
+      setCanSeekAudio(true);
+      updateNowPlayingMetadata(surahNumber, 1, 'bismillah');
       
       // Play
       audio.play().then(() => {
@@ -899,13 +1235,15 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       setIsPlaying(false);
       setIsAudioLoading(false);
     }
-  }, [initAudioElement, updateNowPlayingMetadata]);
+  }, [cancelTranslationSpeech, initAudioElement, updateNowPlayingMetadata]);
 
   const playSurah = useCallback(async (surahNumber: number) => {
     try {
       console.log('🎵 Playing complete surah:', surahNumber);
+      cancelTranslationSpeech();
       setIsSurahMode(true);
       isSurahModeRef.current = true;
+      setCanSeekAudio(true);
 
       // Stop any current playback (don't destroy the element)
       if (audioRef.current) {
@@ -956,6 +1294,25 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
         setCumulativeTime(0);
         cumulativeTimeRef.current = 0;
 
+        if (
+          settings.translationAudioEnabled &&
+          !settings.arabicOnlyMode &&
+          getTranslationAudioConfig(settings.selectedTranslations[0])
+        ) {
+          void getSelectedTranslationData(surahNumber).then((translationData) => {
+            if (!translationData) return;
+
+            const translationDuration = translationData.ayahs.reduce((total, ayah) => {
+              const ayahText = ayah.text?.trim();
+              return ayahText ? total + estimateTranslationDuration(ayahText) : total;
+            }, 0);
+
+            const updatedTotalDuration = estimatedTotalDuration + translationDuration;
+            setTotalSurahDuration(updatedTotalDuration);
+            totalSurahDurationRef.current = updatedTotalDuration;
+          });
+        }
+
         // For Surah 9 (At-Tawbah), no Bismillah
         // For Surah 1 (Al-Fatiha), Bismillah is part of Ayah 1
         // For other surahs (2-8, 10-114), play Bismillah first
@@ -984,7 +1341,20 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       setIsAudioLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.reciter, playAyah, playBismillah, clearPrefetchedAyahs, prefetchUpcomingAyahs]);
+  }, [
+    cancelTranslationSpeech,
+    clearPrefetchedAyahs,
+    estimateTranslationDuration,
+    getSelectedTranslationData,
+    playAyah,
+    playBismillah,
+    prefetchUpcomingAyahs,
+    settings.arabicOnlyMode,
+    settings.reciter,
+    settings.translationAudioEnabled,
+    settings.selectedTranslations,
+    getTranslationAudioConfig,
+  ]);
 
   const pauseAyah = useCallback(() => {
     console.log('⏸️ Pausing audio');
@@ -1010,9 +1380,9 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
             console.log('✅ Audio resumed successfully');
           })
           .catch(error => {
-            console.error('❌ Audio resume failed:', error);
-            setIsPlaying(false);
-          });
+        console.error('❌ Audio resume failed:', error);
+        setIsPlaying(false);
+      });
       }
     }
   }, []);
@@ -1021,6 +1391,11 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     if (isPlaying) {
       pauseAyah();
     } else {
+      if (currentPlaybackTrack === 'translation' && isPaused) {
+        resumeAyah();
+        return;
+      }
+
       // If paused, resume; otherwise play current ayah
       if (audioRef.current && pausedTimeRef.current > 0) {
         resumeAyah();
@@ -1034,7 +1409,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
         setIsPlaying(true);
       }
     }
-  }, [isPlaying, pauseAyah, resumeAyah, currentPlayingAyah, currentPlayingSurah]);
+  }, [currentPlaybackTrack, isPaused, isPlaying, pauseAyah, resumeAyah, currentPlayingAyah, currentPlayingSurah]);
 
   useEffect(() => {
     if (!('mediaSession' in navigator)) return;
@@ -1042,7 +1417,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
   }, [isPlaying, isPaused]);
 
   const seekAudio = useCallback((time: number) => {
-    if (!audioRef.current) return;
+    if (!audioRef.current || !canSeekAudio) return;
 
     if (isSurahModeRef.current) {
       const currentTrackDuration = getSafeDuration(audioRef.current.duration, 0);
@@ -1054,7 +1429,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
 
     audioRef.current.currentTime = time;
     setAudioCurrentTime(time);
-  }, [getSafeDuration]);
+  }, [canSeekAudio, getSafeDuration]);
 
   useEffect(() => {
     if (!('mediaSession' in navigator)) return;
@@ -1096,17 +1471,20 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     });
 
     setMediaAction('seekto', (details) => {
+      if (!canSeekAudio) return;
       if (typeof details.seekTime === 'number') {
         seekAudio(details.seekTime);
       }
     });
 
     setMediaAction('seekforward', (details) => {
+      if (!canSeekAudio) return;
       const skip = details.seekOffset ?? 10;
       seekAudio(audioCurrentTime + skip);
     });
 
     setMediaAction('seekbackward', (details) => {
+      if (!canSeekAudio) return;
       const skip = details.seekOffset ?? 10;
       seekAudio(Math.max(0, audioCurrentTime - skip));
     });
@@ -1119,7 +1497,36 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       setMediaAction('seekforward', null);
       setMediaAction('seekbackward', null);
     };
-  }, [audioCurrentTime, isPaused, pauseAyah, resumeAyah, seekAudio, stopAudio]);
+  }, [audioCurrentTime, canSeekAudio, isPaused, pauseAyah, resumeAyah, seekAudio, stopAudio]);
+
+  const handleAudioError = useCallback(async () => {
+    const audioError = audioRef.current?.error;
+    const errorDetails = {
+      code: audioError?.code ?? null,
+      message: audioError?.message ?? null,
+      track: currentPlaybackTrackRef.current,
+      surahNumber: currentPlayingSurahRef.current,
+      ayahNumber: currentPlayingAyah,
+    };
+
+    console.error('❌ Audio element error details:', errorDetails);
+    setIsAudioLoading(false);
+
+    if (currentPlaybackTrackRef.current === 'translation') {
+      await handleTranslationPlaybackFailure(
+        'audio-element-error',
+        errorDetails,
+        'Translation audio file could not be loaded.'
+      );
+      return;
+    }
+  }, [currentPlayingAyah, handleTranslationPlaybackFailure]);
+
+  useEffect(() => {
+    handleAudioErrorFnRef.current = () => {
+      void handleAudioError();
+    };
+  }, [handleAudioError]);
 
   // Handle audio events
   const handleAudioTimeUpdate = useCallback(() => {
@@ -1191,36 +1598,91 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       }
       return;
     }
-    
-    // Only auto-play next ayah if in surah mode
-    if (isSurahModeRef.current && ayahAudioQueueRef.current.length > 0 && currentQueueIndexRef.current < ayahAudioQueueRef.current.length - 1) {
-      const nextIndex = currentQueueIndexRef.current + 1;
-      const nextAyahNumber = ayahAudioQueueRef.current[nextIndex];
-      const surahNum = currentPlayingSurahRef.current;
-      
-      // Add current ayah duration to cumulative time
-      if (audioRef.current) {
-        const ayahDuration = getSafeDuration(audioRef.current.duration, 0);
-        const newCumulativeTime = cumulativeTimeRef.current + ayahDuration;
-        console.log('🎵 Adding', ayahDuration.toFixed(1), 's to cumulative time:', cumulativeTimeRef.current.toFixed(1), '->', newCumulativeTime.toFixed(1));
-        setCumulativeTime(newCumulativeTime);
-        cumulativeTimeRef.current = newCumulativeTime;
-      }
-      
-      console.log('🎵 Playing next ayah:', nextAyahNumber, 'at index:', nextIndex, 'in surah:', surahNum);
-      
-      setCurrentQueueIndex(nextIndex);
-      currentQueueIndexRef.current = nextIndex;
 
-      if (surahNum) {
-        await playAyah(surahNum, nextAyahNumber, true, ayahAudioUrlMapRef.current.get(nextAyahNumber));
-      }
-    } else {
+    if (!isSurahModeRef.current || ayahAudioQueueRef.current.length === 0) {
       console.log('🎵 Audio playback complete - stopping');
-      // Stop when done (or in ayat-by-ayat mode)
       stopAudio();
+      return;
     }
-  }, [getSafeDuration, playAyah, stopAudio, settings.reciter]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const surahNum = currentPlayingSurahRef.current;
+    const finishedAyahNumber = currentPlayingAyah;
+    const hasNextAyah = currentQueueIndexRef.current < ayahAudioQueueRef.current.length - 1;
+    const nextIndex = hasNextAyah ? currentQueueIndexRef.current + 1 : null;
+
+    if (audioRef.current) {
+      const finishedTrackDuration = getSafeDuration(audioRef.current.duration, 0);
+      const newCumulativeTime = cumulativeTimeRef.current + finishedTrackDuration;
+      console.log('🎵 Adding', finishedTrackDuration.toFixed(1), 's to cumulative time:', cumulativeTimeRef.current.toFixed(1), '->', newCumulativeTime.toFixed(1));
+      setCumulativeTime(newCumulativeTime);
+      cumulativeTimeRef.current = newCumulativeTime;
+      setAudioCurrentTime(newCumulativeTime);
+    }
+
+    if (currentPlaybackTrackRef.current === 'translation') {
+      translationPlaybackContextRef.current = null;
+
+      if (surahNum && typeof nextIndex === 'number') {
+        console.log(`${TRANSLATION_AUDIO_LOG_PREFIX} Translation track finished, continuing Arabic queue.`, {
+          surahNumber: surahNum,
+          nextQueueIndex: nextIndex,
+        });
+        await playNextAyahInQueue(surahNum, nextIndex);
+        return;
+      }
+
+      console.log(`${TRANSLATION_AUDIO_LOG_PREFIX} Translation track finished at end of queue.`);
+      stopAudio();
+      return;
+    }
+
+    const shouldPlayTranslation =
+      settings.translationAudioEnabled &&
+      !settings.arabicOnlyMode &&
+      !!getTranslationAudioConfig(settings.selectedTranslations[0]) &&
+      !!settings.selectedTranslations[0] &&
+      !!surahNum &&
+      !!finishedAyahNumber;
+
+    if (shouldPlayTranslation) {
+      console.log(`${TRANSLATION_AUDIO_LOG_PREFIX} Auto translation handoff after Arabic ayah.`, {
+        surahNumber: surahNum,
+        ayahNumber: finishedAyahNumber,
+        nextQueueIndex: nextIndex,
+        selectedTranslation: settings.selectedTranslations[0],
+      });
+
+      const didStartTranslation = await startTranslationPlayback(surahNum, finishedAyahNumber, {
+        continueSurahMode: true,
+        nextQueueIndex: nextIndex,
+      });
+
+      if (didStartTranslation) {
+        return;
+      }
+
+      console.warn(`${TRANSLATION_AUDIO_LOG_PREFIX} Auto translation handoff did not start; continuing with Arabic queue.`);
+    }
+
+    if (surahNum && typeof nextIndex === 'number') {
+      await playNextAyahInQueue(surahNum, nextIndex);
+      return;
+    }
+
+    console.log('🎵 Audio playback complete - stopping');
+    stopAudio();
+  }, [
+    currentPlayingAyah,
+    getSafeDuration,
+    playAyah,
+    playNextAyahInQueue,
+    settings.arabicOnlyMode,
+    getTranslationAudioConfig,
+    settings.selectedTranslations,
+    settings.translationAudioEnabled,
+    startTranslationPlayback,
+    stopAudio,
+  ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep handler refs in sync so the persistent audio element's delegated listeners always call latest
   useEffect(() => {
@@ -1242,7 +1704,14 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       setIsSurahMode(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.audioMode, settings.audioEnabled, currentSurah]);
+  }, [
+    settings.audioMode,
+    settings.audioEnabled,
+    settings.translationAudioEnabled,
+    settings.arabicOnlyMode,
+    selectedTranslationsDependency,
+    currentSurah,
+  ]);
 
   // Load last read on mount
   useEffect(() => {
@@ -1261,7 +1730,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       loadSurahData(currentSurah);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.showTransliteration, settings.arabicOnlyMode, settings.arabicFont, JSON.stringify(settings.selectedTranslations)]);
+  }, [settings.showTransliteration, settings.arabicOnlyMode, settings.arabicFont, selectedTranslationsDependency]);
 
   const value: QuranContextType = {
     currentSurah,
@@ -1290,6 +1759,8 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     isAudioLoading,
     currentPlayingAyah,
     currentPlayingSurah,
+    currentPlaybackTrack,
+    canSeekAudio,
     audioProgress,
     audioDuration,
     audioCurrentTime,
@@ -1297,6 +1768,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     totalSurahDuration,
     cumulativeTime,
     playAyah,
+    playTranslationAyah,
     pauseAyah,
     resumeAyah,
     stopAyah: stopAudio,

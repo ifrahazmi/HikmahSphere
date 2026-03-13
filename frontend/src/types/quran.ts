@@ -98,6 +98,7 @@ export interface QuranSettings {
   autoPlayNext: boolean;
   audioEnabled: boolean;           // Enable audio playback feature
   audioMode: 'ayah' | 'surah';     // 'ayah' for ayat-by-ayat, 'surah' for complete surah
+  translationAudioEnabled: boolean; // When enabled, translation audio follows the Arabic audio mode
 }
 
 export const BOOKMARK_COLORS = [
@@ -181,6 +182,8 @@ export interface QuranContextType {
   isAudioLoading: boolean;       // Audio buffering state
   currentPlayingAyah: number | null;
   currentPlayingSurah: number | null;
+  currentPlaybackTrack: 'arabic' | 'translation' | 'bismillah' | null;
+  canSeekAudio: boolean;
   audioProgress: number;           // 0-100 percentage
   audioDuration: number;           // Duration in seconds (total for surah mode)
   audioCurrentTime: number;        // Current time in seconds (cumulative for surah mode)
@@ -188,6 +191,7 @@ export interface QuranContextType {
   totalSurahDuration: number;      // Total estimated duration for complete surah
   cumulativeTime: number;          // Cumulative time from previous ayahs
   playAyah: (surahNumber: number, ayahNumber: number, isContinuing?: boolean) => void;
+  playTranslationAyah: (surahNumber: number, ayahNumber: number) => Promise<void>;
   pauseAyah: () => void;
   resumeAyah: () => void;
   stopAyah: () => void;
@@ -259,4 +263,5 @@ export const DEFAULT_QURAN_SETTINGS: QuranSettings = {
   autoPlayNext: false,
   audioEnabled: false,
   audioMode: 'ayah',
+  translationAudioEnabled: false,
 };
