@@ -2009,27 +2009,42 @@ const QuranReader: React.FC = () => {
                             settings.theme === 'dark' ? 'border-gray-700/80' : 'border-emerald-100'
                           }`}
                         >
-                          {/* Word-by-Word Arabic Text */}
-                          <div className={`relative mb-4 overflow-hidden rounded-2xl p-4 sm:p-6 ${getReaderBackgroundClass()}`}>
+                          {/* Word-by-Word Arabic Text with Proper Tajweed Spacing */}
+                          <div className={`relative mb-4 overflow-hidden rounded-2xl p-3 sm:p-5 ${getReaderBackgroundClass()}`}>
                             <div className="w-full">
                               <div
-                                className={`${getFontFamilyClass()} text-right leading-loose ${getFontColorClass()} ${getBookmarkHoverClass(bookmarkColor)} ${bgClass} ${isSelectedForBookmark ? getBookmarkSelectionClass(bookmarkColor) : ''} rounded px-1 cursor-pointer`}
-                                style={{ fontSize: `${getActualFontSize()}px`, lineHeight: getActualLineHeight() }}
+                                className={`${getFontFamilyClass()} text-right ${getFontColorClass()} ${getBookmarkHoverClass(bookmarkColor)} ${bgClass} ${isSelectedForBookmark ? getBookmarkSelectionClass(bookmarkColor) : ''} rounded px-2 py-3 cursor-pointer`}
+                                style={{ 
+                                  fontSize: `${getActualFontSize()}px`,
+                                  lineHeight: getActualLineHeight(),
+                                  letterSpacing: '0.04em',
+                                  wordSpacing: '0.2em'
+                                }}
                                 dir="rtl"
                                 onClick={(e) => handleAyahClick(e, surahData.number, ayahNum)}
                               >
-                                {/* Render each word separately */}
-                                <div className="flex flex-wrap items-center gap-1 justify-end">
+                                {/* Render each word separately with proper Tajweed spacing */}
+                                <div className="flex flex-wrap items-baseline gap-[0.28em] sm:gap-[0.32em] justify-end leading-[2.3] sm:leading-[2.4]">
                                   {ayah.words.map((wordData, wordIndex) => {
                                     // Skip ayah number markers (usually last word with numeric text)
                                     const isAyahMarker = /^\d+$/.test(wordData.text.trim());
                                     if (isAyahMarker) return null;
                                     
+                                    // Check if word contains Tajweed symbols that need extra spacing
+                                    const hasTajweedMarks = /[ۚۖۗۘۜ۩۝]/.test(wordData.text);
+                                    
                                     return (
                                       <React.Fragment key={`surah${surahData.number}-ayah${ayahNum}-word${wordIndex}`}>
                                         <span
-                                          className="inline-block px-0.5 hover:bg-emerald-100 hover:bg-opacity-30 rounded transition-colors"
+                                          className={`inline-block indopak-word-container px-[0.1em] sm:px-[0.12em] my-[0.05em] rounded transition-colors hover:bg-emerald-100 hover:bg-opacity-30 ${
+                                            hasTajweedMarks ? 'tajweed-word' : ''
+                                          }`}
                                           title={`Word ${wordData.position}: ${wordData.location}`}
+                                          style={{
+                                            textRendering: 'optimizeLegibility',
+                                            WebkitFontSmoothing: 'antialiased',
+                                            MozOsxFontSmoothing: 'grayscale'
+                                          }}
                                         >
                                           {wordData.text}
                                         </span>
@@ -2039,7 +2054,7 @@ const QuranReader: React.FC = () => {
                                 </div>
                               </div>
                             </div>
-                            
+
                             {/* Ayah number badge */}
                             <div className="absolute top-2 right-2">
                               <span

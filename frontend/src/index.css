@@ -112,6 +112,39 @@ code {
   font-variant-ligatures: contextual common-ligatures;
   font-feature-settings: "mark" 1, "mkmk" 1, "calt" 1;
   text-rendering: optimizeLegibility;
+  -webkit-text-stroke: 0.3px transparent;
+}
+
+/* Tajweed word spacing fix for mobile */
+.tajweed-word {
+  display: inline-block;
+  line-height: 2.4;
+  margin: 0.03em 0.1em;
+  padding: 0.06em 0.12em;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .tajweed-word {
+    margin: 0.06em 0.14em;
+    padding: 0.1em 0.16em;
+    line-height: 2.5;
+  }
+  
+  .font-indopak-nastaleeq {
+    font-feature-settings: "mark" 1, "mkmk" 1;
+    letter-spacing: 0.04em;
+    word-spacing: 0.22em;
+  }
+  
+  /* Mobile-specific word container for better Tajweed rendering */
+  .indopak-word-container {
+    display: inline-flex;
+    align-items: baseline;
+    justify-content: center;
+    min-height: 1.8em;
+    vertical-align: baseline;
+  }
 }
 
 @font-face {
