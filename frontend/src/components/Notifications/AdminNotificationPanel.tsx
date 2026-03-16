@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Users, User, ChevronDown, Check, Search } from 'lucide-react';
+import { Send, Users, User, Check, Search } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import axios from 'axios';
 
