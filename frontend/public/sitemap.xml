@@ -6,37 +6,44 @@
 
   <url>
     <loc>https://hikmahsphere.site/</loc>
-    <lastmod>2026-03-06</lastmod>
+    <lastmod>2026-03-16</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
 
   <url>
     <loc>https://hikmahsphere.site/prayers</loc>
-    <lastmod>2026-03-06</lastmod>
+    <lastmod>2026-03-16</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.95</priority>
   </url>
 
   <url>
     <loc>https://hikmahsphere.site/quran</loc>
-    <lastmod>2026-03-06</lastmod>
+    <lastmod>2026-03-16</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.95</priority>
   </url>
 
   <url>
     <loc>https://hikmahsphere.site/zakat</loc>
-    <lastmod>2026-03-06</lastmod>
+    <lastmod>2026-03-16</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.95</priority>
   </url>
 
   <url>
     <loc>https://hikmahsphere.site/dhikr-dua</loc>
-    <lastmod>2026-03-06</lastmod>
+    <lastmod>2026-03-16</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.98</priority>
+  </url>
+
+  <url>
+    <loc>https://hikmahsphere.site/hajj-guide</loc>
+    <lastmod>2026-03-16</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.92</priority>
   </url>
 
   <url>

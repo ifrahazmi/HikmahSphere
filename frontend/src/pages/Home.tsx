@@ -205,8 +205,8 @@ const Home: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="Islamic App for Prayer Times, Quran Reader, Dhikr & Dua, Zakat Calculator & Muslim Community"
-        description="HikmahSphere is your all-in-one Islamic platform — accurate daily prayer times, complete Quran with 10+ translations and audio, authentic Dhikr & Dua with online tasbih counter, intelligent Zakat calculator, and a global Muslim community. Free, ad-free, and privacy-first."
+        title="HikmahSphere: A Unified Islamic Platform"
+        description="Complete Islamic platform featuring: Prayer Times (accurate daily schedules with multiple calculation methods), Quran Reader (114 Surahs with 10+ translations, audio recitations, bookmarks), Dhikr & Dua (authentic adhkar with tasbih counter), Zakat Calculator (live nisab rates, crypto support), Muslim Community (forums, events), and AI Islamic Assistant. Free, privacy-first, and built for the global Ummah."
         path="/"
         keywords={[
           'islamic app',
@@ -231,6 +231,14 @@ const Home: React.FC = () => {
           'muslim community app',
           'ramadan fasting times',
           'hikmahsphere',
+        ]}
+        siteLinks={[
+          { name: 'Prayer Times', url: 'https://hikmahsphere.site/prayers' },
+          { name: 'Quran Reader', url: 'https://hikmahsphere.site/quran' },
+          { name: 'Dhikr & Dua', url: 'https://hikmahsphere.site/dhikr-dua' },
+          { name: 'Zakat Calculator', url: 'https://hikmahsphere.site/zakat' },
+          { name: 'Community', url: 'https://hikmahsphere.site/community' },
+          { name: 'Salah Tracker', url: 'https://hikmahsphere.site/salah-tracker' }
         ]}
       />
       <div className="min-h-screen">

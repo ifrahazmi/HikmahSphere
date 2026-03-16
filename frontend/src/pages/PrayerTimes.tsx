@@ -1468,21 +1468,33 @@ const PrayerTimes: React.FC = () => {
     return (
       <>
         <PageSEO
-          title="Accurate Prayer Times Worldwide"
-          description="Get accurate daily prayer times for any city worldwide with geolocation, multiple calculation methods, madhab settings, high-latitude adjustments, fasting schedule and Hijri calendar."
+          title="Prayer Times 2026: Accurate Salah Times Worldwide with Fasting Schedule"
+          description="Get accurate daily prayer times for any city worldwide. Features Fajr, Dhuhr, Asr, Maghrib, Isha times with multiple calculation methods (MWL, ISNA, Umm al-Qura), madhab settings, high-latitude adjustments, Ramadan fasting schedule (Sehri/Iftar), and Hijri calendar."
           path="/prayers"
           keywords={[
+            'prayer times',
+            'prayer times 2026',
+            'prayer times today',
             'accurate prayer times',
             'prayer times worldwide',
-            'prayer times app',
-            'muslim prayer app',
-            'daily prayer times',
-            'islamic prayer times',
-            'salah times by city',
+            'prayer times by city',
+            'salah times',
+            'namaz times',
+            'fajr time',
+            'dhuhr time',
+            'asr time',
+            'maghrib time',
+            'isha time',
             'fajr dhuhr asr maghrib isha',
             'ramadan fasting times',
+            'sehri time',
+            'iftar time',
             'hijri calendar',
-            'hikmahsphere prayer times',
+            'islamic calendar',
+            'qibla direction',
+            'adhan times',
+            'muslim prayer app',
+            'hikmahsphere prayer times'
           ]}
         />
         <LoadingSpinner fullScreen text="Loading prayer times..." />
@@ -1493,21 +1505,33 @@ const PrayerTimes: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="Accurate Prayer Times Worldwide"
-        description="Get accurate daily prayer times for any city worldwide with geolocation, multiple calculation methods, madhab settings, high-latitude adjustments, fasting schedule and Hijri calendar."
+        title="Prayer Times 2026: Accurate Salah Times Worldwide with Fasting Schedule"
+        description="Get accurate daily prayer times for any city worldwide. Features Fajr, Dhuhr, Asr, Maghrib, Isha times with multiple calculation methods (MWL, ISNA, Umm al-Qura), madhab settings, high-latitude adjustments, Ramadan fasting schedule (Sehri/Iftar), and Hijri calendar."
         path="/prayers"
         keywords={[
+          'prayer times',
+          'prayer times 2026',
+          'prayer times today',
           'accurate prayer times',
           'prayer times worldwide',
-          'prayer times app',
-          'muslim prayer app',
-          'daily prayer times',
-          'islamic prayer times',
-          'salah times by city',
+          'prayer times by city',
+          'salah times',
+          'namaz times',
+          'fajr time',
+          'dhuhr time',
+          'asr time',
+          'maghrib time',
+          'isha time',
           'fajr dhuhr asr maghrib isha',
           'ramadan fasting times',
+          'sehri time',
+          'iftar time',
           'hijri calendar',
-          'hikmahsphere prayer times',
+          'islamic calendar',
+          'qibla direction',
+          'adhan times',
+          'muslim prayer app',
+          'hikmahsphere prayer times'
         ]}
       />
       <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 pt-16 pb-8">

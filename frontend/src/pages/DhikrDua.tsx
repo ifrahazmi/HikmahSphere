@@ -1424,23 +1424,31 @@ const DhikrDua: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="Dhikr & Dua with Authentic References, Urdu/English Translation & Online Tasbih Counter"
-        description="Read authentic daily duas and adhkar with Arabic text, transliteration, English and Urdu translation, hadith references, bookmarks, and a free online tasbih counter on HikmahSphere."
+        title="Dhikr & Dua: Authentic Islamic Supplications with Tasbih Counter"
+        description="Complete collection of authentic daily duas and adhkar from Quran and Sunnah. Features Arabic text, transliteration, English/Urdu translations, hadith references, bookmarks, and free online tasbih counter. Morning/evening adhkar, duas for anxiety, travel, and more."
         path="/dhikr-dua"
         keywords={[
           'dhikr and dua',
           'dua and zikr',
           'authentic duas',
-          'hisn al muslim duas',
+          'hisn al muslim',
           'morning evening adhkar',
           'daily duas online',
           'dua for anxiety',
+          'dua for depression',
+          'travel dua',
+          'islamic supplications',
           'dua with arabic and translation',
           'dua in urdu',
+          'dua in english',
           'online dua counter',
           'tasbih counter',
           'online tasbih counter',
-          'islamic supplications with references',
+          'digital tasbih',
+          'islamic remembrance',
+          'adhkar al muslim',
+          'prophetic duas',
+          'hikmahsphere dua'
         ]}
       />
       <Helmet>

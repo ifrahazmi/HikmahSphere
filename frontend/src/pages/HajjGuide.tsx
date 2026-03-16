@@ -425,15 +425,32 @@ const HajjGuide: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="Hajj Guide"
-        description="A beginner-friendly Hajj guide with a simple introduction, step-by-step ritual summary, and an interactive complete page-by-page guide."
+        title="Hajj Guide 2026: Step-by-Step Pilgrimage Instructions with Duas"
+        description="Complete beginner-friendly Hajj guide with step-by-step ritual instructions, Arabic duas with translations, Ihram guidelines, Tawaf, Sa'i, Arafat, Muzdalifah, and Mina procedures. Interactive guide for Hajj al-Tamattu, Qiran, and Ifrad."
         path="/hajj-guide"
         keywords={[
           'Hajj guide',
+          'Hajj 2026',
           'Hajj steps',
           'beginner Hajj guide',
-          'Hikmah Sphere Hajj',
-          'Islamic pilgrimage guide',
+          'Hajj tutorial',
+          'Hajj rituals',
+          'Hajj duas',
+          'Hajj in english',
+          'Hajj in urdu',
+          'Hajj for beginners',
+          'Hajj al Tamattu',
+          'Hajj Qiran',
+          'Hajj Ifrad',
+          'Ihram rules',
+          'Tawaf guide',
+          'Safi Marwa',
+          'Arafat day',
+          'Muzdalifah',
+          'Mina stoning',
+          'Islamic pilgrimage',
+          'Hajj checklist',
+          'Hikmah Sphere Hajj'
         ]}
         image="/logo.png"
       />

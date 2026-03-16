@@ -10,6 +10,7 @@ interface PageSEOProps {
   noIndex?: boolean;
   noFollow?: boolean;
   type?: 'website' | 'article';
+  siteLinks?: Array<{ name: string; url: string }>;
 }
 
 const SITE_NAME = 'HikmahSphere';
@@ -31,10 +32,30 @@ const PageSEO: React.FC<PageSEOProps> = ({
   noIndex = false,
   noFollow = false,
   type = 'website',
+  siteLinks = [],
 }) => {
   const canonicalUrl = getCanonicalUrl(path);
   const fullTitle = title.includes(SITE_NAME) ? title : `${title} | ${SITE_NAME}`;
   const robots = `${noIndex ? 'noindex' : 'index'}, ${noFollow ? 'nofollow' : 'follow'}`;
+
+  // Structured data for Google Sitelinks
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": SITE_NAME,
+    "url": SITE_URL,
+    "description": description,
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": `${SITE_URL}/search?q={search_term_string}`,
+      "query-input": "required name=search_term_string"
+    },
+    "hasPart": siteLinks.map(link => ({
+      "@type": "WebPage",
+      "name": link.name,
+      "url": link.url
+    }))
+  };
 
   return (
     <Helmet prioritizeSeoTags>
@@ -55,6 +76,11 @@ const PageSEO: React.FC<PageSEOProps> = ({
       <meta name="twitter:title" content={fullTitle} />
       <meta name="twitter:description" content={description} />
       <meta name="twitter:image" content={image} />
+
+      {/* Structured Data for Google Sitelinks */}
+      <script type="application/ld+json">
+        {JSON.stringify(structuredData)}
+      </script>
     </Helmet>
   );
 };

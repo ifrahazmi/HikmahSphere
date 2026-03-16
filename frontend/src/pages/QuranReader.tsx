@@ -1002,19 +1002,34 @@ const QuranReader: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="Quran Reader with Audio, Transliteration and Translation"
-        description="Read all 114 surahs with audio recitation, transliteration, multiple translations, IndoPak and Uthmani-style Arabic fonts, bookmarks, and personalized Quran reading settings."
+        title="Quran Reader 2026: Read Quran with Audio, Translations & Indopak Font"
+        description="Read complete 114 Surahs of the Holy Quran online with 10+ translations (English, Urdu, Hindi), audio recitations by famous Qaris, transliteration, IndoPak Nastaleeq font, bookmarks, and customizable reading settings. Free Islamic app."
         path="/quran"
         keywords={[
-          'quran app',
-          'quran reader online',
+          'quran',
+          'quran online',
+          'quran reader',
+          'quran 2026',
+          'read quran online',
+          'quran with translation',
           'quran with audio',
+          'quran recitation',
           'quran transliteration',
-          'quran translation',
-          'online quran search',
-          'indo pak quran font',
+          'quran in english',
+          'quran in urdu',
+          'quran in hindi',
+          'indo pak quran',
+          'indopak nastaleeq',
+          'quran font',
           'quran bookmarks',
+          'surah rahman',
+          'surah yasin',
+          'surah mulk',
+          'quran para wise',
+          'holy quran',
+          'islamic quran app',
           'hikmahsphere quran',
+          'free quran app'
         ]}
       />
       <div className={`min-h-screen ${settings.theme === 'dark' ? 'bg-gray-900' : 'bg-gradient-to-br from-emerald-50 via-white to-teal-50'}`}>
