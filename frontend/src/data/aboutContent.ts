@@ -309,14 +309,14 @@ export const developers: Developer[] = [
     }
   },
   {
-    id: 'hiring',
-    name: "We Are Hiring!",
-    role: "Full Stack Developer / Project Manager",
-    bio: "Join our team! We're looking for talented developers to help manage and improve HikmahSphere. Work on database optimization, lead the complete Zakat management system, and shape the future of Islamic technology.",
-    expertise: ['Full Stack Development', 'Database Management', 'Project Leadership', 'MongoDB', 'React & Node.js'],
-    image: '/Coming-Soon.png',
+    id: 'zafia',
+    name: "Zafia Chowdhury",
+    role: "Creative Director | Content Reviewer & QA",
+    bio: "Cyber Security graduate with a passion for creating safe and beautiful digital experiences. Provides creative direction, design insights, and quality assurance to ensure HikmahSphere serves Ummah with excellence. Her expertise in security ensures user data protection while her creative vision shapes the platform's aesthetic appeal.",
+    expertise: ['Creative Direction', 'Content Review', 'Quality Assurance', 'Cyber Security', 'User Experience', 'Design Systems', 'Security & Privacy',],
+    image: '/zafia.png',
     social: {
-      github: 'https://github.com/ifrahazmi/HikmahSphere'
+      github: 'https://github.com/yani2298/HikmahSphere'
     }
   }
 ];

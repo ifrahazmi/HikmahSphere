@@ -587,7 +587,10 @@ router.get('/fasting', [
           const entry = islamicData.data.fasting[0];
           const { sahur, iftar, duration } = entry.time;
 
-          console.log(`✅ IslamicAPI fasting OK — Sahur: ${sahur}, Iftar: ${iftar}, Duration: ${duration}`);
+          // NOTE: Sahur time from IslamicAPI is actually Imsak time (when eating stops)
+          // This is typically 10-15 minutes before Fajr prayer time
+          console.log(`✅ IslamicAPI fasting OK — Sahur (Imsak): ${sahur}, Iftar: ${iftar}, Duration: ${duration}`);
+          console.log(`ℹ️  Sahur/Imsak is the time when eating stops (before Fajr prayer)`);
 
           // hijri from API: "DD-MM-YYYY" e.g. "29-01-1447"
           const hijriRaw: string = entry.hijri || '';

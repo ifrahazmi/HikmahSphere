@@ -237,6 +237,7 @@ const PrayerTimes: React.FC = () => {
   const hasScrolledRef = useRef(false);
   const prayersContainerRef = useRef<HTMLDivElement>(null);
   const hijriFetchRequestIdRef = useRef(0);
+  const hasRefreshedAtMaghribRef = useRef(false);
 
   useEffect(() => {
     if (!showExtraPrayerInfo) return;
@@ -1157,6 +1158,36 @@ const PrayerTimes: React.FC = () => {
 
     return () => clearInterval(interval);
   }, [prayerData, updatePrayerTimes]);
+
+  // Refresh fasting data at Maghrib time to ensure Sehri/Iftar times update correctly
+  useEffect(() => {
+    if (!prayerData?.times?.Maghrib || !location?.lat || !location?.lon) return;
+
+    const checkMaghribTime = () => {
+      const now = new Date();
+      const maghribTime = parsePrayerTime(prayerData.times.Maghrib);
+      
+      // Check if we just crossed Maghrib (within the last minute)
+      const diffMs = now.getTime() - maghribTime.getTime();
+      const wasJustMaghrib = diffMs >= 0 && diffMs < 60000; // Within 1 minute after Maghrib
+
+      if (wasJustMaghrib && !hasRefreshedAtMaghribRef.current) {
+        console.log('🕌 Maghrib time detected - refreshing fasting data for next day');
+        hasRefreshedAtMaghribRef.current = true;
+        fetchData(location.lat, location.lon, location.city, location.country);
+      }
+
+      // Reset the flag if it's before Maghrib the next day
+      const maghribHour = maghribTime.getHours();
+      const maghribMinute = maghribTime.getMinutes();
+      if (now.getHours() < maghribHour || (now.getHours() === maghribHour && now.getMinutes() < maghribMinute)) {
+        hasRefreshedAtMaghribRef.current = false;
+      }
+    };
+
+    const interval = setInterval(checkMaghribTime, 30000); // Check every 30 seconds
+    return () => clearInterval(interval);
+  }, [prayerData?.times?.Maghrib, location, parsePrayerTime, fetchData]);
 
   // Auto-scroll to current prayer on mobile after data loads
   useEffect(() => {
@@ -2114,7 +2145,7 @@ const PrayerTimes: React.FC = () => {
                             >
                               {formatTimeForDisplay(prayer.time)}
                             </p>
-                            <p className="text-xs sm:text-sm font-arabic text-gray-600">{prayer.arabic}</p>
+                            <p className="text-lg sm:text-xl font-bold font-arabic text-gray-600">{prayer.arabic}</p>
                             </div>
                         </div>
                     </div>
@@ -2135,7 +2166,7 @@ const PrayerTimes: React.FC = () => {
                                 {/* Also show fasting time for Fajr and Maghrib */}
                                 {prayer.name === 'Fajr' && activeFastingEntry && (
                                   <div className="mt-1 pt-1 border-t border-gray-100">
-                                    <span className="text-xs font-medium text-gray-500">Sehri Ends</span>
+                                    <span className="text-xs font-medium text-gray-500" title="Imsak - Time to stop eating">Sehri Ends (Imsak)</span>
                                     <p className="text-sm font-bold text-emerald-600">{formatTimeForDisplay(activeFastingEntry.time.sahur)}</p>
                                   </div>
                                 )}
@@ -2155,13 +2186,13 @@ const PrayerTimes: React.FC = () => {
                                           <span className="text-[10px] sm:text-xs font-medium text-emerald-600 uppercase tracking-wide font-bold">● Now</span>
                                         </div>
                                         <div className="mt-1 pt-1 border-t border-gray-100">
-                                          <span className="text-xs font-medium text-gray-500">Sehri Ends</span>
+                                          <span className="text-xs font-medium text-gray-500" title="Imsak - Time to stop eating">Sehri Ends (Imsak)</span>
                                           <p className="text-sm font-bold text-emerald-600">{formatTimeForDisplay(activeFastingEntry.time.sahur)}</p>
                                         </div>
                                       </>
                                     ) : (
                                       <div>
-                                          <span className="text-xs font-medium text-gray-500">Sehri Ends</span>
+                                          <span className="text-xs font-medium text-gray-500" title="Imsak - Time to stop eating">Sehri Ends (Imsak)</span>
                                           <p className="text-sm font-bold text-emerald-600">{formatTimeForDisplay(activeFastingEntry.time.sahur)}</p>
                                       </div>
                                     )}
@@ -2891,8 +2922,8 @@ const PrayerTimes: React.FC = () => {
                         {/* Times Grid */}
                         <div className="grid grid-cols-2 gap-1.5 sm:gap-2 mb-2.5 sm:mb-3">
                           <div className="bg-orange-50 rounded-lg sm:rounded-xl p-1.5 sm:p-2 text-center">
-                            <p className="text-[10px] sm:text-xs text-orange-600 font-medium mb-0.5 sm:mb-1">Sehri Ends</p>
-                            <p className="text-base sm:text-lg font-bold text-orange-700">{formatTimeForDisplay(day.time?.sahur || day.time?.fajr)}</p>
+                            <p className="text-[10px] sm:text-xs text-orange-600 font-medium mb-0.5 sm:mb-1">Sehri Ends (Imsak)</p>
+                            <p className="text-base sm:text-lg font-bold text-orange-700" title="Imsak - Time to stop eating (before Fajr)">{formatTimeForDisplay(day.time?.sahur || day.time?.fajr)}</p>
                           </div>
                           <div className="bg-emerald-50 rounded-lg sm:rounded-xl p-1.5 sm:p-2 text-center">
                             <p className="text-[10px] sm:text-xs text-emerald-600 font-medium mb-0.5 sm:mb-1">Iftar</p>

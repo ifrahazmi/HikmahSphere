@@ -561,6 +561,7 @@ const QuranReader: React.FC = () => {
 
   // IndoPak waqf symbols can merge with surrounding letters on mobile shaping engines.
   // Render markers in dedicated spans so they stay visually separate from ayah words.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const formatIndopakAyahText = (text: string, keyPrefix = 'indopak'): React.ReactNode => {
     const normalizedText = text
       .replace(/صلى/g, 'صلی')
@@ -926,6 +927,12 @@ const QuranReader: React.FC = () => {
   // Confirm bookmark
   const confirmBookmark = () => {
     if (bookmarkConfirm) {
+      // Validate color selection when adding new bookmark
+      if (!isBookmarked(bookmarkConfirm.surahNum, bookmarkConfirm.ayahNum) && !bookmarkConfirm.color) {
+        alert('Please select a highlight color for your bookmark.');
+        return;
+      }
+      
       if (isBookmarked(bookmarkConfirm.surahNum, bookmarkConfirm.ayahNum)) {
         const bookmark = bookmarks.find(
           b => b.surahNumber === bookmarkConfirm.surahNum && b.ayahNumber === bookmarkConfirm.ayahNum
@@ -1964,155 +1971,88 @@ const QuranReader: React.FC = () => {
                   </div>
                 )}
 
-                {/* Ayahs - Indopak Mode */}
+                {/* Ayahs - Indopak Mode (Word-by-Word Rendering) */}
                 {settings.arabicFont === 'indopak-nastaleeq' && indopakSurah ? (
-                  settings.arabicOnlyMode ? (
-                    /* Continuous Indopak Arabic text */
-                    <div className={`p-3 rounded-lg ${getReaderBackgroundClass()}`}>
-                      <p
-                        className={`${getFontFamilyClass()} leading-loose text-right ${getFontColorClass()}`}
-                        style={{ fontSize: `${getActualFontSize()}px`, lineHeight: getActualLineHeight() }}
-                        dir="rtl"
-                      >
-                        {indopakSurah.ayahs.map((ayah, index) => {
-                          const ayahNum = ayah.ayah;
-                          const isFirstAyahFatiha = surahData?.number === 1 && ayahNum === 1;
-                          if (isFirstAyahFatiha) return null;
+                  <div className="space-y-4">
+                    {indopakSurah.ayahs.map((ayah) => {
+                      const ayahNum = ayah.ayah;
+                      const isFirstAyahFatiha = surahData?.number === 1 && ayahNum === 1;
+                      if (isFirstAyahFatiha) return null;
 
-                          const bookmarkColor = getBookmarkColor(surahData.number, ayahNum);
-                          const bgClass = getBookmarkBackgroundClass(bookmarkColor);
-                          const borderClass = getBookmarkBorderClass(bookmarkColor);
-                          const isSelectedForBookmark = selectedAyahForBookmark?.surah === surahData.number && selectedAyahForBookmark?.ayah === ayahNum;
+                      const bookmarkColor = getBookmarkColor(surahData.number, ayahNum);
+                      const bgClass = getBookmarkBackgroundClass(bookmarkColor);
+                      const borderClass = getBookmarkBorderClass(bookmarkColor);
+                      const isSelectedForBookmark =
+                        selectedAyahForBookmark?.surah === surahData.number &&
+                        selectedAyahForBookmark?.ayah === ayahNum;
 
-                          return (
-                            <span key={ayahNum}>
-                              <span
+                      return (
+                        <div
+                          key={ayahNum}
+                          id={`ayah-${ayahNum}`}
+                          className={`pb-5 border-b last:border-b-0 ${
+                            settings.theme === 'dark' ? 'border-gray-700/80' : 'border-emerald-100'
+                          }`}
+                        >
+                          {/* Word-by-Word Arabic Text */}
+                          <div className={`relative mb-4 overflow-hidden rounded-2xl p-4 sm:p-6 ${getReaderBackgroundClass()}`}>
+                            <div className="w-full">
+                              <div
+                                className={`${getFontFamilyClass()} text-right leading-loose ${getFontColorClass()} ${getBookmarkHoverClass(bookmarkColor)} ${bgClass} ${isSelectedForBookmark ? getBookmarkSelectionClass(bookmarkColor) : ''} rounded px-1 cursor-pointer`}
+                                style={{ fontSize: `${getActualFontSize()}px`, lineHeight: getActualLineHeight() }}
+                                dir="rtl"
                                 onClick={(e) => handleAyahClick(e, surahData.number, ayahNum)}
-                                className={`cursor-pointer rounded px-1 ${getBookmarkHoverClass(bookmarkColor)} ${bgClass} ${isSelectedForBookmark ? getBookmarkSelectionClass(bookmarkColor) : ''}`}
                               >
-                                {formatIndopakAyahText(
-                                  removeBismillah(ayah.text, surahData.number, ayahNum),
-                                  `indopak-inline-${ayahNum}`
-                                )}
-                              </span>
-                              {' '}
+                                {/* Render each word separately */}
+                                <div className="flex flex-wrap items-center gap-1 justify-end">
+                                  {ayah.words.map((wordData, wordIndex) => {
+                                    // Skip ayah number markers (usually last word with numeric text)
+                                    const isAyahMarker = /^\d+$/.test(wordData.text.trim());
+                                    if (isAyahMarker) return null;
+                                    
+                                    return (
+                                      <React.Fragment key={`surah${surahData.number}-ayah${ayahNum}-word${wordIndex}`}>
+                                        <span
+                                          className="inline-block px-0.5 hover:bg-emerald-100 hover:bg-opacity-30 rounded transition-colors"
+                                          title={`Word ${wordData.position}: ${wordData.location}`}
+                                        >
+                                          {wordData.text}
+                                        </span>
+                                      </React.Fragment>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Ayah number badge */}
+                            <div className="absolute top-2 right-2">
                               <span
-                                id={`ayah-${ayahNum}`}
-                                className={`inline-flex items-center justify-center w-6 h-6 rounded-full border-2 text-xs font-bold mx-1 ${borderClass}`}
+                                className={`inline-flex items-center justify-center w-7 h-7 rounded-full border-2 text-xs font-bold ${borderClass} bg-white bg-opacity-90`}
                               >
                                 {ayahNum}
                               </span>
-                              {index < indopakSurah.ayahs.filter(a => !(surahData?.number === 1 && a.ayah === 1)).length - 1 && ' '}
-                            </span>
-                          );
-                        })}
-                      </p>
-                    </div>
-                  ) : (
-                    /* Separate Indopak ayahs with translations */
-                    <div className="space-y-4">
-                      {indopakSurah.ayahs.map((ayah) => {
-                        const ayahNum = ayah.ayah;
-                        const isFirstAyahFatiha = surahData?.number === 1 && ayahNum === 1;
-                        if (isFirstAyahFatiha) return null;
-                        
-                        return (
-                          <div
-                            key={ayahNum}
-                            id={`ayah-${ayahNum}`}
-                            className={`pb-5 border-b last:border-b-0 ${
-                              settings.theme === 'dark' ? 'border-gray-700/80' : 'border-emerald-100'
-                            }`}
-                          >
-                            {/* Arabic Text */}
-                            <div className={`relative mb-4 overflow-hidden rounded-2xl p-4 sm:p-6 ${getReaderBackgroundClass()}`}>
-                              <div className="w-full">
-                                <p
-                                  className={`${getFontFamilyClass()} block text-right leading-loose ${getFontColorClass()}`}
-                                  style={{ fontSize: `${getActualFontSize()}px`, lineHeight: getActualLineHeight() }}
-                                  dir="rtl"
-                                >
-                                  {(() => {
-                                    const bookmarkColor = getBookmarkColor(surahData.number, ayahNum);
-                                    const bgClass = getBookmarkBackgroundClass(bookmarkColor);
-                                    const borderClass = getBookmarkBorderClass(bookmarkColor);
-                                    const isSelectedForBookmark =
-                                      selectedAyahForBookmark?.surah === surahData.number &&
-                                      selectedAyahForBookmark?.ayah === ayahNum;
-
-                                    return (
-                                      <>
-                                        {settings.audioEnabled && settings.audioMode === 'ayah' && currentSurah && (
-                                          <>
-                                            <button
-                                              onClick={(e) => {
-                                                e.preventDefault();
-                                                e.stopPropagation();
-                                                if (isPlaying && currentPlayingAyah === ayahNum) {
-                                                  pauseAyah();
-                                                } else {
-                                                  playAyah(currentSurah, ayahNum);
-                                                }
-                                              }}
-                                              className={`inline-flex h-7 w-7 align-middle items-center justify-center rounded-full mx-1 transition-colors ${
-                                                isPlaying && currentPlayingAyah === ayahNum
-                                                  ? 'bg-emerald-500 text-white'
-                                                  : settings.theme === 'dark'
-                                                  ? 'bg-gray-700 hover:bg-gray-600 text-emerald-400'
-                                                  : 'bg-white text-emerald-600 shadow-sm hover:bg-emerald-50'
-                                              }`}
-                                              title={isPlaying && currentPlayingAyah === ayahNum ? 'Pause' : 'Play'}
-                                            >
-                                              {isPlaying && currentPlayingAyah === ayahNum ? (
-                                                <PauseIcon className="h-4 w-4" />
-                                              ) : (
-                                                <PlayIcon className="h-4 w-4" />
-                                              )}
-                                            </button>
-                                            {' '}
-                                          </>
-                                        )}
-                                        <span
-                                          onClick={(e) => handleAyahClick(e, surahData.number, ayahNum)}
-                                          className={`cursor-pointer rounded px-1 ${getBookmarkHoverClass(bookmarkColor)} ${bgClass} ${isSelectedForBookmark ? getBookmarkSelectionClass(bookmarkColor) : ''}`}
-                                        >
-                                          {formatIndopakAyahText(
-                                            removeBismillah(ayah.text, surahData.number, ayahNum),
-                                            `indopak-block-${ayahNum}`
-                                          )}
-                                        </span>
-                                        {' '}
-                                        <span
-                                          className={`inline-flex items-center justify-center w-6 h-6 rounded-full border-2 text-xs font-bold mx-1 ${borderClass}`}
-                                        >
-                                          {ayahNum}
-                                        </span>
-                                      </>
-                                    );
-                                  })()}
-                                </p>
-                              </div>
                             </div>
-
-                            {/* Transliteration */}
-                            {settings.showTransliteration && transliteration && (
-                              <div className="mb-2">
-                                <p className={`text-xs font-medium mb-1 ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                                  Transliteration
-                                </p>
-                                <p className={`text-sm italic leading-relaxed ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
-                                  {transliteration.ayahs[ayahNum - 1]?.text}
-                                </p>
-                              </div>
-                            )}
-
-                            {/* Translations */}
-                            {renderAyahTranslations(ayahNum - 1)}
                           </div>
-                        );
-                      })}
-                    </div>
-                  )
+
+                          {/* Transliteration */}
+                          {settings.showTransliteration && transliteration && (
+                            <div className="mb-2">
+                              <p className={`text-xs font-medium mb-1 ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                                Transliteration
+                              </p>
+                              <p className={`text-sm italic leading-relaxed ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+                                {transliteration.ayahs[ayahNum - 1]?.text}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Translations */}
+                          {renderAyahTranslations(ayahNum - 1)}
+                        </div>
+                      );
+                    })}
+                  </div>
                 ) : settings.arabicOnlyMode ? (
                   /* Continuous Arabic text in Arabic-only mode */
                   <div className={`p-3 rounded-lg ${getReaderBackgroundClass()}`}>

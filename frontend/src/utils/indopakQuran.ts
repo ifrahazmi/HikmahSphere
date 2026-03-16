@@ -8,12 +8,13 @@ export interface IndopakWord {
   word: string;
   location: string;
   text: string;
+  position?: number;
 }
 
 export interface IndopakAyah {
   surah: number;
   ayah: number;
-  words: IndopakWord[];
+  words: Array<IndopakWord & { position: number }>;
   text: string;
 }
 
@@ -38,43 +39,46 @@ const normalizeIndopakMarks = (text: string): string => (
  */
 export const loadIndopakQuran = (): Map<number, IndopakSurah> => {
   const surahMap = new Map<number, IndopakSurah>();
-  
+
   // Convert JSON object to array and sort by ID
   const words: IndopakWord[] = Object.values(indopakData).sort((a, b) => a.id - b.id);
-  
+
   // Group words by Surah and Ayah
   words.forEach((word) => {
     const surahNum = parseInt(word.surah);
     const ayahNum = parseInt(word.ayah);
-    
+
     // Get or create Surah
     if (!surahMap.has(surahNum)) {
       surahMap.set(surahNum, { surah: surahNum, ayahs: [] });
     }
-    
+
     const surah = surahMap.get(surahNum)!;
-    
+
     // Get or create Ayah
     let ayah = surah.ayahs.find(a => a.ayah === ayahNum);
     if (!ayah) {
       ayah = { surah: surahNum, ayah: ayahNum, words: [], text: '' };
       surah.ayahs.push(ayah);
     }
-    
-    // Add word to ayah
-    ayah.words.push(word);
+
+    // Add word to ayah with position
+    ayah.words.push({
+      ...word,
+      position: parseInt(word.word),
+    });
   });
-  
+
   // Build complete text for each ayah by joining words
   surahMap.forEach((surah) => {
     surah.ayahs.forEach((ayah) => {
       ayah.text = normalizeIndopakMarks(ayah.words.map(w => w.text).join(' '));
     });
-    
+
     // Sort ayahs by ayah number
     surah.ayahs.sort((a, b) => a.ayah - b.ayah);
   });
-  
+
   return surahMap;
 };
 

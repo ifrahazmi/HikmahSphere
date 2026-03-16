@@ -695,7 +695,7 @@ const About: React.FC = () => {
                   <div className="w-1/2 pl-4">
                     <div className="text-teal-300 font-semibold text-xs sm:text-sm">Phase 2</div>
                     <div className="text-white font-bold text-xs sm:text-base">Features</div>
-                    <div className="text-teal-200/60 text-xs hidden sm:block">Prayer times, Quran, Zakat</div>
+                    <div className="text-teal-200/60 text-xs hidden sm:block">Prayer times, Quran, Zakat, Dikr and Dua</div>
                   </div>
                 </div>
 
