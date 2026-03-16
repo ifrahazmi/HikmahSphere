@@ -241,6 +241,80 @@ const Home: React.FC = () => {
           { name: 'Salah Tracker', url: 'https://hikmahsphere.site/salah-tracker' }
         ]}
       />
+      {/* Structured Data for Founder/Developer - Ifrahuddin Azmi */}
+      <script type="application/ld+json">
+        {JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "Person",
+          "name": "Ifrahuddin Azmi",
+          "alternateName": ["Ifrah Azmi", "Ifrahuddin", "Azmi", "Ifrah A.", "Ifrahuddin A."],
+          "url": "https://hikmahsphere.site",
+          "image": "https://hikmahsphere.site/admin-pic.png",
+          "jobTitle": "Lead Architect & Developer | Founder",
+          "worksFor": {
+            "@type": "Organization",
+            "name": "HikmahSphere",
+            "url": "https://hikmahsphere.site",
+            "sameAs": "https://github.com/yani2298/HikmahSphere"
+          },
+          "description": "Founder and Lead Developer of HikmahSphere - a unified Islamic digital platform serving the global Muslim community. Expert in React, Node.js, TypeScript, MongoDB, Python, AI/ML, and Islamic digital solutions.",
+          "sameAs": [
+            "https://github.com/ifrahazmi",
+            "https://www.linkedin.com/in/ifrahuddin-azmi-8869787a/",
+            "https://twitter.com/ifrahazmi"
+          ],
+          "knowsAbout": [
+            "React.js",
+            "Node.js",
+            "TypeScript",
+            "MongoDB",
+            "Python",
+            "Artificial Intelligence",
+            "Machine Learning",
+            "Test Automation",
+            "System Architecture",
+            "Islamic Studies",
+            "Full-Stack Development",
+            "Web Development"
+          ],
+          "award": "Developer of HikmahSphere Islamic Platform"
+        })}
+      </script>
+      <script type="application/ld+json">
+        {JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "Organization",
+          "name": "HikmahSphere",
+          "url": "https://hikmahsphere.site",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://hikmahsphere.site/logo.png"
+          },
+          "description": "A Unified Islamic Digital Platform for the global Muslim community - providing prayer times, Quran reader, Dhikr & Dua, Zakat calculator, and community features",
+          "founder": {
+            "@type": "Person",
+            "name": "Ifrahuddin Azmi",
+            "url": "https://hikmahsphere.site/about",
+            "sameAs": [
+              "https://github.com/ifrahazmi",
+              "https://www.linkedin.com/in/ifrahuddin-azmi-8869787a/"
+            ]
+          },
+          "sameAs": [
+            "https://github.com/yani2298/HikmahSphere"
+          ],
+          "contactPoint": {
+            "@type": "ContactPoint",
+            "email": "ifrahazmi@hikmahsphere.site",
+            "contactType": "developer",
+            "availableLanguage": ["English", "Urdu", "Hindi", "Arabic"]
+          },
+          "areaServed": {
+            "@type": "Country",
+            "name": "Worldwide"
+          }
+        })}
+      </script>
       <div className="min-h-screen">
       {/* Hero Section */}
       <section className="relative bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-950 text-white overflow-hidden">

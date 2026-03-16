@@ -146,7 +146,7 @@ const About: React.FC = () => {
     <>
       <PageSEO
         title="About HikmahSphere and Our Mission"
-        description="Learn how HikmahSphere combines authentic Islamic knowledge with modern technology to support prayer, Quran study, Dhikr & Dua, Zakat, and a connected global Muslim community."
+        description="Learn how HikmahSphere combines authentic Islamic knowledge with modern technology to support prayer, Quran study, Dhikr & Dua, Zakat, and a connected global Muslim community. Founded and developed by Ifrahuddin Azmi."
         path="/about"
         keywords={[
           'about hikmahsphere',
@@ -154,8 +154,70 @@ const About: React.FC = () => {
           'authentic islamic knowledge',
           'muslim technology platform',
           'dhikr and dua platform',
+          'ifrahuddin azmi',
+          'ifrah azmi developer',
+          'hikmahsphere founder',
+          'ifrahuddin hikmahsphere',
+          'azmi islamic app'
         ]}
       />
+      {/* Structured Data for Developer - Ifrahuddin Azmi */}
+      <script type="application/ld+json">
+        {JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "Person",
+          "name": "Ifrahuddin Azmi",
+          "alternateName": ["Ifrah Azmi", "Ifrahuddin", "Azmi", "Ifrah A."],
+          "url": "https://hikmahsphere.site",
+          "jobTitle": "Lead Architect & Developer",
+          "worksFor": {
+            "@type": "Organization",
+            "name": "HikmahSphere",
+            "url": "https://hikmahsphere.site"
+          },
+          "description": "Lead Architect and Developer of HikmahSphere, a unified Islamic digital platform. Visionary technologist with expertise in full-stack development, AI/ML, and Islamic digital solutions.",
+          "sameAs": [
+            "https://github.com/ifrahazmi",
+            "https://www.linkedin.com/in/ifrahuddin-azmi-8869787a/",
+            "https://twitter.com/ifrahazmi"
+          ],
+          "knowsAbout": [
+            "React",
+            "Node.js",
+            "TypeScript",
+            "MongoDB",
+            "Python",
+            "AI/ML",
+            "Test Automation",
+            "System Architecture",
+            "Islamic Studies",
+            "Full-Stack Development"
+          ]
+        })}
+      </script>
+      <script type="application/ld+json">
+        {JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "Organization",
+          "name": "HikmahSphere",
+          "url": "https://hikmahsphere.site",
+          "logo": "https://hikmahsphere.site/logo.png",
+          "description": "A Unified Islamic Digital Platform for the global Muslim community",
+          "founder": {
+            "@type": "Person",
+            "name": "Ifrahuddin Azmi",
+            "url": "https://hikmahsphere.site/about"
+          },
+          "sameAs": [
+            "https://github.com/yani2298/HikmahSphere"
+          ],
+          "contactPoint": {
+            "@type": "ContactPoint",
+            "email": "ifrahazmi@hikmahsphere.site",
+            "contactType": "developer"
+          }
+        })}
+      </script>
       <div className="min-h-screen">
       {/* Hero Section */}
       <section
