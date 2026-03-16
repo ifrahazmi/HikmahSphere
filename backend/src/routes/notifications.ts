@@ -291,6 +291,40 @@ router.delete('/token', authMiddleware, async (req: any, res: Response) => {
     }
 });
 
+// Search users by username (for admin notification panel)
+router.get('/search-users', authMiddleware, superAdminMiddleware, async (req: any, res: Response) => {
+    try {
+        const { query } = req.query;
+        
+        if (!query || typeof query !== 'string') {
+            res.status(400).json({ status: 'error', message: 'Search query is required' });
+            return;
+        }
+
+        // Search for users with username starting with or containing the query
+        const searchRegex = new RegExp(query, 'i'); // Case-insensitive
+        const users = await User.find({
+            username: searchRegex
+        })
+        .select('username email _id')
+        .limit(10); // Limit to 10 suggestions
+
+        const formattedUsers = users.map(user => ({
+            id: user._id,
+            username: user.username,
+            email: user.email
+        }));
+
+        res.json({
+            status: 'success',
+            data: formattedUsers
+        });
+    } catch (error: any) {
+        console.error('Error searching users:', error);
+        res.status(500).json({ status: 'error', message: 'Failed to search users' });
+    }
+});
+
 // --- ADMIN ROUTES ---
 
 // Send direct notification to a specific user
