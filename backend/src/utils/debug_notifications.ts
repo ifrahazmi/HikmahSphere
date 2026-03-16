@@ -40,7 +40,7 @@ const checkTokens = async () => {
       console.log(`   fcmTokens: ${user.fcmTokens?.length || 0}`);
       
       if (user.fcmTokens?.length) {
-        console.log(`   Token[0]: ${user.fcmTokens[0].substring(0, 30)}...`);
+        console.log(`   Token[0]: ${user.fcmTokens[0]?.substring(0, 30) || 'N/A'}...`);
       }
 
       if (user.notificationDevices?.length) {
