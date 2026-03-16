@@ -191,6 +191,7 @@ router.post('/token', authMiddleware, async (req: any, res: Response) => {
 
         const userId = req.user.userId;
 
+        // Remove this token from all other users (prevent duplicates across accounts)
         await User.updateMany(
             { _id: { $ne: userId } },
             {
@@ -224,6 +225,9 @@ router.post('/token', authMiddleware, async (req: any, res: Response) => {
         await user.save();
 
         console.log(`✅ Token stored for user ${userId} (single-latest-token policy)`);
+        console.log(`   Token: ${normalizedToken.substring(0, 20)}...`);
+        console.log(`   Device ID: ${normalizedDeviceId || 'N/A'}`);
+        console.log(`   User Agent: ${normalizedUserAgent ? normalizedUserAgent.substring(0, 50) + '...' : 'N/A'}`);
         res.json({
             status: 'success',
             message: 'Token registered successfully',
@@ -394,6 +398,14 @@ router.post('/broadcast', authMiddleware, superAdminMiddleware, async (req: any,
                         },
                     },
                 });
+            }
+            
+            // Log user agent info for debugging iOS issues
+            const firstDevice = normalizedDevices[0];
+            const userAgent = firstDevice?.userAgent || '';
+            const isIOS = /iPhone|iPad|iPod/i.test(userAgent);
+            if (isIOS) {
+                console.log(`📱 iOS user found: ${user.username || 'unknown'}, token: ${deliveryToken ? deliveryToken.substring(0, 20) + '...' : 'NONE'}`);
             }
         }
 

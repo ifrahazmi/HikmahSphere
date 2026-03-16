@@ -91,15 +91,18 @@ const AppContent: React.FC = () => {
           }
         }
 
+        // Wait a bit for service worker to be ready (especially important for iOS)
+        await new Promise(resolve => setTimeout(resolve, 500));
+
         const token = await requestForToken();
-        
+
         if (token) {
             console.log("FCM Token Generated:", token);
             storePushToken(token);
             const authToken = localStorage.getItem('token');
             if (authToken) {
                 try {
-                    await axios.post(`${API_URL}/notifications/token`, 
+                    await axios.post(`${API_URL}/notifications/token`,
                         {
                           token,
                           deviceId: getPushDeviceId(),
@@ -114,15 +117,23 @@ const AppContent: React.FC = () => {
             }
         } else {
             storePushToken(null);
+            // Log detailed info for iOS debugging
+            console.log("No FCM token generated. Push support:", pushSupport);
+            if (pushSupport.isIOS) {
+              console.log("iOS detected - ensure PWA is installed to Home Screen and permission granted");
+            }
         }
       } catch (err) {
         console.error('Error getting token:', err);
       }
     };
 
-    registerToken();
+    // Only register token if user is logged in
+    if (user) {
+      registerToken();
+    }
 
-  }, [user]); 
+  }, [user]);
 
   if (loading) {
     return <LoadingSpinner />;

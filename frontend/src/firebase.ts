@@ -160,6 +160,22 @@ export const requestForToken = async () => {
     }
   }
 
+  // Even if messaging wasn't initialized, try again now that we have permission
+  // This is critical for iOS 16.4+ PWAs
+  if (!msg) {
+    try {
+      const { isSupported: isSup, getMessaging: getMsg } = await import('firebase/messaging');
+      const supported = await isSup();
+      if (supported) {
+        msg = getMsg(app);
+        messaging = msg;
+        console.log('Firebase Messaging initialized on retry.');
+      }
+    } catch (e) {
+      console.warn('Final attempt to initialize Firebase Messaging failed:', e);
+    }
+  }
+
   if (!msg) {
     console.warn('Firebase Messaging unavailable; push notifications may not work on this device.');
     return null;
@@ -167,13 +183,32 @@ export const requestForToken = async () => {
 
   try {
     const vapidKey = process.env.REACT_APP_FIREBASE_VAPID_KEY || 'BMKXPfAlQOob4fha6L9Pos9_rcJxMsdCr-Z2uR0FrVOHqhMXTTD1qg133D5AN2klLzFIg8ii0iMEqccgdfSLLTY';
-    const currentToken = await getToken(msg, { vapidKey });
+    
+    // Retry logic for token retrieval (especially important for iOS)
+    let currentToken: string | null = null;
+    const maxRetries = 3;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        currentToken = await getToken(msg, { vapidKey });
+        if (currentToken) {
+          console.log(`Token retrieved successfully on attempt ${attempt}`);
+          break;
+        }
+      } catch (err) {
+        console.warn(`Token retrieval attempt ${attempt} failed:`, err);
+        if (attempt < maxRetries) {
+          // Wait before retry (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 500));
+        }
+      }
+    }
 
     if (currentToken) {
       return currentToken;
     }
 
-    console.log('No registration token available.');
+    console.log('No registration token available after all retries.');
     if (supportInfo.isIOS && !supportInfo.isStandalone) {
       console.warn('Install HikmahSphere to Home Screen on iPhone/iPad, then allow notifications.');
     }

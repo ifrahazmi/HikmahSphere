@@ -128,7 +128,7 @@ export const sendMulticastNotification = async (tokens: string[], title: string,
     if (!admin.apps.length) {
          throw new Error("Firebase Admin not initialized. Check server logs.");
     }
-    
+
     if (!tokens || tokens.length === 0) {
         console.warn("⚠️ [Firebase] No tokens provided for multicast.");
         return { successCount: 0, failureCount: 0, responses: [] };
@@ -144,8 +144,18 @@ export const sendMulticastNotification = async (tokens: string[], title: string,
         const response = await admin.messaging().sendEachForMulticast(message);
         console.log(`📢 [Firebase] Broadcast: ${response.successCount} sent, ${response.failureCount} failed.`);
         
+        // Log detailed failure information for debugging
+        if (response.failureCount > 0) {
+            response.responses.forEach((resp, idx) => {
+                if (!resp.success) {
+                    const tokenPreview = tokens[idx]?.substring(0, 20) + '...';
+                    console.warn(`   ❌ Token ${tokenPreview} failed: ${resp.error?.code} - ${resp.error?.message}`);
+                }
+            });
+        }
+
         return response;
-    } catch (error) {
+    } catch (error: any) {
         console.error('❌ [Firebase] Multicast Error:', error);
         throw error;
     }

@@ -21,7 +21,8 @@
     "prebuild": "npm run clean",
     "postbuild": "cp package.json dist/ && mkdir -p dist/data && cp src/data/indopak-nastaleeq-v2.1.db dist/data/indopak-nastaleeq-v2.1.db && mkdir -p dist/assets/hajj-guide && cp src/assets/hajj-guide/* dist/assets/hajj-guide/",
     "docker:build": "docker build -t hikmahsphere-backend .",
-    "docker:run": "docker run -p 5000:5000 hikmahsphere-backend"
+    "docker:run": "docker run -p 5000:5000 hikmahsphere-backend",
+    "debug:notifications": "tsx src/utils/debug_notifications.ts"
   },
   "keywords": [
     "islam",
