@@ -1189,6 +1189,43 @@ const PrayerTimes: React.FC = () => {
     return () => clearInterval(interval);
   }, [prayerData?.times?.Maghrib, location, parsePrayerTime, fetchData]);
 
+  // Auto-scroll to current day's card when Ramadan tab is opened
+  useEffect(() => {
+    // Only scroll in Ramadan view
+    if (viewMode !== 'ramadan') {
+      return;
+    }
+
+    // Wait for Ramadan data to load
+    if (!ramadanData?.fasting) {
+      console.log('Ramadan auto-scroll: Waiting for data');
+      return;
+    }
+
+    // Prevent multiple scrolls
+    if (hasScrolledRef.current) {
+      console.log('Ramadan auto-scroll: Already scrolled');
+      return;
+    }
+
+    console.log('Ramadan auto-scroll: Scrolling to current day');
+
+    // Wait for DOM to render
+    setTimeout(() => {
+      const todayCard = document.querySelector('[class*="border-emerald-500"]');
+      if (todayCard) {
+        todayCard.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+        });
+        hasScrolledRef.current = true;
+        console.log('Ramadan auto-scroll: Scrolled to current day card');
+      } else {
+        console.log('Ramadan auto-scroll: Today card not found');
+      }
+    }, 500);
+  }, [viewMode, ramadanData]);
+
   // Auto-scroll to current prayer on mobile after data loads
   useEffect(() => {
     // Wait for prayer data and current prayer to be determined

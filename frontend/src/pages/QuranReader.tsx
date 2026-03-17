@@ -1216,10 +1216,15 @@ const QuranReader: React.FC = () => {
 
             {/* Surah Info */}
             {surahData && (
-              <div className={`mt-2 text-center text-xs ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                <span className="font-medium">{surahData.englishNameTranslation}</span> •
-                <span className="ml-1">{surahData.numberOfAyahs} Ayahs</span> •
-                <span className="ml-1 capitalize">{surahData.revelationType}</span>
+              <div className={`mt-2 text-center ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+                <p className={`text-lg font-scheherazade font-bold ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`} dir="rtl">
+                  {surahData.name}
+                </p>
+                <p className="text-xs mt-1">
+                  <span className="font-medium">{surahData.englishNameTranslation}</span> •
+                  <span className="ml-1">{surahData.numberOfAyahs} Ayahs</span> •
+                  <span className="ml-1 capitalize">{surahData.revelationType}</span>
+                </p>
               </div>
             )}
           </div>
@@ -1371,7 +1376,9 @@ const QuranReader: React.FC = () => {
                               {surah.number}
                             </span>
                             <div>
-                              <p className={`font-medium text-base ${getFontFamilyClass()}`}>{surah.name}</p>
+                              <p className={`font-medium text-lg font-scheherazade ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`} dir="rtl">
+                                {surah.name}
+                              </p>
                               <p className={`text-sm ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
                                 {surah.englishName} • {surah.englishNameTranslation}
                               </p>
@@ -2027,6 +2034,7 @@ const QuranReader: React.FC = () => {
                       const isSelectedForBookmark =
                         selectedAyahForBookmark?.surah === surahData.number &&
                         selectedAyahForBookmark?.ayah === ayahNum;
+                      const isPlayingThisAyah = isPlaying && currentPlayingAyah === ayahNum;
 
                       return (
                         <div
@@ -2036,6 +2044,41 @@ const QuranReader: React.FC = () => {
                             settings.theme === 'dark' ? 'border-gray-700/80' : 'border-emerald-100'
                           }`}
                         >
+                          {/* Audio Controls - Ayah by Ayah */}
+                          {settings.audioEnabled && settings.audioMode === 'ayah' && currentSurah && (
+                            <div className="mb-3 flex items-center gap-2">
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  if (isPlayingThisAyah) {
+                                    pauseAyah();
+                                  } else {
+                                    playAyah(currentSurah, ayahNum);
+                                  }
+                                }}
+                                className={`inline-flex items-center justify-center w-8 h-8 rounded-full transition-colors ${
+                                  isPlayingThisAyah
+                                    ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+                                    : settings.theme === 'dark'
+                                    ? 'bg-gray-700 hover:bg-gray-600 text-emerald-400'
+                                    : 'bg-white text-emerald-600 shadow-sm hover:bg-emerald-50'
+                                }`}
+                                title={isPlayingThisAyah ? 'Pause' : 'Play Ayah'}
+                              >
+                                {isPlayingThisAyah ? (
+                                  <PauseIcon className="h-5 w-5" />
+                                ) : (
+                                  <PlayIcon className="h-5 w-5" />
+                                )}
+                              </button>
+                              <span className={`text-xs ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                                {isPlayingThisAyah ? 'Playing...' : 'Play Ayah'}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Arabic Text - Word by Word */}
                           <div className={`relative mb-4 overflow-hidden rounded-2xl p-3 sm:p-5 ${getReaderBackgroundClass()}`}>
                             <div
                               className={`${getFontFamilyClass()} flex flex-wrap items-baseline gap-[0.06em] sm:gap-[0.09em] leading-[2.1] sm:leading-[2.3] ${getFontColorClass()} ${getBookmarkHoverClass(bookmarkColor)} ${bgClass} ${isSelectedForBookmark ? getBookmarkSelectionClass(bookmarkColor) : ''} rounded px-2 py-3 cursor-pointer`}
@@ -2343,7 +2386,9 @@ const QuranReader: React.FC = () => {
                           }`}>
                             {surah.number}
                           </span>
-                          <p className={`font-medium ${getFontFamilyClass()} text-base`}>{surah.name}</p>
+                          <p className={`font-medium text-lg font-scheherazade ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`} dir="rtl">
+                            {surah.name}
+                          </p>
                         </div>
                         <p className={`text-xs ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
                           {surah.englishName}
