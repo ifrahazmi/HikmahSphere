@@ -159,9 +159,36 @@ code {
   transform: translateY(-0.02em);
 }
 
+/* iOS Safari Arabic Text Rendering Fixes */
+@supports (-webkit-touch-callout: none) {
+  .font-indopak-nastaleeq,
+  .indopak-word-container {
+    -webkit-font-smoothing: subpixel-antialiased;
+    text-rendering: auto;
+    letter-spacing: -0.02em;
+    word-spacing: 0.05em;
+    font-variant-ligatures: common-ligatures contextual;
+    font-feature-settings: "liga" 1, "clig" 1, "calt" 1;
+    -webkit-text-size-adjust: 100%;
+  }
+  
+  /* Reduce line height on iOS for tighter ayah spacing */
+  .font-indopak-nastaleeq > div {
+    line-height: 2.0 !important;
+  }
+}
+
 @media (max-width: 768px) {
   .indopak-waqf-marker {
     font-family: 'Noto Naskh Arabic', 'Amiri', serif;
+  }
+  
+  /* Additional iOS mobile fixes */
+  @supports (-webkit-touch-callout: none) {
+    .font-indopak-nastaleeq {
+      letter-spacing: -0.03em;
+      word-spacing: 0.03em;
+    }
   }
 }
 

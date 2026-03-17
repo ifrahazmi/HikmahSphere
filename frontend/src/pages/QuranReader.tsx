@@ -2018,8 +2018,15 @@ const QuranReader: React.FC = () => {
                   <div className={`p-2 sm:p-3 rounded-lg ${getReaderBackgroundClass()}`}>
                     {/* Single continuous flex container for all ayah words - Full width utilization */}
                     <div
-                      className={`${getFontFamilyClass()} flex flex-wrap items-baseline gap-[0.08em] sm:gap-[0.10em] leading-[2.3] sm:leading-[2.4] ${getFontColorClass()}`}
-                      style={{ fontSize: `${getActualFontSize()}px`, lineHeight: getActualLineHeight() }}
+                      className={`${getFontFamilyClass()} flex flex-wrap items-baseline gap-[0.06em] sm:gap-[0.09em] leading-[2.1] sm:leading-[2.3] ${getFontColorClass()}`}
+                      style={{ 
+                        fontSize: `${getActualFontSize()}px`, 
+                        lineHeight: getActualLineHeight(),
+                        WebkitTextSizeAdjust: '100%',
+                        textRendering: 'auto',
+                        fontVariantLigatures: 'common-ligatures contextual',
+                        fontFeatureSettings: '"liga" 1, "clig" 1, "calt" 1'
+                      }}
                       dir="rtl"
                     >
                       {/* Render all words from all ayahs in one continuous flow */}
@@ -2054,15 +2061,20 @@ const QuranReader: React.FC = () => {
                               return (
                                 <span
                                   key={`surah${surahData.number}-ayah${ayahNum}-word${wordIndex}`}
-                                  className={`inline-block indopak-word-container px-[0.06em] sm:px-[0.12em] my-[0.04em] rounded transition-colors ${
+                                  className={`inline-block indopak-word-container px-[0.04em] sm:px-[0.10em] my-[0.03em] rounded transition-colors ${
                                     isSelectedForBookmark ? 'bg-emerald-500 text-white' : 'hover:bg-emerald-100 hover:bg-opacity-30'
                                   } ${hasTajweedMarks ? 'tajweed-word' : ''} ${isBookmarkedAyah ? bgClass : ''}`}
                                   title={`Word ${wordData.position}: ${wordData.location}`}
                                   onClick={(e) => handleWordClick(e, surahData.number, ayahNum, wordIndex)}
                                   style={{
-                                    textRendering: 'optimizeLegibility',
-                                    WebkitFontSmoothing: 'antialiased',
-                                    MozOsxFontSmoothing: 'grayscale'
+                                    textRendering: 'auto',
+                                    WebkitFontSmoothing: 'subpixel-antialiased',
+                                    MozOsxFontSmoothing: 'auto',
+                                    WebkitTextSizeAdjust: '100%',
+                                    fontVariantLigatures: 'common-ligatures contextual',
+                                    fontFeatureSettings: '"liga" 1, "clig" 1, "calt" 1',
+                                    letterSpacing: '-0.02em',
+                                    wordSpacing: '0.05em'
                                   }}
                                 >
                                   {wordData.text}

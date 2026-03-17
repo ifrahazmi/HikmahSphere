@@ -88,11 +88,26 @@ const PrayerTimesIslamicCalendar: React.FC<IslamicCalendarProps> = ({ whiteDays,
   const today = new Date();
   const todayIso = toLocalISO(today);
   const displayedMonth = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
-  const displayedDays = getDaysInMonth(displayedMonth).map((date) => ({
-    date,
-    iso: toLocalISO(date),
-    hijri: getHijriInfo(date),
-  }));
+  
+  // Use todayHijri from props (which already has Maghrib-based calculation) for today's date
+  // For other days, use the Intl formatter
+  const displayedDays = getDaysInMonth(displayedMonth).map((date) => {
+    const iso = toLocalISO(date);
+    const isToday = iso === todayIso;
+    
+    // For today, use the hijri date from props (already calculated with Maghrib rule)
+    // For other days, calculate using Intl
+    const hijri = isToday && todayHijri 
+      ? {
+          day: parseInt(String(todayHijri.day), 10) || 0,
+          monthEn: todayHijri.month?.en || '',
+          monthShort: (todayHijri.month?.en || '').slice(0, 3),
+          year: parseInt(String(todayHijri.year), 10) || 0,
+        }
+      : getHijriInfo(date);
+    
+    return { date, iso, hijri };
+  });
 
   const monthName = displayedMonth.toLocaleString('default', { month: 'long' });
   const year = displayedMonth.getFullYear();

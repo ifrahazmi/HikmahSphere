@@ -127,13 +127,113 @@ function calculateQiblaDirection(lat: number, lon: number): number {
   const lat1 = lat * Math.PI / 180;
   const lat2 = MECCA_LAT * Math.PI / 180;
   const dLon = (MECCA_LON - lon) * Math.PI / 180;
-  
+
   const y = Math.sin(dLon) * Math.cos(lat2);
   const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
   const bearing = Math.atan2(y, x) * 180 / Math.PI;
-  
+
   // Normalize to 0-360
   return (bearing + 360) % 360;
+}
+
+/**
+ * Helper: Determine if current time is after Maghrib
+ * Islamic date changes at Maghrib, not midnight
+ * Returns true if current time is after Maghrib (Islamic date should be tomorrow)
+ */
+function isAfterMaghrib(maghribTime: string, timezone: string = 'UTC'): boolean {
+  const now = new Date();
+  
+  if (!maghribTime) {
+    return false;
+  }
+  
+  // Parse Maghrib time (format: "HH:MM" or "HH:MM (timezone)")
+  const timePart = (maghribTime.split('(')[0] || '').trim();
+  const timeParts = timePart.split(':');
+  
+  if (timeParts.length < 2) {
+    return false;
+  }
+  
+  const hoursStr = timeParts[0] || '0';
+  const minutesStr = timeParts[1] || '0';
+  const hours = parseInt(hoursStr);
+  const minutes = parseInt(minutesStr);
+  
+  if (isNaN(hours) || isNaN(minutes)) {
+    return false; // Invalid time format
+  }
+  
+  // Create Maghrib datetime for today
+  const maghribDate = new Date();
+  maghribDate.setHours(hours, minutes, 0, 0);
+  
+  // Check if current time is after Maghrib
+  return now > maghribDate;
+}
+
+/**
+ * Helper: Get the Islamic date considering Maghrib rule
+ * - Before Maghrib: Use today's Islamic date
+ * - After Maghrib: Use tomorrow's Islamic date (Islamic day starts at Maghrib)
+ */
+function getIslamicDateAtMaghrib(hijriDate: any, maghribTime: string, timezone: string = 'UTC'): any {
+  const afterMaghrib = isAfterMaghrib(maghribTime, timezone);
+  
+  if (!afterMaghrib || !hijriDate) {
+    // Before Maghrib or no date - return today's Islamic date
+    return hijriDate;
+  }
+  
+  // After Maghrib - Islamic date should be tomorrow
+  // Add 1 day to Islamic date
+  const nextDay = new Date();
+  nextDay.setDate(nextDay.getDate() + 1);
+  
+  // If hijriDate has day/month/year properties, increment day
+  if (hijriDate && typeof hijriDate === 'object') {
+    const currentDay = parseInt(hijriDate.day) || parseInt(hijriDate.date?.split('-')[2]) || 1;
+    const currentMonth = hijriDate.month?.number || parseInt(hijriDate.date?.split('-')[1]) || 1;
+    const currentYear = hijriDate.year || parseInt(hijriDate.date?.split('-')[0]) || 1446;
+    
+    // Simple day increment (doesn't handle month/year boundaries perfectly)
+    const nextDayNum = currentDay + 1;
+    const daysInMonth = 30; // Approximate Islamic month length
+    
+    if (nextDayNum > daysInMonth) {
+      // Next month
+      return {
+        ...hijriDate,
+        day: '1',
+        month: {
+          ...hijriDate.month,
+          number: currentMonth + 1,
+        },
+        year: currentYear,
+      };
+    }
+    
+    return {
+      ...hijriDate,
+      day: String(nextDayNum),
+      date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(nextDayNum).padStart(2, '0')}`,
+    };
+  }
+  
+  return hijriDate;
+}
+
+/**
+ * Helper: Get prayer times for the correct date
+ * - Prayer times change at midnight (12 AM) based on English/Gregorian date
+ * - This function ensures we fetch prayer times for the current Gregorian date
+ */
+function getPrayerTimesDate(): string {
+  // Prayer times always follow Gregorian date (change at midnight)
+  const isoString = new Date().toISOString();
+  const datePart = isoString.split('T')[0];
+  return String(datePart); // YYYY-MM-DD format
 }
 
 /**
@@ -223,6 +323,10 @@ router.get('/times', [
         if (islamicData.code === 200 && islamicData.data?.times) {
           const d = islamicData.data;
           console.log(`✅ IslamicAPI prayer times OK — Fajr: ${d.times.Fajr}`);
+          
+          // Apply Maghrib rule for Islamic date
+          // Islamic date changes at Maghrib time, not midnight
+          const adjustedHijriDate = getIslamicDateAtMaghrib(d.date.hijri, d.times.Maghrib, d.timezone?.name);
 
           responseData = {
             status: 'success',
@@ -240,8 +344,8 @@ router.get('/times', [
               date: {
                 readable:  d.date.readable,
                 timestamp: d.date.timestamp,
-                gregorian: d.date.gregorian,
-                hijri:     d.date.hijri,
+                gregorian: d.date.gregorian, // Gregorian date (changes at midnight)
+                hijri:     adjustedHijriDate, // Islamic date (changes at Maghrib)
               },
               qibla: {
                 direction: {
@@ -262,6 +366,12 @@ router.get('/times', [
               },
               settings: { method, school },
               source: 'islamicapi.com',
+              // Metadata about date calculation
+              date_calculation: {
+                islamic_date_changes_at: 'maghrib',
+                prayer_times_change_at: 'midnight',
+                is_after_maghrib: isAfterMaghrib(d.times.Maghrib, d.timezone?.name),
+              },
             },
           };
         } else {
@@ -299,6 +409,10 @@ router.get('/times', [
         const distanceToMecca = calculateDistanceToMecca(parseFloat(latitude), parseFloat(longitude));
 
         console.log(`✅ Aladhan prayer times OK — Fajr: ${data.timings.Fajr}`);
+        
+        // Apply Maghrib rule for Islamic date
+        // Islamic date changes at Maghrib time, not midnight
+        const adjustedHijriDate = getIslamicDateAtMaghrib(data.date.hijri, data.timings.Maghrib);
 
         responseData = {
           status: 'success',
@@ -316,8 +430,8 @@ router.get('/times', [
             date: {
               readable:  data.date.readable,
               timestamp: data.date.timestamp,
-              gregorian: data.date.gregorian,
-              hijri:     data.date.hijri,
+              gregorian: data.date.gregorian, // Gregorian date (changes at midnight)
+              hijri:     adjustedHijriDate, // Islamic date (changes at Maghrib)
             },
             qibla: {
               direction: { degrees: qiblaDegrees },
@@ -330,6 +444,12 @@ router.get('/times', [
             },
             settings: { method, school },
             source: 'aladhan.com',
+            // Metadata about date calculation
+            date_calculation: {
+              islamic_date_changes_at: 'maghrib',
+              prayer_times_change_at: 'midnight',
+              is_after_maghrib: isAfterMaghrib(data.timings.Maghrib),
+            },
           },
         };
       } else {
