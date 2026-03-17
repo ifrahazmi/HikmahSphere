@@ -13,12 +13,12 @@ const ISLAMIC_API_PRAYER_URL = 'https://islamicapi.com/api/v1/prayer-time';
 const ISLAMIC_API_FASTING_URL = 'https://islamicapi.com/api/v1/fasting';
 const ISLAMIC_API_RAMADAN_URL = 'https://islamicapi.com/api/v1/ramadan';
 
-// Cache TTL configuration (in seconds)
+// Cache TTL configuration (in seconds) - 1 hour for prayer times
 const CACHE_TTL = {
-  PRAYER_TIMES: parseInt(process.env.PRAYER_TIMES_CACHE_TTL || '15') * 60,
-  FASTING_TIMES: parseInt(process.env.FASTING_TIMES_CACHE_TTL || '15') * 60,
-  RAMADAN_TIMES: parseInt(process.env.RAMADAN_TIMES_CACHE_TTL || '60') * 60,
-  WEATHER: parseInt(process.env.WEATHER_CACHE_TTL || '30') * 60,
+  PRAYER_TIMES: 3600, // 1 hour cache for faster loading
+  FASTING_TIMES: 3600, // 1 hour cache
+  RAMADAN_TIMES: 3600, // 1 hour cache
+  WEATHER: 1800, // 30 minutes cache
 };
 
 // Mecca/Kaaba coordinates
@@ -283,10 +283,10 @@ router.get('/times', [
     const cacheKey = `prayer_times:${latitude}:${longitude}:${method}:${school}`;
 
     try {
-      // Try to get from cache first
+      // Try to get from cache first (1 hour cache)
       const cachedData = await redisClient.get(cacheKey);
       if (cachedData) {
-        console.log(`✅ Cache hit for prayer times (${latitude}, ${longitude})`);
+        console.log(`✅ Cache hit for prayer times (${latitude}, ${longitude}) - Serving from 1hr cache`);
         return res.json(JSON.parse(cachedData));
       }
     } catch (cacheError) {

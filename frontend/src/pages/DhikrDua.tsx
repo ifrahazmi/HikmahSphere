@@ -2173,12 +2173,12 @@ const DhikrDua: React.FC = () => {
                         incrementTasbih();
                       }}
                       onContextMenu={(event) => event.preventDefault()}
-                      className="mx-auto mt-4 flex h-[62vw] w-[62vw] min-h-[11rem] min-w-[11rem] max-h-56 max-w-56 select-none touch-manipulation items-center justify-center rounded-full bg-gradient-to-br from-emerald-600 to-teal-600 text-center text-white shadow-xl transition active:scale-[0.98] hover:from-emerald-700 hover:to-teal-700"
+                      className="mx-auto mt-4 flex h-[55vw] w-[55vw] min-h-[10rem] min-w-[10rem] max-h-48 max-w-48 select-none touch-manipulation items-center justify-center rounded-full bg-gradient-to-br from-emerald-600 to-teal-600 text-center text-white shadow-xl transition active:scale-[0.98] hover:from-emerald-700 hover:to-teal-700 md:h-[45vw] md:w-[45vw]"
                     >
                       <div>
-                        <p className="text-5xl font-bold">{tasbihCount}</p>
+                        <p className="text-4xl font-bold md:text-5xl">{tasbihCount}</p>
                         <p className="mt-1 text-sm font-semibold">Tap to Count</p>
-                        <p className={`mx-auto mt-2 max-w-[11rem] break-words px-1 leading-tight ${selectedPreset.compact ? 'text-[10px]' : 'text-xs'}`}>
+                        <p className={`mx-auto mt-2 max-w-[10rem] break-words px-1 leading-tight ${selectedPreset.compact ? 'text-[10px]' : 'text-xs'}`}>
                           {selectedPreset.label}
                         </p>
                       </div>

@@ -1602,18 +1602,50 @@ const PrayerTimes: React.FC = () => {
 	
 	              {showExtraPrayerInfo && (
 	                <>
+	                  {/* Mobile - Bottom Sheet */}
 	                  <div
-	                    className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm sm:hidden"
+	                    className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm sm:hidden md:hidden"
 	                    onClick={() => setShowExtraPrayerInfo(false)}
 	                  >
 	                    <div
-	                      className="absolute inset-x-3 bottom-3 max-h-[82vh] overflow-y-auto rounded-3xl border border-emerald-100 bg-white p-4 text-left shadow-2xl"
+	                      className="absolute inset-x-2 bottom-2 max-h-[70vh] overflow-y-auto rounded-2xl border border-emerald-100 bg-white p-3 text-left shadow-2xl sm:inset-x-3 sm:bottom-3 sm:max-h-[75vh] sm:rounded-3xl sm:p-4"
 	                      onClick={(event) => event.stopPropagation()}
 	                    >
+	                      <div className="sticky top-0 right-0 flex justify-end mb-2">
+	                        <button
+	                          onClick={() => setShowExtraPrayerInfo(false)}
+	                          className="p-2 rounded-full hover:bg-gray-100"
+	                        >
+	                          <XMarkIcon className="h-5 w-5 text-gray-500" />
+	                        </button>
+	                      </div>
 	                      {extraPrayerInfoContent}
 	                    </div>
 	                  </div>
-	                  <div className="absolute left-1/2 top-full z-30 mt-3 hidden w-[min(92vw,24rem)] -translate-x-1/2 rounded-2xl border border-emerald-100 bg-white p-4 text-left shadow-2xl sm:block">
+	                  {/* Tablet/iPad - Centered Modal */}
+	                  <div
+	                    className="fixed inset-0 z-50 hidden bg-black/50 backdrop-blur-sm sm:hidden md:block lg:hidden"
+	                    onClick={() => setShowExtraPrayerInfo(false)}
+	                  >
+	                    <div className="flex min-h-full items-center justify-center p-4">
+	                      <div
+	                        className="relative max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-emerald-100 bg-white p-5 text-left shadow-2xl"
+	                        onClick={(event) => event.stopPropagation()}
+	                      >
+	                        <div className="sticky top-0 right-0 flex justify-end mb-3">
+	                          <button
+	                            onClick={() => setShowExtraPrayerInfo(false)}
+	                            className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+	                          >
+	                            <XMarkIcon className="h-6 w-6 text-gray-500" />
+	                          </button>
+	                        </div>
+	                        {extraPrayerInfoContent}
+	                      </div>
+	                    </div>
+	                  </div>
+	                  {/* Desktop - Tooltip */}
+	                  <div className="absolute left-1/2 top-full z-30 mt-3 hidden w-[min(92vw,24rem)] -translate-x-1/2 rounded-2xl border border-emerald-100 bg-white p-4 text-left shadow-2xl lg:block">
 	                    {extraPrayerInfoContent}
 	                  </div>
 	                </>

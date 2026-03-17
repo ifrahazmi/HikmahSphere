@@ -2225,6 +2225,43 @@ const QuranReader: React.FC = () => {
                       })}
                     </div>
                   </div>
+                ) : settings.arabicOnlyMode && surahData ? (
+                  // Al Mushaf and other fonts - Arabic-Only Mode (Continuous Flow)
+                  <div className={`p-3 rounded-lg ${getReaderBackgroundClass()}`}>
+                    <div
+                      className={`${getFontFamilyClass()} leading-loose ${getFontColorClass()}`}
+                      style={{ fontSize: `${getActualFontSize()}px`, lineHeight: getActualLineHeight() }}
+                      dir="rtl"
+                    >
+                      {surahData.ayahs
+                        .filter(ayah => !(surahData.number === 1 && ayah.numberInSurah === 1))
+                        .map((ayah, index) => {
+                          const bookmarkColor = getBookmarkColor(surahData.number, ayah.numberInSurah);
+                          const bgClass = getBookmarkBackgroundClass(bookmarkColor);
+                          const borderClass = getBookmarkBorderClass(bookmarkColor);
+                          const isSelectedForBookmark = selectedAyahForBookmark?.surah === surahData.number && selectedAyahForBookmark?.ayah === ayah.numberInSurah;
+
+                          return (
+                            <span key={ayah.numberInSurah} className="inline">
+                              <span
+                                onClick={(e) => handleAyahClick(e, surahData.number, ayah.numberInSurah)}
+                                className={`cursor-pointer rounded px-1 inline ${getBookmarkHoverClass(bookmarkColor)} ${bgClass} ${isSelectedForBookmark ? getBookmarkSelectionClass(bookmarkColor) : ''}`}
+                              >
+                                {removeBismillah(ayah.text, surahData.number, ayah.numberInSurah)}
+                              </span>
+                              {' '}
+                              <span
+                                id={`ayah-${ayah.numberInSurah}`}
+                                className={`inline-flex items-center justify-center w-6 h-6 rounded-full border-2 text-xs font-bold ${borderClass} align-middle`}
+                              >
+                                {ayah.numberInSurah}
+                              </span>
+                              {' '}
+                            </span>
+                          );
+                        })}
+                    </div>
+                  </div>
                 ) : (
                   /* Separate ayahs with translations */
                   <div className="space-y-4">

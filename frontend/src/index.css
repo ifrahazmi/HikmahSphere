@@ -428,3 +428,236 @@ code {
 .animate-shimmer {
   animation: shimmer 2s infinite;
 }
+
+/* ============================================
+   iPad-Specific Fixes (768px - 1024px)
+   ============================================ */
+@media (min-width: 768px) and (max-width: 1024px) {
+  /* ===== Navbar Fixes ===== */
+  /* Prevent navigation from overlapping logo */
+  .hidden.lg\\:flex.flex-1.items-center {
+    gap: 0.125rem !important;
+    margin-left: 0.25rem !important;
+    margin-right: 0.25rem !important;
+  }
+  
+  /* Reduce nav link padding on iPad */
+  .hidden.lg\\:flex .px-2 {
+    padding-left: 0.375rem !important;
+    padding-right: 0.375rem !important;
+  }
+  .hidden.lg\\:flex .lg\\:px-2\\.5 {
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+  }
+  
+  /* Smaller font on iPad */
+  .hidden.lg\\:flex .text-xs {
+    font-size: 0.6875rem !important;
+  }
+  .hidden.lg\\:flex .lg\\:text-sm {
+    font-size: 0.75rem !important;
+  }
+  
+  /* Reduce vertical padding */
+  .hidden.lg\\:flex .py-2 {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+  }
+  
+  /* Fix profile name truncation */
+  .max-w-\\[90px\\] {
+    max-width: 70px !important;
+  }
+  .lg\\:max-w-\\[120px\\] {
+    max-width: 85px !important;
+  }
+  
+  /* Fix notification bell spacing */
+  .hidden.lg\\:flex.items-center.space-x-2 {
+    gap: 0.25rem !important;
+  }
+  
+  /* Reduce logo size on iPad */
+  .w-9.h-9 {
+    width: 1.75rem !important;
+    height: 1.75rem !important;
+  }
+  
+  /* Smaller version badge on iPad */
+  .hidden.lg\\:inline-flex {
+    font-size: 0.625rem !important;
+    padding: 0.125rem 0.375rem !important;
+    margin-left: 0.25rem !important;
+  }
+  
+  /* ===== Tasbeeh Counter - Fixed Right Side on iPad ===== */
+  /* Make counter card fixed on right side */
+  aside#tasbih-counter {
+    position: fixed !important;
+    right: 1rem !important;
+    top: 5rem !important;
+    width: 320px !important;
+    max-height: calc(100vh - 6rem) !important;
+    overflow-y: auto !important;
+    z-index: 40 !important;
+  }
+  
+  /* Adjust counter button size for iPad */
+  aside#tasbih-counter .h-\\[55vw\\] {
+    height: 180px !important;
+    width: 180px !important;
+    min-height: 180px !important;
+    min-width: 180px !important;
+  }
+  
+  /* Ensure reset button is visible */
+  aside#tasbih-counter .mt-3.inline-flex {
+    margin-top: 1rem !important;
+  }
+  
+  /* ===== Quran Reader - Settings Modal ===== */
+  /* iPad-specific centered modal - properly sized */
+  @media (min-width: 768px) and (max-width: 1024px) {
+    /* Make modal wider and taller for iPad */
+    .fixed.inset-0.z-50.lg\\:hidden .relative.w-full {
+      max-width: 550px !important;
+      width: 90vw !important;
+      max-height: 85vh !important;
+    }
+    
+    /* Increase tab button sizes for better touch targets */
+    .fixed.inset-0.z-50.lg\\:hidden button[class*="px-3"] {
+      padding: 0.625rem 0.875rem !important;
+      font-size: 0.8125rem !important;
+      min-height: 2.5rem !important;
+    }
+    
+    /* Increase icon sizes in tabs */
+    .fixed.inset-0.z-50.lg\\:hidden button .h-3\\.5 {
+      height: 1.125rem !important;
+      width: 1.125rem !important;
+    }
+    
+    /* Better content padding */
+    .fixed.inset-0.z-50.lg\\:hidden .overflow-y-auto {
+      padding: 1.25rem !important;
+    }
+    
+    /* Increase font sizes in settings */
+    .fixed.inset-0.z-50.lg\\:hidden label {
+      font-size: 0.875rem !important;
+      font-weight: 500 !important;
+    }
+    
+    /* Better spacing for form elements */
+    .fixed.inset-0.z-50.lg\\:hidden select,
+    .fixed.inset-0.z-50.lg\\:hidden input[type="range"] {
+      height: 2.25rem !important;
+      font-size: 0.875rem !important;
+    }
+    
+    /* Increase slider thumb size */
+    .fixed.inset-0.z-50.lg\\:hidden input[type="range"]::-webkit-slider-thumb {
+      width: 1.25rem !important;
+      height: 1.25rem !important;
+    }
+    
+    /* Better button sizes */
+    .fixed.inset-0.z-50.lg\\:hidden button[class*="py-2"] {
+      min-height: 2.5rem !important;
+      padding-top: 0.625rem !important;
+      padding-bottom: 0.625rem !important;
+    }
+    
+    /* Improve color swatch sizes */
+    .fixed.inset-0.z-50.lg\\:hidden button[class*="w-8"] {
+      width: 2rem !important;
+      height: 2rem !important;
+    }
+  }
+  
+  /* Fix mobile header button spacing */
+  .lg\\:hidden.pt-4.px-2.sticky {
+    padding-top: 0.5rem !important;
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+  
+  /* Reduce button sizes on iPad */
+  .lg\\:hidden .p-2\\.5 {
+    padding: 0.375rem !important;
+  }
+  
+  /* Fix icon sizes */
+  .lg\\:hidden .h-5.w-5 {
+    height: 1rem !important;
+    width: 1rem !important;
+  }
+  
+  /* Better gap spacing */
+  .lg\\:hidden .flex.items-center.gap-2 {
+    gap: 0.375rem !important;
+  }
+  
+  /* Fix surah selector */
+  .lg\\:hidden .w-full.appearance-none {
+    font-size: 0.8125rem !important;
+    padding-left: 0.625rem !important;
+    padding-right: 2rem !important;
+  }
+  
+  /* ===== General Layout Fixes ===== */
+  /* Prevent content overflow */
+  .max-w-7xl.mx-auto {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+  
+  /* Fix card layouts */
+  .rounded-2xl.shadow-lg {
+    margin-left: 0.5rem !important;
+    margin-right: 0.5rem !important;
+  }
+  
+  /* Ensure buttons don't get cut off */
+  button[class*="px-4"] {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+}
+
+/* ============================================
+   iPad Pro (1024px - 1112px) - Additional Fixes
+   ============================================ */
+@media (min-width: 1024px) and (max-width: 1112px) {
+  /* Slightly more breathing room for larger iPads */
+  .hidden.lg\\:flex.flex-1.items-center {
+    gap: 0.25rem !important;
+  }
+  
+  .max-w-\\[90px\\] {
+    max-width: 80px !important;
+  }
+  .lg\\:max-w-\\[120px\\] {
+    max-width: 100px !important;
+  }
+  
+  /* Slightly larger nav links on iPad Pro */
+  .hidden.lg\\:flex .text-xs {
+    font-size: 0.75rem !important;
+  }
+  .hidden.lg\\:flex .lg\\:text-sm {
+    font-size: 0.8125rem !important;
+  }
+  
+  /* Tasbeeh counter - slightly larger on iPad Pro */
+  aside#tasbih-counter {
+    width: 350px !important;
+  }
+  
+  aside#tasbih-counter .h-\\[55vw\\] {
+    height: 200px !important;
+    width: 200px !important;
+  }
+}

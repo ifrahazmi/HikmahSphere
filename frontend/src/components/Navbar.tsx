@@ -118,30 +118,31 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
         <div className="flex justify-between h-16">
           <div className="flex items-center">
             <Link to="/" className="flex-shrink-0 flex items-center">
-              <div className="w-10 h-10 flex items-center justify-center overflow-hidden rounded-full bg-white">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 lg:w-11 lg:h-11 xl:w-12 xl:h-12 flex items-center justify-center overflow-hidden rounded-full bg-white">
                 <img src="/logo.png" alt="HikmahSphere Logo" className="h-full w-full object-cover" />
               </div>
-              <div className="ml-3 flex items-baseline">
-                <span className={`text-xl font-bold ${
+              <div className="ml-2 flex items-baseline">
+                <span className={`text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl font-bold ${
                   isDark ? 'text-white' : 'text-gray-900'
                 }`}>HikmahSphere</span>
-                <span className={`hidden lg:inline-flex ml-1.5 text-[10px] font-semibold px-1.5 py-1 rounded-full ${
+                <span className={`hidden lg:inline-flex ml-0.5 text-[8px] sm:text-[9px] lg:text-[10px] xl:text-xs font-semibold px-0.5 py-0.5 rounded-full ${
                   isDark
                     ? 'bg-emerald-900 text-emerald-300'
                     : 'bg-emerald-100 text-emerald-700'
-                } -translate-y-1`}>
+                } -translate-y-0.5`}>
                   v3.0 Beta
                 </span>
               </div>
             </Link>
           </div>
 
-          <div className="hidden lg:flex flex-1 items-center justify-center gap-1.5 xl:gap-2 min-w-0 mx-2 lg:mx-3">
+          {/* Navigation Links - Responsive sizing based on screen width */}
+          <div className="hidden lg:flex flex-1 items-center justify-center gap-0.5 xl:gap-1 2xl:gap-2 min-w-0 overflow-hidden">
             {navigation.map((item) => (
               <Link
                 key={item.name}
                 to={item.href}
-                className={`px-2 py-1.5 rounded-md text-xs xl:text-sm font-medium whitespace-nowrap transition-colors duration-200 ${
+                className={`px-1.5 lg:px-2 xl:px-2.5 py-1.5 lg:py-2 xl:py-2.5 rounded-md text-[11px] lg:text-xs xl:text-sm 2xl:text-base font-medium whitespace-nowrap transition-colors duration-200 ${
                   item.current
                     ? isDark
                       ? 'bg-emerald-900 text-emerald-300'
@@ -156,7 +157,8 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
             ))}
           </div>
 
-          <div className="hidden lg:flex items-center space-x-2 lg:space-x-3 shrink-0">
+          {/* Right Section - Responsive sizing */}
+          <div className="hidden lg:flex items-center gap-1 lg:gap-1.5 xl:gap-2 shrink-0">
             {user ? (
               <>
                 {/* Notification Bell */}
@@ -165,14 +167,14 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                 <div className="relative" ref={profileMenuRef}>
                   <button
                     onClick={() => setIsProfileOpen(!isProfileOpen)}
-                    className={`flex items-center space-x-1.5 lg:space-x-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 rounded-md p-1.5 lg:p-2 transition-colors duration-200 ${
+                    className={`flex items-center gap-1 lg:gap-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 rounded-md p-1.5 lg:p-2 transition-colors duration-200 ${
                       isDark
                         ? 'text-gray-300 hover:text-emerald-400'
                         : 'text-gray-700 hover:text-emerald-600'
                     }`}
                   >
-                    <UserIcon className="h-6 w-6" />
-                    <span className="text-sm font-medium max-w-[110px] lg:max-w-[140px] truncate">{user.name}</span>
+                    <UserIcon className="h-4 w-4 lg:h-5 lg:w-5" />
+                    <span className="text-[11px] lg:text-xs xl:text-sm font-medium max-w-[60px] lg:max-w-[80px] xl:max-w-[100px] 2xl:max-w-[120px] truncate">{user.name}</span>
                   </button>
 
                   {isProfileOpen && (
