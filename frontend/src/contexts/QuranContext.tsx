@@ -556,7 +556,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
         editions.push(...settings.selectedTranslations);
       }
 
-      const cacheKey = `${surahNumber}|${settings.arabicOnlyMode ? 'arabic' : 'mixed'}|${settings.showTransliteration ? 'translit' : 'plain'}|${settings.arabicFont === 'indopak-nastaleeq-v2' ? 'indopak-v2' : 'standard'}|${settings.selectedTranslations.join(',')}`;
+      const cacheKey = `${surahNumber}|${settings.arabicOnlyMode ? 'arabic' : 'mixed'}|${settings.showTransliteration ? 'translit' : 'plain'}|${settings.selectedTranslations.join(',')}`;
 
       const applyLoadedEditions = (loadedEditions: SurahData[]) => {
         // First edition is always Arabic
@@ -592,44 +592,6 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       
       if (data.status === 'success') {
         let fetchedEditions: SurahData[] = data.data;
-
-        if (settings.arabicFont === 'indopak-nastaleeq-v2') {
-          try {
-            const indopakV2Response = await fetch(`${API_URL}/quran/surah/${surahNumber}/indopak-v2`);
-            const indopakV2Data = await indopakV2Response.json();
-
-            if (indopakV2Data.status === 'success' && Array.isArray(indopakV2Data.data?.rows)) {
-              const ayahTextMap = new Map<number, string>();
-
-              indopakV2Data.data.rows.forEach((row: { ayah: number; text: string }) => {
-                if (typeof row.ayah === 'number' && typeof row.text === 'string') {
-                  ayahTextMap.set(row.ayah, row.text);
-                }
-              });
-
-              if (ayahTextMap.size > 0) {
-                fetchedEditions = [
-                  {
-                    ...fetchedEditions[0],
-                    edition: {
-                      ...fetchedEditions[0].edition,
-                      identifier: 'indopak.nastaleeq.v2',
-                      name: 'IndoPak Nastaleeq v2',
-                      englishName: 'IndoPak Nastaleeq v2',
-                    },
-                    ayahs: fetchedEditions[0].ayahs.map((ayah) => ({
-                      ...ayah,
-                      text: ayahTextMap.get(ayah.numberInSurah) ?? ayah.text,
-                    })),
-                  },
-                  ...fetchedEditions.slice(1),
-                ];
-              }
-            }
-          } catch (indopakError) {
-            console.error('Failed to load IndoPak Nastaleeq v2 data:', indopakError);
-          }
-        }
 
         surahEditionsCacheRef.current.set(cacheKey, fetchedEditions);
         if (surahEditionsCacheRef.current.size > 18) {

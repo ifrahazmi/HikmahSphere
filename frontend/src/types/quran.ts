@@ -87,7 +87,7 @@ export interface QuranSettings {
   fontSize: number;                // 14-38px
   translationFontSize: number;     // 14-26px
   theme: 'light' | 'dark';
-  arabicFont: 'al-mushaf' | 'indopak-nastaleeq' | 'indopak-nastaleeq-v2' | 'amiri' | 'scheherazade' | 'noto-naskh' | 'cairo' | 'lateef' | 'reem-kufi';
+  arabicFont: 'al-mushaf' | 'indopak-nastaleeq' | 'amiri' | 'scheherazade' | 'noto-naskh' | 'cairo' | 'lateef' | 'reem-kufi';
   fontColor: 'default' | 'emerald' | 'blue' | 'amber' | 'rose';
   readerBackground: 'default' | 'white' | 'cream' | 'blue' | 'green';
   lineSpacing: number;             // 1.5-3.0

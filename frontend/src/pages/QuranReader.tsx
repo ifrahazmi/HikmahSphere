@@ -143,6 +143,8 @@ const QuranReader: React.FC = () => {
     color?: BookmarkColor;
   } | null>(null);
   const [selectedAyahForBookmark, setSelectedAyahForBookmark] = useState<{surah: number, ayah: number} | null>(null);
+  // Track selected word for bookmark (for double-click bookmark feature)
+  const [selectedWordForBookmark, setSelectedWordForBookmark] = useState<{surah: number, ayah: number, wordIndex: number} | null>(null);
   // Track visual viewport for iOS keyboard-aware bookmark modal positioning
   const [bookmarkModalViewport, setBookmarkModalViewport] = useState<{ height: number; offsetTop: number } | null>(null);
 
@@ -198,61 +200,67 @@ const QuranReader: React.FC = () => {
   // Scroll to specific ayah
   const scrollToAyahNumber = (ayahNumber: number) => {
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    
+    const isIndoPak = settings.arabicFont === 'indopak-nastaleeq';
+
+    // IndoPak mode needs more time to load and render
+    const maxAttempts = isIndoPak ? 15 : 5;
+    const retryDelay = isIndoPak ? 300 : 200;
+
     // iOS Mobile requires multiple attempts with delays for reliable scrolling
-    const attemptScroll = (attempt = 0, maxAttempts = 5) => {
+    const attemptScroll = (attempt = 0) => {
       const ayahElement = document.getElementById(`ayah-${ayahNumber}`);
-      
+
       if (!ayahElement) {
         console.log(`🔍 Ayah ${ayahNumber} not found, attempt ${attempt + 1}/${maxAttempts}`);
         // Element not found, retry after delay
         if (attempt < maxAttempts) {
-          setTimeout(() => attemptScroll(attempt + 1, maxAttempts), 200);
+          setTimeout(() => attemptScroll(attempt + 1), retryDelay);
         } else {
           console.error(`❌ Failed to find ayah ${ayahNumber} after ${maxAttempts} attempts`);
+          console.log(`💡 Current font: ${settings.arabicFont}, IndoPak: ${isIndoPak}`);
         }
         return;
       }
 
-      console.log(`✅ Found ayah ${ayahNumber}, scrolling... (iOS: ${isIOS})`);
+      console.log(`✅ Found ayah ${ayahNumber}, scrolling... (iOS: ${isIOS}, IndoPak: ${isIndoPak})`);
 
       // Use requestAnimationFrame for better timing on mobile
       requestAnimationFrame(() => {
         if (isIOS) {
           // iOS-specific: Multiple strategies for reliable scrolling
-          
+
           // Force reflow to ensure layout is complete
           void ayahElement.offsetHeight;
-          
+
           // Strategy 1: Direct element focus (helps with keyboard dismissal)
           if (ayahElement.tabIndex === -1) {
             ayahElement.tabIndex = -1;
           }
-          
+
           // Strategy 2: Get element position and scroll
           const rect = ayahElement.getBoundingClientRect();
           const absoluteTop = rect.top + window.pageYOffset;
           const middle = absoluteTop - (window.innerHeight / 2) + (rect.height / 2);
-          
+
           console.log(`📍 Scrolling to position: ${middle}`);
-          
+
           // Use both methods for maximum compatibility
           window.scrollTo(0, middle);
-          
+
           // Backup: Also try scrollIntoView after a frame
           setTimeout(() => {
-            ayahElement.scrollIntoView({ 
-              behavior: 'auto', 
+            ayahElement.scrollIntoView({
+              behavior: 'auto',
               block: 'center',
               inline: 'nearest'
             });
             console.log(`📍 Applied scrollIntoView`);
           }, 50);
-          
+
         } else {
           // For other browsers, use smooth scroll
-          ayahElement.scrollIntoView({ 
-            behavior: 'smooth', 
+          ayahElement.scrollIntoView({
+            behavior: 'smooth',
             block: 'center',
             inline: 'nearest'
           });
@@ -488,7 +496,6 @@ const QuranReader: React.FC = () => {
     const fontMap: Record<string, string> = {
       'al-mushaf': 'font-al-mushaf',
       'indopak-nastaleeq': 'font-indopak-nastaleeq',
-      'indopak-nastaleeq-v2': 'font-indopak-nastaleeq-v2',
       'amiri': 'font-arabic',
       'scheherazade': 'font-scheherazade',
       'noto-naskh': 'font-noto-naskh',
@@ -549,12 +556,6 @@ const QuranReader: React.FC = () => {
     return text;
   };
 
-  // IndoPak v2 DB includes private-use ayah marker glyphs (e.g. U+F500+).
-  // Remove them completely from display text for v2 rendering.
-  const stripIndopakV2AyahEndMarker = (text: string): string => (
-    text.replace(/[\uF500-\uF8FF]+/g, '')
-  );
-
   const INDO_PAK_MARKERS = new Set(['ۚ', 'ۖ', 'ۗ', 'ۘ', 'ۜ', '۩', '۝', 'مـ', 'صلی', 'قلی']);
   const COMBINING_WAQF_MARKERS = new Set(['ۚ', 'ۖ', 'ۗ', 'ۘ', 'ۜ']);
   const markerSplitPattern = /(مـ|صلی|قلی|[ۚۖۗۘۜ۩۝])/g;
@@ -589,7 +590,7 @@ const QuranReader: React.FC = () => {
   };
 
   const getActualLineHeight = () => {
-    if (settings.arabicFont === 'indopak-nastaleeq' || settings.arabicFont === 'indopak-nastaleeq-v2') {
+    if (settings.arabicFont === 'indopak-nastaleeq') {
       return Math.max(settings.lineSpacing, 2.15);
     }
     return settings.lineSpacing;
@@ -907,7 +908,7 @@ const QuranReader: React.FC = () => {
   const handleAyahClick = (e: React.MouseEvent, surahNum: number, ayahNum: number) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     // Check if clicking the same ayah
     if (selectedAyahForBookmark?.surah === surahNum && selectedAyahForBookmark?.ayah === ayahNum) {
       // Second click - open bookmark popup
@@ -921,6 +922,30 @@ const QuranReader: React.FC = () => {
     } else {
       // First click - select the ayah
       setSelectedAyahForBookmark({ surah: surahNum, ayah: ayahNum });
+    }
+  };
+
+  // Handle word click for bookmark (IndoPak mode)
+  // First click: select word with green highlight
+  // Second click on same word: open bookmark popup
+  const handleWordClick = (e: React.MouseEvent, surahNum: number, ayahNum: number, wordIndex: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Check if clicking the same word
+    if (selectedWordForBookmark?.surah === surahNum && 
+        selectedWordForBookmark?.ayah === ayahNum && 
+        selectedWordForBookmark?.wordIndex === wordIndex) {
+      // Second click - open bookmark popup
+      setBookmarkConfirm({
+        surahNum,
+        ayahNum,
+        x: e.clientX,
+        y: e.clientY,
+      });
+    } else {
+      // First click - select the word with green highlight
+      setSelectedWordForBookmark({ surah: surahNum, ayah: ayahNum, wordIndex });
     }
   };
 
@@ -942,21 +967,23 @@ const QuranReader: React.FC = () => {
         addBookmark(bookmarkConfirm.surahNum, bookmarkConfirm.ayahNum, bookmarkConfirm.note, bookmarkConfirm.color);
       }
       setBookmarkConfirm(null);
+      setSelectedWordForBookmark(null); // Clear selected word after saving
     }
   };
 
   // Close popup when clicking outside
   useEffect(() => {
     if (!bookmarkConfirm) return;
-    
+
     // Delay adding the listener to prevent immediate closure
     const timeoutId = setTimeout(() => {
       const handleClickOutside = (e: MouseEvent) => {
         setBookmarkConfirm(null);
+        setSelectedWordForBookmark(null); // Clear selected word on close
       };
       document.addEventListener('click', handleClickOutside, { once: true });
     }, 100);
-    
+
     return () => clearTimeout(timeoutId);
   }, [bookmarkConfirm]);
 
@@ -1514,7 +1541,6 @@ const QuranReader: React.FC = () => {
                   >
                     <option value="al-mushaf">Al Mushaf - Authentic Quranic Script</option>
                     <option value="indopak-nastaleeq">IndoPak Nastaleeq (South India) - Default</option>
-                    <option value="indopak-nastaleeq-v2">IndoPak Nastaleeq v2 - (Tajweed)</option>
                     <option value="amiri">Amiri - Traditional Naskh</option>
                     <option value="scheherazade">Scheherazade - Classic Book Style</option>
                     <option value="noto-naskh">Noto Naskh - Clear & Readable</option>
@@ -1812,9 +1838,10 @@ const QuranReader: React.FC = () => {
                             <button
                               onClick={() => {
                                 goToSurah(bookmark.surahNumber);
-                                // iOS needs longer delay for DOM to settle
+                                // IndoPak mode needs extra time to load word-by-word data
                                 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-                                const delay = isIOS ? 1000 : 600;
+                                const isIndoPak = settings.arabicFont === 'indopak-nastaleeq';
+                                const delay = isIndoPak ? (isIOS ? 1500 : 1000) : (isIOS ? 1000 : 600);
                                 setTimeout(() => scrollToAyahNumber(bookmark.ayahNumber), delay);
                               }}
                               className="text-left flex-1"
@@ -1986,108 +2013,83 @@ const QuranReader: React.FC = () => {
                   </div>
                 )}
 
-                {/* Ayahs - Indopak Mode (Word-by-Word Rendering) */}
+                {/* Ayahs - Indopak Mode (Word-by-Word Rendering - Continuous Flow) */}
                 {settings.arabicFont === 'indopak-nastaleeq' && indopakSurah ? (
-                  <div className="space-y-4">
-                    {indopakSurah.ayahs.map((ayah) => {
-                      const ayahNum = ayah.ayah;
-                      const isFirstAyahFatiha = surahData?.number === 1 && ayahNum === 1;
-                      if (isFirstAyahFatiha) return null;
+                  <div className={`p-2 sm:p-3 rounded-lg ${getReaderBackgroundClass()}`}>
+                    {/* Single continuous flex container for all ayah words - Full width utilization */}
+                    <div
+                      className={`${getFontFamilyClass()} flex flex-wrap items-baseline gap-[0.08em] sm:gap-[0.10em] leading-[2.3] sm:leading-[2.4] ${getFontColorClass()}`}
+                      style={{ fontSize: `${getActualFontSize()}px`, lineHeight: getActualLineHeight() }}
+                      dir="rtl"
+                    >
+                      {/* Render all words from all ayahs in one continuous flow */}
+                      {indopakSurah.ayahs.map((ayah) => {
+                        const ayahNum = ayah.ayah;
+                        const isFirstAyahFatiha = surahData?.number === 1 && ayahNum === 1;
+                        if (isFirstAyahFatiha) return null;
 
-                      const bookmarkColor = getBookmarkColor(surahData.number, ayahNum);
-                      const bgClass = getBookmarkBackgroundClass(bookmarkColor);
-                      const borderClass = getBookmarkBorderClass(bookmarkColor);
-                      const isSelectedForBookmark =
-                        selectedAyahForBookmark?.surah === surahData.number &&
-                        selectedAyahForBookmark?.ayah === ayahNum;
+                        const bookmarkColor = getBookmarkColor(surahData.number, ayahNum);
+                        const bgClass = getBookmarkBackgroundClass(bookmarkColor);
+                        const borderClass = getBookmarkBorderClass(bookmarkColor);
 
-                      return (
-                        <div
-                          key={ayahNum}
-                          id={`ayah-${ayahNum}`}
-                          className={`pb-5 border-b last:border-b-0 ${
-                            settings.theme === 'dark' ? 'border-gray-700/80' : 'border-emerald-100'
-                          }`}
-                        >
-                          {/* Word-by-Word Arabic Text with Proper Tajweed Spacing */}
-                          <div className={`relative mb-4 overflow-hidden rounded-2xl p-3 sm:p-5 ${getReaderBackgroundClass()}`}>
-                            <div className="w-full">
-                              <div
-                                className={`${getFontFamilyClass()} text-right ${getFontColorClass()} ${getBookmarkHoverClass(bookmarkColor)} ${bgClass} ${isSelectedForBookmark ? getBookmarkSelectionClass(bookmarkColor) : ''} rounded px-2 py-3 cursor-pointer`}
-                                style={{ 
-                                  fontSize: `${getActualFontSize()}px`,
-                                  lineHeight: getActualLineHeight(),
-                                  letterSpacing: '0.04em',
-                                  wordSpacing: '0.2em'
-                                }}
-                                dir="rtl"
-                                onClick={(e) => handleAyahClick(e, surahData.number, ayahNum)}
-                              >
-                                {/* Render each word separately with proper Tajweed spacing */}
-                                <div className="flex flex-wrap items-baseline gap-[0.28em] sm:gap-[0.32em] justify-end leading-[2.3] sm:leading-[2.4]">
-                                  {ayah.words.map((wordData, wordIndex) => {
-                                    // Skip ayah number markers (usually last word with numeric text)
-                                    const isAyahMarker = /^\d+$/.test(wordData.text.trim());
-                                    if (isAyahMarker) return null;
-                                    
-                                    // Check if word contains Tajweed symbols that need extra spacing
-                                    const hasTajweedMarks = /[ۚۖۗۘۜ۩۝]/.test(wordData.text);
-                                    
-                                    return (
-                                      <React.Fragment key={`surah${surahData.number}-ayah${ayahNum}-word${wordIndex}`}>
-                                        <span
-                                          className={`inline-block indopak-word-container px-[0.1em] sm:px-[0.12em] my-[0.05em] rounded transition-colors hover:bg-emerald-100 hover:bg-opacity-30 ${
-                                            hasTajweedMarks ? 'tajweed-word' : ''
-                                          }`}
-                                          title={`Word ${wordData.position}: ${wordData.location}`}
-                                          style={{
-                                            textRendering: 'optimizeLegibility',
-                                            WebkitFontSmoothing: 'antialiased',
-                                            MozOsxFontSmoothing: 'grayscale'
-                                          }}
-                                        >
-                                          {wordData.text}
-                                        </span>
-                                      </React.Fragment>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            </div>
+                        return (
+                          <React.Fragment key={ayahNum}>
+                            {/* Render all words for this ayah */}
+                            {ayah.words.map((wordData, wordIndex) => {
+                              // Skip ayah number markers (usually last word with numeric text)
+                              const isAyahMarker = /^\d+$/.test(wordData.text.trim());
+                              if (isAyahMarker) return null;
 
-                            {/* Ayah number badge */}
-                            <div className="absolute top-2 right-2">
-                              <span
-                                className={`inline-flex items-center justify-center w-7 h-7 rounded-full border-2 text-xs font-bold ${borderClass} bg-white bg-opacity-90`}
-                              >
-                                {ayahNum}
-                              </span>
-                            </div>
-                          </div>
+                              // Check if word contains Tajweed symbols that need extra spacing
+                              const hasTajweedMarks = /[ۚۖۗۘۜ۩۝]/.test(wordData.text);
+                              
+                              // Check if this word is selected for bookmark (double-click)
+                              const isSelectedForBookmark = selectedWordForBookmark?.surah === surahData.number &&
+                                                           selectedWordForBookmark?.ayah === ayahNum &&
+                                                           selectedWordForBookmark?.wordIndex === wordIndex;
+                              
+                              // Check if ayah is bookmarked (for color highlighting)
+                              const isBookmarkedAyah = isBookmarked(surahData.number, ayahNum);
 
-                          {/* Transliteration */}
-                          {settings.showTransliteration && transliteration && (
-                            <div className="mb-2">
-                              <p className={`text-xs font-medium mb-1 ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                                Transliteration
-                              </p>
-                              <p className={`text-sm italic leading-relaxed ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
-                                {transliteration.ayahs[ayahNum - 1]?.text}
-                              </p>
-                            </div>
-                          )}
-
-                          {/* Translations */}
-                          {renderAyahTranslations(ayahNum - 1)}
-                        </div>
-                      );
-                    })}
+                              return (
+                                <span
+                                  key={`surah${surahData.number}-ayah${ayahNum}-word${wordIndex}`}
+                                  className={`inline-block indopak-word-container px-[0.06em] sm:px-[0.12em] my-[0.04em] rounded transition-colors ${
+                                    isSelectedForBookmark ? 'bg-emerald-500 text-white' : 'hover:bg-emerald-100 hover:bg-opacity-30'
+                                  } ${hasTajweedMarks ? 'tajweed-word' : ''} ${isBookmarkedAyah ? bgClass : ''}`}
+                                  title={`Word ${wordData.position}: ${wordData.location}`}
+                                  onClick={(e) => handleWordClick(e, surahData.number, ayahNum, wordIndex)}
+                                  style={{
+                                    textRendering: 'optimizeLegibility',
+                                    WebkitFontSmoothing: 'antialiased',
+                                    MozOsxFontSmoothing: 'grayscale'
+                                  }}
+                                >
+                                  {wordData.text}
+                                </span>
+                              );
+                            })}
+                            {/* Ayah number badge at the end of each ayah - with ID for scrolling */}
+                            <span
+                              id={`ayah-${ayahNum}`}
+                              className={`inline-flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 rounded-full border-2 text-xs font-bold ${borderClass} bg-white bg-opacity-90 mr-[0.08em] sm:mr-2 flex-shrink-0 align-middle cursor-pointer`}
+                              onClick={(e) => handleAyahClick(e, surahData.number, ayahNum)}
+                              title={`Ayah ${ayahNum}`}
+                            >
+                              {ayahNum}
+                            </span>
+                            {/* Space between ayahs - minimal on mobile */}
+                            <span className="inline-block w-[0.15em] sm:w-[0.2em] flex-shrink-0" />
+                          </React.Fragment>
+                        );
+                      })}
+                    </div>
                   </div>
                 ) : settings.arabicOnlyMode ? (
-                  /* Continuous Arabic text in Arabic-only mode */
+                  // Continuous Arabic text in Arabic-only mode
                   <div className={`p-3 rounded-lg ${getReaderBackgroundClass()}`}>
-                    <p
-                      className={`${getFontFamilyClass()} leading-loose text-right ${getFontColorClass()}`}
+                    <div
+                      className={`${getFontFamilyClass()} leading-loose ${getFontColorClass()}`}
                       style={{ fontSize: `${getActualFontSize()}px`, lineHeight: getActualLineHeight() }}
                       dir="rtl"
                     >
@@ -2101,17 +2103,15 @@ const QuranReader: React.FC = () => {
                           const isSelectedForBookmark = selectedAyahForBookmark?.surah === surahData.number && selectedAyahForBookmark?.ayah === ayah.numberInSurah;
 
                           return (
-                            <span key={ayah.numberInSurah}>
+                            <span key={ayah.numberInSurah} className="inline">
                               <span
                                 onClick={(e) => handleAyahClick(e, surahData.number, ayah.numberInSurah)}
-                                className={`cursor-pointer rounded px-1 ${getBookmarkHoverClass(bookmarkColor)} ${bgClass} ${isSelectedForBookmark ? getBookmarkSelectionClass(bookmarkColor) : ''}`}
+                                className={`cursor-pointer rounded px-1 inline ${getBookmarkHoverClass(bookmarkColor)} ${bgClass} ${isSelectedForBookmark ? getBookmarkSelectionClass(bookmarkColor) : ''}`}
                               >
-                                {settings.arabicFont === 'indopak-nastaleeq-v2'
-                                  ? stripIndopakV2AyahEndMarker(ayah.text)
-                                  : removeBismillah(ayah.text, surahData.number, ayah.numberInSurah)}
+                                {removeBismillah(ayah.text, surahData.number, ayah.numberInSurah)}
                               </span>
                               {' '}
-                              {/* Play button for Arabic-only mode - BEFORE ayah number */}
+                              {/* Play button for Arabic-only mode - inline after ayah */}
                               {settings.audioEnabled && settings.audioMode === 'ayah' && currentSurah && (
                                 <button
                                   onClick={(e) => {
@@ -2143,15 +2143,14 @@ const QuranReader: React.FC = () => {
                               )}
                               <span
                                 id={`ayah-${ayah.numberInSurah}`}
-                                className={`inline-flex items-center justify-center w-6 h-6 rounded-full border-2 text-xs font-bold ${borderClass}`}
+                                className={`inline-flex items-center justify-center w-6 h-6 rounded-full border-2 text-xs font-bold ${borderClass} align-middle`}
                               >
                                 {ayah.numberInSurah}
                               </span>
-                              {index < surahData.ayahs.filter(a => !(surahData.number === 1 && a.numberInSurah === 1)).length - 1 && ' '}
                             </span>
                           );
                         })}
-                    </p>
+                    </div>
                   </div>
                 ) : (
                   /* Separate ayahs with translations */
@@ -2218,9 +2217,7 @@ const QuranReader: React.FC = () => {
                                       onClick={(e) => handleAyahClick(e, surahData.number, ayah.numberInSurah)}
                                       className={`cursor-pointer rounded px-1 ${getBookmarkHoverClass(bookmarkColor)} ${bgClass} ${isSelectedForBookmark ? getBookmarkSelectionClass(bookmarkColor) : ''}`}
                                     >
-                                      {settings.arabicFont === 'indopak-nastaleeq-v2'
-                                        ? stripIndopakV2AyahEndMarker(ayah.text)
-                                        : removeBismillah(ayah.text, surahData.number, ayah.numberInSurah)}
+                                      {removeBismillah(ayah.text, surahData.number, ayah.numberInSurah)}
                                     </span>
                                     {' '}
                                     <span
@@ -2527,7 +2524,6 @@ const QuranReader: React.FC = () => {
                   >
                     <option value="al-mushaf">Al Mushaf - Authentic Quranic Script</option>
                     <option value="indopak-nastaleeq">IndoPak Nastaleeq (South India) - Default</option>
-                    <option value="indopak-nastaleeq-v2">IndoPak Nastaleeq v2 - (Tajweed)</option>
                     <option value="amiri">Amiri - Traditional Naskh</option>
                     <option value="scheherazade">Scheherazade - Classic Book Style</option>
                     <option value="noto-naskh">Noto Naskh - Clear & Readable</option>
@@ -2851,9 +2847,10 @@ const QuranReader: React.FC = () => {
                               onClick={() => {
                                 goToSurah(bookmark.surahNumber);
                                 cancelMobileSettings();
-                                // iOS needs longer delay for DOM to settle and modal to close
+                                // IndoPak mode needs extra time to load word-by-word data
                                 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-                                const delay = isIOS ? 1200 : 800;
+                                const isIndoPak = settings.arabicFont === 'indopak-nastaleeq';
+                                const delay = isIndoPak ? (isIOS ? 1800 : 1200) : (isIOS ? 1200 : 800);
                                 setTimeout(() => scrollToAyahNumber(bookmark.ayahNumber), delay);
                               }}
                               className="text-left flex-1"
@@ -2929,7 +2926,7 @@ const QuranReader: React.FC = () => {
             >
               {/* Close button for mobile */}
               <button
-                onClick={() => setBookmarkConfirm(null)}
+                onClick={() => { setBookmarkConfirm(null); setSelectedWordForBookmark(null); }}
                 className="absolute top-3 right-3 p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
                 aria-label="Close"
               >
@@ -2987,7 +2984,7 @@ const QuranReader: React.FC = () => {
 
               <div className="flex gap-2 justify-end">
                 <button
-                  onClick={() => setBookmarkConfirm(null)}
+                  onClick={() => { setBookmarkConfirm(null); setSelectedWordForBookmark(null); }}
                   className={`px-4 py-2 text-sm font-medium rounded-lg ${
                     settings.theme === 'dark'
                       ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
@@ -3074,7 +3071,7 @@ const QuranReader: React.FC = () => {
 
             <div className="flex gap-2 justify-end">
               <button
-                onClick={() => setBookmarkConfirm(null)}
+                onClick={() => { setBookmarkConfirm(null); setSelectedWordForBookmark(null); }}
                 className={`px-4 py-2 text-xs font-medium rounded-lg ${
                   settings.theme === 'dark'
                     ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'

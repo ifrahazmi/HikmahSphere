@@ -27,11 +27,13 @@ export interface IndopakSurah {
 // We convert them to the standard sukun shape used by Al Mushaf-style rendering.
 const normalizeIndopakMarks = (text: string): string => (
   text
-    .replace(/\u06E1/g, '\u0652') // ARABIC SMALL HIGH DOTLESS HEAD OF KHAH -> SUKUN
-    .replace(/\u06DF/g, '\u0652') // ARABIC SMALL HIGH ROUNDED ZERO -> SUKUN
     // Remove South IndoPak stop symbols requested by user:
     // U+06D9 (small high lam-alef / looks like لا) and U+06DA (small high jeem / often rendered as ح-like mark)
     .replace(/[\u06D9\u06DA]/g, '')
+    // Remove box/end markers (Private Use Area characters like  U+F500,  U+F501, etc.)
+    .replace(/[\uF500-\uF8FF]/g, '')
+    // Remove Arabic Small High Rounded Zero (۟ U+06DF)
+    .replace(/\u06DF/g, '')
 );
 
 /**
@@ -73,6 +75,10 @@ export const loadIndopakQuran = (): Map<number, IndopakSurah> => {
   surahMap.forEach((surah) => {
     surah.ayahs.forEach((ayah) => {
       ayah.text = normalizeIndopakMarks(ayah.words.map(w => w.text).join(' '));
+      // Also clean each word's text
+      ayah.words.forEach(word => {
+        word.text = normalizeIndopakMarks(word.text);
+      });
     });
 
     // Sort ayahs by ayah number
