@@ -1,5 +1,5 @@
 // Indopak Quran Data Loader
-import indopakData from '../data/indopak.json';
+import indopakData from '../data/indopak-v1.2.json';
 
 export interface IndopakWord {
   id: number;

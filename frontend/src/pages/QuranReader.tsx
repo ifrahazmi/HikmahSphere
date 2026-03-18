@@ -2127,7 +2127,7 @@ const QuranReader: React.FC = () => {
                                 );
                               })}
                               <span
-                                className={`inline-flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 rounded-full border-2 text-xs font-bold ${borderClass} bg-white bg-opacity-90 mr-[0.08em] sm:mr-2 flex-shrink-0 align-middle`}
+                                className={`inline-flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 rounded-full border-2 text-xs font-bold ${borderClass} bg-white bg-opacity-90 mr-[0.08em] sm:mr-[0.15em] flex-shrink-0 align-middle`}
                               >
                                 {ayahNum}
                               </span>
@@ -2213,7 +2213,7 @@ const QuranReader: React.FC = () => {
                             })}
                             <span
                               id={`ayah-${ayahNum}`}
-                              className={`inline-flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 rounded-full border-2 text-xs font-bold ${borderClass} bg-white bg-opacity-90 mr-[0.08em] sm:mr-2 flex-shrink-0 align-middle cursor-pointer`}
+                              className={`inline-flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 rounded-full border-2 text-xs font-bold ${borderClass} bg-white bg-opacity-90 mr-[0.08em] sm:mr-[0.15em] flex-shrink-0 align-middle cursor-pointer`}
                               onClick={(e) => handleAyahClick(e, surahData.number, ayahNum)}
                               title={`Ayah ${ayahNum}`}
                             >

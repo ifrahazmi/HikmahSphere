@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { useAuth } from '../hooks/useAuth';
 import toast from 'react-hot-toast';
@@ -16,6 +16,8 @@ const Auth: React.FC = () => {
 
   const { login, register, user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirectParam = searchParams.get('redirect');
   
   const [formData, setFormData] = useState({
     name: '',
@@ -87,7 +89,7 @@ const Auth: React.FC = () => {
                     // Use the login function from auth context to properly update state
                     await login(submittedEmail, submittedPassword);
                     toast.success('Successfully logged in!');
-                    navigate('/profile', { replace: true });
+                    navigate(redirectParam || '/profile', { replace: true });
                 }
             } else {
                 toast.error(data.message || 'Login failed. Please check your credentials.');
@@ -96,7 +98,7 @@ const Auth: React.FC = () => {
         } else {
             await register(submittedName, submittedEmail, submittedPassword);
             toast.success('Account created successfully!');
-            navigate('/profile', { replace: true });
+            navigate(redirectParam || '/profile', { replace: true });
         }
     } catch (error: any) {
         console.error('Authentication error:', error);

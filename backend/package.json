@@ -22,7 +22,9 @@
     "postbuild": "cp package.json dist/ && mkdir -p dist/assets/hajj-guide && cp src/assets/hajj-guide/* dist/assets/hajj-guide/",
     "docker:build": "docker build -t hikmahsphere-backend .",
     "docker:run": "docker run -p 5000:5000 hikmahsphere-backend",
-    "debug:notifications": "tsx src/utils/debug_notifications.ts"
+    "debug:notifications": "tsx src/utils/debug_notifications.ts",
+    "seed-questions": "tsx src/scripts/seed-questions.ts",
+    "verify-questions": "tsx src/scripts/verify-questions.ts"
   },
   "keywords": [
     "islam",

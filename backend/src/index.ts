@@ -23,6 +23,7 @@ import supportRoutes from './routes/support'; // Import support routes
 import activityRoutes from './routes/activity'; // Import activity log routes
 import salahTrackerRoutes from './routes/salahTracker';
 import hajjGuideRoutes from './routes/hajjGuide';
+import gamesRoutes from './routes/games';
 
 // Load environment variables
 // Use __dirname to resolve paths correctly regardless of whether running from src/ or dist/
@@ -236,6 +237,7 @@ app.use('/api/support', supportRoutes); // Use support routes
 app.use('/api/activity', activityRoutes); // Use activity log routes
 app.use('/api/salah-tracker', salahTrackerRoutes);
 app.use('/api/hajj-guide', hajjGuideRoutes);
+app.use('/api/games', gamesRoutes);
 
 // Admin Routes for User Management (Restricted to Super Admin)
 // Get All Users

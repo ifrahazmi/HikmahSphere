@@ -2269,6 +2269,19 @@ const PrayerTimes: React.FC = () => {
                                     <p className="text-sm font-bold text-emerald-600">{formatTimeForDisplay(activeFastingEntry.time.iftar)}</p>
                                   </div>
                                 )}
+                                {/* Show Ishraq/Duha times for Sunrise - ALWAYS VISIBLE even during countdown */}
+                                {prayer.name === 'Sunrise' && ishraqTimeDisplay && (
+                                  <div className="mt-1 pt-1 border-t border-gray-100">
+                                    <span className="text-xs font-medium text-gray-500">Ishraq Starts</span>
+                                    <p className="text-sm font-bold text-emerald-600">{ishraqTimeDisplay}</p>
+                                  </div>
+                                )}
+                                {prayer.name === 'Sunrise' && duhaTimeDisplay && (
+                                  <div className={`${ishraqTimeDisplay ? 'mt-1 pt-1 border-t border-gray-100' : ''}`}>
+                                    <span className="text-xs font-medium text-gray-500">Duha Begins</span>
+                                    <p className="text-sm font-bold text-emerald-600">{duhaTimeDisplay}</p>
+                                  </div>
+                                )}
                               </div>
                             ) : prayer.name === 'Fajr' && activeFastingEntry ? (
                                 <div className="flex flex-col gap-1">
