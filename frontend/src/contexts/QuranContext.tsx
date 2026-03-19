@@ -611,7 +611,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     } finally {
       setLoading(false);
     }
-  }, [settings.selectedTranslations, settings.showTransliteration, settings.arabicOnlyMode, settings.arabicFont]);
+  }, [settings.selectedTranslations, settings.showTransliteration, settings.arabicOnlyMode]);
 
   // Update settings and reload if necessary
   const updateSettings = useCallback((newSettings: Partial<QuranSettings>) => {

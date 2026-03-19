@@ -678,9 +678,33 @@ router.get('/fasting', [
 
     // ── PRIMARY: islamicapi.com /api/v1/fasting ─────────────────────────────
     // This API supports any date and returns sahur/iftar/duration directly.
+    // NOTE: We also call /prayer-time to get Fajr time for reference.
     try {
       const islamicApiKey = process.env.ISLAMIC_API_KEY || 'icgUaIHMO8GWEVLh7XhFcFoTHjQlsfhSBpJtYfrtTUJXY1eI';
       const isoDate = toISODate(dateStr); // YYYY-MM-DD
+
+      // Step 1: Get prayer times to fetch Fajr time for reference
+      const prayerUrl = `${ISLAMIC_API_PRAYER_URL}/?lat=${latitude}&lon=${longitude}&method=${method}&school=${school}&api_key=${islamicApiKey}`;
+      const prayerResp = await fetchWithTimeout(prayerUrl, 8000, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'application/json',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Referer': 'https://islamicapi.com/',
+        },
+      });
+
+      let fajrFromPrayerApi: string | null = null;
+
+      if (prayerResp.ok) {
+        const prayerData: any = await prayerResp.json();
+        if (prayerData.code === 200 && prayerData.data?.times) {
+          fajrFromPrayerApi = prayerData.data.times.Fajr;
+          console.log(`✅ Prayer API — Fajr: ${fajrFromPrayerApi}`);
+        }
+      }
+
+      // Step 2: Get fasting times for Sahur (Sehri), Iftar and duration
       const islamicUrl = `${ISLAMIC_API_FASTING_URL}/?lat=${latitude}&lon=${longitude}&method=${method}&date=${isoDate}&api_key=${islamicApiKey}`;
 
       console.log('🕌 ========== ISLAMICAPI.COM FASTING CALL ==========');
@@ -707,10 +731,9 @@ router.get('/fasting', [
           const entry = islamicData.data.fasting[0];
           const { sahur, iftar, duration } = entry.time;
 
-          // NOTE: Sahur time from IslamicAPI is actually Imsak time (when eating stops)
-          // This is typically 10-15 minutes before Fajr prayer time
-          console.log(`✅ IslamicAPI fasting OK — Sahur (Imsak): ${sahur}, Iftar: ${iftar}, Duration: ${duration}`);
-          console.log(`ℹ️  Sahur/Imsak is the time when eating stops (before Fajr prayer)`);
+          // Use Sahur from fasting API (this is the Sehri end time)
+          console.log(`✅ IslamicAPI fasting OK — Sahur (Sehri end): ${sahur}, Iftar: ${iftar}, Duration: ${duration}`);
+          console.log(`ℹ️  Sahur is the time when eating stops (Sehri end time)`);
 
           // hijri from API: "DD-MM-YYYY" e.g. "29-01-1447"
           const hijriRaw: string = entry.hijri || '';
@@ -725,6 +748,7 @@ router.get('/fasting', [
               source: 'islamicapi.com',
               fasting: [{
                 time: { sahur, iftar, duration },
+                fajr: fajrFromPrayerApi || null, // Fajr from prayer API for reference
                 date:          entry.date,           // YYYY-MM-DD
                 hijri:         hijriISO,
                 hijri_readable: entry.hijri_readable, // e.g. "29 Muharram 1447 AH"

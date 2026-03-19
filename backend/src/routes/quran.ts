@@ -296,7 +296,7 @@ router.get('/surah/:number', [
     }
 
     const { number } = req.params;
-    const edition = req.query.edition || 'ar.alafasy'; // Default Arabic
+    const edition = req.query.edition || 'quran-uthmani'; // Default Arabic
 
     // Validate surah number
     const surahNum = parseInt(number);
@@ -387,7 +387,7 @@ router.get('/surah/:number/editions', [
 router.get('/ayah/:reference', optionalAuthMiddleware, async (req: any, res: any) => {
   try {
     const { reference } = req.params;
-    const editions = req.query.editions || 'ar.alafasy';
+    const editions = req.query.editions || 'quran-uthmani';
 
     console.log(`🎵 [Quran API] Fetching ayah ${reference} with edition ${editions}`);
 

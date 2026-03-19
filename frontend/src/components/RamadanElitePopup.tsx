@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
-const EID_DATE = new Date("2026-03-20T00:00:00"); // Adjust yearly
+const EID_DATE = new Date("2026-03-21T00:00:00");
 
 interface TimeLeft {
   days: number;
@@ -18,6 +18,105 @@ interface LanguageText {
   playSound: string;
 }
 
+const EidMubarakCard = ({ visible, setVisible, darkMode, lang, toggleSound, soundOn, audioRef }) => {
+  const text = {
+    en: {
+      title: "Eid-Ul-Fitr Mubarak! 🎉",
+      greeting: "To you and your family from the HikmahSphere family.",
+      dua: "May Allah's blessings be with you today, tomorrow, and always. May He accept our fasts and prayers.",
+      continue: "Continue to Website",
+    },
+    ar: {
+      title: "عيد الفطر مبارك! 🎉",
+      greeting: "لكم ولعائلتكم من عائلة HikmahSphere.",
+      dua: "تقبل الله منا ومنكم صالح الأعمال. عيدكم مبارك.",
+      continue: "دخول الموقع",
+    },
+  };
+
+  if (!visible) return null;
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        className={`fixed inset-0 z-50 flex items-center justify-center backdrop-blur-md 
+        ${darkMode ? "bg-black/80" : "bg-gray-800/60"}`}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      >
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.8, opacity: 0 }}
+          transition={{ duration: 0.6 }}
+          className={`relative w-[90%] max-w-lg rounded-2xl p-8 shadow-2xl overflow-hidden
+          bg-gradient-to-br from-green-800 via-teal-700 to-green-800 text-white`}
+        >
+          {/* Crescent Moon Background */}
+          <div className="absolute top-[-50px] left-[-50px] w-48 h-48 text-white/10">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+            >
+              <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8zm-2.5-4.5a.5.5 0 0 1 0-1h5a.5.5 0 0 1 0 1zm-2-4a.5.5 0 0 1 0-1h9a.5.5 0 0 1 0 1zm2-4a.5.5 0 0 1 0-1h5a.5.5 0 0 1 0 1z" />
+            </svg>
+          </div>
+
+          <button
+            onClick={() => setVisible(false)}
+            className="absolute top-4 right-4 text-2xl hover:scale-110 transition-transform"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+
+          <h1 className="text-4xl font-extrabold mb-3 text-center text-yellow-300" dir={lang === "ar" ? "rtl" : "ltr"}>
+            {text[lang].title}
+          </h1>
+
+          <p className="text-center text-lg mb-5" dir={lang === "ar" ? "rtl" : "ltr"}>
+            {text[lang].greeting}
+          </p>
+          <p className="text-center font-semibold text-xl mb-6 bg-white/10 p-3 rounded-lg" dir={lang === "ar" ? "rtl" : "ltr"}>
+            {text[lang].dua}
+          </p>
+
+          <div className="flex flex-col gap-3 items-center relative z-10">
+            <button
+              onClick={() => setVisible(false)}
+              className="px-8 py-3 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black rounded-full font-semibold hover:scale-105 transition-transform shadow-lg"
+            >
+              {text[lang].continue}
+            </button>
+          </div>
+
+          <div className="absolute inset-0 pointer-events-none overflow-hidden">
+            {[...Array(30)].map((_, i) => (
+              <motion.span
+                key={i}
+                className="absolute w-1.5 h-1.5 bg-yellow-200 rounded-full"
+                initial={{ y: -20, x: Math.random() * 400 - 200, opacity: 0 }}
+                animate={{ y: 400, opacity: [0, 1, 0] }}
+                transition={{
+                  duration: Math.random() * 5 + 5,
+                  repeat: Infinity,
+                  delay: i * 0.2,
+                }}
+                style={{
+                  left: `${Math.random() * 100}%`,
+                  top: `${Math.random() * 100}%`,
+                }}
+              />
+            ))}
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+};
+
 export default function RamadanElitePopup() {
   const [visible, setVisible] = useState(false);
   const [timeLeft, setTimeLeft] = useState<TimeLeft>({ days: 0, hours: 0, minutes: 0 });
@@ -25,7 +124,19 @@ export default function RamadanElitePopup() {
   const [lang, setLang] = useState<"en" | "ar">("en");
   const [soundOn, setSoundOn] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const [isEidDay, setIsEidDay] = useState(false);
 
+  useEffect(() => {
+    const today = new Date();
+    if (
+      today.getFullYear() === EID_DATE.getFullYear() &&
+      today.getMonth() === EID_DATE.getMonth() &&
+      today.getDate() === EID_DATE.getDate()
+    ) {
+      setIsEidDay(true);
+    }
+  }, []);
+  
   // Detect Language
   useEffect(() => {
     const browserLang = navigator.language;
@@ -92,6 +203,20 @@ export default function RamadanElitePopup() {
       playSound: "تشغيل الصوت",
     },
   }), []);
+
+  if (isEidDay) {
+    return (
+      <EidMubarakCard
+        visible={visible}
+        setVisible={setVisible}
+        darkMode={darkMode}
+        lang={lang}
+        toggleSound={toggleSound}
+        soundOn={soundOn}
+        audioRef={audioRef}
+      />
+    );
+  }
 
   if (!visible) return null;
 
