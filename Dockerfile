@@ -13,8 +13,7 @@ COPY backend/package*.json ./backend/
 COPY frontend/package*.json ./frontend/
 
 # Install all dependencies (including devDependencies for build)
-RUN npm ci && \
-    cd backend && npm ci && \
+RUN cd backend && npm ci && \
     cd ../frontend && npm ci
 
 # Build stage for backend

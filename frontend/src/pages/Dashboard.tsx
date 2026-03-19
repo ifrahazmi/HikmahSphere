@@ -8,6 +8,7 @@ import {
   BuildingLibraryIcon,
   ClockIcon,
   UserCircleIcon,
+  DocumentArrowDownIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../hooks/useAuth';
 import { API_URL } from '../config';
@@ -15,6 +16,7 @@ import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import AdminNotificationPanel from '../components/Notifications/AdminNotificationPanel';
 import ZakatManagement from '../components/Zakat/ZakatManagement';
+import PageSEO from '../components/PageSEO';
 
 const Dashboard: React.FC = () => {
   const { user, hasRole } = useAuth();
@@ -182,21 +184,38 @@ const Dashboard: React.FC = () => {
 
   if (!canAccessDashboard) {
       return (
-          <div className="min-h-screen pt-24 flex justify-center items-center flex-col">
-              <h2 className="text-2xl font-bold text-red-600 mb-2">Access Denied</h2>
-              <p className="text-gray-600">You do not have permission to view this dashboard.</p>
-              <button
-                  onClick={() => navigate('/')}
-                  className="mt-4 text-emerald-600 hover:text-emerald-700 font-medium"
-              >
-                  Go Home
-              </button>
-          </div>
+          <>
+            <PageSEO
+              title="HikmahSphere Dashboard"
+              description="Secure dashboard area for authorized HikmahSphere users."
+              path="/dashboard"
+              noIndex
+              noFollow
+            />
+            <div className="min-h-screen pt-24 flex justify-center items-center flex-col">
+                <h2 className="text-2xl font-bold text-red-600 mb-2">Access Denied</h2>
+                <p className="text-gray-600">You do not have permission to view this dashboard.</p>
+                <button
+                    onClick={() => navigate('/')}
+                    className="mt-4 text-emerald-600 hover:text-emerald-700 font-medium"
+                >
+                    Go Home
+                </button>
+            </div>
+          </>
       );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-16">
+    <>
+      <PageSEO
+        title="HikmahSphere Dashboard"
+        description="Secure dashboard area for authorized HikmahSphere users."
+        path="/dashboard"
+        noIndex
+        noFollow
+      />
+      <div className="min-h-screen bg-gray-50 pt-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center mb-8">
           <div className="w-12 h-12 flex items-center justify-center overflow-hidden rounded-full bg-white shadow-md mr-4">
@@ -206,7 +225,8 @@ const Dashboard: React.FC = () => {
         </div>
         
         <div className="bg-white rounded-lg shadow mb-8">
-            <nav className="flex border-b border-gray-200 overflow-x-auto">
+            {/* Desktop Tab Navigation */}
+            <nav className="hidden md:flex border-b border-gray-200 overflow-x-auto">
                 <button
                     onClick={() => setActiveTab('overview')}
                     className={`px-6 py-4 text-sm font-medium whitespace-nowrap ${activeTab === 'overview' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
@@ -239,6 +259,56 @@ const Dashboard: React.FC = () => {
                     Notifications
                 </button>
             </nav>
+
+            {/* Mobile Tab Navigation - Non-scrollable */}
+            <div className="md:hidden p-3 border-b border-gray-200">
+                <div className="grid grid-cols-2 gap-2">
+                    <button
+                        onClick={() => setActiveTab('overview')}
+                        className={`w-full px-3 py-2.5 text-xs sm:text-sm font-medium rounded-lg text-center leading-tight transition-colors ${
+                            activeTab === 'overview'
+                                ? 'bg-emerald-500 text-white shadow-md'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                    >
+                        Overview
+                    </button>
+                    {isSuperAdmin && (
+                        <>
+                            <button
+                                onClick={() => setActiveTab('users')}
+                                className={`w-full px-3 py-2.5 text-xs sm:text-sm font-medium rounded-lg text-center leading-tight transition-colors ${
+                                    activeTab === 'users'
+                                        ? 'bg-emerald-500 text-white shadow-md'
+                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                }`}
+                            >
+                                User Management
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('zakat')}
+                                className={`w-full px-3 py-2.5 text-xs sm:text-sm font-medium rounded-lg text-center leading-tight transition-colors ${
+                                    activeTab === 'zakat'
+                                        ? 'bg-emerald-500 text-white shadow-md'
+                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                }`}
+                            >
+                                Zakat Management
+                            </button>
+                        </>
+                    )}
+                    <button
+                        onClick={() => setActiveTab('notifications')}
+                        className={`w-full px-3 py-2.5 text-xs sm:text-sm font-medium rounded-lg text-center leading-tight transition-colors ${
+                            activeTab === 'notifications'
+                                ? 'bg-emerald-500 text-white shadow-md'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                    >
+                        Notifications
+                    </button>
+                </div>
+            </div>
         </div>
 
         {activeTab === 'overview' && (
@@ -337,9 +407,33 @@ const Dashboard: React.FC = () => {
         {/* Zakat Management Tab - Admin/Manager Only */}
         {activeTab === 'zakat' && (
             <div className="space-y-6">
-                <ZakatManagement 
+                {/* Export Buttons */}
+                <div className="flex flex-wrap gap-3 justify-end">
+                    <button
+                        onClick={() => {
+                            const event = new CustomEvent('export-zakat-csv');
+                            window.dispatchEvent(event);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-xs font-medium shadow-sm"
+                    >
+                        <DocumentArrowDownIcon className="h-4 w-4" />
+                        Export CSV
+                    </button>
+                    <button
+                        onClick={() => {
+                            const event = new CustomEvent('export-zakat-json');
+                            window.dispatchEvent(event);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs font-medium shadow-sm"
+                    >
+                        <DocumentArrowDownIcon className="h-4 w-4" />
+                        Export JSON
+                    </button>
+                </div>
+
+                <ZakatManagement
                     showStats={true}
-                    showExport={true}
+                    showExport={false}
                     showDelete={isSuperAdmin}
                     showDonorSummary={true}
                     showRecordButtons={false}
@@ -500,7 +594,8 @@ const Dashboard: React.FC = () => {
             </div>
         )}
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 

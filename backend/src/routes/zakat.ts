@@ -35,17 +35,35 @@ const DonorModel = Donor as typeof Donor & {
 const router = express.Router();
 
 // Ensure upload directory exists - Use absolute path for production
-const uploadDir = path.resolve(process.cwd(), 'src', 'uploads', 'zakat');
+// In production, save to /var/www/hikmah/uploads/zakat
+// In development, save to backend/src/uploads/zakat
+// Check NODE_ENV first, then fall back to checking if the production path exists.
+const isProduction = process.env.NODE_ENV === 'production' || fs.existsSync('/var/www/hikmah/uploads');
+const uploadDir = isProduction
+  ? '/var/www/hikmah/uploads/zakat'
+  : path.resolve(process.cwd(), 'src', 'uploads', 'zakat');
+
+console.log(`[Zakat] Upload directory: ${uploadDir} (NODE_ENV=${process.env.NODE_ENV})`);
+
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
+// Helper: convert a stored URL path (/uploads/zakat/file.jpg)
+// back to the real filesystem path for file deletion.
+const getFilesystemPath = (urlPath: string): string => {
+  const clean = urlPath.replace(/^\//, ''); // strip leading slash
+  return isProduction
+    ? `/var/www/hikmah/${clean}`
+    : path.resolve(process.cwd(), 'src', clean);
+};
+
 // Multer Storage for Zakat Proofs
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
+  destination: (req: Express.Request, file: Express.Multer.File, cb: (error: Error | null, destination: string) => void) => {
     cb(null, uploadDir);
   },
-  filename: (req, file, cb) => {
+  filename: (req: Express.Request, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     cb(null, 'zakat-proof-' + uniqueSuffix + path.extname(file.originalname));
   }
@@ -54,7 +72,7 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage: storage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-  fileFilter: (req, file, cb) => {
+  fileFilter: (req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
     const allowedTypes = /jpeg|jpg|png|pdf/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
     const mimetype = allowedTypes.test(file.mimetype);
@@ -76,27 +94,115 @@ const ZAKAT_RATES = {
 
 const ISLAMIC_API_KEY = process.env.ISLAMIC_API_KEY || 'icgUaIHMO8GWEVLh7XhFcFoTHjQlsfhSBpJtYfrtTUJXY1eI';
 
+// Actual islamicapi.com response shape:
+// { code, status, calculation_standard, currency, weight_unit, updated_at, data: { nisab_thresholds: { gold, silver } } }
 interface NisabApiResponse {
+  code: number;
   status: string;
+  calculation_standard?: string;
+  currency: string;       // top-level
+  weight_unit: string;    // top-level
+  updated_at: string;     // top-level
   data: {
     nisab_thresholds: {
       gold: { weight: number; unit_price: number; nisab_amount: number };
       silver: { weight: number; unit_price: number; nisab_amount: number };
     };
-    currency: string;
-    weight_unit: string;
-    updated_at: string;
   };
   message?: string;
 }
+
+interface FxApiResponse {
+  result?: string;
+  rates?: Record<string, number>;
+}
+
+const fetchFallbackNisabData = async (standard: 'classical' | 'common' = 'common', currency: string = 'inr') => {
+  try {
+    const [goldRes, silverRes, fxRes] = await Promise.all([
+      fetch('https://api.gold-api.com/price/XAU'),
+      fetch('https://api.gold-api.com/price/XAG'),
+      fetch('https://open.er-api.com/v6/latest/USD'),
+    ]);
+
+    const [goldData, silverData, fxData] = await Promise.all([
+      goldRes.json() as Promise<{ price?: number; updatedAt?: string }>,
+      silverRes.json() as Promise<{ price?: number; updatedAt?: string }>,
+      fxRes.json() as Promise<FxApiResponse>,
+    ]);
+
+    const goldPerOunceUsd = Number(goldData?.price);
+    const silverPerOunceUsd = Number(silverData?.price);
+    const targetCurrency = currency.toUpperCase();
+    const fxRate = targetCurrency === 'USD' ? 1 : Number(fxData?.rates?.[targetCurrency]);
+
+    if (
+      !Number.isFinite(goldPerOunceUsd) ||
+      !Number.isFinite(silverPerOunceUsd) ||
+      !Number.isFinite(fxRate) ||
+      fxRate <= 0
+    ) {
+      return { success: false, error: 'Fallback provider returned invalid market rates' };
+    }
+
+    // 1 troy ounce = 31.1034768 grams
+    const goldUnitPrice = (goldPerOunceUsd / 31.1034768) * fxRate;
+    const silverUnitPrice = (silverPerOunceUsd / 31.1034768) * fxRate;
+
+    const goldWeight = standard === 'classical' ? ZAKAT_RATES.NISAB_GOLD_GRAMS_CLASSICAL : ZAKAT_RATES.NISAB_GOLD_GRAMS;
+    const silverWeight = standard === 'classical' ? ZAKAT_RATES.NISAB_SILVER_GRAMS_CLASSICAL : ZAKAT_RATES.NISAB_SILVER_GRAMS;
+
+    return {
+      success: true,
+      data: {
+        gold: {
+          weight: goldWeight,
+          unitPrice: goldUnitPrice,
+          nisabAmount: goldWeight * goldUnitPrice,
+        },
+        silver: {
+          weight: silverWeight,
+          unitPrice: silverUnitPrice,
+          nisabAmount: silverWeight * silverUnitPrice,
+        },
+        currency: currency.toLowerCase(),
+        weightUnit: 'gram',
+        updatedAt: goldData?.updatedAt || new Date().toISOString(),
+        source: 'Fallback live market feed',
+      },
+    };
+  } catch (error) {
+    console.error('Fallback Nisab API Error:', error);
+    return { success: false, error: 'Unable to fetch fallback live nisab values' };
+  }
+};
 
 const fetchNisabData = async (standard: 'classical' | 'common' = 'common', currency: string = 'inr') => {
   try {
     const url = `https://islamicapi.com/api/v1/zakat-nisab/?standard=${standard}&currency=${currency}&unit=g&api_key=${ISLAMIC_API_KEY}`;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
-    const response = await fetch(url, { signal: controller.signal });
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+    });
     clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      console.warn(`⚠️ IslamicAPI nisab returned HTTP ${response.status} — falling back to market feed`);
+      return { success: false, error: `IslamicAPI returned ${response.status}` };
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      console.warn(`⚠️ IslamicAPI nisab returned non-JSON content-type (${contentType}) — falling back`);
+      return { success: false, error: 'IslamicAPI returned non-JSON response' };
+    }
+
     const data = await response.json() as NisabApiResponse;
 
     if (data.status === 'success') {
@@ -113,9 +219,11 @@ const fetchNisabData = async (standard: 'classical' | 'common' = 'common', curre
             unitPrice: data.data.nisab_thresholds.silver.unit_price,
             nisabAmount: data.data.nisab_thresholds.silver.nisab_amount,
           },
-          currency: data.data.currency,
-          weightUnit: data.data.weight_unit,
-          updatedAt: data.data.updated_at,
+          // currency, weight_unit, updated_at are at the TOP level of the response
+          currency: data.currency,
+          weightUnit: data.weight_unit,
+          updatedAt: data.updated_at,
+          source: 'islamicapi.com',
         }
       };
     }
@@ -125,6 +233,71 @@ const fetchNisabData = async (standard: 'classical' | 'common' = 'common', curre
     return { success: false, error: 'Unable to fetch live nisab values' };
   }
 };
+
+router.get('/nisab-live', [
+  query('standard').optional().isIn(['classical', 'common']),
+  query('currency').optional().isString().trim().isLength({ min: 3, max: 3 }),
+], optionalAuthMiddleware, async (req: any, res: any) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ status: 'error', errors: errors.array() });
+    }
+
+    const standard = (req.query.standard as 'classical' | 'common') || 'common';
+    const currency = ((req.query.currency as string) || 'inr').toLowerCase();
+
+    // PRIMARY: islamicapi.com/api/v1/zakat-nisab
+    console.log('🕌 Fetching Nisab from islamicapi.com (primary)...');
+    const primary = await fetchNisabData(standard, currency);
+    if (primary.success && primary.data) {
+      console.log('✅ islamicapi.com Nisab data received');
+      return res.json({ status: 'success', data: primary.data });
+    }
+
+    // FALLBACK 1: market feed (gold-api.com + open.er-api.com)
+    console.warn(`⚠️ islamicapi.com Nisab failed (${primary.error}) — using market feed fallback`);
+    const fallback = await fetchFallbackNisabData(standard, currency);
+    if (fallback.success && fallback.data) {
+      console.log('✅ Market feed fallback Nisab data received');
+      return res.json({ status: 'success', data: fallback.data });
+    }
+
+    // FALLBACK 2: static hardcoded rates (last resort — always shows the section)
+    console.warn(`⚠️ Market feed also failed (${fallback.error}) — using static rates`);
+    const goldWeight = standard === 'classical' ? ZAKAT_RATES.NISAB_GOLD_GRAMS_CLASSICAL : ZAKAT_RATES.NISAB_GOLD_GRAMS;
+    const silverWeight = standard === 'classical' ? ZAKAT_RATES.NISAB_SILVER_GRAMS_CLASSICAL : ZAKAT_RATES.NISAB_SILVER_GRAMS;
+    // Approximate rates per gram (USD base, shown as-is for INR display)
+    const STATIC_GOLD_PER_GRAM_USD = 90;   // ~$90/g (approximate 2025/26)
+    const STATIC_SILVER_PER_GRAM_USD = 1;  // ~$1/g
+    const FX: Record<string, number> = { inr: 84, usd: 1, gbp: 0.79, eur: 0.92, sar: 3.75, aed: 3.67 };
+    const fx = FX[currency.toLowerCase()] ?? 84;
+    const goldUnitPrice = STATIC_GOLD_PER_GRAM_USD * fx;
+    const silverUnitPrice = STATIC_SILVER_PER_GRAM_USD * fx;
+    return res.json({
+      status: 'success',
+      data: {
+        gold: {
+          weight: goldWeight,
+          unitPrice: goldUnitPrice,
+          nisabAmount: goldWeight * goldUnitPrice,
+        },
+        silver: {
+          weight: silverWeight,
+          unitPrice: silverUnitPrice,
+          nisabAmount: silverWeight * silverUnitPrice,
+        },
+        currency: currency.toLowerCase(),
+        weightUnit: 'gram',
+        updatedAt: new Date().toISOString(),
+        source: 'Static rates (live feed unavailable)',
+      },
+    });
+  } catch (error: any) {
+    console.error('Live Nisab route error:', error);
+    return res.status(500).json({ status: 'error', message: 'Failed to fetch live nisab values' });
+  }
+});
 
 const convertWeightToValue = (weight: number, unitPrice: number, weightUnit: string, inputUnit: string): number => {
   let weightInGrams = weight;
@@ -162,7 +335,15 @@ router.post('/calculate', [
       currency = 'inr',
     } = req.body;
 
-    const nisabResult = await fetchNisabData(calculationStandard, currency);
+    // PRIMARY: islamicapi.com | FALLBACK 1: market feed | FALLBACK 2: static rates
+    console.log('🕌 Fetching Nisab for Zakat calculation from islamicapi.com (primary)...');
+    let nisabResult = await fetchNisabData(calculationStandard, currency);
+    if (!nisabResult.success) {
+      console.warn(`⚠️ islamicapi.com Nisab failed (${nisabResult.error}) — falling back to market feed`);
+      nisabResult = await fetchFallbackNisabData(calculationStandard, currency);
+    } else {
+      console.log('✅ islamicapi.com Nisab data used for calculation');
+    }
 
     let goldUnitPrice = 0;
     let silverUnitPrice = 0;
@@ -173,9 +354,21 @@ router.post('/calculate', [
     if (nisabResult.success && nisabResult.data) {
       goldUnitPrice = nisabResult.data.gold.unitPrice;
       silverUnitPrice = nisabResult.data.silver.unitPrice;
-      weightUnit = nisabResult.data.weightUnit;
+      weightUnit = nisabResult.data.weightUnit || 'gram';
       nisabGoldAmount = nisabResult.data.gold.nisabAmount;
       nisabSilverAmount = nisabResult.data.silver.nisabAmount;
+    } else {
+      // Static fallback so calculation always works
+      console.warn('⚠️ All Nisab feeds failed — using static rates for calculation');
+      const FX: Record<string, number> = { inr: 84, usd: 1, gbp: 0.79, eur: 0.92, sar: 3.75, aed: 3.67 };
+      const fx = FX[(currency || 'inr').toLowerCase()] ?? 84;
+      goldUnitPrice = 90 * fx;
+      silverUnitPrice = 1 * fx;
+      weightUnit = 'gram';
+      const gw = calculationStandard === 'classical' ? ZAKAT_RATES.NISAB_GOLD_GRAMS_CLASSICAL : ZAKAT_RATES.NISAB_GOLD_GRAMS;
+      const sw = calculationStandard === 'classical' ? ZAKAT_RATES.NISAB_SILVER_GRAMS_CLASSICAL : ZAKAT_RATES.NISAB_SILVER_GRAMS;
+      nisabGoldAmount = gw * goldUnitPrice;
+      nisabSilverAmount = sw * silverUnitPrice;
     }
 
     let finalGoldValue = parseFloat(goldValue);
@@ -446,45 +639,47 @@ router.post('/transaction', [
     }
 
     if (paymentMethod === 'UPI Transfer' && (!senderUpiId || senderUpiId.trim() === '')) {
-      return res.status(400).json({ 
-        status: 'error', 
-        message: 'Sender UPI ID is required for UPI Transfer' 
+      return res.status(400).json({
+        status: 'error',
+        message: 'Sender UPI ID is required for UPI Transfer'
       });
+    }
+
+    // Validate UPI ID format (number@any)
+    if (paymentMethod === 'UPI Transfer' && senderUpiId) {
+      if (!/^\d+@[a-zA-Z]+$/.test(senderUpiId)) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'UPI ID must be in format: number@bank (e.g., 9876543210@oksbi)'
+        });
+      }
     }
 
     if (paymentMethod === 'Cheque' && (!chequeNumber || chequeNumber.trim() === '')) {
-      return res.status(400).json({ 
-        status: 'error', 
-        message: 'Cheque Number is required for Cheque payment' 
+      return res.status(400).json({
+        status: 'error',
+        message: 'Cheque Number is required for Cheque payment'
       });
     }
 
-    // Validate transaction ref ID (6 digits) for non-Cash, non-Cheque payments
-    if (paymentMethod !== 'Cash' && paymentMethod !== 'Cheque' && paymentMethod !== 'Bank Transfer') {
-      if (!transactionRefId || !/^\d{6}$/.test(transactionRefId)) {
-        return res.status(400).json({ 
-          status: 'error', 
-          message: 'Transaction Ref ID must be exactly 6 digits' 
+    // Validate transaction ref ID (required, minimum 6 digits) for UPI Transfer and QR Scanner
+    if (paymentMethod === 'UPI Transfer' || paymentMethod === 'QR Scanner') {
+      if (!transactionRefId || !/^\d{6,}$/.test(transactionRefId)) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Transaction Ref ID is required (minimum 6 digits)'
         });
       }
 
       // Check for duplicate ref ID
       const isDuplicate = await ZakatPaymentModel.hasDuplicateRefId(transactionRefId, paymentMethod);
       if (isDuplicate) {
-        return res.status(409).json({ 
-          status: 'error', 
+        return res.status(409).json({
+          status: 'error',
           message: 'Duplicate Transaction Ref ID found for this payment method',
           code: 'DUPLICATE_REF_ID'
         });
       }
-    }
-
-    // Validate proof of payment
-    if (paymentMethod !== 'Cash' && !req.file) {
-      return res.status(400).json({ 
-        status: 'error', 
-        message: 'Proof of payment is required for non-Cash transactions' 
-      });
     }
 
     // Check balance for spending transactions
@@ -544,7 +739,7 @@ router.post('/transaction', [
       bankName: paymentMethod === 'Bank Transfer' ? bankName?.trim() : undefined,
       senderUpiId: paymentMethod === 'UPI Transfer' ? senderUpiId?.trim() : undefined,
       chequeNumber: paymentMethod === 'Cheque' ? chequeNumber?.trim() : undefined,
-      proofFilePath: req.file ? `uploads/zakat/${req.file.filename}` : undefined,
+      proofFilePath: req.file ? `/uploads/zakat/${req.file.filename}` : undefined,
       notes: notes?.trim(),
       recordedBy: req.user.userId,
     });
@@ -732,7 +927,11 @@ router.put('/payment/:id', [
       payment.bankName = updates.bankName;
     }
 
+    // Validate UPI ID format
     if (updates.senderUpiId) {
+      if (!/^\d+@[a-zA-Z]+$/.test(updates.senderUpiId)) {
+        return res.status(400).json({ status: 'error', message: 'UPI ID must be in format: number@bank (e.g., 9876543210@oksbi)' });
+      }
       payment.senderUpiId = updates.senderUpiId;
     }
 
@@ -740,26 +939,24 @@ router.put('/payment/:id', [
       payment.chequeNumber = updates.chequeNumber;
     }
 
-    // Validate transaction ref ID
-    if (updates.transactionRefId || payment.paymentMethod !== 'Cash') {
+    // Validate transaction ref ID (required, minimum 6 digits) for UPI Transfer and QR Scanner
+    const newMethod = updates.paymentMethod || payment.paymentMethod;
+    if (newMethod === 'UPI Transfer' || newMethod === 'QR Scanner') {
       const newRefId = updates.transactionRefId || payment.transactionRefId;
-      const newMethod = updates.paymentMethod || payment.paymentMethod;
       
-      if (newMethod !== 'Cash' && newMethod !== 'Cheque') {
-        if (!newRefId || !/^\d{6}$/.test(newRefId)) {
-          return res.status(400).json({ status: 'error', message: 'Transaction Ref ID must be exactly 6 digits' });
-        }
-
-        const isDuplicate = await ZakatPaymentModel.hasDuplicateRefId(newRefId, newMethod, paymentId);
-        if (isDuplicate) {
-          return res.status(409).json({ 
-            status: 'error', 
-            message: 'Duplicate Transaction Ref ID found for this payment method',
-            code: 'DUPLICATE_REF_ID'
-          });
-        }
-        payment.transactionRefId = newRefId;
+      if (!newRefId || !/^\d{6,}$/.test(newRefId)) {
+        return res.status(400).json({ status: 'error', message: 'Transaction Ref ID is required (minimum 6 digits)' });
       }
+
+      const isDuplicate = await ZakatPaymentModel.hasDuplicateRefId(newRefId, newMethod, paymentId);
+      if (isDuplicate) {
+        return res.status(409).json({
+          status: 'error',
+          message: 'Duplicate Transaction Ref ID found for this payment method',
+          code: 'DUPLICATE_REF_ID'
+        });
+      }
+      payment.transactionRefId = newRefId;
     }
 
     // Update other fields
@@ -770,16 +967,30 @@ router.put('/payment/:id', [
     if (updates.recipientType) payment.recipientType = updates.recipientType;
     if (updates.notes !== undefined) payment.notes = updates.notes;
 
-    // Handle file update
-    if (req.file) {
+    // Handle proof removal (user clicked red X to remove existing proof)
+    if (updates.removeProof === 'true' && !req.file) {
       if (payment.proofFilePath) {
         try {
-          fs.unlinkSync(payment.proofFilePath);
+          fs.unlinkSync(getFilesystemPath(payment.proofFilePath));
+        } catch (e) {
+          console.error('Proof file deletion error:', e);
+        }
+        payment.proofFilePath = undefined as any;
+      }
+    }
+
+    // Handle file update
+    if (req.file) {
+      // Delete the old file using the real filesystem path (not the stored URL path)
+      if (payment.proofFilePath) {
+        try {
+          fs.unlinkSync(getFilesystemPath(payment.proofFilePath));
         } catch (e) {
           console.error('Old file deletion error:', e);
         }
       }
-      payment.proofFilePath = req.file.path.replace(/\\/g, '/');
+      // Store as a URL path so the frontend can use it directly
+      payment.proofFilePath = `/uploads/zakat/${req.file.filename}`;
     }
 
     const updatedPayment = await payment.save();
@@ -830,7 +1041,7 @@ router.delete('/payment/:id', authMiddleware, async (req: any, res: any) => {
 
     if (payment.proofFilePath) {
       try {
-        fs.unlinkSync(payment.proofFilePath);
+        fs.unlinkSync(getFilesystemPath(payment.proofFilePath));
       } catch (e) {
         console.error('File deletion error:', e);
       }
@@ -839,12 +1050,15 @@ router.delete('/payment/:id', authMiddleware, async (req: any, res: any) => {
     if (payment.type === 'collection' && payment.donorId) {
       const donor = await Donor.findById(payment.donorId);
       if (donor) {
-        donor.totalDonated = Math.max(0, donor.totalDonated - payment.amount);
-        donor.donationCount = Math.max(0, donor.donationCount - 1);
-        
-        if (donor.donationCount === 0) {
-          await Donor.findByIdAndUpdate(donor._id, { $unset: { lastDonationDate: 1 } });
+        const remainingDonations = Math.max(0, donor.donationCount - 1);
+
+        if (remainingDonations === 0) {
+          // No donations left — delete the donor entirely so they
+          // no longer appear in autocomplete suggestions
+          await Donor.findByIdAndDelete(donor._id);
         } else {
+          donor.totalDonated = Math.max(0, donor.totalDonated - payment.amount);
+          donor.donationCount = remainingDonations;
           await donor.save();
         }
       }

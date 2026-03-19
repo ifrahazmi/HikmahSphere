@@ -2,12 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import NotificationBell from './Notifications/NotificationBell'; // Import the new NotificationBell
-import { 
-  Bars3Icon, 
+import {
+  Bars3Icon,
   XMarkIcon,
   UserIcon,
+  CalendarDaysIcon,
   Cog6ToothIcon,
-  ArrowRightOnRectangleIcon 
+  ArrowRightOnRectangleIcon
 } from '@heroicons/react/24/outline';
 
 interface NavbarProps {
@@ -22,6 +23,11 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to top on route change
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [location.pathname]);
 
   // Check if we're on Quran page and get theme from localStorage
   const [quranTheme, setQuranTheme] = useState<'light' | 'dark'>('light');
@@ -66,9 +72,11 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
     { name: 'Home', href: '/', current: location.pathname === '/' },
     { name: 'About', href: '/about', current: location.pathname === '/about' },
     { name: 'Prayer Times', href: '/prayers', current: location.pathname === '/prayers' },
+    { name: 'Dhikr & Dua', href: '/dhikr-dua', current: location.pathname === '/dhikr-dua' },
     { name: 'Quran', href: '/quran', current: location.pathname === '/quran' },
     { name: 'Zakat', href: '/zakat', current: location.pathname === '/zakat' },
     { name: 'Community', href: '/community', current: location.pathname === '/community' },
+    { name: 'Hajj Guide', href: '/hajj-guide', current: location.pathname === '/hajj-guide' },
     { name: 'Contact', href: '/contact', current: location.pathname === '/contact' },
   ];
 
@@ -98,7 +106,6 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
 
   // Check for Super Admin Role
   const isSuperAdmin = hasRole && hasRole(['superadmin']);
-  const isManager = hasRole && hasRole(['manager']);
 
   // Determine if we should use dark mode
   const isDark = isQuranPage && quranTheme === 'dark';
@@ -107,34 +114,35 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
     <nav className={`shadow-lg fixed top-0 left-0 right-0 z-50 transition-colors duration-200 ${
       isDark ? 'bg-gray-800' : 'bg-white'
     }`}>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-[90rem] mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex items-center">
             <Link to="/" className="flex-shrink-0 flex items-center">
-              <div className="w-10 h-10 flex items-center justify-center overflow-hidden rounded-full bg-white">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 lg:w-11 lg:h-11 xl:w-12 xl:h-12 flex items-center justify-center overflow-hidden rounded-full bg-white">
                 <img src="/logo.png" alt="HikmahSphere Logo" className="h-full w-full object-cover" />
               </div>
-              <div className="ml-3 flex items-baseline">
-                <span className={`text-xl font-bold ${
+              <div className="ml-2 flex items-baseline">
+                <span className={`text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl font-bold ${
                   isDark ? 'text-white' : 'text-gray-900'
                 }`}>HikmahSphere</span>
-                <span className={`ml-2 text-xs font-semibold px-2 py-1 rounded-full ${
+                <span className={`hidden lg:inline-flex ml-0.5 text-[8px] sm:text-[9px] lg:text-[10px] xl:text-xs font-semibold px-0.5 py-0.5 rounded-full ${
                   isDark
                     ? 'bg-emerald-900 text-emerald-300'
                     : 'bg-emerald-100 text-emerald-700'
-                } -translate-y-1`}>
-                  v2.1 Beta
+                } -translate-y-0.5`}>
+                  v3.0 Beta
                 </span>
               </div>
             </Link>
           </div>
 
-          <div className="hidden md:flex items-center space-x-8">
+          {/* Navigation Links - Responsive sizing based on screen width */}
+          <div className="hidden lg:flex flex-1 items-center justify-center gap-0.5 xl:gap-1 2xl:gap-2 min-w-0 overflow-hidden">
             {navigation.map((item) => (
               <Link
                 key={item.name}
                 to={item.href}
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${
+                className={`px-1.5 lg:px-2 xl:px-2.5 py-1.5 lg:py-2 xl:py-2.5 rounded-md text-[11px] lg:text-xs xl:text-sm 2xl:text-base font-medium whitespace-nowrap transition-colors duration-200 ${
                   item.current
                     ? isDark
                       ? 'bg-emerald-900 text-emerald-300'
@@ -149,7 +157,8 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
             ))}
           </div>
 
-          <div className="hidden md:flex items-center space-x-4">
+          {/* Right Section - Responsive sizing */}
+          <div className="hidden lg:flex items-center gap-1 lg:gap-1.5 xl:gap-2 shrink-0">
             {user ? (
               <>
                 {/* Notification Bell */}
@@ -158,14 +167,14 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                 <div className="relative" ref={profileMenuRef}>
                   <button
                     onClick={() => setIsProfileOpen(!isProfileOpen)}
-                    className={`flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 rounded-md p-2 transition-colors duration-200 ${
+                    className={`flex items-center gap-1 lg:gap-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 rounded-md p-1.5 lg:p-2 transition-colors duration-200 ${
                       isDark
                         ? 'text-gray-300 hover:text-emerald-400'
                         : 'text-gray-700 hover:text-emerald-600'
                     }`}
                   >
-                    <UserIcon className="h-6 w-6" />
-                    <span className="text-sm font-medium">{user.name}</span>
+                    <UserIcon className="h-4 w-4 lg:h-5 lg:w-5" />
+                    <span className="text-[11px] lg:text-xs xl:text-sm font-medium max-w-[60px] lg:max-w-[80px] xl:max-w-[100px] 2xl:max-w-[120px] truncate">{user.name}</span>
                   </button>
 
                   {isProfileOpen && (
@@ -183,6 +192,19 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                       >
                         <UserIcon className="h-4 w-4 mr-2" />
                         Profile
+                      </Link>
+
+                      <Link
+                        to="/salah-tracker"
+                        className={`flex items-center px-4 py-2 text-sm ${
+                          isDark
+                            ? 'text-gray-300 hover:bg-gray-600'
+                            : 'text-gray-700 hover:bg-gray-100'
+                        }`}
+                        onClick={() => setIsProfileOpen(false)}
+                      >
+                        <CalendarDaysIcon className="h-4 w-4 mr-2" />
+                        Salah Tracker
                       </Link>
                       
                       {/* Dashboard only for Super Admin */}
@@ -226,7 +248,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
             )}
           </div>
 
-          <div className="md:hidden flex items-center gap-2">
+          <div className="lg:hidden flex items-center gap-2">
             {/* Mobile Notification Bell */}
             {user && <NotificationBell />}
             
@@ -249,7 +271,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
       </div>
 
       {isOpen && (
-        <div className="md:hidden">
+        <div className="lg:hidden">
           <div className={`px-2 pt-2 pb-3 space-y-1 sm:px-3 border-t transition-colors duration-200 ${
             isDark ? 'bg-gray-800 border-gray-700' : 'bg-white'
           }`}>
@@ -295,6 +317,17 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                     onClick={() => setIsOpen(false)}
                   >
                     Profile
+                  </Link>
+                  <Link
+                    to="/salah-tracker"
+                    className={`block px-3 py-2 text-base font-medium transition-colors duration-200 ${
+                      isDark
+                        ? 'text-gray-300 hover:text-emerald-400 hover:bg-gray-700'
+                        : 'text-gray-700 hover:text-emerald-600 hover:bg-emerald-50'
+                    }`}
+                    onClick={() => setIsOpen(false)}
+                  >
+                    Salah Tracker
                   </Link>
                   {isSuperAdmin && (
                     <Link

@@ -12,7 +12,7 @@
     pkgs.nodejs_20
     pkgs.mongodb
     pkgs.sudo
-    pkgs.zip
+    pkgs.pm2
   ];
 
   env = {};

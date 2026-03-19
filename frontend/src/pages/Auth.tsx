@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { useAuth } from '../hooks/useAuth';
 import toast from 'react-hot-toast';
+import PageSEO from '../components/PageSEO';
 import { API_URL } from '../config';
 
 const Auth: React.FC = () => {
@@ -10,9 +11,13 @@ const Auth: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [passwordChangeToken, setPasswordChangeToken] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
 
-  const { login, register } = useAuth();
+  const { login, register, user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirectParam = searchParams.get('redirect');
   
   const [formData, setFormData] = useState({
     name: '',
@@ -21,9 +26,23 @@ const Auth: React.FC = () => {
     newPassword: ''
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
+
+    const submittedData = new FormData(e.currentTarget);
+    const submittedName = String(submittedData.get('name') || formData.name).trim();
+    const submittedEmail = String(submittedData.get('email') || formData.email).trim().toLowerCase();
+    const submittedPassword = String(submittedData.get('password') || formData.password);
+    const submittedNewPassword = String(submittedData.get('newPassword') || formData.newPassword);
+
+    setFormData(prev => ({
+      ...prev,
+      name: submittedName,
+      email: submittedEmail,
+      password: submittedPassword,
+      newPassword: submittedNewPassword,
+    }));
 
     try {
         if (showPasswordChange) {
@@ -34,7 +53,7 @@ const Auth: React.FC = () => {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${passwordChangeToken}`
                 },
-                body: JSON.stringify({ newPassword: formData.newPassword })
+                body: JSON.stringify({ newPassword: submittedNewPassword })
             });
             const data = await response.json();
             if (data.status === 'success') {
@@ -42,6 +61,7 @@ const Auth: React.FC = () => {
                 setShowPasswordChange(false);
                 setPasswordChangeToken('');
                 setFormData(prev => ({ ...prev, password: '', newPassword: '' }));
+                setShowNewPassword(false);
                 setIsLogin(true);
             } else {
                 toast.error(data.message || 'Failed to change password');
@@ -55,7 +75,7 @@ const Auth: React.FC = () => {
             const response = await fetch(`${API_URL}/auth/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: formData.email, password: formData.password })
+                body: JSON.stringify({ email: submittedEmail, password: submittedPassword })
             });
 
             const data = await response.json();
@@ -67,18 +87,18 @@ const Auth: React.FC = () => {
                     setShowPasswordChange(true);
                 } else {
                     // Use the login function from auth context to properly update state
-                    await login(formData.email, formData.password);
+                    await login(submittedEmail, submittedPassword);
                     toast.success('Successfully logged in!');
-                    navigate('/dashboard');
+                    navigate(redirectParam || '/profile', { replace: true });
                 }
             } else {
                 toast.error(data.message || 'Login failed. Please check your credentials.');
             }
 
         } else {
-            await register(formData.name, formData.email, formData.password);
+            await register(submittedName, submittedEmail, submittedPassword);
             toast.success('Account created successfully!');
-            navigate('/dashboard');
+            navigate(redirectParam || '/profile', { replace: true });
         }
     } catch (error: any) {
         console.error('Authentication error:', error);
@@ -93,12 +113,35 @@ const Auth: React.FC = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  if (user) {
+    return <Navigate to="/profile" replace />;
+  }
+
   if (loading) {
-    return <LoadingSpinner fullScreen text={isLogin ? 'Signing in...' : 'Processing...'} />;
+    return (
+      <>
+        <PageSEO
+          title="Sign In to HikmahSphere"
+          description="Sign in or create your HikmahSphere account to access personalized Islamic tools and services."
+          path="/auth"
+          noIndex
+          noFollow
+        />
+        <LoadingSpinner fullScreen text={isLogin ? 'Signing in...' : 'Processing...'} />
+      </>
+    );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-950 py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+    <>
+      <PageSEO
+        title="Sign In to HikmahSphere"
+        description="Sign in or create your HikmahSphere account to access personalized Islamic tools and services."
+        path="/auth"
+        noIndex
+        noFollow
+      />
+      <div className="min-h-screen flex items-start justify-center bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-950 pt-10 pb-4 sm:items-center sm:py-6 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
       {/* Animated Background Pattern */}
       <div className="absolute inset-0 opacity-5">
         <div className="absolute inset-0" style={{
@@ -165,7 +208,7 @@ const Auth: React.FC = () => {
         <div className="w-full lg:w-1/2 max-w-md">
           <div className="bg-white rounded-3xl shadow-2xl p-8 backdrop-blur-sm bg-white/95">
             <div>
-              <div className="lg:hidden mx-auto h-20 w-20 flex items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 shadow-lg overflow-hidden p-2 mb-4">
+              <div className="lg:hidden mx-auto h-20 w-20 flex items-center justify-center rounded-full bg-white shadow-lg overflow-hidden p-2 mb-4">
                 <img src="/logo.png" alt="HikmahSphere Logo" className="h-full w-full object-cover rounded-full" />
               </div>
               <h2 className="text-center text-3xl font-bold text-gray-900">
@@ -176,7 +219,7 @@ const Auth: React.FC = () => {
               </p>
             </div>
 
-            <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+            <form className="mt-8 space-y-6" onSubmit={handleSubmit} autoComplete="on">
               <div className="space-y-5">
 
                 {showPasswordChange && (
@@ -188,13 +231,22 @@ const Auth: React.FC = () => {
                       <input
                         id="newPassword"
                         name="newPassword"
-                        type="password"
+                        type={showNewPassword ? 'text' : 'password'}
+                        autoComplete="new-password"
                         required
                         value={formData.newPassword}
                         onChange={handleInputChange}
-                        className="appearance-none relative block w-full px-4 py-3 border-2 border-gray-200 placeholder-gray-400 text-gray-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+                        onInput={handleInputChange}
+                        className="appearance-none relative block w-full px-4 pr-20 py-3 border-2 border-gray-200 placeholder-gray-400 text-gray-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
                         placeholder="Enter new password"
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword(prev => !prev)}
+                        className="absolute inset-y-0 right-0 px-4 text-sm font-medium text-emerald-700 hover:text-emerald-800"
+                      >
+                        {showNewPassword ? 'Hide' : 'Show'}
+                      </button>
                     </div>
                   </div>
                 )}
@@ -209,9 +261,11 @@ const Auth: React.FC = () => {
                         id="name"
                         name="name"
                         type="text"
+                        autoComplete="name"
                         required={!isLogin}
                         value={formData.name}
                         onChange={handleInputChange}
+                        onInput={handleInputChange}
                         className="appearance-none relative block w-full px-4 py-3 border-2 border-gray-200 placeholder-gray-400 text-gray-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
                         placeholder="Enter your full name"
                       />
@@ -230,9 +284,13 @@ const Auth: React.FC = () => {
                           id="email"
                           name="email"
                           type="email"
+                          autoComplete={isLogin ? 'username' : 'email'}
+                          autoCapitalize="none"
+                          autoCorrect="off"
                           required
                           value={formData.email}
                           onChange={handleInputChange}
+                          onInput={handleInputChange}
                           className="appearance-none relative block w-full px-4 py-3 border-2 border-gray-200 placeholder-gray-400 text-gray-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
                           placeholder="Enter your email"
                         />
@@ -247,13 +305,22 @@ const Auth: React.FC = () => {
                         <input
                           id="password"
                           name="password"
-                          type="password"
+                          type={showPassword ? 'text' : 'password'}
+                          autoComplete={isLogin ? 'current-password' : 'new-password'}
                           required
                           value={formData.password}
                           onChange={handleInputChange}
-                          className="appearance-none relative block w-full px-4 py-3 border-2 border-gray-200 placeholder-gray-400 text-gray-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+                          onInput={handleInputChange}
+                          className="appearance-none relative block w-full px-4 pr-20 py-3 border-2 border-gray-200 placeholder-gray-400 text-gray-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
                           placeholder="Enter your password"
                         />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(prev => !prev)}
+                          className="absolute inset-y-0 right-0 px-4 text-sm font-medium text-emerald-700 hover:text-emerald-800"
+                        >
+                          {showPassword ? 'Hide' : 'Show'}
+                        </button>
                       </div>
                     </div>
                   </>
@@ -302,7 +369,8 @@ const Auth: React.FC = () => {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 

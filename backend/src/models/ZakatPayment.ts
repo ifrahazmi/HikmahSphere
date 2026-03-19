@@ -112,10 +112,10 @@ ZakatPaymentSchema.index({ transactionRefId: 1, paymentMethod: 1 });
 
 // Pre-save validation
 ZakatPaymentSchema.pre('save', function(next) {
-  // Validate transaction ref ID format for non-Cash, non-Cheque payments
-  if (this.transactionRefId && this.paymentMethod !== 'Cash' && this.paymentMethod !== 'Cheque') {
-    if (!/^\d{6}$/.test(this.transactionRefId)) {
-      return next(new Error('Transaction Ref ID must be exactly 6 digits'));
+  // Validate transaction ref ID format for non-Cash, non-Cheque, non-Bank Transfer payments
+  if (this.transactionRefId && this.paymentMethod !== 'Cash' && this.paymentMethod !== 'Cheque' && this.paymentMethod !== 'Bank Transfer') {
+    if (!/^\d{6,}$/.test(this.transactionRefId)) {
+      return next(new Error('Transaction Ref ID must be at least 6 digits'));
     }
   }
 
@@ -132,6 +132,13 @@ ZakatPaymentSchema.pre('save', function(next) {
   // Validate sender UPI ID if payment method is UPI Transfer
   if (this.paymentMethod === 'UPI Transfer' && !this.senderUpiId) {
     return next(new Error('Sender UPI ID is required for UPI Transfer payments'));
+  }
+  
+  // Validate UPI ID format (number@any)
+  if (this.paymentMethod === 'UPI Transfer' && this.senderUpiId) {
+    if (!/^\d+@[a-zA-Z]+$/.test(this.senderUpiId)) {
+      return next(new Error('UPI ID must be in format: number@bank (e.g., 9876543210@oksbi)'));
+    }
   }
 
   // Validate amount

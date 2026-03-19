@@ -1,8 +1,8 @@
-import mongoose, { Document, Schema } from 'mongoose';
+import mongoose, { Document, Schema, Types } from 'mongoose';
 import bcrypt from 'bcryptjs';
 
 export interface IUser extends Document {
-  _id: string;
+  _id: Types.ObjectId;
   username: string;
   email: string;
   password: string;
@@ -14,8 +14,14 @@ export interface IUser extends Document {
   isAdmin: boolean;
   role: 'superadmin' | 'manager' | 'user';
   isBlocked: boolean;
-  requiresPasswordChange: boolean; 
+  requiresPasswordChange: boolean;
   fcmTokens?: string[]; // Added FCM Tokens field
+  notificationDevices?: Array<{
+    deviceId: string;
+    token: string;
+    userAgent?: string;
+    updatedAt: Date;
+  }>;
   location?: {
     city: string;
     country: string;
@@ -72,10 +78,49 @@ export interface IUser extends Document {
       lastRead: {
         surah: number;
         ayah: number;
+        surahName?: string;
         timestamp: Date;
       };
+      bookmarks: Array<{
+        id: string;
+        surah: number;
+        ayah: number;
+        surahName: string;
+        timestamp: Date;
+        note?: string;
+        color?: 'emerald' | 'blue' | 'purple' | 'amber' | 'rose';
+      }>;
+      settings?: Record<string, unknown>;
       completedSurahs: number[];
       totalRecitations: number;
+    };
+    dhikrDuaProgress?: {
+      bookmarks: string[];
+      lastViewedDuaId?: string;
+      tasbih?: {
+        presetId: string;
+        count: number;
+      };
+      dailyTracker?: {
+        date: string;
+        counts: Record<string, number>;
+      };
+      reminders?: {
+        enabled: boolean;
+        morning: boolean;
+        evening: boolean;
+        friday: boolean;
+        scheduleType: 'periodic' | 'specific';
+        periodicIntervalMinutes: number;
+        specificTime: string;
+        includeDhikr: boolean;
+        includeDua: boolean;
+      };
+      settings?: {
+        darkMode: boolean;
+        translationLanguage: 'english' | 'urdu';
+      };
+      updatedAt?: Date;
     };
   };
   community: {
@@ -161,6 +206,26 @@ const UserSchema = new Schema<IUser>({
     default: false,
   },
   fcmTokens: [{ type: String }], // Array of FCM tokens for multi-device support
+  notificationDevices: [{
+    deviceId: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    token: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    userAgent: {
+      type: String,
+      trim: true,
+    },
+    updatedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  }],
   dateOfBirth: {
     type: Date,
     validate: {
@@ -238,10 +303,65 @@ const UserSchema = new Schema<IUser>({
       lastRead: {
         surah: { type: Number, min: 1, max: 114 },
         ayah: { type: Number, min: 1 },
+        surahName: { type: String, trim: true },
         timestamp: { type: Date, default: Date.now },
       },
+      bookmarks: [{
+        id: { type: String, required: true },
+        surah: { type: Number, min: 1, max: 114, required: true },
+        ayah: { type: Number, min: 1, required: true },
+        surahName: { type: String, required: true, trim: true },
+        timestamp: { type: Date, default: Date.now },
+        note: { type: String, trim: true, maxlength: 500 },
+        color: { type: String, enum: ['emerald', 'blue', 'purple', 'amber', 'rose'] },
+      }],
+      settings: { type: Schema.Types.Mixed },
       completedSurahs: [{ type: Number, min: 1, max: 114 }],
       totalRecitations: { type: Number, default: 0 },
+    },
+    dhikrDuaProgress: {
+      bookmarks: [{ type: String, trim: true }],
+      lastViewedDuaId: { type: String, trim: true },
+      tasbih: {
+        presetId: { type: String, trim: true },
+        count: { type: Number, min: 0, default: 0 },
+      },
+      dailyTracker: {
+        date: { type: String, trim: true },
+        counts: { type: Schema.Types.Mixed },
+      },
+      reminders: {
+        enabled: { type: Boolean, default: false },
+        morning: { type: Boolean, default: true },
+        evening: { type: Boolean, default: true },
+        friday: { type: Boolean, default: true },
+        scheduleType: {
+          type: String,
+          enum: ['periodic', 'specific'],
+          default: 'periodic',
+        },
+        periodicIntervalMinutes: {
+          type: Number,
+          enum: [30, 60, 120, 180, 360],
+          default: 180,
+        },
+        specificTime: {
+          type: String,
+          default: '08:00',
+          match: [/^([01]\d|2[0-3]):([0-5]\d)$/, 'Reminder time must be HH:MM (24-hour).'],
+        },
+        includeDhikr: { type: Boolean, default: true },
+        includeDua: { type: Boolean, default: true },
+      },
+      settings: {
+        darkMode: { type: Boolean, default: false },
+        translationLanguage: {
+          type: String,
+          enum: ['english', 'urdu'],
+          default: 'english',
+        },
+      },
+      updatedAt: { type: Date, default: Date.now },
     },
   },
   community: {

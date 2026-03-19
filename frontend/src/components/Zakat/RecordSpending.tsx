@@ -123,10 +123,6 @@ const RecordSpending: React.FC<RecordSpendingProps> = ({ currentBalance, onSucce
         toast.error('Bank Name is required for Bank Transfer');
         return false;
       }
-      if (!formData.transactionRefId || !/^\d{6}$/.test(formData.transactionRefId)) {
-        toast.error('Transaction Ref ID must be exactly 6 digits');
-        return false;
-      }
     }
 
     if (formData.paymentMethod === 'UPI Transfer') {
@@ -134,8 +130,12 @@ const RecordSpending: React.FC<RecordSpendingProps> = ({ currentBalance, onSucce
         toast.error('Sender UPI ID is required for UPI Transfer');
         return false;
       }
-      if (!formData.transactionRefId || !/^\d{6}$/.test(formData.transactionRefId)) {
-        toast.error('Transaction Ref ID must be exactly 6 digits');
+      if (!/^\d+@[a-zA-Z]+$/.test(formData.senderUpiId)) {
+        toast.error('UPI ID must be in format: number@bank (e.g., 9876543210@oksbi)');
+        return false;
+      }
+      if (!formData.transactionRefId || !/^\d{6,}$/.test(formData.transactionRefId)) {
+        toast.error('Transaction Ref ID is required (minimum 6 digits)');
         return false;
       }
     }
@@ -145,15 +145,11 @@ const RecordSpending: React.FC<RecordSpendingProps> = ({ currentBalance, onSucce
         toast.error('Cheque Number is required');
         return false;
       }
-      if (!formData.transactionRefId || !/^\d{6}$/.test(formData.transactionRefId)) {
-        toast.error('Transaction Ref ID must be exactly 6 digits');
-        return false;
-      }
     }
 
     if (formData.paymentMethod === 'QR Scanner') {
-      if (!formData.transactionRefId || !/^\d{6}$/.test(formData.transactionRefId)) {
-        toast.error('Transaction Ref ID must be exactly 6 digits');
+      if (!formData.transactionRefId || !/^\d{6,}$/.test(formData.transactionRefId)) {
+        toast.error('Transaction Ref ID is required (minimum 6 digits)');
         return false;
       }
     }
@@ -262,29 +258,27 @@ const RecordSpending: React.FC<RecordSpendingProps> = ({ currentBalance, onSucce
   const isQRScanner = formData.paymentMethod === 'QR Scanner';
 
   return (
-    <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-      <div className="bg-white rounded-2xl max-w-2xl w-full my-8 shadow-2xl">
-        <div className="flex justify-between items-center p-6 border-b border-gray-200">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-orange-500 rounded-xl flex items-center justify-center">
-              <ArrowDownOnSquareIcon className="w-6 h-6 text-white" />
+    <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-3xl sm:my-8 shadow-2xl lg:max-w-xl max-h-[85vh] flex flex-col">
+        <div className="flex justify-between items-center p-4 border-b border-gray-200 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 bg-gradient-to-br from-red-500 to-orange-500 rounded-xl flex items-center justify-center flex-shrink-0">
+              <ArrowDownOnSquareIcon className="w-5 h-5 text-white" />
             </div>
-            <div>
-              <h2 className="text-xl font-bold text-gray-900">Record Zakat Spending</h2>
-              <p className="text-sm text-gray-500">Distribute zakat to recipients</p>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-base sm:text-lg font-bold text-gray-900 truncate">Record Zakat Spending</h2>
+              <p className="text-xs text-gray-500 truncate">Distribute zakat</p>
             </div>
           </div>
-          {onClose && (
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
-              <XMarkIcon className="w-6 h-6" />
-            </button>
-          )}
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-lg flex-shrink-0">
+            <XMarkIcon className="w-6 h-6" />
+          </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        <form onSubmit={handleSubmit} className="p-4 space-y-3 overflow-y-auto flex-1">
           {/* Recipient Name */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
+            <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5">
               Recipient Name <span className="text-red-500">*</span>
             </label>
             <input
@@ -292,39 +286,42 @@ const RecordSpending: React.FC<RecordSpendingProps> = ({ currentBalance, onSucce
               value={formData.recipientName}
               onChange={(e) => handleInputChange('recipientName', e.target.value)}
               placeholder="Enter recipient name"
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              className="w-full px-3 sm:px-4 py-2.5 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm sm:text-base"
               required
             />
           </div>
 
           {/* Recipient Type */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
+            <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5">
               Recipient Type <span className="text-red-500">*</span>
             </label>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {RECIPIENT_TYPES.map((type) => (
                 <button
                   key={type.value}
                   type="button"
                   onClick={() => handleInputChange('recipientType', type.value)}
-                  className={`flex flex-col items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 transition-all ${
+                  className={`flex flex-col items-center justify-center gap-1.5 px-2 py-2.5 rounded-xl border-2 transition-all text-xs sm:text-sm ${
                     formData.recipientType === type.value
                       ? 'border-red-500 bg-red-50 text-red-700'
                       : 'border-gray-200 text-gray-600 hover:border-gray-300'
                   }`}
                 >
-                  {type.icon}
-                  <span className="text-sm font-medium">{type.label}</span>
+                  <div className="w-4 h-4 [&>svg]:w-full [&>svg]:h-full">
+                    {type.icon}
+                  </div>
+                  <span className="hidden sm:inline">{type.label}</span>
+                  <span className="sm:hidden">{type.label.substring(0, 8)}</span>
                 </button>
               ))}
             </div>
           </div>
 
           {/* Amount and Date */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5">
                 Amount (₹) <span className="text-red-500">*</span>
               </label>
               <input
@@ -390,18 +387,17 @@ const RecordSpending: React.FC<RecordSpendingProps> = ({ currentBalance, onSucce
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Transaction Ref ID (Last 6 Digits) <span className="text-red-500">*</span>
+                  Transaction Ref ID (Minimum 6 Digits) <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.transactionRefId}
                   onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, '').slice(0, 6);
+                    const value = e.target.value.replace(/\D/g, '');
                     handleInputChange('transactionRefId', value);
                   }}
-                  placeholder="Enter 6-digit reference"
-                  maxLength={6}
-                  pattern="\d{6}"
+                  placeholder="Enter reference ID (min 6 digits)"
+                  pattern="\d{6,}"
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 font-mono tracking-wider"
                   required
                 />
@@ -419,25 +415,24 @@ const RecordSpending: React.FC<RecordSpendingProps> = ({ currentBalance, onSucce
                   type="text"
                   value={formData.senderUpiId}
                   onChange={(e) => handleInputChange('senderUpiId', e.target.value)}
-                  placeholder="e.g., username@oksbi"
+                  placeholder="e.g., 9876543210@oksbi"
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500"
                   required
                 />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Transaction Ref ID (Last 6 Digits) <span className="text-red-500">*</span>
+                  Transaction Ref ID (Minimum 6 Digits) <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.transactionRefId}
                   onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, '').slice(0, 6);
+                    const value = e.target.value.replace(/\D/g, '');
                     handleInputChange('transactionRefId', value);
                   }}
-                  placeholder="Enter 6-digit reference"
-                  maxLength={6}
-                  pattern="\d{6}"
+                  placeholder="Enter reference ID (min 6 digits)"
+                  pattern="\d{6,}"
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 font-mono tracking-wider"
                   required
                 />
@@ -462,18 +457,17 @@ const RecordSpending: React.FC<RecordSpendingProps> = ({ currentBalance, onSucce
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Transaction Ref ID (Last 6 Digits) <span className="text-red-500">*</span>
+                  Transaction Ref ID (Minimum 6 Digits) <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.transactionRefId}
                   onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, '').slice(0, 6);
+                    const value = e.target.value.replace(/\D/g, '');
                     handleInputChange('transactionRefId', value);
                   }}
-                  placeholder="Enter 6-digit reference"
-                  maxLength={6}
-                  pattern="\d{6}"
+                  placeholder="Enter reference ID (min 6 digits)"
+                  pattern="\d{6,}"
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 font-mono tracking-wider"
                   required
                 />
@@ -484,18 +478,17 @@ const RecordSpending: React.FC<RecordSpendingProps> = ({ currentBalance, onSucce
           {isQRScanner && (
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Transaction Ref ID (Last 6 Digits) <span className="text-red-500">*</span>
+                Transaction Ref ID (Minimum 6 Digits) <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 value={formData.transactionRefId}
                 onChange={(e) => {
-                  const value = e.target.value.replace(/\D/g, '').slice(0, 6);
+                  const value = e.target.value.replace(/\D/g, '');
                   handleInputChange('transactionRefId', value);
                 }}
-                placeholder="Enter 6-digit reference"
-                maxLength={6}
-                pattern="\d{6}"
+                placeholder="Enter reference ID (min 6 digits)"
+                pattern="\d{6,}"
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 font-mono tracking-wider"
                 required
               />
@@ -514,10 +507,10 @@ const RecordSpending: React.FC<RecordSpendingProps> = ({ currentBalance, onSucce
             />
           </div>
 
-          {/* Supporting Document Upload (Optional) */}
+          {/* Proof of Payment Upload (Optional) */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Supporting Document (Optional)
+              Proof of Payment (Optional)
             </label>
             <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:border-red-500 transition-colors">
               <input
@@ -529,7 +522,20 @@ const RecordSpending: React.FC<RecordSpendingProps> = ({ currentBalance, onSucce
               />
               <label htmlFor="spending-proof-upload" className="cursor-pointer">
                 {proofPreview ? (
-                  <div className="space-y-2">
+                  <div className="space-y-2 relative">
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setProofFile(null);
+                        setProofPreview(null);
+                      }}
+                      className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 z-10"
+                      title="Remove proof"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
                     {proofPreview.startsWith('data:image') ? (
                       <img src={proofPreview} alt="Preview" className="max-h-40 mx-auto rounded-lg" />
                     ) : (

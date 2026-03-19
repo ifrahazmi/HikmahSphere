@@ -73,15 +73,16 @@ router.post('/register', [
     }
 
     const { username, email, password, firstName, lastName } = req.body;
+    const normalizedEmail = String(email).trim().toLowerCase();
 
-    let user = await User.findOne({ $or: [{ email }, { username }] });
+    let user = await User.findOne({ $or: [{ email: normalizedEmail }, { username }] });
     if (user) {
       return res.status(400).json({ status: 'error', message: 'User already exists' });
     }
 
     user = new User({
       username,
-      email,
+      email: normalizedEmail,
       password,
       firstName,
       lastName,
@@ -90,17 +91,17 @@ router.post('/register', [
 
     await user.save();
 
-    const accessToken = generateToken(user._id);
-    const refreshToken = generateRefreshToken(user._id);
+    const accessToken = generateToken(user._id.toString());
+    const refreshToken = generateRefreshToken(user._id.toString());
 
     // Log registration activity
     await logAnonymousActivity(
       user._id.toString(),
       `${firstName} ${lastName}`,
-      email,
+      normalizedEmail,
       'register',
       'auth',
-      `New user registered: ${email}`,
+      `New user registered: ${normalizedEmail}`,
       req,
       { username, role: user.role }
     );
@@ -110,9 +111,12 @@ router.post('/register', [
       token: accessToken,
       refreshToken,
       user: {
-        id: user._id,
+        id: user._id.toString(),
         username: user.username,
         email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        createdAt: user.createdAt,
         role: user.role,
         isAdmin: user.isAdmin
       },
@@ -137,7 +141,8 @@ router.post('/login', [
     }
 
     const { email, password } = req.body;
-    const user = await User.findOne({ email }).select('+password');
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const user = await User.findOne({ email: normalizedEmail }).select('+password');
     
     if (!user) {
       return res.status(401).json({ status: 'error', message: 'Invalid credentials' });
@@ -154,13 +159,13 @@ router.post('/login', [
     }
 
     // Reset login attempts
-    await User.updateOne({ _id: user._id }, { 
+    await User.updateOne({ _id: user._id }, {
         $unset: { 'security.lockUntil': 1 },
-        $set: { 'security.loginAttempts': 0, 'security.lastLogin': new Date() } 
+        $set: { 'security.loginAttempts': 0, 'security.lastLogin': new Date() }
     });
 
-    const accessToken = generateToken(user._id);
-    const refreshToken = generateRefreshToken(user._id);
+    const accessToken = generateToken(user._id.toString());
+    const refreshToken = generateRefreshToken(user._id.toString());
 
     // Log login activity
     await logAnonymousActivity(
@@ -194,6 +199,7 @@ router.post('/login', [
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
+        createdAt: user.createdAt,
         role: user.role,
         isAdmin: user.isAdmin
       },

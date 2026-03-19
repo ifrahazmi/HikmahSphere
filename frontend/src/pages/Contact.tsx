@@ -9,6 +9,7 @@ import {
   EnvelopeIcon,
   CheckCircleIcon
 } from '@heroicons/react/24/outline';
+import PageSEO from '../components/PageSEO';
 import { API_URL } from '../config';
 
 type ContactFormData = {
@@ -76,7 +77,19 @@ const Contact: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-20 pb-12 px-4 sm:px-6 lg:px-8">
+    <>
+      <PageSEO
+        title="Contact HikmahSphere Support"
+        description="Contact HikmahSphere for support, bug reports, feature suggestions, and Islamic content corrections. We value your feedback and aim to respond quickly."
+        path="/contact"
+        keywords={[
+          'hikmahsphere contact',
+          'islamic app support',
+          'report bug hikmahsphere',
+          'feature request hikmahsphere',
+        ]}
+      />
+      <div className="min-h-screen bg-gray-50 pt-20 pb-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-12">
           <h1 className="text-3xl font-bold text-gray-900 sm:text-4xl">
@@ -251,7 +264,8 @@ const Contact: React.FC = () => {
           ))}
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 

@@ -15,18 +15,37 @@ import redisClient from './config/redis'; // Import Redis client
 import authRoutes from './routes/auth';
 import prayerRoutes from './routes/prayers';
 import quranRoutes from './routes/quran';
+import dhikrRoutes from './routes/dhikr';
 import zakatRoutes from './routes/zakat';
 import communityRoutes from './routes/community';
 import notificationRoutes from './routes/notifications'; // Import notification routes
 import supportRoutes from './routes/support'; // Import support routes
 import activityRoutes from './routes/activity'; // Import activity log routes
+import salahTrackerRoutes from './routes/salahTracker';
+import hajjGuideRoutes from './routes/hajjGuide';
+import gamesRoutes from './routes/games';
 
 // Load environment variables
-// Try to load from root .env for local development, fallback to Docker env vars
-const envPath = path.join(process.cwd(), '../.env');
-dotenv.config({ path: envPath });
-// Also try current directory as fallback
-dotenv.config();
+// Use __dirname to resolve paths correctly regardless of whether running from src/ or dist/
+const rootDir = path.resolve(__dirname, '..');
+const envPaths = [
+  path.join(rootDir, '.env'),           // Root .env (for both dev and production)
+  path.join(process.cwd(), '.env'),     // Fallback to current directory
+];
+
+console.log('📝 Attempting to load .env from:', envPaths);
+
+for (const envPath of envPaths) {
+  dotenv.config({ path: envPath, override: false });
+}
+
+// Log loaded Islamic API Key (masked)
+const apiKey = process.env.ISLAMIC_API_KEY;
+if (apiKey) {
+    console.log(`🔑 ISLAMIC_API_KEY loaded successfully: ${apiKey.substring(0, 5)}...`);
+} else {
+    console.warn('⚠️ ISLAMIC_API_KEY is missing from environment variables!');
+}
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '5000', 10);
@@ -59,7 +78,8 @@ const limiter = rateLimit({
   },
   validate: {
       xForwardedForHeader: false, // Disable validation if we trust proxy logic is complex
-  }
+  },
+  skip: (req) => req.path.startsWith('/api/hajj-guide/images'),
 });
 
 app.use(limiter);
@@ -96,15 +116,42 @@ app.get('/', (req, res) => {
       auth: '/api/auth',
       prayers: '/api/prayers',
       quran: '/api/quran',
+      dhikr: '/api/dhikr',
       zakat: '/api/zakat',
-      community: '/api/community'
+      community: '/api/community',
+      salahTracker: '/api/salah-tracker',
+      hajjGuide: '/api/hajj-guide',
     },
     documentation: `http://localhost:${process.env.PORT || 5000}/docs`
   });
 });
 
-// Health check endpoint
-app.get('/health', async (req, res) => {
+// API base endpoint (supports both /api and /api/)
+app.get(['/api', '/api/'], (req, res) => {
+  res.status(200).json({
+    status: 'success',
+    message: '🕌 HikmahSphere API base endpoint',
+    version: '1.0.0',
+    basePath: '/api',
+    endpoints: {
+      health: '/health',
+      auth: '/api/auth',
+      prayers: '/api/prayers',
+      quran: '/api/quran',
+      dhikr: '/api/dhikr',
+      zakat: '/api/zakat',
+      community: '/api/community',
+      notifications: '/api/notifications',
+      support: '/api/support',
+      activity: '/api/activity',
+      salahTracker: '/api/salah-tracker',
+      hajjGuide: '/api/hajj-guide',
+    },
+  });
+});
+
+// Health check endpoint (supports both /health and /api/health)
+app.get(['/health', '/api/health'], async (req, res) => {
   let redisStatus = 'disconnected';
   try {
       if (redisClient.isOpen) {
@@ -182,11 +229,15 @@ app.get('/api/tools/users', async (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/prayers', prayerRoutes);
 app.use('/api/quran', quranRoutes);
+app.use('/api/dhikr', dhikrRoutes);
 app.use('/api/zakat', zakatRoutes);
 app.use('/api/community', communityRoutes);
 app.use('/api/notifications', notificationRoutes); // Use notification routes
 app.use('/api/support', supportRoutes); // Use support routes
 app.use('/api/activity', activityRoutes); // Use activity log routes
+app.use('/api/salah-tracker', salahTrackerRoutes);
+app.use('/api/hajj-guide', hajjGuideRoutes);
+app.use('/api/games', gamesRoutes);
 
 // Admin Routes for User Management (Restricted to Super Admin)
 // Get All Users

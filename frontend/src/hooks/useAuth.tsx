@@ -1,5 +1,6 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { API_URL } from '../config';
+import { getPushDeviceId, getStoredPushToken, storePushToken } from '../firebase';
 
 interface User {
   id: string;
@@ -44,9 +45,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const mapUser = (apiUser: any): User => {
+      const firstName = typeof apiUser.firstName === 'string' ? apiUser.firstName.trim() : '';
+      const lastName = typeof apiUser.lastName === 'string' ? apiUser.lastName.trim() : '';
+      const composedName = `${firstName} ${lastName}`.trim();
+      const fallbackName =
+        typeof apiUser.name === 'string' && apiUser.name.trim().length > 0
+          ? apiUser.name.trim()
+          : typeof apiUser.username === 'string' && apiUser.username.trim().length > 0
+            ? apiUser.username.trim()
+            : 'User';
+
       return {
-        id: apiUser._id,
-        name: `${apiUser.firstName} ${apiUser.lastName}`,
+        id: apiUser._id || apiUser.id,
+        name: composedName || fallbackName,
         email: apiUser.email,
         isAdmin: apiUser.isAdmin,
         role: apiUser.role || (apiUser.isAdmin ? 'superadmin' : 'user'), // Map role
@@ -64,9 +75,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const token = localStorage.getItem('token');
       const storedUser = localStorage.getItem('user');
-      
-      // First try to get user from stored data
-      if (storedUser) {
+
+      // Only set user from localStorage if we have a token
+      // Otherwise wait for API validation
+      if (token && storedUser) {
         try {
           const parsedUser = JSON.parse(storedUser);
           setUser(mapUser(parsedUser));
@@ -74,7 +86,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           localStorage.removeItem('user');
         }
       }
-      
+
       if (token) {
         try {
             const response = await fetch(`${API_URL}/auth/profile`, {
@@ -104,6 +116,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             localStorage.removeItem('user');
             setUser(null);
         }
+      } else {
+        // No token - clear any stored user data
+        localStorage.removeItem('user');
+        setUser(null);
       }
     } catch (error) {
       console.error('Auth check failed:', error);
@@ -117,12 +133,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const login = async (email: string, password: string) => {
     try {
       setLoading(true);
+      const normalizedEmail = email.trim().toLowerCase();
       const response = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: normalizedEmail, password }),
       });
 
       const data = await response.json();
@@ -131,8 +148,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         localStorage.setItem('token', data.token);
         if (data.user) {
           localStorage.setItem('user', JSON.stringify(data.user));
-          setUser(mapUser(data.user));
         }
+        await checkAuthStatus();
       } else {
         throw new Error(data.message || 'Login failed');
       }
@@ -147,6 +164,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const register = async (name: string, email: string, password: string) => {
     try {
       setLoading(true);
+      const normalizedEmail = email.trim().toLowerCase();
       const [firstName, ...lastNameParts] = name.split(' ');
       const lastName = lastNameParts.join(' ') || 'User';
 
@@ -158,9 +176,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         body: JSON.stringify({ 
             firstName, 
             lastName, 
-            email, 
+            email: normalizedEmail, 
             password,
-            username: email.split('@')[0] + Math.floor(Math.random() * 1000) 
+            username: normalizedEmail.split('@')[0] + Math.floor(Math.random() * 1000) 
         }),
       });
 
@@ -181,7 +199,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const logout = () => {
+    const authToken = localStorage.getItem('token');
+    const pushToken = getStoredPushToken();
+    const deviceId = getPushDeviceId();
+
+    if (authToken && (pushToken || deviceId)) {
+      void fetch(`${API_URL}/notifications/token`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({
+          token: pushToken,
+          deviceId,
+        }),
+      }).catch((error) => {
+        console.error('Failed to remove FCM token during logout:', error);
+      });
+    }
+
+    storePushToken(null);
     localStorage.removeItem('token');
+    localStorage.removeItem('user');
     setUser(null);
   };
 

@@ -84,6 +84,8 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
   // New form modals
   const [showCollectionModal, setShowCollectionModal] = useState(false);
   const [showSpendingModal, setShowSpendingModal] = useState(false);
+  const [editProofFile, setEditProofFile] = useState<File | null>(null);
+  const [editProofPreview, setEditProofPreview] = useState<string | null>(null);
 
   // Filter state
   const [filterType, setFilterType] = useState<'all' | 'collection' | 'spending'>('all');
@@ -103,6 +105,21 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Listen for export events from Dashboard
+  useEffect(() => {
+    const handleExportCSV = () => exportToCSV();
+    const handleExportJSON = () => exportToJSON();
+
+    window.addEventListener('export-zakat-csv', handleExportCSV);
+    window.addEventListener('export-zakat-json', handleExportJSON);
+
+    return () => {
+      window.removeEventListener('export-zakat-csv', handleExportCSV);
+      window.removeEventListener('export-zakat-json', handleExportJSON);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zakatTransactions]);
 
   const fetchZakatData = async () => {
     try {
@@ -182,6 +199,11 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
       if (editingTransaction.chequeNumber) formData.append('chequeNumber', editingTransaction.chequeNumber);
       if (editingTransaction.transactionRefId) formData.append('transactionRefId', editingTransaction.transactionRefId);
       if (editingTransaction.notes) formData.append('notes', editingTransaction.notes);
+      if (editProofFile) formData.append('proofOfPayment', editProofFile);
+      // If user removed the existing proof (red X) and didn't upload a new one
+      if (!editingTransaction.proofFilePath && !editProofFile) {
+        formData.append('removeProof', 'true');
+      }
 
       const response = await fetch(`${API_URL}/zakat/payment/${editingTransaction._id}`, {
         method: 'PUT',
@@ -194,6 +216,8 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
       if (data.status === 'success') {
         toast.success('Transaction updated successfully');
         setShowEditModal(false);
+        setEditProofFile(null);
+        setEditProofPreview(null);
         fetchZakatData();
       } else {
         toast.error(data.message || 'Update failed');
@@ -404,32 +428,32 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
 
       {/* Action Buttons */}
       {isAdmin && showRecordButtons && (
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-col sm:flex-row flex-wrap gap-3">
           <button
             onClick={() => setShowCollectionModal(true)}
-            className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl hover:from-emerald-700 hover:to-teal-700 transition-all font-semibold shadow-md hover:shadow-lg"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl hover:from-emerald-700 hover:to-teal-700 transition-all font-semibold shadow-md hover:shadow-lg active:scale-95"
           >
             <ArrowUpOnSquareIcon className="h-5 w-5" />
-            Record Collection
+            <span>Record Collection</span>
           </button>
-          
+
           <button
             onClick={() => setShowSpendingModal(true)}
-            className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-red-600 to-orange-600 text-white rounded-xl hover:from-red-700 hover:to-orange-700 transition-all font-semibold shadow-md hover:shadow-lg"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-red-600 to-orange-600 text-white rounded-xl hover:from-red-700 hover:to-orange-700 transition-all font-semibold shadow-md hover:shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={zakatStats.currentBalance <= 0}
           >
             <ArrowDownOnSquareIcon className="h-5 w-5" />
-            Record Spending
+            <span>Record Spending</span>
           </button>
 
           <div className="flex-1" />
 
           {/* Filter */}
           {showFilters && (
-          <div className="flex items-center gap-2 bg-white rounded-xl border border-gray-200 p-1">
+          <div className="flex items-center gap-2 bg-white rounded-xl border border-gray-200 p-1 overflow-x-auto">
             <button
               onClick={() => setFilterType('all')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
                 filterType === 'all' ? 'bg-emerald-100 text-emerald-700' : 'text-gray-600 hover:bg-gray-100'
               }`}
             >
@@ -437,7 +461,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
             </button>
             <button
               onClick={() => setFilterType('collection')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
                 filterType === 'collection' ? 'bg-green-100 text-green-700' : 'text-gray-600 hover:bg-gray-100'
               }`}
             >
@@ -445,7 +469,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
             </button>
             <button
               onClick={() => setFilterType('spending')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
                 filterType === 'spending' ? 'bg-red-100 text-red-700' : 'text-gray-600 hover:bg-gray-100'
               }`}
             >
@@ -520,107 +544,204 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Party</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment Details</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredTransactions.map((t) => (
-                  <tr key={t._id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
+          <>
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto rounded-xl border border-gray-200">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Party</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment Details</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredTransactions.map((t) => (
+                    <tr key={t._id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">
+                          {new Date(t.paymentDate).toLocaleDateString('en-IN', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric'
+                          })}
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          Rec: {t.createdAt ? new Date(t.createdAt).toLocaleDateString('en-IN') : '-'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          t.type === 'collection'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {t.type === 'collection' ? 'Collection' : 'Spending'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">
+                          {t.type === 'collection' ? t.donorName : t.recipientName}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {t.type === 'collection' ? t.donorType : t.recipientType}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                        <div className="flex flex-col gap-1">
+                          <span className="font-medium">{t.paymentMethod}</span>
+                          {getPaymentDetails(t) !== t.paymentMethod && (
+                            <span className="text-xs text-gray-500">{getPaymentDetails(t)}</span>
+                          )}
+                          {t.proofFilePath && isAdmin && (
+                            <span
+                              onClick={(e) => handleProofClick(e, t.proofFilePath!)}
+                              className="text-xs text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer inline-flex items-center gap-1 font-medium px-2.5 py-1.5 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors"
+                            >
+                              📎 View Proof
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className={`px-6 py-4 whitespace-nowrap text-right text-sm font-bold ${
+                        t.type === 'collection' ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        {t.type === 'collection' ? '+' : '-'}₹{t.amount.toLocaleString('en-IN')}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => { setViewingTransaction(t); setShowViewModal(true); }}
+                            className="text-blue-600 hover:text-blue-900 p-1 hover:bg-blue-50 rounded transition-colors"
+                            title="View Details"
+                          >
+                            <EyeIcon className="h-5 w-5" />
+                          </button>
+                          {isAdmin && (
+                            <>
+                              <button
+                                onClick={() => { setEditingTransaction(t); setEditProofFile(null); setEditProofPreview(null); setShowEditModal(true); }}
+                                className="text-indigo-600 hover:text-indigo-900 p-1 hover:bg-indigo-50 rounded transition-colors"
+                                title="Edit"
+                              >
+                                <PencilIcon className="h-5 w-5" />
+                              </button>
+                              {canDelete && (
+                                <button
+                                  onClick={() => handleDeleteTransaction(t._id)}
+                                  className="text-red-600 hover:text-red-900 p-1 hover:bg-red-50 rounded transition-colors"
+                                  title="Delete"
+                                >
+                                  <TrashIcon className="h-5 w-5" />
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card View */}
+            <div className="md:hidden space-y-3">
+              {filteredTransactions.map((t) => (
+                <div
+                  key={t._id}
+                  className="bg-white rounded-xl shadow-md border border-gray-200 p-4 hover:shadow-lg transition-shadow"
+                >
+                  {/* Header */}
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <span className={`px-2.5 py-1 inline-flex text-xs font-semibold rounded-full ${
+                        t.type === 'collection'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {t.type === 'collection' ? '💰 Collection' : '💸 Spending'}
+                      </span>
+                      <p className="text-xs text-gray-500 mt-1">
                         {new Date(t.paymentDate).toLocaleDateString('en-IN', {
                           day: 'numeric',
                           month: 'short',
                           year: 'numeric'
                         })}
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        Rec: {t.createdAt ? new Date(t.createdAt).toLocaleDateString('en-IN') : '-'}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        t.type === 'collection' 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {t.type === 'collection' ? 'Collection' : 'Spending'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
-                        {t.type === 'collection' ? t.donorName : t.recipientName}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {t.type === 'collection' ? t.donorType : t.recipientType}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      <div className="flex flex-col gap-1">
-                        <span className="font-medium">{t.paymentMethod}</span>
-                        {getPaymentDetails(t) !== t.paymentMethod && (
-                          <span className="text-xs text-gray-500">{getPaymentDetails(t)}</span>
-                        )}
-                        {t.proofFilePath && isAdmin && (
-                          <span
-                            onClick={(e) => handleProofClick(e, t.proofFilePath!)}
-                            className="text-xs text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer inline-flex items-center gap-1 font-medium px-2.5 py-1.5 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors"
-                          >
-                            📎 View Proof
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className={`px-6 py-4 whitespace-nowrap text-right text-sm font-bold ${
+                      </p>
+                    </div>
+                    <p className={`text-lg font-bold ${
                       t.type === 'collection' ? 'text-green-600' : 'text-red-600'
                     }`}>
                       {t.type === 'collection' ? '+' : '-'}₹{t.amount.toLocaleString('en-IN')}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex justify-end gap-2">
+                    </p>
+                  </div>
+
+                  {/* Party Info */}
+                  <div className="mb-3 pb-3 border-b border-gray-100">
+                    <p className="text-sm font-medium text-gray-900">
+                      {t.type === 'collection' ? t.donorName : t.recipientName}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {t.type === 'collection' ? t.donorType : t.recipientType}
+                    </p>
+                  </div>
+
+                  {/* Payment Details */}
+                  <div className="mb-3 text-sm">
+                    <div className="flex items-center gap-2 text-gray-600 mb-1">
+                      <span className="font-medium">{t.paymentMethod}</span>
+                    </div>
+                    {getPaymentDetails(t) !== t.paymentMethod && (
+                      <p className="text-xs text-gray-500">{getPaymentDetails(t)}</p>
+                    )}
+                    {t.proofFilePath && isAdmin && (
+                      <button
+                        onClick={(e) => handleProofClick(e, t.proofFilePath!)}
+                        className="text-xs text-emerald-600 hover:text-emerald-700 font-medium mt-1 inline-flex items-center gap-1"
+                      >
+                        📎 View Proof
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+                    <button
+                      onClick={() => { setViewingTransaction(t); setShowViewModal(true); }}
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+                    >
+                      <EyeIcon className="h-4 w-4" />
+                      View
+                    </button>
+                    {isAdmin && (
+                      <>
                         <button
-                          onClick={() => { setViewingTransaction(t); setShowViewModal(true); }}
-                          className="text-blue-600 hover:text-blue-900 p-1 hover:bg-blue-50 rounded transition-colors"
-                          title="View Details"
+                          onClick={() => { setEditingTransaction(t); setEditProofFile(null); setEditProofPreview(null); setShowEditModal(true); }}
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors"
                         >
-                          <EyeIcon className="h-5 w-5" />
+                          <PencilIcon className="h-4 w-4" />
+                          Edit
                         </button>
-                        {isAdmin && (
-                          <>
-                            <button
-                              onClick={() => { setEditingTransaction(t); setShowEditModal(true); }}
-                              className="text-indigo-600 hover:text-indigo-900 p-1 hover:bg-indigo-50 rounded transition-colors"
-                              title="Edit"
-                            >
-                              <PencilIcon className="h-5 w-5" />
-                            </button>
-                            {canDelete && (
-                              <button
-                                onClick={() => handleDeleteTransaction(t._id)}
-                                className="text-red-600 hover:text-red-900 p-1 hover:bg-red-50 rounded transition-colors"
-                                title="Delete"
-                              >
-                                <TrashIcon className="h-5 w-5" />
-                              </button>
-                            )}
-                          </>
+                        {canDelete && (
+                          <button
+                            onClick={() => handleDeleteTransaction(t._id)}
+                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
+                          >
+                            <TrashIcon className="h-4 w-4" />
+                            Delete
+                          </button>
                         )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
 
@@ -643,15 +764,25 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
 
       {/* View Transaction Modal */}
       {showViewModal && viewingTransaction && (
-        <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl">
-            <div className="flex justify-between items-center p-6 border-b">
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-gray-900/50 p-3 sm:items-center sm:p-4"
+          onClick={() => setShowViewModal(false)}
+        >
+          <div
+            className="my-3 w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl max-h-[92dvh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-white/95 p-4 backdrop-blur sm:p-6">
               <h3 className="text-xl font-bold text-gray-900">Transaction Details</h3>
-              <button onClick={() => setShowViewModal(false)} className="text-gray-400 hover:text-gray-600">
+              <button
+                onClick={() => setShowViewModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+                aria-label="Close transaction details"
+              >
                 <XMarkIcon className="w-6 h-6" />
               </button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="max-h-[calc(92dvh-10rem)] overflow-y-auto p-4 space-y-4 sm:max-h-[calc(92dvh-11rem)] sm:p-6">
               <div className="flex items-center gap-3">
                 <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
                   viewingTransaction.type === 'collection' 
@@ -665,7 +796,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                 </span>
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <p className="text-sm text-gray-500">Date</p>
                   <p className="font-medium">
@@ -701,9 +832,9 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                   </div>
                 )}
                 {viewingTransaction.senderUpiId && (
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-sm text-gray-500">Sender UPI ID</p>
-                    <p className="font-medium">{viewingTransaction.senderUpiId}</p>
+                    <p className="font-medium break-all">{viewingTransaction.senderUpiId}</p>
                   </div>
                 )}
                 {viewingTransaction.chequeNumber && (
@@ -713,9 +844,9 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                   </div>
                 )}
                 {viewingTransaction.transactionRefId && (
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-sm text-gray-500">Reference ID</p>
-                    <p className="font-mono font-medium">{viewingTransaction.transactionRefId}</p>
+                    <p className="font-mono font-medium break-all text-sm sm:text-base">{viewingTransaction.transactionRefId}</p>
                   </div>
                 )}
                 <div>
@@ -748,7 +879,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                 </div>
               )}
             </div>
-            <div className="p-6 border-t bg-gray-50 rounded-b-2xl">
+            <div className="sticky bottom-0 border-t bg-gray-50 p-4 sm:rounded-b-2xl sm:p-6">
               <button
                 onClick={() => setShowViewModal(false)}
                 className="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-colors font-medium"
@@ -862,16 +993,15 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
 
               {(editingTransaction.paymentMethod === 'UPI Transfer' || editingTransaction.paymentMethod === 'QR Scanner') && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Transaction Ref ID</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Transaction Ref ID (Min 6 Digits)</label>
                   <input
                     type="text"
-                    maxLength={6}
-                    pattern="\d{6}"
+                    pattern="\d{6,}"
                     className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-mono"
                     value={editingTransaction.transactionRefId || ''}
                     onChange={e => setEditingTransaction({
-                      ...editingTransaction, 
-                      transactionRefId: e.target.value.replace(/\D/g, '').slice(0, 6)
+                      ...editingTransaction,
+                      transactionRefId: e.target.value.replace(/\D/g, '')
                     })}
                   />
                 </div>
@@ -885,6 +1015,94 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                   value={editingTransaction.notes || ''}
                   onChange={e => setEditingTransaction({...editingTransaction, notes: e.target.value})}
                 />
+              </div>
+
+              {/* Proof of Payment Upload / Replace */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Proof of Payment</label>
+                
+                {/* Show existing proof if present and no new file selected */}
+                {editingTransaction.proofFilePath && !editProofPreview && (
+                  <div className="mb-2 p-3 bg-gray-50 rounded-xl border border-gray-200 relative">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <DocumentArrowDownIcon className="w-5 h-5 text-emerald-600" />
+                        <span className="text-sm text-gray-700 font-medium">Existing proof uploaded</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPreviewProofPath(editingTransaction.proofFilePath!);
+                          setShowProofPreview(true);
+                        }}
+                        className="text-xs text-emerald-600 hover:text-emerald-700 font-medium hover:underline"
+                      >
+                        View
+                      </button>
+                    </div>
+                    {/* Red cross to remove existing proof */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingTransaction({ ...editingTransaction, proofFilePath: undefined });
+                        toast.success('Proof marked for removal. Click Save to confirm.');
+                      }}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 shadow"
+                      title="Remove proof"
+                    >
+                      <XMarkIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
+                {/* New file preview */}
+                {editProofPreview && (
+                  <div className="mb-2 relative">
+                    {editProofPreview.startsWith('data:image') ? (
+                      <img src={editProofPreview} alt="New proof" className="max-h-32 mx-auto rounded-lg border" />
+                    ) : (
+                      <div className="flex items-center gap-2 p-3 bg-emerald-50 rounded-xl border border-emerald-200">
+                        <DocumentArrowDownIcon className="w-5 h-5 text-emerald-600" />
+                        <span className="text-sm text-emerald-700 font-medium">{editProofFile?.name}</span>
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => { setEditProofFile(null); setEditProofPreview(null); }}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 shadow"
+                    >
+                      <XMarkIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
+                <input
+                  type="file"
+                  id="edit-proof-upload"
+                  accept="image/jpeg,image/jpg,image/png,application/pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      if (file.size > 5 * 1024 * 1024) {
+                        toast.error('File must be under 5MB');
+                        return;
+                      }
+                      setEditProofFile(file);
+                      const reader = new FileReader();
+                      reader.onloadend = () => setEditProofPreview(reader.result as string);
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                />
+                <label
+                  htmlFor="edit-proof-upload"
+                  className="inline-flex items-center gap-2 px-4 py-2 border border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-emerald-400 hover:bg-emerald-50 transition-colors text-sm text-gray-600 hover:text-emerald-700"
+                >
+                  <ArrowUpOnSquareIcon className="w-4 h-4" />
+                  {editingTransaction.proofFilePath ? 'Replace Proof' : 'Upload Proof'}
+                </label>
+                <p className="text-xs text-gray-500 mt-1">JPEG, PNG, or PDF. Max 5MB.</p>
               </div>
 
               <div className="flex gap-3 pt-4">

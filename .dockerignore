@@ -1,0 +1,42 @@
+# Database data
+db_data/
+.db_data/
+
+# Logs
+logs/
+*.log
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Qwen
+.qwen/
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Documentation
+*.md
+!backend/README.md
+!frontend/README.md
+
+# Misc
+.DS_Store
+Thumbs.db
+.env
+.env.*
+!.env.example
+
+# Build outputs
+backend/dist/
+frontend/build/
+node_modules/

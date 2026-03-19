@@ -222,10 +222,6 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
         toast.error('Bank Name is required for Bank Transfer');
         return false;
       }
-      if (!formData.transactionRefId || !/^\d{6}$/.test(formData.transactionRefId)) {
-        toast.error('Transaction Ref ID must be exactly 6 digits');
-        return false;
-      }
     }
 
     if (formData.paymentMethod === 'UPI Transfer') {
@@ -233,8 +229,12 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
         toast.error('Sender UPI ID is required for UPI Transfer');
         return false;
       }
-      if (!formData.transactionRefId || !/^\d{6}$/.test(formData.transactionRefId)) {
-        toast.error('Transaction Ref ID must be exactly 6 digits');
+      if (!/^\d+@[a-zA-Z]+$/.test(formData.senderUpiId)) {
+        toast.error('UPI ID must be in format: number@bank (e.g., 9876543210@oksbi)');
+        return false;
+      }
+      if (!formData.transactionRefId || !/^\d{6,}$/.test(formData.transactionRefId)) {
+        toast.error('Transaction Ref ID is required (minimum 6 digits)');
         return false;
       }
     }
@@ -247,8 +247,8 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
     }
 
     if (formData.paymentMethod === 'QR Scanner') {
-      if (!formData.transactionRefId || !/^\d{6}$/.test(formData.transactionRefId)) {
-        toast.error('Transaction Ref ID must be exactly 6 digits');
+      if (!formData.transactionRefId || !/^\d{6,}$/.test(formData.transactionRefId)) {
+        toast.error('Transaction Ref ID is required (minimum 6 digits)');
         return false;
       }
     }
@@ -283,7 +283,7 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
       if (formData.paymentMethod === 'Cheque') {
         formDataToSend.append('chequeNumber', formData.chequeNumber);
       }
-      if (formData.paymentMethod === 'QR Scanner' || formData.paymentMethod === 'Bank Transfer') {
+      if (formData.paymentMethod === 'QR Scanner' || formData.paymentMethod === 'Bank Transfer' || formData.paymentMethod === 'UPI Transfer') {
         formDataToSend.append('transactionRefId', formData.transactionRefId);
       }
       
@@ -365,29 +365,27 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
   const isQRScanner = formData.paymentMethod === 'QR Scanner';
 
   return (
-    <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-      <div className="bg-white rounded-2xl max-w-2xl w-full my-8 shadow-2xl">
-        <div className="flex justify-between items-center p-6 border-b border-gray-200">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl flex items-center justify-center">
-              <ArrowUpOnSquareIcon className="w-6 h-6 text-white" />
+    <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-3xl sm:my-8 shadow-2xl lg:max-w-xl max-h-[85vh] flex flex-col">
+        <div className="flex justify-between items-center p-4 border-b border-gray-200 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl flex items-center justify-center flex-shrink-0">
+              <ArrowUpOnSquareIcon className="w-5 h-5 text-white" />
             </div>
-            <div>
-              <h2 className="text-xl font-bold text-gray-900">Record Zakat Collection</h2>
-              <p className="text-sm text-gray-500">Add new zakat payment received</p>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-base sm:text-lg font-bold text-gray-900 truncate">Record Zakat Collection</h2>
+              <p className="text-xs text-gray-500 truncate">Add new zakat payment</p>
             </div>
           </div>
-          {onClose && (
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
-              <XMarkIcon className="w-6 h-6" />
-            </button>
-          )}
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-lg flex-shrink-0">
+            <XMarkIcon className="w-6 h-6" />
+          </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        <form onSubmit={handleSubmit} className="p-4 space-y-3 overflow-y-auto flex-1">
           {/* Donor Name with Autocomplete */}
           <div className="relative" ref={suggestionsRef}>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
+            <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5">
               Donor Name <span className="text-red-500">*</span>
             </label>
             <div className="relative">
@@ -398,7 +396,7 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
                 onChange={handleDonorNameChange}
                 onKeyDown={handleKeyDown}
                 placeholder="Start typing donor name..."
-                className="w-full px-4 py-3 pr-10 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+                className="w-full px-3 sm:px-4 py-2.5 pr-10 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all text-sm sm:text-base"
                 autoComplete="off"
                 required
               />
@@ -476,51 +474,54 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
 
           {/* Donor Type */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Donor Type</label>
-            <div className="flex gap-3">
+            <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5">Donor Type</label>
+            <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => handleInputChange('donorType', 'Individual')}
-                className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 transition-all ${
+                className={`flex-1 flex items-center justify-center gap-1.5 px-2 sm:px-3 py-2.5 rounded-xl border-2 transition-all text-xs sm:text-sm ${
                   formData.donorType === 'Individual'
                     ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
                     : 'border-gray-200 text-gray-600 hover:border-gray-300'
                 }`}
               >
-                <UserGroupIcon className="w-5 h-5" />
-                Individual
+                <UserGroupIcon className="w-4 h-4" />
+                <span className="hidden sm:inline">Individual</span>
+                <span className="sm:hidden">Ind</span>
               </button>
               <button
                 type="button"
                 onClick={() => handleInputChange('donorType', 'Organization')}
-                className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 transition-all ${
+                className={`flex-1 flex items-center justify-center gap-1.5 px-2 sm:px-3 py-2.5 rounded-xl border-2 transition-all text-xs sm:text-sm ${
                   formData.donorType === 'Organization'
                     ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
                     : 'border-gray-200 text-gray-600 hover:border-gray-300'
                 }`}
               >
-                <BuildingOfficeIcon className="w-5 h-5" />
-                Organization
+                <BuildingOfficeIcon className="w-4 h-4" />
+                <span className="hidden sm:inline">Organization</span>
+                <span className="sm:hidden">Org</span>
               </button>
               <button
                 type="button"
                 onClick={() => handleInputChange('donorType', 'Charity')}
-                className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 transition-all ${
+                className={`flex-1 flex items-center justify-center gap-1.5 px-2 sm:px-3 py-2.5 rounded-xl border-2 transition-all text-xs sm:text-sm ${
                   formData.donorType === 'Charity'
                     ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
                     : 'border-gray-200 text-gray-600 hover:border-gray-300'
                 }`}
               >
-                <BuildingLibraryIcon className="w-5 h-5" />
-                Charity
+                <BuildingLibraryIcon className="w-4 h-4" />
+                <span className="hidden sm:inline">Charity</span>
+                <span className="sm:hidden">Char</span>
               </button>
             </div>
           </div>
 
           {/* Amount and Date */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5">
                 Amount (₹) <span className="text-red-500">*</span>
               </label>
               <input
@@ -586,18 +587,17 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Transaction Ref ID (Last 6 Digits)
+                  Transaction Ref ID (Minimum 6 Digits)
                 </label>
                 <input
                   type="text"
                   value={formData.transactionRefId}
                   onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, '').slice(0, 6);
+                    const value = e.target.value.replace(/\D/g, '');
                     handleInputChange('transactionRefId', value);
                   }}
-                  placeholder="Enter 6-digit reference"
-                  maxLength={6}
-                  pattern="\d{6}"
+                  placeholder="Enter reference ID (min 6 digits)"
+                  pattern="\d{6,}"
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-mono tracking-wider"
                 />
               </div>
@@ -614,25 +614,24 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
                   type="text"
                   value={formData.senderUpiId}
                   onChange={(e) => handleInputChange('senderUpiId', e.target.value)}
-                  placeholder="e.g., username@oksbi"
+                  placeholder="e.g., 9876543210@oksbi"
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                   required
                 />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Transaction Ref ID (Last 6 Digits) <span className="text-red-500">*</span>
+                  Transaction Ref ID (Minimum 6 Digits) <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.transactionRefId}
                   onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, '').slice(0, 6);
+                    const value = e.target.value.replace(/\D/g, '');
                     handleInputChange('transactionRefId', value);
                   }}
-                  placeholder="Enter 6-digit reference"
-                  maxLength={6}
-                  pattern="\d{6}"
+                  placeholder="Enter reference ID (min 6 digits)"
+                  pattern="\d{6,}"
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-mono tracking-wider"
                   required
                 />
@@ -659,18 +658,17 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
           {isQRScanner && (
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Transaction Ref ID (Last 6 Digits) <span className="text-red-500">*</span>
+                Transaction Ref ID (Minimum 6 Digits) <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 value={formData.transactionRefId}
                 onChange={(e) => {
-                  const value = e.target.value.replace(/\D/g, '').slice(0, 6);
+                  const value = e.target.value.replace(/\D/g, '');
                   handleInputChange('transactionRefId', value);
                 }}
-                placeholder="Enter 6-digit reference"
-                maxLength={6}
-                pattern="\d{6}"
+                placeholder="Enter reference ID (min 6 digits)"
+                pattern="\d{6,}"
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-mono tracking-wider"
                 required
               />
@@ -678,12 +676,11 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
           )}
 
           {/* Proof of Payment Upload (Optional) */}
-          {!isCashPayment && (
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Proof of Payment (Optional)
-              </label>
-              <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:border-emerald-500 transition-colors">
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Proof of Payment (Optional)
+            </label>
+            <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:border-emerald-500 transition-colors">
                 <input
                   type="file"
                   id="proof-upload"
@@ -693,7 +690,20 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
                 />
                 <label htmlFor="proof-upload" className="cursor-pointer">
                   {proofPreview ? (
-                    <div className="space-y-2">
+                    <div className="space-y-2 relative">
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setProofFile(null);
+                          setProofPreview(null);
+                        }}
+                        className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 z-10"
+                        title="Remove proof"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
                       {proofPreview.startsWith('data:image') ? (
                         <img src={proofPreview} alt="Preview" className="max-h-40 mx-auto rounded-lg" />
                       ) : (
@@ -716,7 +726,6 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
                 </label>
               </div>
             </div>
-          )}
 
           {isCashPayment && (
             <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">

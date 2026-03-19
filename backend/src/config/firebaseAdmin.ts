@@ -3,22 +3,33 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 
-dotenv.config();
+// Load .env files using __dirname for consistent path resolution
+const rootDir = path.resolve(__dirname, '../..'); // Go up from dist/config/ to backend/
+const envPaths = [
+  path.join(rootDir, '.env'),
+  path.join(process.cwd(), '.env'),
+];
+for (const envPath of envPaths) {
+  dotenv.config({ path: envPath, override: false });
+}
 
 // Initialize Firebase Admin SDK
 let serviceAccount: admin.ServiceAccount | undefined;
 
-// Paths to check for service-account.json
-// Order:
-// 1. Environment Variable
-// 2. backend/config/firebase-credentials/service-account.json (Production structure)
-// 3. backend/service-account.json (Quick dev placement)
+// Get the backend directory (where dist/ and config/ folders are)
+const backendDir = path.resolve(__dirname, '../..');
+
+// Paths to check for service-account.json (using __dirname for reliable resolution)
 const possibleFilePaths = [
-    path.join(process.cwd(), 'config/firebase-credentials/service-account.json'),
+    // 1. Environment Variable (highest priority)
+    process.env.FIREBASE_SERVICE_ACCOUNT ? 'env' : null,
+    // 2. Production structure - relative to backend root (works in any VM)
+    path.join(backendDir, 'config/firebase-credentials/service-account.json'),
+    // 3. Quick dev placement
     path.join(process.cwd(), 'service-account.json'),
-    // In case we are running from dist/
-    path.join(process.cwd(), '../config/firebase-credentials/service-account.json')
-];
+    // 4. Running from dist/ (fallback)
+    path.join(process.cwd(), '../config/firebase-credentials/service-account.json'),
+].filter(Boolean) as string[];
 
 let credentialsLoaded = false;
 
@@ -32,25 +43,31 @@ try {
         } catch (e) {
             console.error("❌ [Firebase] Failed to parse FIREBASE_SERVICE_ACCOUNT env var");
         }
-    } 
-    
-    // 2. Try local files if not found yet
-    if (!credentialsLoaded) { // Fix: use credentialsLoaded flag
+    }
+
+    // 2. Try local files if not found in env
+    if (!credentialsLoaded) {
+        console.log("🔍 [Firebase] Checking for service-account.json file...");
         for (const filePath of possibleFilePaths) {
+            if (filePath === 'env') continue; // Skip env placeholder
+            
+            console.log(`   Checking: ${filePath}`);
             if (fs.existsSync(filePath)) {
                 try {
                     const fileContent = fs.readFileSync(filePath, 'utf8');
                     serviceAccount = JSON.parse(fileContent);
-                    console.log(`✅ [Firebase] Loaded credentials from file: ${filePath}`);
+                    console.log(`✅ [Firebase] Loaded credentials from: ${filePath}`);
                     credentialsLoaded = true;
-                    break; 
+                    break;
                 } catch (e) {
-                    console.error(`❌ [Firebase] Found file but failed to parse: ${filePath}`, e);
+                    console.error(`❌ [Firebase] Failed to parse: ${filePath}`, e);
                 }
+            } else {
+                console.log(`   ❌ File not found: ${filePath}`);
             }
         }
     }
-    
+
     // Initialize Admin SDK
     if (credentialsLoaded && serviceAccount && !admin.apps.length) {
         admin.initializeApp({
@@ -59,7 +76,10 @@ try {
         console.log("🚀 [Firebase] Admin SDK initialized successfully");
     } else if (!credentialsLoaded) {
         console.warn("⚠️  [Firebase] NOT INITIALIZED: Missing credentials.");
-        console.warn("   To fix, place 'service-account.json' in 'backend/config/firebase-credentials/'");
+        console.warn("   Push notifications will not work.");
+        console.warn("   To fix:");
+        console.warn("   1. Place 'service-account.json' in 'backend/config/firebase-credentials/'");
+        console.warn("   2. Or set FIREBASE_SERVICE_ACCOUNT environment variable");
     }
 
 } catch (error) {
@@ -89,28 +109,53 @@ export const sendNotification = async (token: string, title: string, body: strin
     }
 };
 
+const normalizeNotificationData = (data?: Record<string, unknown>): Record<string, string> => {
+    if (!data || typeof data !== 'object') {
+        return {};
+    }
+
+    return Object.entries(data).reduce<Record<string, string>>((accumulator, [key, value]) => {
+        if (typeof value === 'undefined' || value === null) {
+            return accumulator;
+        }
+
+        accumulator[key] = typeof value === 'string' ? value : JSON.stringify(value);
+        return accumulator;
+    }, {});
+};
+
 export const sendMulticastNotification = async (tokens: string[], title: string, body: string, data?: any) => {
     if (!admin.apps.length) {
          throw new Error("Firebase Admin not initialized. Check server logs.");
     }
-    
+
     if (!tokens || tokens.length === 0) {
         console.warn("⚠️ [Firebase] No tokens provided for multicast.");
-        return { successCount: 0, failureCount: 0 };
+        return { successCount: 0, failureCount: 0, responses: [] };
     }
 
     try {
         const message: admin.messaging.MulticastMessage = {
             notification: { title, body },
-            data: data || {},
+            data: normalizeNotificationData(data),
             tokens: tokens
         };
 
         const response = await admin.messaging().sendEachForMulticast(message);
         console.log(`📢 [Firebase] Broadcast: ${response.successCount} sent, ${response.failureCount} failed.`);
         
+        // Log detailed failure information for debugging
+        if (response.failureCount > 0) {
+            response.responses.forEach((resp, idx) => {
+                if (!resp.success) {
+                    const tokenPreview = tokens[idx]?.substring(0, 20) + '...';
+                    console.warn(`   ❌ Token ${tokenPreview} failed: ${resp.error?.code} - ${resp.error?.message}`);
+                }
+            });
+        }
+
         return response;
-    } catch (error) {
+    } catch (error: any) {
         console.error('❌ [Firebase] Multicast Error:', error);
         throw error;
     }

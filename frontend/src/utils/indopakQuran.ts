@@ -1,5 +1,5 @@
 // Indopak Quran Data Loader
-import indopakData from '../data/indopak.json';
+import indopakData from '../data/indopak-v1.2.json';
 
 export interface IndopakWord {
   id: number;
@@ -8,12 +8,13 @@ export interface IndopakWord {
   word: string;
   location: string;
   text: string;
+  position?: number;
 }
 
 export interface IndopakAyah {
   surah: number;
   ayah: number;
-  words: IndopakWord[];
+  words: Array<IndopakWord & { position: number }>;
   text: string;
 }
 
@@ -22,48 +23,68 @@ export interface IndopakSurah {
   ayahs: IndopakAyah[];
 }
 
+// Normalize Quranic marks that render as round circles in some IndoPak fonts.
+// We convert them to the standard sukun shape used by Al Mushaf-style rendering.
+const normalizeIndopakMarks = (text: string): string => (
+  text
+    // Remove South IndoPak stop symbols requested by user:
+    // U+06D9 (small high lam-alef / looks like لا) and U+06DA (small high jeem / often rendered as ح-like mark)
+    .replace(/[\u06D9\u06DA]/g, '')
+    // Remove box/end markers (Private Use Area characters like  U+F500,  U+F501, etc.)
+    .replace(/[\uF500-\uF8FF]/g, '')
+    // Remove Arabic Small High Rounded Zero (۟ U+06DF)
+    .replace(/\u06DF/g, '')
+);
+
 /**
  * Parse the Indopak JSON data and group by Surah and Ayah
  */
 export const loadIndopakQuran = (): Map<number, IndopakSurah> => {
   const surahMap = new Map<number, IndopakSurah>();
-  
+
   // Convert JSON object to array and sort by ID
   const words: IndopakWord[] = Object.values(indopakData).sort((a, b) => a.id - b.id);
-  
+
   // Group words by Surah and Ayah
   words.forEach((word) => {
     const surahNum = parseInt(word.surah);
     const ayahNum = parseInt(word.ayah);
-    
+
     // Get or create Surah
     if (!surahMap.has(surahNum)) {
       surahMap.set(surahNum, { surah: surahNum, ayahs: [] });
     }
-    
+
     const surah = surahMap.get(surahNum)!;
-    
+
     // Get or create Ayah
     let ayah = surah.ayahs.find(a => a.ayah === ayahNum);
     if (!ayah) {
       ayah = { surah: surahNum, ayah: ayahNum, words: [], text: '' };
       surah.ayahs.push(ayah);
     }
-    
-    // Add word to ayah
-    ayah.words.push(word);
+
+    // Add word to ayah with position
+    ayah.words.push({
+      ...word,
+      position: parseInt(word.word),
+    });
   });
-  
+
   // Build complete text for each ayah by joining words
   surahMap.forEach((surah) => {
     surah.ayahs.forEach((ayah) => {
-      ayah.text = ayah.words.map(w => w.text).join(' ');
+      ayah.text = normalizeIndopakMarks(ayah.words.map(w => w.text).join(' '));
+      // Also clean each word's text
+      ayah.words.forEach(word => {
+        word.text = normalizeIndopakMarks(word.text);
+      });
     });
-    
+
     // Sort ayahs by ayah number
     surah.ayahs.sort((a, b) => a.ayah - b.ayah);
   });
-  
+
   return surahMap;
 };
 

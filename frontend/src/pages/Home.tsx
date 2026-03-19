@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
 import {
   HeartIcon,
   CheckCircleIcon,
@@ -9,6 +10,7 @@ import {
   BookOpenIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../hooks/useAuth';
+import PageSEO from '../components/PageSEO';
 
 const Home: React.FC = () => {
   const { user } = useAuth();
@@ -58,6 +60,7 @@ const Home: React.FC = () => {
     {
       icon: '/Smart-Prayer-Times.png',
       title: 'Smart Prayer Times',
+      path: '/prayers',
       description: 'Ultra-precise prayer times with real-time geolocation, multiple calculation methods (MWL, ISNA, Umm al-Qura), astronomical corrections for high latitudes, and beautiful shareable prayer cards',
       color: 'text-emerald-600',
       bgColor: 'bg-emerald-50',
@@ -66,6 +69,7 @@ const Home: React.FC = () => {
     {
       icon: '/Quran-Reader.png',
       title: 'Quran Reader',
+      path: '/quran',
       description: 'Complete 114 Surahs with 10+ translations, semantic AI search, audio recitations, bookmarks, Indopak script, customizable fonts, and seamless navigation between ayahs',
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
@@ -74,6 +78,7 @@ const Home: React.FC = () => {
     {
       icon: '/Zakat.png',
       title: hasManagementAccess ? 'Zakat Management' : 'Zakat Calculator',
+      path: '/zakat',
       description: hasManagementAccess
         ? 'Complete Zakat dashboard with donor tracking, collection/spending records, real-time balance, donor leaderboards, and export capabilities for transparent fund management'
         : 'Intelligent Zakat calculator with live nisab rates, support for gold/silver/assets/crypto, 2.5% calculation, and multiple scholarly methodologies',
@@ -84,15 +89,17 @@ const Home: React.FC = () => {
     {
       icon: '/Global-Community.png',
       title: 'Global Community',
+      path: '/community',
       description: 'Connect with Muslims worldwide through community forums, local event discovery, group discussions, and reputation systems fostering meaningful Islamic brotherhood',
       color: 'text-purple-600',
       bgColor: 'bg-purple-50',
       gradient: 'from-purple-500 to-pink-500',
     },
     {
-      icon: '/Qibla-Finder-AR.png',
-      title: 'Qibla Finder AR',
-      description: 'Augmented reality Qibla direction with 3D compass, precise geolocation calculations, visual overlay guidance, and accurate Kaaba direction for any location worldwide',
+      icon: '/Tasbih.png',
+      title: 'Dhikr & Dua',
+      path: '/dhikr-dua',
+      description: 'Authentic daily duas and adhkar with Arabic, transliteration, English/Urdu translation, verified references, favorites, and a built-in online tasbih counter for daily remembrance',
       color: 'text-teal-600',
       bgColor: 'bg-teal-50',
       gradient: 'from-teal-500 to-emerald-500',
@@ -100,7 +107,7 @@ const Home: React.FC = () => {
     {
       icon: '/AI-Scholar-Assistant.png',
       title: 'AI Assistant',
-      description: 'Islamic AI assistant for religious questions and guidance',
+      description: 'Islamic AI assistant for religious questions and guidance — powered by verified scholarly sources',
       color: 'text-gray-400',
       bgColor: 'bg-gray-100',
       disabled: true,
@@ -108,31 +115,51 @@ const Home: React.FC = () => {
     },
   ];
 
+  const handleFeatureCardClick = (feature: (typeof features)[number]) => {
+    if (feature.disabled) {
+      if (feature.title === 'AI Assistant') {
+        toast.error('AI Assistant is not yet implemented.');
+      }
+      return;
+    }
+
+    if (feature.path) {
+      navigate(feature.path);
+    }
+  };
+
   const stats = [
     {
-      label: 'Accurate Prayer Times',
-      description: 'Real-time geolocation & multiple calculation methods',
+      label: 'Precise Prayer Times',
+      description: 'Geolocation-based, multiple scholarly methods, Ramadan schedules',
       icon: ClockIcon,
       color: 'text-emerald-600',
       bgColor: 'bg-emerald-100',
     },
     {
       label: 'Complete Quran',
-      description: '114 Surahs with 10+ translations & audio',
+      description: '114 Surahs · 10+ translations · Audio recitations · IndoPak font',
       icon: BookOpenIcon,
       color: 'text-blue-600',
       bgColor: 'bg-blue-100',
     },
     {
+      label: 'Dhikr & Dua',
+      description: 'Morning/evening adhkar · Authentic references · Tasbih counter',
+      icon: HeartIcon,
+      color: 'text-teal-600',
+      bgColor: 'bg-teal-100',
+    },
+    {
       label: 'Smart Zakat',
-      description: 'Live nisab rates & all asset types supported',
+      description: 'Live nisab rates · All asset types · Crypto support',
       icon: SparklesIcon,
       color: 'text-yellow-600',
       bgColor: 'bg-yellow-100',
     },
     {
-      label: 'Global Qibla',
-      description: 'AR-powered precise direction worldwide',
+      label: 'Global Community',
+      description: 'Forums, Islamic events, and brotherhood worldwide',
       icon: GlobeAltIcon,
       color: 'text-purple-600',
       bgColor: 'bg-purple-100',
@@ -141,30 +168,154 @@ const Home: React.FC = () => {
 
   const testimonials = [
     {
-      name: 'Ahmad Hassan',
-      location: 'London, UK',
-      text: 'HikmahSphere has revolutionized my daily worship. The prayer notifications are incredibly accurate!',
+      name: 'Tasneem Fatima',
+      location: 'Kolkata, India',
+      text: 'The prayer times feature has transformed my daily Salah routine. The accurate geolocation-based calculations and beautiful prayer cards I can share with family make staying connected to my faith effortless. The notifications are perfectly timed!',
       rating: 5,
-      avatar: '👨‍💼',
+      avatar: '🧕🏽',
+      feature: 'Prayer Times',
     },
     {
-      name: 'Fatima Al-Zahra',
-      location: 'Cairo, Egypt',
-      text: 'The Quran search feature is amazing. I can find any verse instantly in multiple languages.',
-      rating: 5,
-      avatar: '👩‍💼',
+      name: 'Ahemed Khan',
+      location: 'Bangalore, India',
+      text: 'The Zakat calculator is incredibly comprehensive. It calculated my Zakat considering gold, silver, savings, and even my investments. The live nisab rates gave me confidence that my calculation was accurate. Made my annual Zakat so much easier!',
+      rating: 4,
+      avatar: '🧔🏽',
+      feature: 'Zakat Calculator',
     },
     {
-      name: 'Omar Ibrahim',
-      location: 'New York, USA',
-      text: 'The Zakat calculator made my annual calculation so simple and accurate. Highly recommended!',
+      name: 'Zafia Chowdhury',
+      location: 'Bangalore, India',
+      text: 'As someone who reads Quran daily, the multi-translation reader with Indopak script is a blessing. I can compare translations, bookmark my favorite ayahs, and the audio recitations help me improve my Tajweed. The semantic search finds exactly what I need!',
       rating: 5,
-      avatar: '🧔',
+      avatar: '🧕🏼',
+      feature: 'Quran Reader',
+    },
+    {
+      name: 'Zeenat Chowdhury',
+      location: 'Kolkata, India',
+      text: 'As a mother, my heart fills with pride seeing my son create something so beneficial for the Ummah. This platform beautifully combines technology with Islamic values. May Allah accept this sincere effort, bless you abundantly, and grant you the ability to continue serving the Deen. Aameen.',
+      rating: 5,
+      avatar: '🧕🏼',
+      feature: 'Mother\'s Message',
+      special: true,
     },
   ];
 
   return (
-    <div className="min-h-screen">
+    <>
+      <PageSEO
+        title="HikmahSphere: A Unified Islamic Platform"
+        description="Complete Islamic platform featuring: Prayer Times (accurate daily schedules with multiple calculation methods), Quran Reader (114 Surahs with 10+ translations, audio recitations, bookmarks), Dhikr & Dua (authentic adhkar with tasbih counter), Zakat Calculator (live nisab rates, crypto support), Muslim Community (forums, events), and AI Islamic Assistant. Free, privacy-first, and built for the global Ummah."
+        path="/"
+        keywords={[
+          'islamic app',
+          'muslim app',
+          'islamic platform',
+          'islamic digital platform',
+          'accurate prayer times',
+          'prayer times india',
+          'salah times',
+          'namaz times',
+          'quran reader',
+          'quran with audio',
+          'quran with translation',
+          'urdu quran',
+          'indo pak quran',
+          'dhikr and dua',
+          'morning evening adhkar',
+          'online tasbih counter',
+          'zakat calculator',
+          'zakat calculator india',
+          'nisab value today',
+          'muslim community app',
+          'ramadan fasting times',
+          'hikmahsphere',
+        ]}
+        siteLinks={[
+          { name: 'Prayer Times', url: 'https://hikmahsphere.site/prayers' },
+          { name: 'Quran Reader', url: 'https://hikmahsphere.site/quran' },
+          { name: 'Dhikr & Dua', url: 'https://hikmahsphere.site/dhikr-dua' },
+          { name: 'Zakat Calculator', url: 'https://hikmahsphere.site/zakat' },
+          { name: 'Community', url: 'https://hikmahsphere.site/community' },
+          { name: 'Salah Tracker', url: 'https://hikmahsphere.site/salah-tracker' }
+        ]}
+      />
+      {/* Structured Data for Founder/Developer - Ifrahuddin Azmi */}
+      <script type="application/ld+json">
+        {JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "Person",
+          "name": "Ifrahuddin Azmi",
+          "alternateName": ["Ifrah Azmi", "Ifrahuddin", "Azmi", "Ifrah A.", "Ifrahuddin A."],
+          "url": "https://hikmahsphere.site",
+          "image": "https://hikmahsphere.site/admin-pic.png",
+          "jobTitle": "Lead Architect & Developer | Founder",
+          "worksFor": {
+            "@type": "Organization",
+            "name": "HikmahSphere",
+            "url": "https://hikmahsphere.site",
+            "sameAs": "https://github.com/yani2298/HikmahSphere"
+          },
+          "description": "Founder and Lead Developer of HikmahSphere - a unified Islamic digital platform serving the global Muslim community. Expert in React, Node.js, TypeScript, MongoDB, Python, AI/ML, and Islamic digital solutions.",
+          "sameAs": [
+            "https://github.com/ifrahazmi",
+            "https://www.linkedin.com/in/ifrahuddin-azmi-8869787a/",
+            "https://twitter.com/ifrahazmi"
+          ],
+          "knowsAbout": [
+            "React.js",
+            "Node.js",
+            "TypeScript",
+            "MongoDB",
+            "Python",
+            "Artificial Intelligence",
+            "Machine Learning",
+            "Test Automation",
+            "System Architecture",
+            "Islamic Studies",
+            "Full-Stack Development",
+            "Web Development"
+          ],
+          "award": "Developer of HikmahSphere Islamic Platform"
+        })}
+      </script>
+      <script type="application/ld+json">
+        {JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "Organization",
+          "name": "HikmahSphere",
+          "url": "https://hikmahsphere.site",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://hikmahsphere.site/logo.png"
+          },
+          "description": "A Unified Islamic Digital Platform for the global Muslim community - providing prayer times, Quran reader, Dhikr & Dua, Zakat calculator, and community features",
+          "founder": {
+            "@type": "Person",
+            "name": "Ifrahuddin Azmi",
+            "url": "https://hikmahsphere.site/about",
+            "sameAs": [
+              "https://github.com/ifrahazmi",
+              "https://www.linkedin.com/in/ifrahuddin-azmi-8869787a/"
+            ]
+          },
+          "sameAs": [
+            "https://github.com/yani2298/HikmahSphere"
+          ],
+          "contactPoint": {
+            "@type": "ContactPoint",
+            "email": "ifrahazmi@hikmahsphere.site",
+            "contactType": "developer",
+            "availableLanguage": ["English", "Urdu", "Hindi", "Arabic"]
+          },
+          "areaServed": {
+            "@type": "Country",
+            "name": "Worldwide"
+          }
+        })}
+      </script>
+      <div className="min-h-screen">
       {/* Hero Section */}
       <section className="relative bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-950 text-white overflow-hidden">
         {/* Animated Background Pattern */}
@@ -196,7 +347,7 @@ const Home: React.FC = () => {
             {/* Badge */}
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full border border-white/20 mb-8">
               <SparklesIcon className="w-4 h-4 text-emerald-300" />
-              <span className="text-sm font-medium text-emerald-100">Your Complete Islamic Digital Companion</span>
+            <span className="text-sm font-medium text-emerald-100">Prayer Times · Quran · Dhikr &amp; Dua · Zakat · Community</span>
             </div>
 
             <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold mb-8 leading-tight">
@@ -207,7 +358,7 @@ const Home: React.FC = () => {
             </h1>
 
             <p className="text-xl sm:text-2xl mb-10 text-emerald-100 max-w-3xl mx-auto leading-relaxed">
-              Where Islamic knowledge, technology, and spiritual guidance unite in one beautiful digital experience
+              Accurate prayer times, the complete Quran, authentic Dhikr &amp; Dua, smart Zakat calculation, and a global Muslim community — one platform, built with sincerity for every believer
             </p>
 
             {/* CTA Buttons */}
@@ -271,7 +422,7 @@ const Home: React.FC = () => {
             </p>
           </div>
           
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 lg:gap-8">
             {stats.map((stat, index) => (
               <div 
                 key={index} 
@@ -293,6 +444,158 @@ const Home: React.FC = () => {
         </div>
       </section>
 
+      {/* SEO Content Section */}
+      <section className="py-20 bg-gradient-to-br from-emerald-50 via-white to-teal-50">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+
+          {/* Main Heading */}
+          <div className="text-center mb-14">
+            <h2 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-6 leading-tight">
+              <span className="text-emerald-700">The Premier </span>
+              <span className="bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">Islamic App</span>
+              <span className="text-gray-900"> for the Modern Believer</span>
+            </h2>
+            <p className="text-lg text-gray-700 max-w-4xl mx-auto leading-relaxed">
+              HikmahSphere is where timeless Islamic tradition meets the precision of modern technology. Built by Muslims, for Muslims — our{' '}
+              <strong className="text-emerald-700 font-semibold">islamic digital platform</strong> removes the friction between you and your faith, giving you the tools for every act of worship in one seamless, ad-free experience.
+            </p>
+          </div>
+
+          {/* All-in-One Section */}
+          <div className="mb-12 bg-white rounded-2xl shadow-lg p-8 border border-emerald-100">
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+              Your All-in-One{' '}
+              <span className="text-emerald-700">Muslim App</span>
+            </h2>
+            <p className="text-gray-700 mb-6 leading-relaxed">
+              Why juggle five different applications for your daily Islamic needs? HikmahSphere is the definitive{' '}
+              <strong className="text-emerald-700 font-semibold">muslim app</strong> — meticulously designed for the global Ummah, bringing every essential feature into a single, beautiful interface.
+            </p>
+            <ul className="space-y-4 text-gray-700">
+              <li className="flex items-start gap-3">
+                <CheckCircleIcon className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
+                <span><strong className="font-semibold text-gray-900">Accurate Prayer Times:</strong> GPS-powered Salah timings with multiple scholarly calculation methods (MWL, ISNA, Karachi, Umm al-Qura), Hanafi and Shafi Asr support, high-latitude corrections, and Ramadan fasting schedules — so you never miss a prayer, anywhere in the world.</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <CheckCircleIcon className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
+                <span><strong className="font-semibold text-gray-900">Complete Quran Reader:</strong> All 114 Surahs with 10+ translations in English, Urdu, Hindi and more, transliteration, authentic Indo-Pak Nastaleeq font, audio recitations from world-renowned reciters, semantic verse search, and personal bookmarks.</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <CheckCircleIcon className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
+                <span><strong className="font-semibold text-gray-900">Authentic Dhikr &amp; Dua Companion:</strong> Access daily adhkar and duas with Arabic text, transliteration, English/Urdu translation, hadith references, bookmarking, and a built-in online tasbih counter for focused remembrance.</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <CheckCircleIcon className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
+                <span><strong className="font-semibold text-gray-900">Intelligent Zakat Calculator:</strong> Live nisab thresholds updated with real-time gold and silver prices, support for all asset types including cash, investments, business stock and cryptocurrency — fulfil your obligation with total confidence.</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <CheckCircleIcon className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
+                <span><strong className="font-semibold text-gray-900">Global Muslim Community:</strong> Join thousands of believers in moderated Islamic forums, discover local events, share knowledge, and experience the warmth of the Ummah — from Bengaluru to Birmingham.</span>
+              </li>
+            </ul>
+          </div>
+
+          {/* Feature Deep-Dives */}
+          <div className="mb-12">
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-8 text-center">
+              Essential Tools for Daily Islamic Practice
+            </h2>
+            <p className="text-center text-gray-700 mb-10 max-w-3xl mx-auto leading-relaxed">
+              Every feature in HikmahSphere is designed as a spiritual tool — built to support your worship, deepen your understanding, and strengthen your connection with Allah.
+            </p>
+
+            {/* Prayer Times */}
+            <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-8 mb-6 border border-emerald-200">
+              <h3 className="text-2xl font-bold text-gray-900 mb-3">
+                Precise Daily <span className="text-emerald-700">Prayer Times</span>
+              </h3>
+              <p className="text-gray-700 leading-relaxed">
+                As a trusted <strong className="font-semibold text-emerald-700">prayer times app</strong>, HikmahSphere ensures you never miss Fajr, Dhuhr, Asr, Maghrib, or Isha. Our engine delivers ultra-precise{' '}
+                <strong className="font-semibold text-emerald-700">daily prayer times</strong> and full Ramadan fasting schedules (Sehri and Iftar) with beautiful, shareable prayer cards. The most reliable{' '}
+                <strong className="font-semibold text-emerald-700">muslim prayer app</strong> for accuracy and peace of mind.
+              </p>
+            </div>
+
+            {/* Quran */}
+            <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-8 mb-6 border border-blue-200">
+              <h3 className="text-2xl font-bold text-gray-900 mb-3">
+                The Definitive <span className="text-blue-700">Online Quran Reader</span>
+              </h3>
+              <p className="text-gray-700 leading-relaxed">
+                Our comprehensive <strong className="font-semibold text-blue-700">quran app</strong> transforms how you engage with the Book of Allah. Enjoy a world-class{' '}
+                <strong className="font-semibold text-blue-700">quran reader online</strong> with semantic AI-powered verse search, side-by-side translations, authentic audio recitations, personalised bookmarks, and customisable fonts — including the revered Indo-Pak Nastaleeq script loved across South Asia.
+              </p>
+            </div>
+
+            {/* Dhikr & Dua */}
+            <div className="bg-gradient-to-br from-teal-50 to-emerald-50 rounded-2xl p-8 mb-6 border border-teal-200">
+              <h3 className="text-2xl font-bold text-gray-900 mb-3">
+                Authentic <span className="text-teal-700">Dhikr &amp; Dua</span> for Daily Life
+              </h3>
+              <p className="text-gray-700 leading-relaxed">
+                HikmahSphere provides a practical <strong className="font-semibold text-teal-700">dhikr and dua app</strong> experience with morning and evening adhkar, daily life supplications, Salah duas, and situational duas. Every entry includes Arabic, transliteration, English and Urdu translation, plus source references. Use the built-in <strong className="font-semibold text-teal-700">online tasbih counter</strong> to track remembrance with focus every day.
+              </p>
+            </div>
+
+            {/* Zakat */}
+            <div className="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-2xl p-8 mb-6 border border-amber-200">
+              <h3 className="text-2xl font-bold text-gray-900 mb-3">
+                The Smartest <span className="text-amber-700">Zakat Calculator</span> Online
+              </h3>
+              <p className="text-gray-700 leading-relaxed">
+                Fulfilling the Third Pillar of Islam has never been this straightforward. HikmahSphere's{' '}
+                <strong className="font-semibold text-amber-700">zakat calculator</strong> is designed to make the entire process simple, accurate, and stress-free — just enter your assets and we handle the rest.
+              </p>
+              <ul className="mt-4 space-y-3 text-gray-700">
+                <li className="flex items-start gap-3">
+                  <CheckCircleIcon className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <span>
+                    <strong className="font-semibold">Live Nisab Value, Updated Daily</strong> — the current nisab threshold is displayed in real time, fetched automatically from today's gold and silver market prices across INR, USD, GBP, SAR and more. You always know exactly where you stand.
+                  </span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <CheckCircleIcon className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <span>
+                    <strong className="font-semibold">Every Asset Type, One Place</strong> — cash, savings accounts, gold, silver, business inventory, investments, and cryptocurrency. All eligible categories covered so nothing is missed.
+                  </span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <CheckCircleIcon className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <span>
+                    <strong className="font-semibold">Instant 2.5% Calculation</strong> — your Zakat due is calculated live as you enter values, with a clear breakdown so you fully understand your obligation before you give.
+                  </span>
+                </li>
+              </ul>
+              <p className="mt-4 text-gray-700 leading-relaxed">
+                The most thorough{' '}
+                <strong className="font-semibold text-amber-700">zakat calculator india</strong> and a globally trusted solution — because your obligation deserves clarity, not confusion.
+              </p>
+            </div>
+
+            {/* Community */}
+            <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-8 border border-purple-200">
+              <h3 className="text-2xl font-bold text-gray-900 mb-3">
+                A Thriving <span className="text-purple-700">Global Muslim Community</span>
+              </h3>
+              <p className="text-gray-700 leading-relaxed">
+                Islam thrives in community. HikmahSphere connects you with a growing{' '}
+                <strong className="font-semibold text-purple-700">muslim community app</strong> experience — moderated Islamic forums, local event discovery, knowledge sharing, and meaningful brother-and-sisterhood. Because believers, from Bengaluru to Kolkata or Bihar to Hyderabad all across every continent, are one Ummah.
+              </p>
+            </div>
+          </div>
+
+          {/* Trust Statement */}
+          <div className="text-center bg-white rounded-2xl shadow-lg p-8 border border-gray-200">
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+              Free Forever. Ad-Free. Privacy First.
+            </h2>
+            <p className="text-gray-700 leading-relaxed max-w-3xl mx-auto">
+              HikmahSphere is and will always be free. No advertisements interrupt your ibadah. Your data is never sold or shared. We believe your spiritual journey is sacred — and your Islamic digital companion should honour that. Join a community of believers who trust HikmahSphere every single day.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* Features Section */}
       <section id="features-section" className="py-24 bg-gradient-to-b from-white to-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -305,15 +608,19 @@ const Home: React.FC = () => {
               Everything You Need in One Place
             </h2>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              Experience Islam in the digital age with cutting-edge technology designed for the modern Muslim
+              Experience Islam in the digital age with cutting-edge technology for prayer, Quran, Dhikr &amp; Dua, Zakat, and community
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {features.map((feature, index) => (
-              <div
+              <button
                 key={index}
-                className={`group relative bg-white rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-2 border border-gray-100 overflow-hidden ${feature.disabled ? 'opacity-60' : ''}`}
+                type="button"
+                onClick={() => handleFeatureCardClick(feature)}
+                className={`group relative bg-white rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-2 border border-gray-100 overflow-hidden text-left w-full ${
+                  feature.disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
+                }`}
               >
                 {/* Gradient Background on Hover */}
                 <div className={`absolute inset-0 bg-gradient-to-br ${feature.gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-500`}></div>
@@ -355,7 +662,7 @@ const Home: React.FC = () => {
                     </div>
                   )}
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -377,33 +684,68 @@ const Home: React.FC = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {testimonials.map((testimonial, index) => (
               <div
                 key={index}
-                className="group bg-white rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 border border-emerald-100"
+                className={`group rounded-2xl p-8 transition-all duration-300 transform hover:-translate-y-2 ${
+                  testimonial.special
+                    ? 'bg-gradient-to-br from-emerald-50 to-teal-50 border-2 border-emerald-300 shadow-xl col-span-full max-w-3xl mx-auto'
+                    : 'bg-white rounded-2xl p-8 shadow-lg hover:shadow-2xl border border-emerald-100'
+                }`}
               >
+                {/* Special Badge for Founder's Message */}
+                {testimonial.special && (
+                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-600 text-white text-xs font-semibold rounded-full mb-4">
+                    <HeartIcon className="w-3 h-3" />
+                    Mother's Message
+                  </div>
+                )}
+
                 {/* Rating Stars */}
-                <div className="flex items-center mb-6">
+                <div className="flex items-center mb-4">
                   {[...Array(testimonial.rating)].map((_, i) => (
                     <svg key={i} className="w-5 h-5 text-yellow-400 fill-current" viewBox="0 0 20 20">
                       <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                     </svg>
                   ))}
                 </div>
-                
+
+                {/* Feature Tag */}
+                {!testimonial.special && (
+                  <div className="inline-block px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-medium rounded-full mb-4">
+                    {testimonial.feature}
+                  </div>
+                )}
+
                 {/* Testimonial Text */}
-                <p className="text-gray-700 mb-6 italic leading-relaxed">
-                  "{testimonial.text}"
+                <p className={`mb-6 leading-relaxed ${
+                  testimonial.special 
+                    ? 'text-gray-800 text-lg italic font-medium' 
+                    : 'text-gray-700 italic'
+                }`}>
+                  {testimonial.special ? (
+                    <>
+                      <span className="text-3xl text-emerald-600 mr-2">"</span>
+                      {testimonial.text}
+                      <span className="text-3xl text-emerald-600 ml-2">"</span>
+                    </>
+                  ) : (
+                    `"${testimonial.text}"`
+                  )}
                 </p>
-                
+
                 {/* User Info */}
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-gradient-to-br from-emerald-400 to-teal-400 rounded-full flex items-center justify-center text-2xl">
+                  <div className={`w-14 h-14 rounded-full flex items-center justify-center text-3xl ${
+                    testimonial.special
+                      ? 'bg-gradient-to-br from-emerald-500 to-teal-500 shadow-lg'
+                      : 'bg-gradient-to-br from-emerald-400 to-teal-400'
+                  }`}>
                     {testimonial.avatar}
                   </div>
                   <div>
-                    <div className="font-bold text-gray-900">
+                    <div className="font-bold text-gray-900 text-lg">
                       {testimonial.name}
                     </div>
                     <div className="text-sm text-gray-500 flex items-center gap-1">
@@ -527,7 +869,8 @@ const Home: React.FC = () => {
           </div>
         </div>
       </section>
-    </div>
+      </div>
+    </>
   );
 };
 

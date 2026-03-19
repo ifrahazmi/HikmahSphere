@@ -1,8 +1,37 @@
-import React, { useState } from 'react';
-import { UserGroupIcon, ChatBubbleLeftIcon, CalendarIcon, MapPinIcon } from '@heroicons/react/24/outline';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { UserGroupIcon, ChatBubbleLeftIcon, XMarkIcon, TrophyIcon } from '@heroicons/react/24/outline';
+import PageSEO from '../components/PageSEO';
+import IslamicGames from '../components/IslamicGames';
 
 const Community: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('forums');
+  const [searchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const isFromLogin = tabParam === 'games';
+  const [activeTab, setActiveTab] = useState(isFromLogin ? 'games' : 'forums');
+  const [showUnderConstruction, setShowUnderConstruction] = useState(!isFromLogin);
+
+  // Set active tab based on URL query parameter
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'games') {
+      setActiveTab('games');
+      setShowUnderConstruction(false); // Hide popup when redirected from login
+    } else {
+      setActiveTab('forums');
+    }
+  }, [searchParams]);
+
+  // Auto-hide popup after 10 seconds (only if not from login redirect)
+  useEffect(() => {
+    if (!isFromLogin) {
+      const timer = setTimeout(() => {
+        setShowUnderConstruction(false);
+      }, 15000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [isFromLogin]);
 
   const forums = [
     {
@@ -31,36 +60,6 @@ const Community: React.FC = () => {
     }
   ];
 
-  const events = [
-    {
-      id: 1,
-      title: 'Community Iftar Gathering',
-      date: '2024-04-15',
-      time: '18:30',
-      location: 'Masjid Al-Noor',
-      attendees: 156,
-      type: 'iftar'
-    },
-    {
-      id: 2,
-      title: 'Friday Khutbah: Patience in Islam',
-      date: '2024-04-12',
-      time: '13:00',
-      location: 'Islamic Center',
-      attendees: 89,
-      type: 'lecture'
-    },
-    {
-      id: 3,
-      title: 'Youth Islamic Quiz Competition',
-      date: '2024-04-20',
-      time: '15:00',
-      location: 'Community Hall',
-      attendees: 45,
-      type: 'competition'
-    }
-  ];
-
   const recentPosts = [
     {
       id: 1,
@@ -84,12 +83,110 @@ const Community: React.FC = () => {
 
   const tabs = [
     { id: 'forums', name: 'Forums', icon: ChatBubbleLeftIcon },
-    { id: 'events', name: 'Events', icon: CalendarIcon },
-    { id: 'posts', name: 'Recent Posts', icon: UserGroupIcon }
+    { id: 'posts', name: 'Recent Posts', icon: UserGroupIcon },
+    { id: 'games', name: 'Games', icon: TrophyIcon },
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 pt-16">
+    <>
+      <PageSEO
+        title="Muslim Community Forums and Events"
+        description="Join the HikmahSphere Muslim community for Islamic discussions, Quran study circles, worship insights, and local events that strengthen brotherhood and learning."
+        path="/community"
+        keywords={[
+          'muslim community app',
+          'muslim community online',
+          'islamic discussion forum',
+          'quran study circle',
+          'muslim events',
+          'hikmahsphere community',
+        ]}
+      />
+      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 pt-16">
+      {/* Under Construction Popup Modal - Compact & Mobile Optimized */}
+      {showUnderConstruction && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowUnderConstruction(false)}
+          ></div>
+
+          {/* Modal Content - fits portrait & landscape on all screen sizes */}
+          <div className="flex min-h-full items-center justify-center p-2">
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-auto p-4 border-2 border-emerald-300">
+              {/* Close Button */}
+              <button
+                onClick={() => setShowUnderConstruction(false)}
+                className="absolute top-2 right-2 p-1.5 rounded-full bg-red-500 hover:bg-red-600 text-white transition-all shadow-md z-10"
+                aria-label="Close"
+              >
+                <XMarkIcon className="h-4 w-4" />
+              </button>
+
+              {/* Icon + Title row */}
+              <div className="flex items-center gap-3 mb-3">
+                <div className="bg-gradient-to-br from-emerald-500 to-teal-500 rounded-full p-2.5 shadow-lg shrink-0">
+                  <svg className="h-7 w-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-base font-extrabold text-emerald-700 leading-tight">🚧 Under Construction</h2>
+                  <p className="text-xs text-gray-500">✨ Something amazing is coming!</p>
+                </div>
+              </div>
+
+              {/* Description */}
+              <p className="text-xs text-gray-700 bg-emerald-50 rounded-xl p-2.5 mb-3 leading-relaxed border border-emerald-200">
+                Our <span className="font-bold text-emerald-700">Community</span> page is being developed. Soon you'll connect with Muslims worldwide, join discussions, and be part of a thriving Islamic community! 🌍
+              </p>
+
+              {/* Features grid - 4 in a row */}
+              <div className="grid grid-cols-4 gap-1.5 mb-3">
+                {[
+                  { icon: '💬', label: 'Forums' },
+                  { icon: '👥', label: 'Groups' },
+                  { icon: '🎮', label: 'Games' },
+                  { icon: '🎯', label: 'More' },
+                ].map(({ icon, label }) => (
+                  <div key={label} className="bg-emerald-50 rounded-lg p-2 text-center border border-emerald-200">
+                    <div className="text-xl mb-0.5">{icon}</div>
+                    <p className="text-xs font-semibold text-gray-700">{label}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Progress Bar */}
+              <div className="mb-3">
+                <div className="flex justify-between text-xs text-gray-600 font-semibold mb-1">
+                  <span>🚀 Progress</span>
+                  <span className="text-emerald-600 font-bold">75%</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                  <div className="bg-gradient-to-r from-emerald-500 to-teal-500 h-2.5 rounded-full" style={{ width: '75%' }}></div>
+                </div>
+              </div>
+
+              {/* Action Button */}
+              <button
+                onClick={() => setShowUnderConstruction(false)}
+                className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 text-white py-2.5 px-4 rounded-xl font-bold text-sm hover:from-emerald-600 hover:to-teal-600 transition-all shadow-md"
+              >
+                Got it! 👍
+              </button>
+
+              {/* Coming Soon Badge */}
+              <div className="mt-2 text-center">
+                <span className="inline-flex items-center gap-1 px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-xs font-bold border border-amber-300">
+                  ✨ Coming Soon ✨
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Community</h1>
@@ -149,34 +246,6 @@ const Community: React.FC = () => {
           </div>
         )}
 
-        {/* Events Tab */}
-        {activeTab === 'events' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {events.map((event) => (
-              <div key={event.id} className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">{event.title}</h3>
-                <div className="space-y-2 mb-4">
-                  <div className="flex items-center text-gray-600">
-                    <CalendarIcon className="h-4 w-4 mr-2" />
-                    <span>{event.date} at {event.time}</span>
-                  </div>
-                  <div className="flex items-center text-gray-600">
-                    <MapPinIcon className="h-4 w-4 mr-2" />
-                    <span>{event.location}</span>
-                  </div>
-                  <div className="flex items-center text-gray-600">
-                    <UserGroupIcon className="h-4 w-4 mr-2" />
-                    <span>{event.attendees} attending</span>
-                  </div>
-                </div>
-                <button className="w-full bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-700 transition-colors">
-                  Join Event
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
         {/* Recent Posts Tab */}
         {activeTab === 'posts' && (
           <div className="space-y-4">
@@ -199,6 +268,11 @@ const Community: React.FC = () => {
           </div>
         )}
 
+        {/* Games Tab */}
+        {activeTab === 'games' && (
+          <IslamicGames />
+        )}
+
         {/* Islamic Quote */}
         <div className="mt-12 bg-white rounded-lg shadow-md p-6 text-center">
           <p className="text-lg font-arabic text-gray-700 mb-2">
@@ -210,7 +284,8 @@ const Community: React.FC = () => {
           <p className="text-xs text-gray-400 mt-2">- Quran 9:71</p>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 

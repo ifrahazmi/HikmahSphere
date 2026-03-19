@@ -13,6 +13,7 @@ export interface SpiritualFeature {
   icon: any;
   title: string;
   description: string;
+  path?: string;
   color?: string;
   bgColor?: string;
   image?: string;
@@ -98,7 +99,7 @@ export const timeline: TimelineItem[] = [
     features: [
       "Accurate Prayer Times with Notifications",
       "Complete Quran Reader & Audio",
-      "Qibla Finder with AR",
+      "Dhikr & Dua Library with Tasbih Counter",
       "Zakat Calculator & Management",
       "Community Connection Hub"
     ]
@@ -172,27 +173,32 @@ export const spiritualFeatures: SpiritualFeature[] = [
   {
     icon: "/Smart-Prayer-Times.png",
     title: "Smart Prayer Times",
+    path: "/prayers",
     description: "Never miss the connection with your Lord. Ultra-precise calculations with real-time geolocation, multiple scholarly methods (MWL, ISNA, Umm al-Qura), high latitude corrections, and beautiful shareable prayer cards."
   },
   {
     icon: "/Quran-Reader.png",
     title: "Quran Reader",
+    path: "/quran",
     description: "Understand His words in your language. Complete 114 Surahs with 10+ translations, semantic AI search, audio recitations, bookmarks, Indopak script, and seamless navigation that transforms your reading experience."
   },
   {
     icon: "/Zakat.png",
     title: "Zakat Management",
+    path: "/zakat",
     description: "Purify your wealth with confidence. Complete dashboard for Zakat collection and distribution, donor tracking, real-time balance, leaderboards, and transparent fund management with export capabilities."
   },
   {
     icon: "/Global-Community.png",
     title: "Global Community",
+    path: "/community",
     description: "Find your brothers and sisters across continents. Connect through forums, discover local events, join meaningful discussions, and strengthen the bonds of Islamic brotherhood worldwide."
   },
   {
-    icon: "/Qibla-Finder-AR.png",
-    title: "Qibla Finder AR",
-    description: "Face the House of Allah with confidence. Augmented reality guidance, 3D compass, precise geolocation calculations, and visual overlay showing the exact direction to the Kaaba from anywhere on Earth."
+    icon: "/Tasbih.png",
+    title: "Dhikr & Dua",
+    path: "/dhikr-dua",
+    description: "Keep your heart connected to Allah throughout the day. Access authentic daily duas and adhkar with Arabic text, transliteration, English/Urdu translation, full hadith references, bookmarks, and a focused online tasbih counter."
   },
   {
     icon: "/AI-Scholar-Assistant.png",
@@ -303,14 +309,14 @@ export const developers: Developer[] = [
     }
   },
   {
-    id: 'hiring',
-    name: "We Are Hiring!",
-    role: "Full Stack Developer / Project Manager",
-    bio: "Join our team! We're looking for talented developers to help manage and improve HikmahSphere. Work on database optimization, lead the complete Zakat management system, and shape the future of Islamic technology.",
-    expertise: ['Full Stack Development', 'Database Management', 'Project Leadership', 'MongoDB', 'React & Node.js'],
-    image: '/Coming-Soon.png',
+    id: 'zafia',
+    name: "Zafia Chowdhury",
+    role: "Creative Director | Content Reviewer & QA",
+    bio: "Cyber Security graduate with a passion for creating safe and beautiful digital experiences. Provides creative direction, design insights, and quality assurance to ensure HikmahSphere serves Ummah with excellence. Her expertise in security ensures user data protection while her creative vision shapes the platform's aesthetic appeal.",
+    expertise: ['Creative Direction', 'Content Review', 'Quality Assurance', 'Cyber Security', 'User Experience', 'Design Systems', 'Security & Privacy',],
+    image: '/zafia.png',
     social: {
-      github: 'https://github.com/ifrahazmi/HikmahSphere'
+      github: 'https://github.com/yani2298/HikmahSphere'
     }
   }
 ];
