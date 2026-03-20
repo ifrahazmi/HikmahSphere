@@ -488,13 +488,35 @@ router.get('/search', [
 // ============================================================
 import sqlite3 from 'sqlite3';
 import path from 'path';
+import fs from 'fs';
 import { Request, Response } from 'express';
 
 let indopakV3Db: sqlite3.Database | null = null;
 
+const resolveIndopakV3DbPath = (): string => {
+  const envPath = process.env.INDOPAK_V3_DB_PATH;
+  const candidatePaths = [
+    envPath,
+    path.resolve(__dirname, '../data/indopak-nastaleeq-v3.db'),
+    path.resolve(__dirname, '../../src/data/indopak-nastaleeq-v3.db'),
+    path.resolve(process.cwd(), 'dist/data/indopak-nastaleeq-v3.db'),
+    path.resolve(process.cwd(), 'src/data/indopak-nastaleeq-v3.db'),
+    path.resolve(process.cwd(), 'backend/dist/data/indopak-nastaleeq-v3.db'),
+    path.resolve(process.cwd(), 'backend/src/data/indopak-nastaleeq-v3.db'),
+  ].filter((candidate): candidate is string => Boolean(candidate));
+
+  const dbPath = candidatePaths.find((candidate) => fs.existsSync(candidate));
+
+  if (!dbPath) {
+    throw new Error(`IndoPak v3 database not found. Checked: ${candidatePaths.join(', ')}`);
+  }
+
+  return dbPath;
+};
+
 const getIndopakV3Db = (): sqlite3.Database => {
   if (!indopakV3Db) {
-    const dbPath = path.join(__dirname, '../data/indopak-nastaleeq-v3.db');
+    const dbPath = resolveIndopakV3DbPath();
     indopakV3Db = new sqlite3.Database(dbPath, sqlite3.OPEN_READONLY);
   }
   return indopakV3Db;
