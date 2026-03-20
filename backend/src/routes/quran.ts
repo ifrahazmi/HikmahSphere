@@ -457,14 +457,14 @@ router.get('/search', [
 
     const { q, surah } = req.query;
     let searchUrl = `${QURAN_API_BASE}/search/${q}/all/en`;
-    
+
     if (surah) {
       searchUrl = `${QURAN_API_BASE}/search/${q}/${surah}/en`;
     }
 
     const response = await fetch(searchUrl);
     const data: any = await response.json();
-    
+
     if (data.code === 200 && data.data) {
       res.json({
         status: 'success',
@@ -480,6 +480,178 @@ router.get('/search', [
       message: 'Failed to search Quran',
       details: error.message
     });
+  }
+});
+
+// ============================================================
+// IndoPak Nastaleeq V3 API - Word by Word Quran Data
+// ============================================================
+import sqlite3 from 'sqlite3';
+import path from 'path';
+import { Request, Response } from 'express';
+
+let indopakV3Db: sqlite3.Database | null = null;
+
+const getIndopakV3Db = (): sqlite3.Database => {
+  if (!indopakV3Db) {
+    const dbPath = path.join(__dirname, '../data/indopak-nastaleeq-v3.db');
+    indopakV3Db = new sqlite3.Database(dbPath, sqlite3.OPEN_READONLY);
+  }
+  return indopakV3Db;
+};
+
+/**
+ * GET /api/quran/indopak-v3/surah/:surahNumber
+ * Get complete Surah with word-by-word IndoPak V3 script
+ */
+router.get('/indopak-v3/surah/:surahNumber', [
+  // surahNumber comes from route params, not query
+], async (req: Request, res: Response) => {
+  try {
+    const surahNumber = parseInt(req.params.surahNumber as string);
+    
+    // Validate surah number
+    if (Number.isNaN(surahNumber) || surahNumber < 1 || surahNumber > 114) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid surah number. Must be between 1 and 114.'
+      });
+    }
+    
+    const db = getIndopakV3Db();
+
+    // Get all words for this Surah - sorted by ayah first, then by word position
+    const words = await new Promise<any[]>((resolve, reject) => {
+      db.all(
+        'SELECT * FROM words WHERE surah = ? ORDER BY ayah ASC, word ASC',
+        [surahNumber],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
+
+    if (words.length === 0) {
+      return res.status(404).json({
+        status: 'error',
+        message: `Surah ${surahNumber} not found in IndoPak V3 database`
+      });
+    }
+
+    // Group words by Ayah
+    const ayahsMap = new Map<number, any[]>();
+    words.forEach(word => {
+      if (!ayahsMap.has(word.ayah)) {
+        ayahsMap.set(word.ayah, []);
+      }
+      ayahsMap.get(word.ayah)!.push({
+        position: word.word,
+        text: word.text,
+        location: word.location
+      });
+    });
+
+    // Build ayahs array with full text
+    const ayahs = Array.from(ayahsMap.entries()).sort((a, b) => a[0] - b[0]).map(([ayahNum, words]) => ({
+      ayah: ayahNum,
+      words,
+      text: words.map((w: any) => w.text).join(' ')
+    }));
+
+    res.json({
+      status: 'success',
+      data: {
+        surah: surahNumber,
+        ayahs,
+        script_type: 'text_indopak_nastaleeq',
+        font_family: 'indopak-nastaleeq-v3'
+      }
+    });
+    return;
+  } catch (error: any) {
+    console.error('IndoPak V3 Surah API error:', error.message);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch IndoPak V3 Surah',
+      details: error.message
+    });
+    return;
+  }
+});
+
+/**
+ * GET /api/quran/indopak-v3/ayah/:surahNumber/:ayahNumber
+ * Get specific Ayah with word-by-word IndoPak V3 script
+ */
+router.get('/indopak-v3/ayah/:surahNumber/:ayahNumber', [
+  // Parameters come from route params, not query
+], async (req: Request, res: Response) => {
+  try {
+    const surahNumber = parseInt(req.params.surahNumber as string);
+    const ayahNumber = parseInt(req.params.ayahNumber as string);
+    
+    // Validate parameters
+    if (Number.isNaN(surahNumber) || surahNumber < 1 || surahNumber > 114) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid surah number. Must be between 1 and 114.'
+      });
+    }
+    if (Number.isNaN(ayahNumber) || ayahNumber < 1) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid ayah number. Must be a positive integer.'
+      });
+    }
+    
+    const db = getIndopakV3Db();
+
+    // Get all words for this Ayah
+    const words = await new Promise<any[]>((resolve, reject) => {
+      db.all(
+        'SELECT * FROM words WHERE surah = ? AND ayah = ? ORDER BY word',
+        [surahNumber, ayahNumber],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
+
+    if (words.length === 0) {
+      return res.status(404).json({
+        status: 'error',
+        message: `Ayah ${surahNumber}:${ayahNumber} not found in IndoPak V3 database`
+      });
+    }
+
+    const formattedWords = words.map(word => ({
+      position: word.word,
+      text: word.text,
+      location: word.location
+    }));
+
+    res.json({
+      status: 'success',
+      data: {
+        surah: surahNumber,
+        ayah: ayahNumber,
+        words: formattedWords,
+        text: formattedWords.map((w: any) => w.text).join(' '),
+        script_type: 'text_indopak_nastaleeq',
+        font_family: 'indopak-nastaleeq-v3'
+      }
+    });
+    return;
+  } catch (error: any) {
+    console.error('IndoPak V3 Ayah API error:', error.message);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch IndoPak V3 Ayah',
+      details: error.message
+    });
+    return;
   }
 });
 

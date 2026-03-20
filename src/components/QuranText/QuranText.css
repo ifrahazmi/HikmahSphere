@@ -1,0 +1,52 @@
+/* Load QUL Nastaleeq Hanafi font */
+@font-face {
+  font-family: 'QUL-Nastaleeq';
+  src: url('https://static-cdn.tarteel.ai/qul/fonts/nastaleeq/Hanafi/normal-v4.2.2/with-waqf-lazmi/font.ttf')
+    format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+.quran-container {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 24px;
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  max-width: 800px;
+  margin: 20px auto;
+}
+
+.quran-text {
+  font-family: 'QUL-Nastaleeq', serif;
+  font-size: 32px;
+  line-height: 2.2;
+  direction: rtl;
+  text-align: right;
+  /* Enable OpenType features for proper ligatures and marks */
+  font-feature-settings: 'liga' 1, 'calt' 1, 'mark' 1, 'mkmk' 1;
+  -webkit-font-feature-settings: 'liga' 1, 'calt' 1, 'mark' 1, 'mkmk' 1;
+  color: #1a1a1a;
+}
+
+.ayah-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border: 2px solid #c9a227;
+  border-radius: 50%;
+  background-color: #fff;
+  color: #c9a227;
+  /* Use standard font for English digits - NOT the Quran font */
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  flex-shrink: 0;
+}

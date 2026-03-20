@@ -27,6 +27,10 @@ import {
   DEFAULT_TRANSLATIONS,
 } from '../types/quran';
 import { getIndopakQuranData, getIndopakSurah, type IndopakSurah } from '../utils/indopakQuran';
+import {
+  fetchIndopakV3Surah,
+  type IndopakV3Surah,
+} from '../utils/indopakV3Quran';
 
 const BOOKMARK_COLOR_CLASS_MAP: Record<
   BookmarkColor,
@@ -152,6 +156,11 @@ const QuranReader: React.FC = () => {
   const [indopakData, setIndopakData] = useState<Map<number, IndopakSurah> | null>(null);
   const [indopakSurah, setIndopakSurah] = useState<IndopakSurah | null>(null);
 
+  // IndoPak V3 Quran data state
+  const [indopakV3Surah, setIndopakV3Surah] = useState<IndopakV3Surah | null>(null);
+  const [indopakV3Loading, setIndopakV3Loading] = useState(false);
+  const [indopakV3Error, setIndopakV3Error] = useState<string | null>(null);
+
   // Load Indopak Quran data on mount
   useEffect(() => {
     const data = getIndopakQuranData();
@@ -167,6 +176,31 @@ const QuranReader: React.FC = () => {
       setIndopakSurah(null);
     }
   }, [indopakData, settings.arabicFont, currentSurah]);
+
+  // Load current Surah from IndoPak V3 API when surah or font changes
+  useEffect(() => {
+    const loadV3Surah = async () => {
+      if (settings.arabicFont !== 'indopak-nastaleeq-v3' || !currentSurah) {
+        setIndopakV3Surah(null);
+        return;
+      }
+
+      setIndopakV3Loading(true);
+      setIndopakV3Error(null);
+
+      try {
+        const surah = await fetchIndopakV3Surah(currentSurah);
+        setIndopakV3Surah(surah);
+      } catch (error: any) {
+        console.error('Failed to load IndoPak V3 Surah:', error);
+        setIndopakV3Error(error.message || 'Failed to load IndoPak V3 Surah');
+      } finally {
+        setIndopakV3Loading(false);
+      }
+    };
+
+    loadV3Surah();
+  }, [settings.arabicFont, currentSurah]);
 
   // Mobile settings modal state
   const [showMobileSettings, setShowMobileSettings] = useState(false);
@@ -496,6 +530,7 @@ const QuranReader: React.FC = () => {
     const fontMap: Record<string, string> = {
       'al-mushaf': 'font-al-mushaf',
       'indopak-nastaleeq': 'font-indopak-nastaleeq',
+      'indopak-nastaleeq-v3': 'font-indopak-nastaleeq-v3',
       'amiri': 'font-arabic',
       'scheherazade': 'font-scheherazade',
       'noto-naskh': 'font-noto-naskh',
@@ -1547,7 +1582,8 @@ const QuranReader: React.FC = () => {
                     }`}
                   >
                     <option value="al-mushaf">Al Mushaf - Authentic Quranic Script</option>
-                    <option value="indopak-nastaleeq">IndoPak Nastaleeq (South India) - Default</option>
+                    <option value="indopak-nastaleeq-v3">IndoPak Nastaleeq V3 - Word by Word (Recommended)</option>
+                    <option value="indopak-nastaleeq">IndoPak Nastaleeq V1 - South India (Legacy)</option>
                     <option value="amiri">Amiri - Traditional Naskh</option>
                     <option value="scheherazade">Scheherazade - Classic Book Style</option>
                     <option value="noto-naskh">Noto Naskh - Clear & Readable</option>
@@ -1893,10 +1929,10 @@ const QuranReader: React.FC = () => {
               </div>
             ) : surahData ? (
               <div className={`${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow-md p-4`}>
-                {/* Bismillah (except for Surah 9) */}
+                {/* Bismillah (except for Surah 9) - Uses currently selected Arabic font */}
                 {surahData.number !== 9 && (
                   <div className="text-center mb-6 py-3">
-                    <p className={`text-2xl ${getFontFamilyClass()} text-emerald-600 leading-loose mb-4`}>
+                    <p className={`text-2xl ${getFontFamilyClass()} text-emerald-600 leading-loose mb-4 bismillah-text`} dir="rtl" lang="ar">
                       بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
                     </p>
                     {/* Beautiful Islamic Divider */}
@@ -2127,7 +2163,14 @@ const QuranReader: React.FC = () => {
                                 );
                               })}
                               <span
-                                className={`inline-flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 rounded-full border-2 text-xs font-bold ${borderClass} bg-white bg-opacity-90 mr-[0.08em] sm:mr-[0.15em] flex-shrink-0 align-middle`}
+                                className="inline-flex items-center justify-center rounded-full bg-white text-xs font-bold flex-shrink-0 align-middle ml-2"
+                                style={{
+                                  fontFamily: 'Arial, Helvetica, sans-serif',
+                                  width: '28px',
+                                  height: '28px',
+                                  border: '2px solid black',
+                                  fontWeight: '600',
+                                }}
                               >
                                 {ayahNum}
                               </span>
@@ -2136,11 +2179,11 @@ const QuranReader: React.FC = () => {
 
                           {/* Transliteration */}
                           {settings.showTransliteration && transliteration && (
-                            <div className="mb-3">
+                            <div className="mb-3 text-left ltr" dir="ltr">
                               <p className={`text-xs font-medium mb-1 ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
                                 Transliteration
                               </p>
-                              <p className={`text-sm italic leading-relaxed ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+                              <p className={`text-sm italic leading-relaxed transliteration-text ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
                                 {transliteration.ayahs[ayahNum - 1]?.text}
                               </p>
                             </div>
@@ -2213,14 +2256,257 @@ const QuranReader: React.FC = () => {
                             })}
                             <span
                               id={`ayah-${ayahNum}`}
-                              className={`inline-flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 rounded-full border-2 text-xs font-bold ${borderClass} bg-white bg-opacity-90 mr-[0.08em] sm:mr-[0.15em] flex-shrink-0 align-middle cursor-pointer`}
+                              className="inline-flex items-center justify-center rounded-full bg-white text-xs font-bold flex-shrink-0 align-middle ml-2 cursor-pointer"
                               onClick={(e) => handleAyahClick(e, surahData.number, ayahNum)}
                               title={`Ayah ${ayahNum}`}
+                              style={{
+                                fontFamily: 'Arial, Helvetica, sans-serif',
+                                width: '28px',
+                                height: '28px',
+                                border: '2px solid black',
+                                fontWeight: '600',
+                              }}
                             >
                               {ayahNum}
                             </span>
                             <span className="inline-block w-[0.15em] sm:w-[0.2em] flex-shrink-0" />
                           </React.Fragment>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : settings.arabicFont === 'indopak-nastaleeq-v3' && indopakV3Loading ? (
+                  // IndoPak V3 - Loading State
+                  <div className="flex items-center justify-center py-12">
+                    <LoadingSpinner size="lg" />
+                    <span className={`ml-3 text-sm ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+                      Loading IndoPak V3 Surah...
+                    </span>
+                  </div>
+                ) : settings.arabicFont === 'indopak-nastaleeq-v3' && indopakV3Error ? (
+                  // IndoPak V3 - Error State
+                  <div className="text-center py-8">
+                    <ExclamationTriangleIcon className={`h-12 w-12 mx-auto mb-3 ${settings.theme === 'dark' ? 'text-red-400' : 'text-red-500'}`} />
+                    <p className={`text-sm font-medium ${settings.theme === 'dark' ? 'text-red-300' : 'text-red-600'}`}>
+                      Failed to load IndoPak V3 Surah
+                    </p>
+                    <p className={`text-xs mt-1 ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                      {indopakV3Error}
+                    </p>
+                    <button
+                      onClick={() => currentSurah && fetchIndopakV3Surah(currentSurah).then(setIndopakV3Surah).catch(e => setIndopakV3Error(e.message))}
+                      className="mt-3 px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : settings.arabicFont === 'indopak-nastaleeq-v3' && indopakV3Surah && !settings.arabicOnlyMode ? (
+                  // IndoPak V3 - Translation Mode (Line by Line per Ayah)
+                  // Note: Bismillah is already shown at top level, so we skip Ayah 1 for Surah 1
+                  <div className="space-y-4">
+                    {indopakV3Surah.ayahs.map((ayah) => {
+                      const ayahNum = ayah.ayah;
+                      // For Surah 1, skip Ayah 1 (contains Bismillah) since it's shown separately at top
+                      const isFirstAyahFatiha = surahData?.number === 1 && ayahNum === 1;
+                      if (isFirstAyahFatiha) return null;
+
+                      const bookmarkColor = getBookmarkColor(surahData.number, ayahNum);
+                      const bgClass = getBookmarkBackgroundClass(bookmarkColor);
+                      const borderClass = getBookmarkBorderClass(bookmarkColor);
+                      const isSelectedForBookmark =
+                        selectedAyahForBookmark?.surah === surahData.number &&
+                        selectedAyahForBookmark?.ayah === ayahNum;
+                      const isPlayingThisAyah = isPlaying && currentPlayingAyah === ayahNum;
+
+                      return (
+                        <div
+                          key={ayahNum}
+                          id={`ayah-${ayahNum}`}
+                          className={`indopak-v3-translation-mode pb-5 border-b last:border-b-0 ${
+                            settings.theme === 'dark' ? 'border-gray-700/80' : 'border-emerald-100'
+                          }`}
+                        >
+                          {/* Audio Controls - Ayah by Ayah */}
+                          {settings.audioEnabled && settings.audioMode === 'ayah' && currentSurah && (
+                            <div className="mb-3 flex items-center gap-2">
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  if (isPlayingThisAyah) {
+                                    pauseAyah();
+                                  } else {
+                                    playAyah(currentSurah, ayahNum);
+                                  }
+                                }}
+                                className={`inline-flex items-center justify-center w-8 h-8 rounded-full transition-colors ${
+                                  isPlayingThisAyah
+                                    ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+                                    : settings.theme === 'dark'
+                                    ? 'bg-gray-700 hover:bg-gray-600 text-emerald-400'
+                                    : 'bg-white text-emerald-600 shadow-sm hover:bg-emerald-50'
+                                }`}
+                                title={isPlayingThisAyah ? 'Pause' : 'Play Ayah'}
+                              >
+                                {isPlayingThisAyah ? (
+                                  <PauseIcon className="h-5 w-5" />
+                                ) : (
+                                  <PlayIcon className="h-5 w-5" />
+                                )}
+                              </button>
+                              <span className={`text-xs ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                                {isPlayingThisAyah ? 'Playing...' : 'Play Ayah'}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Arabic Text - Word by Word (No conversion, just fetch and display) */}
+                          <div className={`relative mb-4 overflow-hidden rounded-2xl p-3 sm:p-5 ${getReaderBackgroundClass()}`}>
+                            <div
+                              className={`${getFontFamilyClass()} flex flex-wrap items-baseline gap-[0.08em] sm:gap-[0.12em] leading-[2.4] sm:leading-[2.6] ${getFontColorClass()} ${getBookmarkHoverClass(bookmarkColor)} ${bgClass} ${isSelectedForBookmark ? getBookmarkSelectionClass(bookmarkColor) : ''} rounded px-2 py-3 cursor-pointer`}
+                              style={{
+                                fontSize: `${getActualFontSize()}px`,
+                                lineHeight: getActualLineHeight(),
+                                WebkitTextSizeAdjust: '100%',
+                                textRendering: 'auto',
+                                fontVariantLigatures: 'common-ligatures contextual',
+                                fontFeatureSettings: '"liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1'
+                              }}
+                              dir="rtl"
+                              onClick={(e) => handleAyahClick(e, surahData.number, ayahNum)}
+                            >
+                              {ayah.words.map((wordData, wordIndex) => {
+                                const isAyahMarker = /^\d+$/.test(wordData.text.trim());
+                                if (isAyahMarker) return null;
+
+                                const isSelectedForWordBookmark = selectedWordForBookmark?.surah === surahData.number &&
+                                     selectedWordForBookmark?.ayah === ayahNum &&
+                                     selectedWordForBookmark?.wordIndex === wordIndex;
+                                const isBookmarkedAyah = isBookmarked(surahData.number, ayahNum);
+
+                                return (
+                                  <span
+                                    key={`v3-surah${surahData.number}-ayah${ayahNum}-word${wordIndex}`}
+                                    className={`inline-block indopak-v3-word-container px-[0.06em] sm:px-[0.12em] my-[0.04em] rounded transition-colors ${
+                                      isSelectedForWordBookmark ? 'bg-emerald-500 text-white' : 'hover:bg-emerald-100 hover:bg-opacity-30'
+                                    } ${isBookmarkedAyah ? bgClass : ''}`}
+                                    title={`Word ${wordData.position}: ${wordData.location}`}
+                                    onClick={(e) => handleWordClick(e, surahData.number, ayahNum, wordIndex)}
+                                    style={{
+                                      textRendering: 'auto',
+                                      WebkitFontSmoothing: 'subpixel-antialiased',
+                                      MozOsxFontSmoothing: 'auto',
+                                      WebkitTextSizeAdjust: '100%',
+                                      fontVariantLigatures: 'common-ligatures contextual',
+                                      fontFeatureSettings: '"liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1',
+                                      letterSpacing: '0.02em',
+                                      wordSpacing: '0.08em'
+                                    }}
+                                  >
+                                    {wordData.text}
+                                  </span>
+                                );
+                              })}
+                              <span
+                                className="inline-flex items-center justify-center rounded-full bg-white text-xs font-bold flex-shrink-0 align-middle ml-2"
+                                style={{
+                                  fontFamily: 'Arial, Helvetica, sans-serif',
+                                  width: '28px',
+                                  height: '28px',
+                                  border: '2px solid black',
+                                  fontWeight: '600',
+                                }}
+                              >
+                                {ayahNum}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Transliteration */}
+                          {settings.showTransliteration && transliteration && (
+                            <div className="mb-3 text-left ltr" dir="ltr">
+                              <p className={`text-xs font-medium mb-1 ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                                Transliteration
+                              </p>
+                              <p className={`text-sm italic leading-relaxed transliteration-text ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+                                {transliteration.ayahs[ayahNum - 1]?.text}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Translations */}
+                          {renderAyahTranslations(ayahNum - 1)}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : settings.arabicFont === 'indopak-nastaleeq-v3' && indopakV3Surah && settings.arabicOnlyMode ? (
+                  // IndoPak V3 - Arabic Only Mode (Continuous flow, ayahs flow one after another)
+                  // Note: Bismillah is already shown at top level, so we skip Ayah 1 for Surah 1
+                  <div className={`p-2 sm:p-3 rounded-lg ${getReaderBackgroundClass()}`}>
+                    <div
+                      className={`${getFontFamilyClass()} indopak-v3-continuous flex flex-wrap items-baseline gap-[0.08em] sm:gap-[0.12em] leading-[2.4] sm:leading-[2.6] ${getFontColorClass()}`}
+                      style={{
+                        fontSize: `${getActualFontSize()}px`,
+                        lineHeight: getActualLineHeight(),
+                        WebkitTextSizeAdjust: '100%',
+                        textRendering: 'auto',
+                        fontVariantLigatures: 'common-ligatures contextual',
+                        fontFeatureSettings: '"liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1'
+                      }}
+                      dir="rtl"
+                    >
+                      {indopakV3Surah.ayahs.map((ayah) => {
+                        const ayahNum = ayah.ayah;
+                        // For Surah 1, skip Ayah 1 (contains Bismillah) since it's shown separately at top
+                        const isFirstAyahFatiha = surahData?.number === 1 && ayahNum === 1;
+                        if (isFirstAyahFatiha) return null;
+
+                        const bookmarkColor = getBookmarkColor(surahData.number, ayahNum);
+                        const bgClass = getBookmarkBackgroundClass(bookmarkColor);
+                        const borderClass = getBookmarkBorderClass(bookmarkColor);
+
+                        return (
+                          <span key={ayahNum} className="inline">
+                            {ayah.words.map((wordData, wordIndex) => {
+                              const isAyahMarker = /^\d+$/.test(wordData.text.trim());
+                              if (isAyahMarker) return null;
+
+                              const isSelectedForWordBookmark = selectedWordForBookmark?.surah === surahData.number &&
+                                   selectedWordForBookmark?.ayah === ayahNum &&
+                                   selectedWordForBookmark?.wordIndex === wordIndex;
+
+                              return (
+                                <span
+                                  key={`v3-continuous-surah${surahData.number}-ayah${ayahNum}-word${wordIndex}`}
+                                  className={`inline-block px-[0.04em] sm:px-[0.08em] my-[0.02em] rounded transition-colors cursor-pointer ${
+                                    isSelectedForWordBookmark ? 'bg-emerald-500 text-white' : 'hover:bg-emerald-100 hover:bg-opacity-30'
+                                  } ${bgClass}`}
+                                  onClick={(e) => handleWordClick(e, surahData.number, ayahNum, wordIndex)}
+                                  style={{
+                                    textRendering: 'auto',
+                                    WebkitFontSmoothing: 'subpixel-antialiased',
+                                    fontFeatureSettings: '"liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1'
+                                  }}
+                                >
+                                  {wordData.text}
+                                </span>
+                              );
+                            })}
+                            <span
+                              className="inline-flex items-center justify-center rounded-full bg-white text-xs font-bold flex-shrink-0 align-middle ml-2"
+                              style={{
+                                fontFamily: 'Arial, Helvetica, sans-serif',
+                                width: '28px',
+                                height: '28px',
+                                border: '2px solid black',
+                                fontWeight: '600',
+                              }}
+                            >
+                              {ayahNum}
+                            </span>
+                            {' '}
+                          </span>
                         );
                       })}
                     </div>
@@ -2252,7 +2538,14 @@ const QuranReader: React.FC = () => {
                               {' '}
                               <span
                                 id={`ayah-${ayah.numberInSurah}`}
-                                className={`inline-flex items-center justify-center w-6 h-6 rounded-full border-2 text-xs font-bold ${borderClass} align-middle`}
+                                className="inline-flex items-center justify-center rounded-full bg-white text-xs font-bold align-middle ml-2"
+                                style={{ 
+                                  fontFamily: 'Arial, Helvetica, sans-serif',
+                                  width: '28px',
+                                  height: '28px',
+                                  border: '2px solid black',
+                                  fontWeight: '600',
+                                }}
                               >
                                 {ayah.numberInSurah}
                               </span>
@@ -2331,7 +2624,14 @@ const QuranReader: React.FC = () => {
                                     </span>
                                     {' '}
                                     <span
-                                      className={`inline-flex items-center justify-center w-6 h-6 rounded-full border-2 text-xs font-bold mx-1 ${borderClass}`}
+                                      className="inline-flex items-center justify-center rounded-full bg-white text-xs font-bold ml-2"
+                                      style={{ 
+                                        fontFamily: 'Arial, Helvetica, sans-serif',
+                                        width: '28px',
+                                        height: '28px',
+                                        border: '2px solid black',
+                                        fontWeight: '600',
+                                      }}
                                     >
                                       {ayah.numberInSurah}
                                     </span>
@@ -2635,7 +2935,8 @@ const QuranReader: React.FC = () => {
                     }`}
                   >
                     <option value="al-mushaf">Al Mushaf - Authentic Quranic Script</option>
-                    <option value="indopak-nastaleeq">IndoPak Nastaleeq (South India) - Default</option>
+                    <option value="indopak-nastaleeq-v3">IndoPak Nastaleeq V3 - Word by Word (Recommended)</option>
+                    <option value="indopak-nastaleeq">IndoPak Nastaleeq V1 - South India (Legacy)</option>
                     <option value="amiri">Amiri - Traditional Naskh</option>
                     <option value="scheherazade">Scheherazade - Classic Book Style</option>
                     <option value="noto-naskh">Noto Naskh - Clear & Readable</option>

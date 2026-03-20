@@ -94,25 +94,270 @@ code {
   line-height: 2.2;
 }
 
-/* Indopak Nastaleeq Font - Custom Quran Font */
+/* Indopak Nastaleeq Font - Custom Quran Font with Comprehensive Unicode Support */
 @font-face {
   font-family: 'Indopak Nastaleeq';
   src: url('./data/Al Qalam Quran Majeed 1 Regular.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
   font-display: swap;
+  unicode-range: U+0600-06FF, U+FB50-FDFF, U+FE70-FEFF, U+2E41, U+F500-F8FF;
+}
+
+/* Fajer Noori Nastaleeq as secondary font for better coverage */
+@font-face {
+  font-family: 'Fajer Noori Nastaleeq';
+  src: url('./data/Fajer-Noori-Nastalique.woff') format('woff'),
+       url('./data/Fajer-Noori-Nastalique.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0600-06FF, U+FB50-FDFF, U+FE70-FEFF, U+F500-F8FF;
 }
 
 .font-indopak-nastaleeq {
-  font-family: 'Indopak Nastaleeq', 'Noto Naskh Arabic', 'Amiri', serif;
+  font-family: 'Indopak Nastaleeq', 'Fajer Noori Nastaleeq', 'Noto Naskh Arabic', 'Amiri', serif;
   font-variant-ligatures: contextual common-ligatures;
-  font-feature-settings: "mark" 1, "mkmk" 1, "calt" 1;
+  font-feature-settings: "mark" 1, "mkmk" 1, "calt" 1, "liga" 1, "clig" 1, "rlig" 1, "init" 1, "medi" 1, "fina" 1, "isol" 1;
   text-rendering: optimizeLegibility;
   -webkit-text-stroke: 0.3px transparent;
+  line-height: 2.4;
+  letter-spacing: 0.02em;
+  word-spacing: 0.08em;
 }
 
 .font-indopak-nastaleeq * {
   font-family: inherit;
+}
+
+/* ============================================================
+   INDO-PAK QURAN FONT SETUP - Complete Solution
+   Using Tarteel AI's IndoPak Nastaleeq Font
+   Source: https://static-cdn.tarteel.ai/qul/fonts/nastaleeq/Hanafi/normal-v4.2.2/with-waqf-lazmi/font.ttf
+   ============================================================ */
+
+/* Primary IndoPak Font - Tarteel AI's IndoPak Nastaleeq */
+@font-face {
+  font-family: 'Indopak Nastaleeq';
+  src: url('https://static-cdn.tarteel.ai/qul/fonts/nastaleeq/Hanafi/normal-v4.2.2/with-waqf-lazmi/font.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0600-06FF, U+FB50-FDFF, U+FE70-FEFF, U+FDF0-FDFF, U+2E41, U+F500-F8FF;
+}
+
+/* Fallback: Noto Naskh Arabic (Google Fonts) - for missing glyphs */
+@font-face {
+  font-family: 'Noto Naskh Arabic';
+  src: local('Noto Naskh Arabic'), local('NotoNaskhArabic');
+  font-display: swap;
+  unicode-range: U+0600-06FF, U+FB50-FDFF, U+FE70-FEFF;
+}
+
+/* Fallback: Amiri for additional coverage */
+@font-face {
+  font-family: 'Amiri';
+  src: local('Amiri'), local('Amiri-Regular');
+  font-display: swap;
+  unicode-range: U+0600-06FF, U+FB50-FDFF, U+FE70-FEFF;
+}
+
+/* ============================================================
+   INDO-PAK V3 - Word-by-Word Rendering
+   ============================================================ */
+.font-indopak-nastaleeq-v3 {
+  /* Font stack: Tarteel IndoPak first, then fallbacks for missing glyphs */
+  font-family: 'Indopak Nastaleeq', 'Noto Naskh Arabic', 'Amiri', serif;
+  
+  /* OpenType features for proper Arabic shaping */
+  font-variant-ligatures: contextual common-ligatures;
+  font-feature-settings: 
+    "calt" 1,  /* Contextual alternates - ESSENTIAL for Arabic letter joining */
+    "liga" 1,  /* Standard ligatures */
+    "clig" 1,  /* Contextual ligatures */
+    "rlig" 1,  /* Required ligatures */
+    "init" 1,  /* Initial forms */
+    "medi" 1,  /* Medial forms */
+    "fina" 1,  /* Final forms */
+    "isol" 1,  /* Isolated forms */
+    "ccmp" 1,  /* Composition/decomposition - prevents broken characters */
+    "mark" 1,  /* Mark positioning - for harakat/tajweed */
+    "mkmk" 1;  /* Mark-to-mark positioning */
+  
+  /* Text rendering optimization */
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-stroke: 0.3px transparent;
+  
+  /* Spacing */
+  line-height: 2.8;
+  letter-spacing: 0.04em;
+  word-spacing: 0.15em;
+  
+  /* RTL support */
+  direction: rtl;
+  text-align: right;
+  unicode-bidi: embed;
+}
+
+.font-indopak-nastaleeq-v3 * {
+  font-family: inherit;
+  direction: rtl;
+  unicode-bidi: embed;
+}
+
+/* ============================================================
+   BISMILLAH - Standard Arabic Font (NOT QUL font)
+   Bismillah is manually typed Arabic Unicode, not QUL data
+   So we use standard Arabic font like Amiri/Scheherazade
+   ============================================================ */
+.bismillah-text {
+  font-family: 'Amiri', 'Scheherazade New', 'Noto Naskh Arabic', serif !important;
+  direction: rtl !important;
+  text-align: right !important;
+  unicode-bidi: embed !important;
+  font-size: 1.5rem !important;
+  line-height: 2.8 !important;
+  letter-spacing: 0.04em !important;
+  word-spacing: 0.12em !important;
+  text-rendering: optimizeLegibility !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+}
+
+/* ============================================================
+   WORD CONTAINER - Prevents breaking Arabic shaping
+   ============================================================ */
+.indopak-v3-word-container {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-start;
+  min-height: 2.2em;
+  vertical-align: baseline;
+  line-height: 2.8;
+  direction: rtl;
+  unicode-bidi: embed;
+  
+  /* Prevent word breaks - CRITICAL for Arabic shaping */
+  white-space: nowrap;
+  word-break: keep-all;
+  overflow-wrap: normal;
+  break-word: normal;
+  break-all: normal;
+  
+  /* Font shaping */
+  font-variant-ligatures: contextual common-ligatures;
+  font-feature-settings: "calt" 1, "liga" 1, "clig" 1, "rlig" 1, "ccmp" 1;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============================================================
+   QURAN SYMBOLS - Proper Rendering
+   ============================================================ */
+
+/* Ayah marker (۝ U+06DD) */
+.quran-ayah-marker {
+  font-family: 'Indopak Nastaleeq', 'Noto Naskh Arabic', 'Amiri', serif;
+  font-feature-settings: "mark" 1, "mkmk" 1, "ccmp" 1;
+  display: inline-block;
+  margin-inline: 0.2em;
+}
+
+/* Rub el Hizb (۞ U+06DE) */
+.quran-rub-el-hizb {
+  font-family: 'Indopak Nastaleeq', 'Noto Naskh Arabic', 'Amiri', serif;
+  font-feature-settings: "mark" 1, "mkmk" 1;
+  display: inline-block;
+  margin-inline: 0.15em;
+}
+
+/* Basmala (﷽ U+FDFD) */
+.quran-basmala {
+  font-family: 'Indopak Nastaleeq', 'Noto Naskh Arabic', 'Amiri', serif;
+  font-feature-settings: "liga" 1, "calt" 1, "ccmp" 1;
+  display: inline-block;
+  white-space: nowrap;
+}
+
+/* Waqf symbols */
+.indopak-waqf-marker {
+  display: inline-block;
+  font-family: 'Indopak Nastaleeq', 'Noto Naskh Arabic', 'Amiri', serif;
+  font-feature-settings: "mark" 1, "mkmk" 1, "ccmp" 1;
+  line-height: 1;
+  vertical-align: middle;
+  unicode-bidi: isolate;
+  margin-inline: 0.18em;
+  font-size: 0.9em;
+  transform: translateY(-0.02em);
+}
+
+/* Tajweed marks */
+.tajweed-word {
+  display: inline-block;
+  line-height: 2.8;
+  margin: 0.03em 0.1em;
+  padding: 0.06em 0.12em;
+  white-space: nowrap;
+  font-feature-settings: "mark" 1, "mkmk" 1, "ccmp" 1;
+}
+
+/* ============================================================
+   TRANSLITERATION - LTR Support
+   ============================================================ */
+.transliteration-text {
+  direction: ltr !important;
+  text-align: left !important;
+  unicode-bidi: embed !important;
+  display: block !important;
+  width: 100% !important;
+}
+
+/* ============================================================
+   MOBILE OPTIMIZATIONS
+   ============================================================ */
+@media (max-width: 640px) {
+  .font-indopak-nastaleeq-v3 {
+    line-height: 3.0;
+    letter-spacing: 0.05em;
+    word-spacing: 0.18em;
+  }
+  
+  .indopak-v3-word-container {
+    min-height: 2.4em;
+    line-height: 3.0;
+  }
+  
+  .indopak-waqf-marker {
+    font-size: 0.85em;
+    margin-inline: 0.15em;
+  }
+}
+
+/* V3 Continuous Text Mode (Arabic Only) */
+.indopak-v3-continuous {
+  display: inline;
+  line-height: 2.8;
+  text-align: justify;
+  text-justify: inter-word;
+  direction: rtl;
+  unicode-bidi: embed;
+}
+
+/* V3 Translation Mode (Line by Line) */
+.indopak-v3-translation-mode {
+  display: block;
+  margin-bottom: 1.5em;
+  padding-bottom: 1em;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  direction: rtl;
+  unicode-bidi: embed;
+}
+
+.indopak-v3-translation-mode:last-child {
+  border-bottom: none;
 }
 
 /* Tajweed word spacing fix for mobile */
@@ -124,6 +369,112 @@ code {
   white-space: nowrap;
 }
 
+/* Comprehensive Tajweed Marks Support */
+.tajweed-mark {
+  display: inline-block;
+  font-family: 'Indopak Nastaleeq', 'Fajer Noori Nastaleeq', 'Noto Naskh Arabic', 'Amiri', serif;
+  font-feature-settings: "mark" 1, "mkmk" 1;
+  line-height: 1;
+  vertical-align: middle;
+  transform: translateY(-0.1em);
+}
+
+/* Specific Tajweed Mark Styling */
+.tajweed-qalqalah {
+  color: #059669;
+  font-weight: bold;
+}
+
+.tajweed-ghunnah {
+  color: #0284c7;
+  font-weight: bold;
+}
+
+.tajweed-madd {
+  color: #dc2626;
+  font-weight: bold;
+}
+
+.tajweed-idgham {
+  color: #7c3aed;
+  font-weight: bold;
+}
+
+.tajweed-iqlab {
+  color: #ea580c;
+  font-weight: bold;
+}
+
+.tajweed-ikhfa {
+  color: #0891b2;
+  font-weight: bold;
+}
+
+/* Waqf (Pause) Marks Styling */
+.waqf-la {
+  /* لا - Prohibited stop */
+  color: #dc2626;
+  font-weight: bold;
+}
+
+.waqf-jaiz {
+  /* ج - Permissible stop */
+  color: #059669;
+  font-weight: bold;
+}
+
+.waqf-awla {
+  /* قلى - Stop is better */
+  color: #0284c7;
+  font-weight: bold;
+}
+
+.waqf-waqf {
+  /* وقف - Must stop */
+  color: #7c3aed;
+  font-weight: bold;
+}
+
+.waqf-muraqaba {
+  /* ص - Connection mark */
+  color: #ea580c;
+  font-weight: bold;
+}
+
+.waqf-kadha {
+  /* كذ - Similar stop */
+  color: #0891b2;
+  font-weight: bold;
+}
+
+.waqf-saktah {
+  /* س - Pause without breath */
+  color: #dc2626;
+  font-weight: bold;
+}
+
+.waqf-wasl {
+  /* صلي - Continue preferred */
+  color: #059669;
+  font-weight: bold;
+}
+
+/* IndoPak specific waqf markers with proper Unicode support */
+.indopak-waqf-marker {
+  display: inline-block;
+  font-family: 'Indopak Nastaleeq', 'Fajer Noori Nastaleeq', 'Noto Naskh Arabic', 'Amiri', serif;
+  font-feature-settings: "mark" 1, "mkmk" 1, "calt" 1;
+  line-height: 1;
+  vertical-align: middle;
+  unicode-bidi: isolate;
+  margin-inline: 0.18em;
+  font-size: 0.9em;
+  transform: translateY(-0.02em);
+  /* Support for all IndoPak waqf symbols */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 @media (max-width: 640px) {
   .tajweed-word {
     margin: 0.06em 0.14em;
@@ -132,9 +483,10 @@ code {
   }
 
   .font-indopak-nastaleeq {
-    font-feature-settings: "mark" 1, "mkmk" 1;
+    font-feature-settings: "mark" 1, "mkmk" 1, "calt" 1, "liga" 1;
     letter-spacing: 0.04em;
     word-spacing: 0.22em;
+    line-height: 2.6;
   }
 
   .indopak-word-container {
@@ -144,12 +496,17 @@ code {
     min-height: 1.8em;
     vertical-align: baseline;
   }
+  
+  .indopak-waqf-marker {
+    font-size: 0.85em;
+    margin-inline: 0.15em;
+  }
 }
 
 .indopak-waqf-marker {
   display: inline-block;
-  font-family: 'Noto Naskh Arabic', 'Amiri', serif;
-  font-feature-settings: "mark" 0, "mkmk" 0, "calt" 0;
+  font-family: 'Indopak Nastaleeq', 'Fajer Noori Nastaleeq', 'Noto Naskh Arabic', 'Amiri', serif;
+  font-feature-settings: "mark" 1, "mkmk" 1, "calt" 1;
   line-height: 1;
   vertical-align: middle;
   unicode-bidi: isolate;
@@ -167,24 +524,35 @@ code {
     letter-spacing: -0.02em;
     word-spacing: 0.05em;
     font-variant-ligatures: common-ligatures contextual;
-    font-feature-settings: "liga" 1, "clig" 1, "calt" 1;
+    font-feature-settings: "liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1;
     -webkit-text-size-adjust: 100%;
   }
 
   .font-indopak-nastaleeq > div {
     line-height: 2.0 !important;
   }
+  
+  /* iOS-specific tajweed mark fixes */
+  .tajweed-mark,
+  .indopak-waqf-marker {
+    -webkit-font-smoothing: antialiased;
+    transform: translateY(-0.05em);
+  }
 }
 
 @media (max-width: 768px) {
   .indopak-waqf-marker {
-    font-family: 'Noto Naskh Arabic', 'Amiri', serif;
+    font-family: 'Indopak Nastaleeq', 'Fajer Noori Nastaleeq', 'Noto Naskh Arabic', 'Amiri', serif;
   }
 
   @supports (-webkit-touch-callout: none) {
     .font-indopak-nastaleeq {
       letter-spacing: -0.03em;
       word-spacing: 0.03em;
+    }
+    
+    .indopak-waqf-marker {
+      font-size: 0.8em;
     }
   }
 }

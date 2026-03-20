@@ -87,7 +87,7 @@ export interface QuranSettings {
   fontSize: number;                // 14-38px
   translationFontSize: number;     // 14-26px
   theme: 'light' | 'dark';
-  arabicFont: 'al-mushaf' | 'indopak-nastaleeq' | 'amiri' | 'scheherazade' | 'noto-naskh' | 'cairo' | 'lateef' | 'reem-kufi';
+  arabicFont: 'al-mushaf' | 'indopak-nastaleeq' | 'indopak-nastaleeq-v3' | 'amiri' | 'scheherazade' | 'noto-naskh' | 'cairo' | 'lateef' | 'reem-kufi';
   fontColor: 'default' | 'emerald' | 'blue' | 'amber' | 'rose';
   readerBackground: 'default' | 'white' | 'cream' | 'blue' | 'green';
   lineSpacing: number;             // 1.5-3.0
@@ -252,7 +252,7 @@ export const DEFAULT_QURAN_SETTINGS: QuranSettings = {
   fontSize: 20,
   translationFontSize: 20,
   theme: 'light',
-  arabicFont: 'indopak-nastaleeq',
+  arabicFont: 'indopak-nastaleeq-v3',
   fontColor: 'default',
   readerBackground: 'default',
   lineSpacing: 2.0,
