@@ -427,59 +427,6 @@ const incrementHijriByOneDay = (hijri?: HijriDate | null): HijriDate | null => {
   };
 };
 
-const calculateQiblaDirection = (userLat: number, userLon: number): number => {
-  const MECCA_LAT = 21.4225;
-  const MECCA_LON = 39.8262;
-  const lat1 = userLat * Math.PI / 180;
-  const lat2 = MECCA_LAT * Math.PI / 180;
-  const dLon = (MECCA_LON - userLon) * Math.PI / 180;
-
-  const y = Math.sin(dLon) * Math.cos(lat2);
-  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
-  const bearing = Math.atan2(y, x) * 180 / Math.PI;
-
-  return (bearing + 360) % 360;
-};
-
-const calculateDistanceToMecca = (userLat: number, userLon: number): number => {
-  const MECCA_LAT = 21.4225;
-  const MECCA_LON = 39.8262;
-  const R = 6371;
-  const dLat = (MECCA_LAT - userLat) * Math.PI / 180;
-  const dLon = (MECCA_LON - userLon) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
-    + Math.cos(userLat * Math.PI / 180) * Math.cos(MECCA_LAT * Math.PI / 180)
-    * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-  return R * c;
-};
-
-const buildMonthlyPrayerSnapshot = (calendarDays: any[], lat: number, lon: number) => {
-  if (!Array.isArray(calendarDays) || calendarDays.length === 0) {
-    return null;
-  }
-
-  const firstDay = calendarDays[0];
-  return {
-    times: {
-      Fajr: firstDay.timings.Fajr,
-      Sunrise: firstDay.timings.Sunrise,
-      Dhuhr: firstDay.timings.Dhuhr,
-      Asr: firstDay.timings.Asr,
-      Maghrib: firstDay.timings.Maghrib,
-      Isha: firstDay.timings.Isha,
-      Imsak: firstDay.timings.Imsak,
-    },
-    date: firstDay.date,
-    qibla: {
-      direction: { degrees: calculateQiblaDirection(lat, lon) },
-      distance: { value: calculateDistanceToMecca(lat, lon) },
-    },
-    meta: firstDay.meta,
-  };
-};
-
 const PrayerTimes: React.FC = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -933,10 +880,6 @@ const PrayerTimes: React.FC = () => {
 
     if (cachedMonthlyData) {
       setMonthlyData(cachedMonthlyData);
-      const monthlyPrayerSnapshot = buildMonthlyPrayerSnapshot(cachedMonthlyData, lat, lon);
-      if (monthlyPrayerSnapshot) {
-        setPrayerData(monthlyPrayerSnapshot);
-      }
       setLoading(false);
       return;
     }
@@ -950,10 +893,6 @@ const PrayerTimes: React.FC = () => {
       
       if (data.code === 200 && data.data) {
         setMonthlyData(data.data);
-        const monthlyPrayerSnapshot = buildMonthlyPrayerSnapshot(data.data, lat, lon);
-        if (monthlyPrayerSnapshot) {
-          setPrayerData(monthlyPrayerSnapshot);
-        }
         writePrayerCache(monthlyCacheKey, data.data);
       } else {
         setError('Unable to fetch monthly data.');
@@ -2398,10 +2337,14 @@ const PrayerTimes: React.FC = () => {
 	                      const rowGregorianDate = parseGregorianDDMMYYYY(gd?.date)
 	                        || new Date(gd.year, Number(gd.month?.number || 1) - 1, Number(gd.day || 1));
 	                      const isToday = rowGregorianDate.toDateString() === activeIslamicGregorianDate.toDateString();
+	                      const rowPrayerHijriDate = buildHijriDateFromPrayerSource(day.date?.hijri);
 	                      const fallbackRowHijriDate = buildHijriDateFromGregorianDate(rowGregorianDate);
+	                      const resolvedRowHijriDate = resolvePreferredHijriDate(rowPrayerHijriDate, fallbackRowHijriDate)
+	                        || rowPrayerHijriDate
+	                        || fallbackRowHijriDate;
 	                      const rowHijriDate = isToday
-	                        ? (resolvePreferredHijriDate(displayHijriDate, fallbackRowHijriDate) || displayHijriDate || fallbackRowHijriDate)
-	                        : fallbackRowHijriDate;
+	                        ? (resolvePreferredHijriDate(displayHijriDate, resolvedRowHijriDate) || displayHijriDate || resolvedRowHijriDate)
+	                        : resolvedRowHijriDate;
 	                      const hijriMonth = rowHijriDate?.month?.en || day.date.hijri.month.en;
 	                      const hijriDay = parseInt(String(rowHijriDate?.day || day.date.hijri.day), 10) || 0;
 

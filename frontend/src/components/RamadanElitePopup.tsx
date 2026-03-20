@@ -35,6 +35,10 @@ const EidMubarakCard = ({ visible, setVisible, darkMode, lang, toggleSound, soun
       continue: "دخول الموقع",
     },
   };
+  const eidArabicWish = {
+    title: "عيد مبارك",
+    dua: "تقبل الله منا ومنكم.",
+  };
 
   if (!visible) return null;
 
@@ -88,14 +92,14 @@ const EidMubarakCard = ({ visible, setVisible, darkMode, lang, toggleSound, soun
           )}
 
           <div className="mb-5 rounded-2xl border border-white/20 bg-white/10 px-4 py-4 text-center shadow-inner">
-            <div className="flex items-center justify-center gap-2 text-yellow-100" dir="rtl">
-              <span className="eid-arabic-text text-[2rem] sm:text-[2.3rem]">
-                عيد مبارك
+            <div className="mx-auto flex max-w-full items-center justify-center gap-2 text-yellow-100" dir="rtl">
+              <span className="eid-arabic-text text-[1.85rem] sm:text-[2.15rem]" dir="rtl" lang="ar">
+                {eidArabicWish.title}
               </span>
               <span className="shrink-0 text-2xl leading-none sm:text-3xl" aria-hidden="true">🌙</span>
             </div>
-            <p className="eid-arabic-text mt-1 text-[1.6rem] text-white sm:text-[1.9rem]" dir="rtl">
-              تقبل الله منا ومنكم.
+            <p className="eid-arabic-text mt-2 text-[1.45rem] text-white sm:text-[1.75rem]" dir="rtl" lang="ar">
+              {eidArabicWish.dua}
             </p>
           </div>
 

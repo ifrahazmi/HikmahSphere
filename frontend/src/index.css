@@ -229,15 +229,18 @@ code {
 }
 
 .eid-arabic-text {
-  font-family: 'Al Mushaf Quran', 'Amiri', 'Scheherazade New', 'Noto Naskh Arabic', serif !important;
+  font-family: 'Indopak Nastaleeq', 'Fajer Noori Nastaleeq', 'Al Mushaf Quran', 'Amiri', 'Scheherazade New', 'Noto Naskh Arabic', serif !important;
   direction: rtl !important;
   text-align: center !important;
   unicode-bidi: plaintext !important;
-  display: block !important;
-  white-space: nowrap !important;
+  display: inline-block !important;
+  max-width: 100% !important;
+  white-space: normal !important;
+  word-break: keep-all !important;
+  overflow-wrap: break-word !important;
   letter-spacing: 0 !important;
-  word-spacing: 0.03em !important;
-  line-height: 1.75 !important;
+  word-spacing: 0.04em !important;
+  line-height: 1.9 !important;
   font-variant-ligatures: common-ligatures contextual !important;
   font-feature-settings: "rlig" 1, "liga" 1, "calt" 1, "ccmp" 1, "mark" 1, "mkmk" 1 !important;
   text-rendering: optimizeLegibility !important;

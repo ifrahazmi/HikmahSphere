@@ -450,8 +450,10 @@ UserSchema.methods.incrementLoginAttempts = async function(): Promise<void> {
 UserSchema.methods.toJSON = function() {
   const userObject = this.toObject();
   delete userObject.password;
-  delete userObject.security.loginAttempts;
-  delete userObject.security.lockUntil;
+  if (userObject.security) {
+    delete userObject.security.loginAttempts;
+    delete userObject.security.lockUntil;
+  }
   return userObject;
 };
 

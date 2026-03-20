@@ -668,7 +668,7 @@ router.get(
 
         leaderboard = scores.map((s, i) => ({
           rank: i + 1,
-          userId: s.userId,
+          userId: s.userId || { username: 'Unknown' },
           totalPoints: s.totalPoints,
           gamesPlayed: s.gamesPlayed,
           accuracy: s.totalAnswers > 0 ? Math.round((s.correctAnswers / s.totalAnswers) * 100) : 0,
