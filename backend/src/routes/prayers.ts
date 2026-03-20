@@ -256,6 +256,10 @@ router.get('/times', [
     .optional()
     .isInt()
     .withMessage('School must be an integer (1=Shafi, 2=Hanafi)'),
+  query('date')
+    .optional()
+    .matches(/^\d{2}-\d{2}-\d{4}$/)
+    .withMessage('Date must be DD-MM-YYYY'),
 ], optionalAuthMiddleware, async (req: Request, res: Response) => {
   try {
     const errors = validationResult(req);
@@ -271,16 +275,19 @@ router.get('/times', [
       latitude,
       longitude,
       method = '3', // Default: Muslim World League
-      school = '1'  // Default: Shafi
+      school = '1',  // Default: Shafi
+      date,
     } = req.query as {
       latitude: string;
       longitude: string;
       method?: string;
       school?: string;
+      date?: string;
     };
 
+    const requestDate = date || `${String(new Date().getDate()).padStart(2, '0')}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${new Date().getFullYear()}`;
     // Generate cache key based on parameters
-    const cacheKey = `prayer_times:${latitude}:${longitude}:${method}:${school}`;
+    const cacheKey = `prayer_times:${latitude}:${longitude}:${method}:${school}:${requestDate}`;
 
     try {
       // Try to get from cache first (1 hour cache)
@@ -387,8 +394,7 @@ router.get('/times', [
 
     // ── FALLBACK: Aladhan API ─────────────────────────────────────────────────
     if (!responseData) {
-      const timestamp = Math.floor(Date.now() / 1000);
-      const aladhanUrl = `${API_BASE_URL}/${timestamp}?latitude=${latitude}&longitude=${longitude}&method=${method}&school=${school === '2' ? '1' : '0'}`;
+      const aladhanUrl = `${API_BASE_URL}/${requestDate}?latitude=${latitude}&longitude=${longitude}&method=${method}&school=${school === '2' ? '1' : '0'}`;
 
       console.log('🕌 ========== ALADHAN FALLBACK PRAYER CALL ==========');
       console.log(`🔗 URL: ${aladhanUrl}`);
@@ -497,6 +503,10 @@ router.get('/timesByCity', [
     .optional()
     .isInt()
     .withMessage('School must be an integer'),
+  query('date')
+    .optional()
+    .matches(/^\d{2}-\d{2}-\d{4}$/)
+    .withMessage('Date must be DD-MM-YYYY'),
 ], optionalAuthMiddleware, async (req: Request, res: Response) => {
   try {
     const errors = validationResult(req);
@@ -513,17 +523,20 @@ router.get('/timesByCity', [
       country,
       method = '3', // Default: Muslim World League
       school = '1', // Default: Shafi
-      latitudeAdjustmentMethod = '3' // Default: Angle Based
+      latitudeAdjustmentMethod = '3', // Default: Angle Based
+      date,
     } = req.query as {
       city: string;
       country: string;
       method?: string;
       school?: string;
       latitudeAdjustmentMethod?: string;
+      date?: string;
     };
 
+    const requestDate = date || `${String(new Date().getDate()).padStart(2, '0')}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${new Date().getFullYear()}`;
     // Generate cache key
-    const cacheKey = `prayer_times_city:${city}:${country}:${method}:${school}`;
+    const cacheKey = `prayer_times_city:${city}:${country}:${method}:${school}:${requestDate}`;
 
     try {
       const cachedData = await redisClient.get(cacheKey);
@@ -535,9 +548,7 @@ router.get('/timesByCity', [
       console.warn('⚠️ Redis cache read error:', cacheError);
     }
 
-    const timestamp = Math.floor(Date.now() / 1000);
-    const dateStr = `${new Date().getDate()}-${new Date().getMonth() + 1}-${new Date().getFullYear()}`;
-    const apiUrl = `${TIMINGS_BY_CITY_URL}/${dateStr}?city=${encodeURIComponent(city)}&country=${encodeURIComponent(country)}&method=${method}&school=${school === '2' ? '1' : '0'}&latitudeAdjustmentMethod=${latitudeAdjustmentMethod}`;
+    const apiUrl = `${TIMINGS_BY_CITY_URL}/${requestDate}?city=${encodeURIComponent(city)}&country=${encodeURIComponent(country)}&method=${method}&school=${school === '2' ? '1' : '0'}&latitudeAdjustmentMethod=${latitudeAdjustmentMethod}`;
 
     // 🕌 Aladhan API Call Debug Logging
     console.log('🕌 ========== ALADHAN CITY API CALL ==========');
@@ -571,11 +582,12 @@ router.get('/timesByCity', [
     }
     console.log('🕌 ======================================');
 
-    if (apiData.code === 200 && apiData.data) {
-      const data = apiData.data;
-      const responseData = {
-        status: 'success',
-        data: {
+	    if (apiData.code === 200 && apiData.data) {
+	      const data = apiData.data;
+	      const adjustedHijriDate = getIslamicDateAtMaghrib(data.date?.hijri, data.timings?.Maghrib, data.meta?.timezone);
+	      const responseData = {
+	        status: 'success',
+	        data: {
           times: {
             Fajr: data.timings.Fajr,
             Sunrise: data.timings.Sunrise,
@@ -586,10 +598,19 @@ router.get('/timesByCity', [
             Midnight: data.timings.Midnight,
             Imsak: data.timings.Imsak || data.timings.Fajr
           },
-          date: data.date,
-          meta: data.meta
-        }
-      };
+	          date: {
+	            ...data.date,
+	            hijri: adjustedHijriDate,
+	          },
+	          meta: data.meta,
+	          source: 'aladhan.com',
+	          date_calculation: {
+	            islamic_date_changes_at: 'maghrib',
+	            prayer_times_change_at: 'midnight',
+	            is_after_maghrib: isAfterMaghrib(data.timings?.Maghrib, data.meta?.timezone),
+	          },
+	        }
+	      };
 
       // Store in cache
       try {

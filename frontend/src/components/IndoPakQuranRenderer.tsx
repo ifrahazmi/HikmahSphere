@@ -14,12 +14,6 @@
 
 import React from 'react';
 
-// Helper function to convert English digits to Urdu numerals
-const toUrduNumerals = (num: number): string => {
-  const urduDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
-  return num.toString().replace(/\d/g, (digit) => urduDigits[parseInt(digit)]);
-};
-
 // Types
 interface Word {
   position: number;
@@ -87,20 +81,19 @@ WordSpan.displayName = 'WordSpan';
  */
 const Bismillah: React.FC<{
   surahNumber: number;
-  fontClass: string;
   theme: 'light' | 'dark';
-}> = ({ surahNumber, fontClass, theme }) => {
+}> = ({ surahNumber, theme }) => {
   // Skip for Surah 9 (At-Tawbah)
   if (surahNumber === 9) return null;
 
   return (
     <div className="text-center mb-6 py-3">
       <p
-        className={`text-2xl ${fontClass} text-emerald-600 leading-loose mb-4 bismillah-text`}
+        className="text-2xl text-emerald-600 leading-loose mb-4 bismillah-text"
         dir="rtl"
         lang="ar"
         style={{
-          fontFeatureSettings: '"calt" 1, "liga" 1, "clig" 1, "rlig" 1, "ccmp" 1',
+          fontFeatureSettings: '"rlig" 1, "liga" 1, "calt" 1, "ccmp" 1, "mark" 1, "mkmk" 1',
         }}
       >
         بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
@@ -144,7 +137,7 @@ export const IndoPakQuranRenderer: React.FC<IndoPakQuranRendererProps> = ({
   return (
     <div className={`font-indopak-nastaleeq-v3 ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>
       {/* Bismillah */}
-      <Bismillah surahNumber={surahNumber} fontClass="font-indopak-nastaleeq-v3" theme={theme} />
+      <Bismillah surahNumber={surahNumber} theme={theme} />
 
       {/* Ayahs */}
       <div className="space-y-4">
@@ -190,21 +183,6 @@ export const IndoPakQuranRenderer: React.FC<IndoPakQuranRendererProps> = ({
                     />
                   ))}
 
-                  {/* Ayah number marker - Urdu numerals in black circle */}
-                  <span
-                    className="inline-flex items-center justify-center rounded-full bg-white flex-shrink-0 align-middle ml-2"
-                    title={`Ayah ${ayah.ayah}`}
-                    style={{
-                      fontFamily: 'Arial, Helvetica, sans-serif',
-                      width: '32px',
-                      height: '32px',
-                      border: '2px solid black',
-                      fontSize: '14px',
-                      fontWeight: 600,
-                    }}
-                  >
-                    {toUrduNumerals(ayah.ayah)}
-                  </span>
                 </div>
               </div>
 

@@ -193,7 +193,7 @@ const QuranReader: React.FC = () => {
         setIndopakV3Surah(surah);
       } catch (error: any) {
         console.error('Failed to load IndoPak V3 Surah:', error);
-        setIndopakV3Error(error.message || 'Failed to load IndoPak V3 Surah');
+        setIndopakV3Error(error.message || 'Failed to load IndoPak v3 Surah');
       } finally {
         setIndopakV3Loading(false);
       }
@@ -482,12 +482,6 @@ const QuranReader: React.FC = () => {
   const getBookmarkBackgroundClass = (color?: BookmarkColor): string => {
     if (!color) return '';
     return BOOKMARK_COLOR_CLASS_MAP[color]?.background || '';
-  };
-
-  // Get border color class based on bookmark color
-  const getBookmarkBorderClass = (color?: BookmarkColor): string => {
-    if (!color) return 'border-emerald-600 text-emerald-600';
-    return BOOKMARK_COLOR_CLASS_MAP[color]?.border || 'border-emerald-600 text-emerald-600';
   };
 
   const getBookmarkSelectionClass = (color?: BookmarkColor): string => {
@@ -1582,8 +1576,8 @@ const QuranReader: React.FC = () => {
                     }`}
                   >
                     <option value="al-mushaf">Al Mushaf - Authentic Quranic Script</option>
-                    <option value="indopak-nastaleeq-v3">IndoPak Nastaleeq V3 - Word by Word (Recommended)</option>
-                    <option value="indopak-nastaleeq">IndoPak Nastaleeq V1 - South India (Legacy)</option>
+                    <option value="indopak-nastaleeq-v3">IndoPak Nastaleeq v3 - Word by Word</option>
+                    <option value="indopak-nastaleeq">IndoPak Nastaleeq v1 - South India (Legacy)</option>
                     <option value="amiri">Amiri - Traditional Naskh</option>
                     <option value="scheherazade">Scheherazade - Classic Book Style</option>
                     <option value="noto-naskh">Noto Naskh - Clear & Readable</option>
@@ -1932,7 +1926,15 @@ const QuranReader: React.FC = () => {
                 {/* Bismillah (except for Surah 9) - Uses currently selected Arabic font */}
                 {surahData.number !== 9 && (
                   <div className="text-center mb-6 py-3">
-                    <p className={`text-2xl ${getFontFamilyClass()} text-emerald-600 leading-loose mb-4 bismillah-text`} dir="rtl" lang="ar">
+                    <p
+                      className={`text-2xl text-emerald-600 leading-loose mb-4 ${
+                        settings.arabicFont === 'indopak-nastaleeq' || settings.arabicFont === 'indopak-nastaleeq-v3'
+                          ? 'bismillah-text'
+                          : getFontFamilyClass()
+                      }`}
+                      dir="rtl"
+                      lang="ar"
+                    >
                       بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
                     </p>
                     {/* Beautiful Islamic Divider */}
@@ -2066,7 +2068,6 @@ const QuranReader: React.FC = () => {
 
                       const bookmarkColor = getBookmarkColor(surahData.number, ayahNum);
                       const bgClass = getBookmarkBackgroundClass(bookmarkColor);
-                      const borderClass = getBookmarkBorderClass(bookmarkColor);
                       const isSelectedForBookmark =
                         selectedAyahForBookmark?.surah === surahData.number &&
                         selectedAyahForBookmark?.ayah === ayahNum;
@@ -2163,12 +2164,11 @@ const QuranReader: React.FC = () => {
                                 );
                               })}
                               <span
-                                className="inline-flex items-center justify-center rounded-full bg-white text-xs font-bold flex-shrink-0 align-middle ml-2"
+                                className="inline-flex items-center justify-center rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold flex-shrink-0 align-middle ml-2 border-2 border-emerald-500"
                                 style={{
                                   fontFamily: 'Arial, Helvetica, sans-serif',
                                   width: '28px',
                                   height: '28px',
-                                  border: '2px solid black',
                                   fontWeight: '600',
                                 }}
                               >
@@ -2217,8 +2217,6 @@ const QuranReader: React.FC = () => {
 
                         const bookmarkColor = getBookmarkColor(surahData.number, ayahNum);
                         const bgClass = getBookmarkBackgroundClass(bookmarkColor);
-                        const borderClass = getBookmarkBorderClass(bookmarkColor);
-
                         return (
                           <React.Fragment key={ayahNum}>
                             {ayah.words.map((wordData, wordIndex) => {
@@ -2256,14 +2254,13 @@ const QuranReader: React.FC = () => {
                             })}
                             <span
                               id={`ayah-${ayahNum}`}
-                              className="inline-flex items-center justify-center rounded-full bg-white text-xs font-bold flex-shrink-0 align-middle ml-2 cursor-pointer"
+                              className="inline-flex items-center justify-center rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold flex-shrink-0 align-middle ml-2 cursor-pointer border-2 border-emerald-500"
                               onClick={(e) => handleAyahClick(e, surahData.number, ayahNum)}
                               title={`Ayah ${ayahNum}`}
                               style={{
                                 fontFamily: 'Arial, Helvetica, sans-serif',
                                 width: '28px',
                                 height: '28px',
-                                border: '2px solid black',
                                 fontWeight: '600',
                               }}
                             >
@@ -2280,7 +2277,7 @@ const QuranReader: React.FC = () => {
                   <div className="flex items-center justify-center py-12">
                     <LoadingSpinner size="lg" />
                     <span className={`ml-3 text-sm ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
-                      Loading IndoPak V3 Surah...
+                      Loading IndoPak v3 Surah...
                     </span>
                   </div>
                 ) : settings.arabicFont === 'indopak-nastaleeq-v3' && indopakV3Error ? (
@@ -2288,7 +2285,7 @@ const QuranReader: React.FC = () => {
                   <div className="text-center py-8">
                     <ExclamationTriangleIcon className={`h-12 w-12 mx-auto mb-3 ${settings.theme === 'dark' ? 'text-red-400' : 'text-red-500'}`} />
                     <p className={`text-sm font-medium ${settings.theme === 'dark' ? 'text-red-300' : 'text-red-600'}`}>
-                      Failed to load IndoPak V3 Surah
+                      Failed to load IndoPak v3 Surah
                     </p>
                     <p className={`text-xs mt-1 ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
                       {indopakV3Error}
@@ -2312,7 +2309,6 @@ const QuranReader: React.FC = () => {
 
                       const bookmarkColor = getBookmarkColor(surahData.number, ayahNum);
                       const bgClass = getBookmarkBackgroundClass(bookmarkColor);
-                      const borderClass = getBookmarkBorderClass(bookmarkColor);
                       const isSelectedForBookmark =
                         selectedAyahForBookmark?.surah === surahData.number &&
                         selectedAyahForBookmark?.ayah === ayahNum;
@@ -2407,18 +2403,6 @@ const QuranReader: React.FC = () => {
                                   </span>
                                 );
                               })}
-                              <span
-                                className="inline-flex items-center justify-center rounded-full bg-white text-xs font-bold flex-shrink-0 align-middle ml-2"
-                                style={{
-                                  fontFamily: 'Arial, Helvetica, sans-serif',
-                                  width: '28px',
-                                  height: '28px',
-                                  border: '2px solid black',
-                                  fontWeight: '600',
-                                }}
-                              >
-                                {ayahNum}
-                              </span>
                             </div>
                           </div>
 
@@ -2464,10 +2448,9 @@ const QuranReader: React.FC = () => {
 
                         const bookmarkColor = getBookmarkColor(surahData.number, ayahNum);
                         const bgClass = getBookmarkBackgroundClass(bookmarkColor);
-                        const borderClass = getBookmarkBorderClass(bookmarkColor);
 
                         return (
-                          <span key={ayahNum} className="inline">
+                          <React.Fragment key={ayahNum}>
                             {ayah.words.map((wordData, wordIndex) => {
                               const isAyahMarker = /^\d+$/.test(wordData.text.trim());
                               if (isAyahMarker) return null;
@@ -2493,20 +2476,8 @@ const QuranReader: React.FC = () => {
                                 </span>
                               );
                             })}
-                            <span
-                              className="inline-flex items-center justify-center rounded-full bg-white text-xs font-bold flex-shrink-0 align-middle ml-2"
-                              style={{
-                                fontFamily: 'Arial, Helvetica, sans-serif',
-                                width: '28px',
-                                height: '28px',
-                                border: '2px solid black',
-                                fontWeight: '600',
-                              }}
-                            >
-                              {ayahNum}
-                            </span>
-                            {' '}
-                          </span>
+                            <span className="inline-block w-[0.12em] sm:w-[0.18em] flex-shrink-0" />
+                          </React.Fragment>
                         );
                       })}
                     </div>
@@ -2524,7 +2495,6 @@ const QuranReader: React.FC = () => {
                         .map((ayah, index) => {
                           const bookmarkColor = getBookmarkColor(surahData.number, ayah.numberInSurah);
                           const bgClass = getBookmarkBackgroundClass(bookmarkColor);
-                          const borderClass = getBookmarkBorderClass(bookmarkColor);
                           const isSelectedForBookmark = selectedAyahForBookmark?.surah === surahData.number && selectedAyahForBookmark?.ayah === ayah.numberInSurah;
 
                           return (
@@ -2538,12 +2508,11 @@ const QuranReader: React.FC = () => {
                               {' '}
                               <span
                                 id={`ayah-${ayah.numberInSurah}`}
-                                className="inline-flex items-center justify-center rounded-full bg-white text-xs font-bold align-middle ml-2"
+                                className="inline-flex items-center justify-center rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold align-middle ml-2 border-2 border-emerald-500"
                                 style={{ 
                                   fontFamily: 'Arial, Helvetica, sans-serif',
                                   width: '28px',
                                   height: '28px',
-                                  border: '2px solid black',
                                   fontWeight: '600',
                                 }}
                               >
@@ -2581,7 +2550,6 @@ const QuranReader: React.FC = () => {
                               {(() => {
                                 const bookmarkColor = getBookmarkColor(surahData.number, ayah.numberInSurah);
                                 const bgClass = getBookmarkBackgroundClass(bookmarkColor);
-                                const borderClass = getBookmarkBorderClass(bookmarkColor);
                                 const isSelectedForBookmark = selectedAyahForBookmark?.surah === surahData.number && selectedAyahForBookmark?.ayah === ayah.numberInSurah;
 
                                 return (
@@ -2624,12 +2592,11 @@ const QuranReader: React.FC = () => {
                                     </span>
                                     {' '}
                                     <span
-                                      className="inline-flex items-center justify-center rounded-full bg-white text-xs font-bold ml-2"
+                                      className="inline-flex items-center justify-center rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold ml-2 border-2 border-emerald-500"
                                       style={{ 
                                         fontFamily: 'Arial, Helvetica, sans-serif',
                                         width: '28px',
                                         height: '28px',
-                                        border: '2px solid black',
                                         fontWeight: '600',
                                       }}
                                     >
@@ -2935,8 +2902,8 @@ const QuranReader: React.FC = () => {
                     }`}
                   >
                     <option value="al-mushaf">Al Mushaf - Authentic Quranic Script</option>
-                    <option value="indopak-nastaleeq-v3">IndoPak Nastaleeq V3 - Word by Word (Recommended)</option>
-                    <option value="indopak-nastaleeq">IndoPak Nastaleeq V1 - South India (Legacy)</option>
+                    <option value="indopak-nastaleeq-v3">IndoPak Nastaleeq v3 - Word by Word</option>
+                    <option value="indopak-nastaleeq">IndoPak Nastaleeq v1 - South India (Legacy)</option>
                     <option value="amiri">Amiri - Traditional Naskh</option>
                     <option value="scheherazade">Scheherazade - Classic Book Style</option>
                     <option value="noto-naskh">Noto Naskh - Clear & Readable</option>

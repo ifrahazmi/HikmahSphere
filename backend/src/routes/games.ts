@@ -8,6 +8,8 @@ import { SEED_QUESTIONS } from '../data/gameQuestionsSeed';
 import { getAllCategoryStats, getCompleteStats } from '../utils/questionStats';
 
 const router = express.Router();
+const QUIZ_CATEGORIES: QuizCategory[] = ['quran', 'hadith', 'fiqh', 'seerah', 'general', 'arabic', 'history'];
+type QuizRequestCategory = QuizCategory | 'mixed';
 
 // ─── Seeding Helper ────────────────────────────────────────────────────────────
 
@@ -37,6 +39,10 @@ function calcPoints(
   else if (difficulty === 'medium' && timeLeft >= 15) bonus = 10;
   else if (difficulty === 'hard' && timeLeft >= 10) bonus = 15;
   return basePoints + bonus;
+}
+
+function calcWrongAnswerPenalty(basePoints: number): number {
+  return -Math.max(basePoints, 0);
 }
 
 function applyStreakMultiplier(points: number, streak: number): number {
@@ -122,9 +128,8 @@ router.get('/categories', async (_req: any, res: any) => {
   try {
     await seedQuestionsIfNeeded();
 
-    const categories = ['quran', 'hadith', 'fiqh', 'seerah', 'general', 'arabic', 'history'];
     const counts = await Promise.all(
-      categories.map(async (cat) => {
+      QUIZ_CATEGORIES.map(async (cat) => {
         const total = await GameQuestion.countDocuments({ category: cat });
         const easy = await GameQuestion.countDocuments({ category: cat, difficulty: 'easy' });
         const medium = await GameQuestion.countDocuments({ category: cat, difficulty: 'medium' });
@@ -188,7 +193,7 @@ router.get('/stats', async (req: any, res: any) => {
 router.get(
   '/questions',
   [
-    query('category').optional().isIn(['quran', 'hadith', 'fiqh', 'seerah', 'general', 'arabic', 'history']),
+    query('category').optional().isIn([...QUIZ_CATEGORIES, 'mixed']),
     query('difficulty').optional().isIn(['easy', 'medium', 'hard']),
     query('limit').optional().isInt({ min: 1, max: 100 }),
   ],
@@ -205,6 +210,7 @@ router.get(
       const { category, difficulty, limit = 20 } = req.query;
       const userId = req.user?.userId;
       const limitNum = parseInt(limit as string);
+      const requestCategory = category as QuizRequestCategory;
 
       if (!category || !difficulty) {
         return res.status(400).json({ 
@@ -219,16 +225,21 @@ router.get(
         userScore = await UserGameScore.create({ userId });
       }
 
-      // Get questions user has already seen for this category/difficulty
-      const seenQuestionIds = userScore.questionHistory[category as keyof typeof userScore.questionHistory] || [];
+      const seenQuestionIds = requestCategory === 'mixed'
+        ? Array.from(new Set(QUIZ_CATEGORIES.flatMap((cat) => userScore.questionHistory[cat] || [])))
+        : userScore.questionHistory[requestCategory as keyof typeof userScore.questionHistory] || [];
+      const seenQuestionIdsSet = new Set(seenQuestionIds);
 
       // Build filter for ALL questions in database for this category/difficulty
-      const allFilter: any = { category, difficulty };
+      const allFilter: any = { difficulty };
+      if (requestCategory !== 'mixed') {
+        allFilter.category = requestCategory;
+      }
       const allQuestions = await GameQuestion.find(allFilter).select('-correctIndex -__v');
       
       // Separate into seen and unseen
-      const unseenQuestions = allQuestions.filter(q => !seenQuestionIds.includes(q._id.toString()));
-      const seenQuestions = allQuestions.filter(q => seenQuestionIds.includes(q._id.toString()));
+      const unseenQuestions = allQuestions.filter(q => !seenQuestionIdsSet.has(q._id.toString()));
+      const seenQuestions = allQuestions.filter(q => seenQuestionIdsSet.has(q._id.toString()));
 
       // Shuffle both arrays
       const shuffle = (array: any[]) => array.sort(() => Math.random() - 0.5);
@@ -241,12 +252,14 @@ router.get(
       if (unseenQuestions.length > 0) {
         // Take from unseen first
         selectedQuestions = unseenQuestions.slice(0, limitNum);
+      } else if (requestCategory === 'mixed') {
+        selectedQuestions = seenQuestions.slice(0, limitNum);
       } else {
         // All questions seen - reset and start over (user has completed all!)
-        console.log(`🎉 User ${userId} has seen all ${seenQuestions.length} questions in ${category}/${difficulty}! Resetting history.`);
+        console.log(`🎉 User ${userId} has seen all ${seenQuestions.length} questions in ${requestCategory}/${difficulty}! Resetting history.`);
         
         // Clear history for this category/difficulty
-        (userScore.questionHistory[category as keyof typeof userScore.questionHistory] as string[]) = [];
+        (userScore.questionHistory[requestCategory as keyof typeof userScore.questionHistory] as string[]) = [];
         await userScore.save();
         
         // Use all questions (fresh start)
@@ -256,9 +269,11 @@ router.get(
       // If we need more questions and have seen some, fill from seen
       if (selectedQuestions.length < limitNum && seenQuestions.length > 0) {
         const needMore = limitNum - selectedQuestions.length;
+        const selectedQuestionIds = new Set(selectedQuestions.map((question) => question._id.toString()));
+        const fillerQuestions = seenQuestions.filter((question) => !selectedQuestionIds.has(question._id.toString()));
         selectedQuestions = [
           ...selectedQuestions,
-          ...seenQuestions.slice(0, needMore)
+          ...fillerQuestions.slice(0, needMore)
         ];
       }
 
@@ -269,7 +284,13 @@ router.get(
           total: selectedQuestions.length,
           unseenCount: unseenQuestions.length,
           seenCount: seenQuestions.length,
-          message: unseenQuestions.length === 0 ? '🎉 All questions seen! Starting fresh.' : undefined
+          message: unseenQuestions.length === 0
+            ? (
+              requestCategory === 'mixed'
+                ? 'Mixed pool exhausted. Reusing previous questions.'
+                : '🎉 All questions seen! Starting fresh.'
+            )
+            : undefined
         } 
       });
     } catch (err) {
@@ -291,7 +312,7 @@ router.post(
     body('answers.*.questionId').isString().withMessage('questionId required'),
     body('answers.*.selectedIndex').isInt({ min: 0, max: 3 }).withMessage('selectedIndex 0-3 required'),
     body('answers.*.timeSpentSeconds').isInt({ min: 0 }).withMessage('timeSpentSeconds required'),
-    body('category').isIn(['quran', 'hadith', 'fiqh', 'seerah', 'general', 'arabic', 'history']),
+    body('category').isIn([...QUIZ_CATEGORIES, 'mixed']),
     body('difficulty').isIn(['easy', 'medium', 'hard']),
   ],
   async (req: any, res: any) => {
@@ -305,6 +326,7 @@ router.post(
 
       const { answers, category, difficulty } = req.body;
       const userId = req.user?.userId;
+      const requestCategory = category as QuizRequestCategory;
 
       // Fetch actual questions with correct answers
       const questionIds = answers.map((a: any) => a.questionId);
@@ -315,10 +337,25 @@ router.post(
       let correctCount = 0;
       let consecutiveCorrect = 0;
       const breakdown: any[] = [];
+      const categoryProgress = QUIZ_CATEGORIES.reduce((acc, quizCategory) => {
+        acc[quizCategory] = {
+          points: 0,
+          correct: 0,
+          total: 0,
+          questionIds: [] as string[],
+        };
+        return acc;
+      }, {} as Record<QuizCategory, { points: number; correct: number; total: number; questionIds: string[] }>);
 
       for (const answer of answers) {
         const q = questionMap.get(answer.questionId);
         if (!q) continue;
+
+        const questionCategory = q.category as QuizCategory;
+        categoryProgress[questionCategory].total += 1;
+        if (!categoryProgress[questionCategory].questionIds.includes(answer.questionId)) {
+          categoryProgress[questionCategory].questionIds.push(answer.questionId);
+        }
 
         const isCorrect = answer.selectedIndex === q.correctIndex;
         if (isCorrect) {
@@ -327,6 +364,8 @@ router.post(
           let pts = calcPoints(q.points, q.difficulty as QuizDifficulty, answer.timeSpentSeconds, q.timeLimitSeconds);
           pts = applyStreakMultiplier(pts, consecutiveCorrect);
           totalPointsEarned += pts;
+          categoryProgress[questionCategory].points += pts;
+          categoryProgress[questionCategory].correct += 1;
           breakdown.push({
             questionId: answer.questionId,
             question: q.question,
@@ -338,13 +377,16 @@ router.post(
           });
         } else {
           consecutiveCorrect = 0;
+          const pts = calcWrongAnswerPenalty(q.points);
+          totalPointsEarned += pts;
+          categoryProgress[questionCategory].points += pts;
           breakdown.push({
             questionId: answer.questionId,
             question: q.question,
             selectedIndex: answer.selectedIndex,
             correctIndex: q.correctIndex,
             isCorrect: false,
-            pointsEarned: 0,
+            pointsEarned: pts,
             explanation: q.explanation,
           });
         }
@@ -362,13 +404,14 @@ router.post(
       score.correctAnswers += correctCount;
       score.totalAnswers += answers.length;
 
-      // Category stats
-      const catKey = category as keyof typeof score.categoryStats;
-      if (score.categoryStats[catKey]) {
-        score.categoryStats[catKey].points += totalPointsEarned;
-        score.categoryStats[catKey].correct += correctCount;
-        score.categoryStats[catKey].total += answers.length;
-      }
+      QUIZ_CATEGORIES.forEach((quizCategory) => {
+        const progress = categoryProgress[quizCategory];
+        if (!progress || progress.total === 0) return;
+
+        score.categoryStats[quizCategory].points += progress.points;
+        score.categoryStats[quizCategory].correct += progress.correct;
+        score.categoryStats[quizCategory].total += progress.total;
+      });
 
       // Streak
       const yesterday = new Date();
@@ -385,21 +428,19 @@ router.post(
       score.streak.lastPlayedDate = today;
 
       // Points history
-      score.pointsHistory.push({ date: today, points: totalPointsEarned, category, isDaily: false });
+      score.pointsHistory.push({ date: today, points: totalPointsEarned, category: requestCategory, isDaily: false });
 
       // Badges
-      const newBadges = computeNewBadges(score, correctCount, category);
+      const newBadges = computeNewBadges(score, correctCount, requestCategory);
       score.badges.push(...newBadges);
 
-      // Track which questions user has seen (to avoid repetition)
-      const catHistoryKey = category as keyof typeof score.questionHistory;
-      const questionHistory = score.questionHistory[catHistoryKey] as string[];
-      
-      // Add new question IDs to history (avoid duplicates)
-      questionIds.forEach((qid: string) => {
-        if (!questionHistory.includes(qid)) {
-          questionHistory.push(qid);
-        }
+      QUIZ_CATEGORIES.forEach((quizCategory) => {
+        const questionHistory = score.questionHistory[quizCategory] as string[];
+        categoryProgress[quizCategory].questionIds.forEach((questionId) => {
+          if (!questionHistory.includes(questionId)) {
+            questionHistory.push(questionId);
+          }
+        });
       });
 
       await score.save();
@@ -540,7 +581,9 @@ router.post(
           totalPointsEarned += pts;
           breakdown.push({ questionId: answer.questionId, question: q.question, selectedIndex: answer.selectedIndex, correctIndex: q.correctIndex, isCorrect: true, pointsEarned: pts, explanation: q.explanation });
         } else {
-          breakdown.push({ questionId: answer.questionId, question: q.question, selectedIndex: answer.selectedIndex, correctIndex: q.correctIndex, isCorrect: false, pointsEarned: 0, explanation: q.explanation });
+          const pts = calcWrongAnswerPenalty(q.points * 2);
+          totalPointsEarned += pts;
+          breakdown.push({ questionId: answer.questionId, question: q.question, selectedIndex: answer.selectedIndex, correctIndex: q.correctIndex, isCorrect: false, pointsEarned: pts, explanation: q.explanation });
         }
       }
 

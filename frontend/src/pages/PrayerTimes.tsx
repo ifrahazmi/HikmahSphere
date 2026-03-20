@@ -44,6 +44,23 @@ interface ExtraPrayerTimingCard {
   accentClassName: string;
 }
 
+interface PrayerPageCacheEnvelope<T> {
+  timestamp: number;
+  data: T;
+}
+
+interface DailyPrayerCacheData {
+  prayerData: any;
+  fastingData: any;
+  weatherData: any;
+  islamicEvents: any[];
+  isRamadanMonth: boolean;
+  nextHijriDate: HijriDate | null;
+  nextDayPrayerData: any;
+  nextDayFastingData: any;
+  ramadanData: any;
+}
+
 const HIJRI_MONTH_NAMES: Record<number, string> = {
   1: 'Muharram',
   2: 'Safar',
@@ -58,6 +75,41 @@ const HIJRI_MONTH_NAMES: Record<number, string> = {
   11: 'Dhul Qada',
   12: 'Dhul Hijjah',
 };
+
+const HIJRI_MONTH_NUMBERS: Record<string, number> = {
+  muharram: 1,
+  safar: 2,
+  'rabi al-awwal': 3,
+  'rabi al awwal': 3,
+  'rabiul awwal': 3,
+  'rabi al-thani': 4,
+  'rabi al thani': 4,
+  'rabiul akhir': 4,
+  'jumada al-awwal': 5,
+  'jumada al awwal': 5,
+  'jumada al-thani': 6,
+  'jumada al thani': 6,
+  rajab: 7,
+  "sha'ban": 8,
+  shaban: 8,
+  ramadan: 9,
+  'ramaḍān': 9,
+  shawwal: 10,
+  'shawwāl': 10,
+  'dhul qada': 11,
+  'dhu al-qadah': 11,
+  'dhul hijjah': 12,
+  'dhū al-ḥijjah': 12,
+};
+
+const PRAYER_PAGE_CACHE_PREFIX = 'hikmah-sphere:prayer-times:v3';
+const PRAYER_PAGE_CACHE_TTL_MS = 30 * 60 * 1000;
+
+const HIJRI_INTL_LONG_FORMATTER = new Intl.DateTimeFormat('en-SA-u-ca-islamic-umalqura', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+});
 
 const parseGregorianDDMMYYYY = (value?: string): Date | null => {
   if (!value) return null;
@@ -92,6 +144,91 @@ const addDaysToGregorianDDMMYYYY = (value: string, days: number): string | null 
   return formatGregorianDDMMYYYY(parsed);
 };
 
+const normalizeCacheValue = (value?: string): string => (
+  (value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    || 'na'
+);
+
+const buildPrayerCacheKey = (
+  scope: 'daily' | 'monthly' | 'ramadan',
+  options: {
+    lat: number;
+    lon: number;
+    city?: string;
+    country?: string;
+    date?: string;
+    method: number;
+    school: number;
+    highLatitudeRule?: number;
+    month?: number;
+    year?: number;
+  },
+): string => {
+  const baseKey = [
+    scope,
+    options.lat.toFixed(3),
+    options.lon.toFixed(3),
+    normalizeCacheValue(options.city),
+    normalizeCacheValue(options.country),
+    normalizeCacheValue(options.date),
+    `m${options.method}`,
+    `s${options.school}`,
+    `hlr${options.highLatitudeRule ?? 0}`,
+  ];
+
+  if (typeof options.month === 'number') {
+    baseKey.push(`mo${options.month}`);
+  }
+  if (typeof options.year === 'number') {
+    baseKey.push(`yr${options.year}`);
+  }
+
+  return `${PRAYER_PAGE_CACHE_PREFIX}:${baseKey.join(':')}`;
+};
+
+const readPrayerCache = <T,>(key: string): T | null => {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as PrayerPageCacheEnvelope<T>;
+    if (!parsed?.timestamp || !('data' in parsed)) {
+      window.localStorage.removeItem(key);
+      return null;
+    }
+
+    if (Date.now() - parsed.timestamp > PRAYER_PAGE_CACHE_TTL_MS) {
+      window.localStorage.removeItem(key);
+      return null;
+    }
+
+    return parsed.data;
+  } catch (error) {
+    console.warn('Prayer cache read failed:', error);
+    return null;
+  }
+};
+
+const writePrayerCache = <T,>(key: string, data: T) => {
+  if (typeof window === 'undefined') return;
+
+  try {
+    const payload: PrayerPageCacheEnvelope<T> = {
+      timestamp: Date.now(),
+      data,
+    };
+    window.localStorage.setItem(key, JSON.stringify(payload));
+  } catch (error) {
+    console.warn('Prayer cache write failed:', error);
+  }
+};
+
 const parseGregorianYYYYMMDDLocal = (value?: string): Date | null => {
   if (!value) return null;
   const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -114,12 +251,22 @@ const parseGregorianYYYYMMDDLocal = (value?: string): Date | null => {
   return parsed;
 };
 
+const normalizeHijriMonthName = (value?: string): string => (
+  (value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+);
+
 const buildHijriDateFromFastingEntry = (entry: any): HijriDate | null => {
   if (!entry) return null;
 
   const hijriIso = typeof entry.hijri === 'string' ? entry.hijri : '';
   const readable = typeof entry.hijri_readable === 'string' ? entry.hijri_readable : '';
   const isoMatch = hijriIso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const ddmmyyyyMatch = hijriIso.match(/^(\d{2})-(\d{2})-(\d{4})$/);
   const readableMatch = readable.match(/^(\d{1,2})\s+(.+?)\s+(\d{4})/);
 
   if (isoMatch) {
@@ -139,16 +286,114 @@ const buildHijriDateFromFastingEntry = (entry: any): HijriDate | null => {
     }
   }
 
+  if (ddmmyyyyMatch) {
+    const day = parseInt(ddmmyyyyMatch[1], 10);
+    const month = parseInt(ddmmyyyyMatch[2], 10);
+    const year = parseInt(ddmmyyyyMatch[3], 10);
+    if (year && month && day) {
+      return {
+        day: String(day),
+        month: {
+          number: month,
+          en: readableMatch?.[2]?.trim() || HIJRI_MONTH_NAMES[month] || '',
+        },
+        year: String(year),
+        readable: readable || undefined,
+      };
+    }
+  }
+
   if (readableMatch) {
+    const monthName = readableMatch[2].trim();
     return {
       day: readableMatch[1],
-      month: { number: 0, en: readableMatch[2].trim() },
+      month: {
+        number: HIJRI_MONTH_NUMBERS[normalizeHijriMonthName(monthName)] || 0,
+        en: monthName,
+      },
       year: readableMatch[3],
       readable,
     };
   }
 
   return null;
+};
+
+const buildHijriDateFromPrayerSource = (hijri: any): HijriDate | null => {
+  if (!hijri) return null;
+
+  return {
+    day: String(hijri.day || ''),
+    month: {
+      number: Number(hijri.month?.number) || 0,
+      en: String(hijri.month?.en || ''),
+    },
+    year: String(hijri.year || ''),
+  };
+};
+
+const buildHijriDateFromGregorianDate = (date: Date): HijriDate | null => {
+  const parts = HIJRI_INTL_LONG_FORMATTER.formatToParts(date);
+  const day = parseInt(parts.find((part) => part.type === 'day')?.value ?? '', 10);
+  const monthName = parts.find((part) => part.type === 'month')?.value ?? '';
+  const year = parseInt(parts.find((part) => part.type === 'year')?.value ?? '', 10);
+
+  if (!day || !monthName || !year) return null;
+
+  return {
+    day: String(day),
+    month: {
+      number: HIJRI_MONTH_NUMBERS[normalizeHijriMonthName(monthName)] || 0,
+      en: monthName,
+    },
+    year: String(year),
+  };
+};
+
+const formatHijriReadable = (hijri?: HijriDate | null): string => {
+  if (!hijri) return '';
+
+  const parts = [hijri.day, hijri.month?.en, hijri.year]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
+
+  return parts.join(' ');
+};
+
+const getHijriAbsoluteDayEstimate = (hijri?: HijriDate | null): number | null => {
+  if (!hijri) return null;
+
+  const day = parseInt(String(hijri.day || ''), 10);
+  const month = Number(hijri.month?.number) || 0;
+  const year = parseInt(String(hijri.year || ''), 10);
+
+  if (!day || !month || !year) return null;
+  return (year * 360) + ((month - 1) * 30) + day;
+};
+
+const resolvePreferredHijriDate = (
+  primary?: HijriDate | null,
+  fallback?: HijriDate | null,
+): HijriDate | null => {
+  if (!primary) return fallback || null;
+  if (!fallback) return primary;
+
+  const primaryEstimate = getHijriAbsoluteDayEstimate(primary);
+  const fallbackEstimate = getHijriAbsoluteDayEstimate(fallback);
+  if (primaryEstimate !== null && fallbackEstimate !== null) {
+    return Math.abs(primaryEstimate - fallbackEstimate) <= 1 ? primary : fallback;
+  }
+
+  const primaryMonth = Number(primary.month?.number) || 0;
+  const fallbackMonth = Number(fallback.month?.number) || 0;
+  const primaryYear = parseInt(String(primary.year || ''), 10);
+  const fallbackYear = parseInt(String(fallback.year || ''), 10);
+
+  if (primaryMonth && fallbackMonth && primaryYear && fallbackYear) {
+    return primaryMonth === fallbackMonth && primaryYear === fallbackYear ? primary : fallback;
+  }
+
+  return primary;
 };
 
 const incrementHijriByOneDay = (hijri?: HijriDate | null): HijriDate | null => {
@@ -182,6 +427,59 @@ const incrementHijriByOneDay = (hijri?: HijriDate | null): HijriDate | null => {
   };
 };
 
+const calculateQiblaDirection = (userLat: number, userLon: number): number => {
+  const MECCA_LAT = 21.4225;
+  const MECCA_LON = 39.8262;
+  const lat1 = userLat * Math.PI / 180;
+  const lat2 = MECCA_LAT * Math.PI / 180;
+  const dLon = (MECCA_LON - userLon) * Math.PI / 180;
+
+  const y = Math.sin(dLon) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+  const bearing = Math.atan2(y, x) * 180 / Math.PI;
+
+  return (bearing + 360) % 360;
+};
+
+const calculateDistanceToMecca = (userLat: number, userLon: number): number => {
+  const MECCA_LAT = 21.4225;
+  const MECCA_LON = 39.8262;
+  const R = 6371;
+  const dLat = (MECCA_LAT - userLat) * Math.PI / 180;
+  const dLon = (MECCA_LON - userLon) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+    + Math.cos(userLat * Math.PI / 180) * Math.cos(MECCA_LAT * Math.PI / 180)
+    * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c;
+};
+
+const buildMonthlyPrayerSnapshot = (calendarDays: any[], lat: number, lon: number) => {
+  if (!Array.isArray(calendarDays) || calendarDays.length === 0) {
+    return null;
+  }
+
+  const firstDay = calendarDays[0];
+  return {
+    times: {
+      Fajr: firstDay.timings.Fajr,
+      Sunrise: firstDay.timings.Sunrise,
+      Dhuhr: firstDay.timings.Dhuhr,
+      Asr: firstDay.timings.Asr,
+      Maghrib: firstDay.timings.Maghrib,
+      Isha: firstDay.timings.Isha,
+      Imsak: firstDay.timings.Imsak,
+    },
+    date: firstDay.date,
+    qibla: {
+      direction: { degrees: calculateQiblaDirection(lat, lon) },
+      distance: { value: calculateDistanceToMecca(lat, lon) },
+    },
+    meta: firstDay.meta,
+  };
+};
+
 const PrayerTimes: React.FC = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -199,7 +497,7 @@ const PrayerTimes: React.FC = () => {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [ramadanData, setRamadanData] = useState<any>(null);
-  const [isRamadanMonth, setIsRamadanMonth] = useState(false);
+  const [, setIsRamadanMonth] = useState(false);
 
   // Calculation method settings
   const [selectedMadhab, setSelectedMadhab] = useState<string>(user?.madhab || 'shafi');
@@ -238,6 +536,7 @@ const PrayerTimes: React.FC = () => {
   const prayersContainerRef = useRef<HTMLDivElement>(null);
   const hijriFetchRequestIdRef = useRef(0);
   const hasRefreshedAtMaghribRef = useRef(false);
+  const currentGregorianDateRef = useRef(formatGregorianDDMMYYYY(new Date()));
 
   useEffect(() => {
     if (!showExtraPrayerInfo) return;
@@ -371,6 +670,33 @@ const PrayerTimes: React.FC = () => {
 
     // Convert madhab to school parameter (Backend API: 1=Shafi/Maliki/Hanbali, 2=Hanafi)
     const school = selectedMadhab === 'hanafi' ? 2 : 1;
+    const requestGregorianDate = formatGregorianDDMMYYYY(new Date());
+    currentGregorianDateRef.current = requestGregorianDate;
+    const dailyCacheKey = buildPrayerCacheKey('daily', {
+      lat,
+      lon,
+      city,
+      country,
+      date: requestGregorianDate,
+      method: calculationMethod,
+      school,
+      highLatitudeRule,
+    });
+
+    const cachedDailyData = readPrayerCache<DailyPrayerCacheData>(dailyCacheKey);
+    if (cachedDailyData) {
+      setPrayerData(cachedDailyData.prayerData);
+      setFastingData(cachedDailyData.fastingData);
+      setWeatherData(cachedDailyData.weatherData);
+      setIslamicEvents(cachedDailyData.islamicEvents || []);
+      setIsRamadanMonth(Boolean(cachedDailyData.isRamadanMonth));
+      setNextHijriDate(cachedDailyData.nextHijriDate || null);
+      setNextDayPrayerData(cachedDailyData.nextDayPrayerData || null);
+      setNextDayFastingData(cachedDailyData.nextDayFastingData || null);
+      setRamadanData(cachedDailyData.ramadanData || null);
+      setLoading(false);
+      return;
+    }
 
     try {
       // Fetch Prayer Times from Backend API
@@ -378,24 +704,25 @@ const PrayerTimes: React.FC = () => {
 
       // Use city-based API if city and country are available
       if (city && country) {
-        prayerUrl = `${API_URL}/prayers/timesByCity?city=${encodeURIComponent(city)}&country=${encodeURIComponent(country)}&method=${calculationMethod}&school=${school}`;
+        prayerUrl = `${API_URL}/prayers/timesByCity?city=${encodeURIComponent(city)}&country=${encodeURIComponent(country)}&method=${calculationMethod}&school=${school}&date=${encodeURIComponent(requestGregorianDate)}`;
       } else {
         // Fallback to coordinates-based API
-        prayerUrl = `${API_URL}/prayers/times?latitude=${lat}&longitude=${lon}&method=${calculationMethod}&school=${school}`;
+        prayerUrl = `${API_URL}/prayers/times?latitude=${lat}&longitude=${lon}&method=${calculationMethod}&school=${school}&date=${encodeURIComponent(requestGregorianDate)}`;
       }
 
       console.log('Fetching prayer times from backend:', prayerUrl);
       const prayerRes = await fetch(prayerUrl);
       const prayerJson = await prayerRes.json();
+      if (hijriFetchRequestIdRef.current !== requestId) return;
 
       // Hoisted so fasting logic below can read it regardless of the prayer status branch
       let isRamadan = false;
+      let events: any[] = [];
 
       if (prayerJson.status === 'success') {
         setPrayerData(prayerJson.data);
 
         // Extract Islamic events from the response
-        const events = [];
         const hijriMonth = prayerJson.data?.date?.hijri?.month?.en;
         const hijriDay = prayerJson.data?.date?.hijri?.day;
 
@@ -438,6 +765,7 @@ const PrayerTimes: React.FC = () => {
       } else {
         console.warn("Prayer API Error:", prayerJson);
         setError('Unable to fetch prayer times.');
+        return;
       }
 
       // Fetch Fasting Times — dedicated islamicapi.com /fasting endpoint (primary),
@@ -450,12 +778,15 @@ const PrayerTimes: React.FC = () => {
         `${API_URL}/prayers/fasting?latitude=${lat}&longitude=${lon}&method=${calculationMethod}&school=${school}${fastingDateParam}`
       );
       const fastingJson = await fastingRes.json();
+      if (hijriFetchRequestIdRef.current !== requestId) return;
 
       console.log('Fasting API Response:', fastingJson);
 
+      let fastingPayload = null;
       if (fastingJson.status === 'success' && fastingJson.data?.fasting?.length > 0) {
-        setFastingData(fastingJson.data);
-        console.log('Fasting data set:', fastingJson.data);
+        fastingPayload = fastingJson.data;
+        setFastingData(fastingPayload);
+        console.log('Fasting data set:', fastingPayload);
       } else {
         console.warn('Fasting API Error:', fastingJson);
       }
@@ -464,39 +795,45 @@ const PrayerTimes: React.FC = () => {
       const tomorrowGregorianDate = typeof fastingGregorianDate === 'string' && /^\d{2}-\d{2}-\d{4}$/.test(fastingGregorianDate)
         ? addDaysToGregorianDDMMYYYY(fastingGregorianDate, 1)
         : null;
+      const weatherPromise = fetch(`${API_URL}/prayers/weather?latitude=${lat}&longitude=${lon}`)
+        .then((response) => response.json())
+        .then((weatherJson) => (weatherJson.status === 'success' ? weatherJson.data : null))
+        .catch((weatherError) => {
+          console.warn('Weather fetch error:', weatherError);
+          return null;
+        });
 
-      if (tomorrowGregorianDate) {
-        fetch(
+      const nextDayFastingPromise = tomorrowGregorianDate
+        ? fetch(
           `${API_URL}/prayers/fasting?latitude=${lat}&longitude=${lon}&method=${calculationMethod}&school=${school}&date=${encodeURIComponent(tomorrowGregorianDate)}`
         )
           .then((r) => r.json())
           .then((nextDayJson) => {
             if (nextDayJson.status === 'success' && nextDayJson.data?.fasting?.length > 0) {
-              if (hijriFetchRequestIdRef.current === requestId) {
-                setNextDayFastingData(nextDayJson.data);
-              }
-              const parsedHijri = buildHijriDateFromFastingEntry(nextDayJson.data.fasting[0]);
-              if (parsedHijri && hijriFetchRequestIdRef.current === requestId) {
-                setNextHijriDate(parsedHijri);
-              }
+              return nextDayJson.data;
             }
+
+            return null;
           })
           .catch((nextHijriError) => {
             console.warn('Next-day Hijri fetch error:', nextHijriError);
-          });
+            return null;
+          })
+        : Promise.resolve(null);
 
-        const aladhanSchool = selectedMadhab === 'hanafi' ? 1 : 0;
-        fetch(
+      const aladhanSchool = selectedMadhab === 'hanafi' ? 1 : 0;
+      const nextDayPrayerPromise = tomorrowGregorianDate
+        ? fetch(
           `https://api.aladhan.com/v1/timings/${tomorrowGregorianDate}?latitude=${lat}&longitude=${lon}&method=${calculationMethod}&school=${aladhanSchool}&latitudeAdjustmentMethod=${highLatitudeRule}`
         )
           .then((r) => r.json())
           .then((nextPrayerJson) => {
-            if (nextPrayerJson.code !== 200 || !nextPrayerJson.data || hijriFetchRequestIdRef.current !== requestId) {
-              return;
+            if (nextPrayerJson.code !== 200 || !nextPrayerJson.data) {
+              return null;
             }
 
             const nextDay = nextPrayerJson.data;
-            setNextDayPrayerData({
+            return {
               times: {
                 Fajr: nextDay.timings?.Fajr,
                 Sunrise: nextDay.timings?.Sunrise,
@@ -510,33 +847,65 @@ const PrayerTimes: React.FC = () => {
               date: nextDay.date,
               qibla: prayerJson.data?.qibla,
               meta: nextDay.meta || prayerJson.data?.meta,
-            });
+            };
           })
           .catch((nextPrayerError) => {
             console.warn('Next-day prayer fetch error:', nextPrayerError);
-          });
-      }
+            return null;
+          })
+        : Promise.resolve(null);
 
       // Pre-fetch Ramadan schedule in the background during Ramadan so the tab is instant
-      if (isRamadan) {
-        fetch(`${API_URL}/prayers/ramadan?latitude=${lat}&longitude=${lon}&method=${calculationMethod}&school=${school}`)
+      const ramadanPromise = isRamadan
+        ? fetch(`${API_URL}/prayers/ramadan?latitude=${lat}&longitude=${lon}&method=${calculationMethod}&school=${school}`)
           .then(r => r.json())
           .then(d => {
             if (d.status === 'success' && d.data?.fasting?.length > 0) {
-              setRamadanData(d.data);
-              setIsRamadanMonth(true);
+              return d.data;
             }
+
+            return null;
           })
-          .catch(err => console.warn('Ramadan pre-fetch error:', err));
+          .catch(err => {
+            console.warn('Ramadan pre-fetch error:', err);
+            return null;
+          })
+        : Promise.resolve(null);
+
+      const [weatherPayload, nextDayFastingPayload, nextDayPrayerPayload, ramadanPayload] = await Promise.all([
+        weatherPromise,
+        nextDayFastingPromise,
+        nextDayPrayerPromise,
+        ramadanPromise,
+      ]);
+
+      if (hijriFetchRequestIdRef.current !== requestId) return;
+
+      const resolvedNextHijriDate = buildHijriDateFromFastingEntry(nextDayFastingPayload?.fasting?.[0]);
+
+      setWeatherData(weatherPayload);
+      setNextDayFastingData(nextDayFastingPayload);
+      setNextHijriDate(resolvedNextHijriDate);
+      setNextDayPrayerData(nextDayPrayerPayload);
+
+      if (ramadanPayload) {
+        setRamadanData(ramadanPayload);
+        setIsRamadanMonth(true);
+      } else if (!isRamadan) {
+        setRamadanData(null);
       }
 
-      // Fetch Weather
-      const weatherRes = await fetch(`${API_URL}/prayers/weather?latitude=${lat}&longitude=${lon}`);
-      const weatherJson = await weatherRes.json();
-
-      if (weatherJson.status === 'success') {
-          setWeatherData(weatherJson.data);
-      }
+      writePrayerCache<DailyPrayerCacheData>(dailyCacheKey, {
+        prayerData: prayerJson.data,
+        fastingData: fastingPayload,
+        weatherData: weatherPayload,
+        islamicEvents: events,
+        isRamadanMonth: isRamadan,
+        nextHijriDate: resolvedNextHijriDate,
+        nextDayPrayerData: nextDayPrayerPayload,
+        nextDayFastingData: nextDayFastingPayload,
+        ramadanData: ramadanPayload,
+      });
 
     } catch (err) {
       setError('Network error. Please try again later.');
@@ -551,36 +920,26 @@ const PrayerTimes: React.FC = () => {
     setError(null);
     
     const school = selectedMadhab === 'hanafi' ? 1 : 0;
-    
-    // Helper function to calculate Qibla direction (bearing to Mecca)
-    const calculateQiblaDirection = (userLat: number, userLon: number): number => {
-      const MECCA_LAT = 21.4225;
-      const MECCA_LON = 39.8262;
-      const lat1 = userLat * Math.PI / 180;
-      const lat2 = MECCA_LAT * Math.PI / 180;
-      const dLon = (MECCA_LON - userLon) * Math.PI / 180;
-      
-      const y = Math.sin(dLon) * Math.cos(lat2);
-      const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
-      const bearing = Math.atan2(y, x) * 180 / Math.PI;
-      
-      // Normalize to 0-360
-      return (bearing + 360) % 360;
-    };
-    
-    // Helper function to calculate distance to Mecca using Haversine formula
-    const calculateDistanceToMecca = (userLat: number, userLon: number): number => {
-      const MECCA_LAT = 21.4225;
-      const MECCA_LON = 39.8262;
-      const R = 6371; // Earth's radius in kilometers
-      const dLat = (MECCA_LAT - userLat) * Math.PI / 180;
-      const dLon = (MECCA_LON - userLon) * Math.PI / 180;
-      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                Math.cos(userLat * Math.PI / 180) * Math.cos(MECCA_LAT * Math.PI / 180) *
-                Math.sin(dLon / 2) * Math.sin(dLon / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return R * c; // Distance in kilometers
-    };
+    const monthlyCacheKey = buildPrayerCacheKey('monthly', {
+      lat,
+      lon,
+      method: calculationMethod,
+      school,
+      highLatitudeRule,
+      month,
+      year,
+    });
+    const cachedMonthlyData = readPrayerCache<any[]>(monthlyCacheKey);
+
+    if (cachedMonthlyData) {
+      setMonthlyData(cachedMonthlyData);
+      const monthlyPrayerSnapshot = buildMonthlyPrayerSnapshot(cachedMonthlyData, lat, lon);
+      if (monthlyPrayerSnapshot) {
+        setPrayerData(monthlyPrayerSnapshot);
+      }
+      setLoading(false);
+      return;
+    }
     
     try {
       // Fetch monthly calendar from Aladhan API
@@ -591,30 +950,11 @@ const PrayerTimes: React.FC = () => {
       
       if (data.code === 200 && data.data) {
         setMonthlyData(data.data);
-        // Set first day as current prayer data for display
-        if (data.data.length > 0) {
-          const firstDay = data.data[0];
-          const qiblaDegrees = calculateQiblaDirection(lat, lon);
-          const distanceToMecca = calculateDistanceToMecca(lat, lon);
-          
-          setPrayerData({
-            times: {
-              Fajr: firstDay.timings.Fajr,
-              Sunrise: firstDay.timings.Sunrise,
-              Dhuhr: firstDay.timings.Dhuhr,
-              Asr: firstDay.timings.Asr,
-              Maghrib: firstDay.timings.Maghrib,
-              Isha: firstDay.timings.Isha,
-              Imsak: firstDay.timings.Imsak
-            },
-            date: firstDay.date,
-            qibla: { 
-              direction: { degrees: qiblaDegrees },
-              distance: { value: distanceToMecca }
-            },
-            meta: firstDay.meta
-          });
+        const monthlyPrayerSnapshot = buildMonthlyPrayerSnapshot(data.data, lat, lon);
+        if (monthlyPrayerSnapshot) {
+          setPrayerData(monthlyPrayerSnapshot);
         }
+        writePrayerCache(monthlyCacheKey, data.data);
       } else {
         setError('Unable to fetch monthly data.');
       }
@@ -631,6 +971,20 @@ const PrayerTimes: React.FC = () => {
     setError(null);
 
     const school = selectedMadhab === 'hanafi' ? 2 : 1;
+    const ramadanCacheKey = buildPrayerCacheKey('ramadan', {
+      lat,
+      lon,
+      method: calculationMethod,
+      school,
+    });
+    const cachedRamadanData = readPrayerCache<any>(ramadanCacheKey);
+
+    if (cachedRamadanData) {
+      setRamadanData(cachedRamadanData);
+      setIsRamadanMonth(true);
+      setLoading(false);
+      return;
+    }
 
     try {
       console.log('Fetching Ramadan data from backend...');
@@ -644,6 +998,7 @@ const PrayerTimes: React.FC = () => {
       if (data.status === 'success' && data.data?.fasting?.length > 0) {
         setRamadanData(data.data);
         setIsRamadanMonth(true);
+        writePrayerCache(ramadanCacheKey, data.data);
       } else {
         setError('Unable to fetch Ramadan data.');
         setIsRamadanMonth(false);
@@ -1189,6 +1544,21 @@ const PrayerTimes: React.FC = () => {
     return () => clearInterval(interval);
   }, [prayerData?.times?.Maghrib, location, parsePrayerTime, fetchData]);
 
+  useEffect(() => {
+    if (!location?.lat || !location?.lon || viewMode !== 'daily') return;
+
+    const checkGregorianDateRollover = () => {
+      const nextDate = formatGregorianDDMMYYYY(new Date());
+      if (nextDate !== currentGregorianDateRef.current) {
+        currentGregorianDateRef.current = nextDate;
+        fetchData(location.lat, location.lon, location.city, location.country);
+      }
+    };
+
+    const interval = setInterval(checkGregorianDateRollover, 30000);
+    return () => clearInterval(interval);
+  }, [location, viewMode, fetchData]);
+
   // Auto-scroll to current day's card when Ramadan tab is opened
   useEffect(() => {
     // Only scroll in Ramadan view
@@ -1303,14 +1673,11 @@ const PrayerTimes: React.FC = () => {
     return () => clearTimeout(scrollTimeout);
   }, [prayerData, currentPrayerIndex, viewMode]);
 
-  const baseHijriDate: HijriDate | null = prayerData?.date?.hijri ? {
-    day: String(prayerData.date.hijri.day),
-    month: {
-      number: Number(prayerData.date.hijri.month?.number) || 0,
-      en: String(prayerData.date.hijri.month?.en || ''),
-    },
-    year: String(prayerData.date.hijri.year),
-  } : null;
+  const prayerSourceHijriDate = buildHijriDateFromPrayerSource(prayerData?.date?.hijri);
+  const baseFastingEntry = fastingData?.fasting?.[0];
+  const nextFastingEntry = nextDayFastingData?.fasting?.[0];
+  const baseFastingHijriDate = buildHijriDateFromFastingEntry(baseFastingEntry);
+  const baseHijriDate = resolvePreferredHijriDate(prayerSourceHijriDate, baseFastingHijriDate);
 
   const nowForHijri = new Date();
   const maghribTimeToday = prayerData?.times?.Maghrib
@@ -1323,9 +1690,20 @@ const PrayerTimes: React.FC = () => {
     activeIslamicGregorianDate.setDate(activeIslamicGregorianDate.getDate() + 1);
   }
   const fallbackNextHijri = incrementHijriByOneDay(baseHijriDate);
+  const nextPrayerHijriDate = buildHijriDateFromPrayerSource(nextDayPrayerData?.date?.hijri);
+  const nextFastingHijriDate = buildHijriDateFromFastingEntry(nextFastingEntry);
+  const resolvedNextHijriDate = nextHijriDate
+    || resolvePreferredHijriDate(nextPrayerHijriDate, nextFastingHijriDate)
+    || nextPrayerHijriDate
+    || nextFastingHijriDate
+    || fallbackNextHijri;
   const effectiveHijriDate = isAfterMaghrib
-    ? (nextHijriDate || fallbackNextHijri || baseHijriDate)
+    ? (resolvedNextHijriDate || baseHijriDate)
     : baseHijriDate;
+  const fallbackCurrentHijriDate = buildHijriDateFromGregorianDate(activeIslamicGregorianDate);
+  const displayHijriDate = resolvePreferredHijriDate(effectiveHijriDate, fallbackCurrentHijriDate)
+    || effectiveHijriDate
+    || fallbackCurrentHijriDate;
   const activePrayerData = isAfterMaghrib && nextDayPrayerData?.times
     ? nextDayPrayerData
     : prayerData;
@@ -1334,10 +1712,21 @@ const PrayerTimes: React.FC = () => {
     : fastingData;
   const activeFastingEntry = activeFastingData?.fasting?.[0];
 
-  const baseHijriReadable = activeFastingEntry?.hijri_readable
-    || (baseHijriDate ? `${baseHijriDate.day} ${baseHijriDate.month.en} ${baseHijriDate.year}` : '');
-  const effectiveHijriReadable = effectiveHijriDate?.readable
-    || (effectiveHijriDate ? `${effectiveHijriDate.day} ${effectiveHijriDate.month.en} ${effectiveHijriDate.year}` : baseHijriReadable);
+  const baseHijriReadable = formatHijriReadable(displayHijriDate || baseHijriDate);
+  const nextHijriReadable = formatHijriReadable(resolvedNextHijriDate);
+  const effectiveHijriReadable = isAfterMaghrib
+    ? (nextHijriReadable || baseHijriReadable)
+    : baseHijriReadable;
+  const visibleIslamicEvents = islamicEvents.filter((event) => event.name !== 'Ramadan');
+  const activeGregorianDate = parseGregorianDDMMYYYY(activePrayerData?.date?.gregorian?.date) || activeIslamicGregorianDate;
+  const isFriday = activeGregorianDate.getDay() === 5;
+  const shouldShowRamadanTab = (displayHijriDate?.month?.number || effectiveHijriDate?.month?.number || 0) === 9;
+
+  useEffect(() => {
+    if (viewMode === 'ramadan' && !shouldShowRamadanTab) {
+      setViewMode('daily');
+    }
+  }, [viewMode, shouldShowRamadanTab]);
 
   const toMinutes = (timeStr?: string): number | null => {
     if (!timeStr) return null;
@@ -1704,7 +2093,7 @@ const PrayerTimes: React.FC = () => {
               <span className="hidden xs:inline">Monthly</span>
               <span className="xs:hidden">Month</span>
             </button>
-            {isRamadanMonth && (
+            {shouldShowRamadanTab && (
               <button
                 onClick={() => setViewMode('ramadan')}
                 className={`flex-1 min-w-[80px] sm:min-w-[100px] px-2 sm:px-4 md:px-6 py-2 sm:py-2.5 md:py-3 rounded-xl font-semibold text-xs sm:text-sm md:text-base transition-all duration-300 flex items-center justify-center gap-1 sm:gap-1.5 md:gap-2 whitespace-nowrap shadow-md ${
@@ -1870,10 +2259,10 @@ const PrayerTimes: React.FC = () => {
           )}
 
           {/* Islamic Events Display - Mobile Optimized */}
-          {islamicEvents.length > 0 && (
+          {visibleIslamicEvents.length > 0 && (
             <div className="bg-gradient-to-r from-emerald-100 to-teal-100 rounded-xl p-3 sm:p-4 mb-4 sm:mb-6">
               <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
-                {islamicEvents.map((event, idx) => (
+                {visibleIslamicEvents.map((event, idx) => (
                   <div
                     key={idx}
                     className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-medium ${
@@ -1918,13 +2307,13 @@ const PrayerTimes: React.FC = () => {
                 </p>
                 <span className="text-gray-400">•</span>
                 <p className="font-arabic text-gray-700">
-                    {effectiveHijriReadable}
+                    {effectiveHijriReadable ? `${effectiveHijriReadable} AH` : ''}
                 </p>
 
                 {/* Current Weather Display next to date */}
                 {weatherData && (
-                    <span className="text-gray-500 flex items-center">
-                         <span className="mx-1.5 hidden sm:inline">|</span>
+                    <span className="text-gray-500 flex items-center whitespace-nowrap">
+                         <span className="mx-1.5 hidden sm:inline">•</span>
                          {weatherData.current.temperature_2m}°C
                          <span className="ml-1 hidden sm:inline">({getWeatherStyling(weatherData.current.weather_code, 'Dhuhr').label})</span>
                     </span>
@@ -2003,41 +2392,45 @@ const PrayerTimes: React.FC = () => {
                       <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Hijri</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {monthlyData.map((day: any, idx: number) => {
-                      const isToday = new Date(day.date.gregorian.date).toDateString() === activeIslamicGregorianDate.toDateString();
+	                  <tbody className="divide-y divide-gray-200">
+	                    {monthlyData.map((day: any, idx: number) => {
+	                      const gd = day.date.gregorian;
+	                      const rowGregorianDate = parseGregorianDDMMYYYY(gd?.date)
+	                        || new Date(gd.year, Number(gd.month?.number || 1) - 1, Number(gd.day || 1));
+	                      const isToday = rowGregorianDate.toDateString() === activeIslamicGregorianDate.toDateString();
+	                      const fallbackRowHijriDate = buildHijriDateFromGregorianDate(rowGregorianDate);
+	                      const rowHijriDate = isToday
+	                        ? (resolvePreferredHijriDate(displayHijriDate, fallbackRowHijriDate) || displayHijriDate || fallbackRowHijriDate)
+	                        : fallbackRowHijriDate;
+	                      const hijriMonth = rowHijriDate?.month?.en || day.date.hijri.month.en;
+	                      const hijriDay = parseInt(String(rowHijriDate?.day || day.date.hijri.day), 10) || 0;
 
-                      // Aladhan Hijri is consistently 1 day AHEAD of islamicapi.
-                      // Subtract 1 for both display and event detection to match islamicapi.
-                      const hijriMonth = day.date.hijri.month.en;
-                      const hijriDayRaw = parseInt(day.date.hijri.day); // Aladhan raw
-                      const hijriDay = hijriDayRaw - 1;                  // islamicapi-aligned
-                      const displayHijriDay = hijriDay > 0 ? hijriDay : 30; // boundary: day 0 = last of prev month
+	                      const normalizedHijriMonth = normalizeHijriMonthName(hijriMonth);
+	                      const isRamadan = (rowHijriDate?.month?.number || HIJRI_MONTH_NUMBERS[normalizedHijriMonth] || 0) === 9;
+	                      const isEidFitr = (rowHijriDate?.month?.number || HIJRI_MONTH_NUMBERS[normalizedHijriMonth] || 0) === 10 && hijriDay === 1;
+	                      const isEidAdha = (rowHijriDate?.month?.number || HIJRI_MONTH_NUMBERS[normalizedHijriMonth] || 0) === 12 && hijriDay === 10;
+	                      const isArafah = (rowHijriDate?.month?.number || HIJRI_MONTH_NUMBERS[normalizedHijriMonth] || 0) === 12 && hijriDay === 9;
+	                      const isAshura = (rowHijriDate?.month?.number || HIJRI_MONTH_NUMBERS[normalizedHijriMonth] || 0) === 1 && hijriDay === 10;
 
-                      const isRamadan = hijriMonth.includes('Rama') || hijriMonth.includes('rama');
-                      const isEidFitr = hijriMonth === 'Shawwāl' && hijriDay === 1;
-                      const isEidAdha = hijriMonth === 'Dhū al-Ḥijjah' && hijriDay === 10;
-                      const isArafah = hijriMonth === 'Dhū al-Ḥijjah' && hijriDay === 9;
-                      const isAshura = hijriMonth === 'Muḥarram' && hijriDay === 10;
-
-                      // White Days: build YYYY-MM-DD from Aladhan separate fields to avoid DD-MM-YYYY parsing issues
-                      const gd = day.date.gregorian;
-                      const isoGregDate = `${gd.year}-${String(gd.month.number).padStart(2, '0')}-${String(gd.day).padStart(2, '0')}`;
-                      const whiteDayDatesSet = new Set<string>(
-                        fastingData?.white_days?.days
+	                      // White Days: build YYYY-MM-DD from Aladhan separate fields to avoid DD-MM-YYYY parsing issues
+	                      const isoGregDate = `${gd.year}-${String(gd.month.number).padStart(2, '0')}-${String(gd.day).padStart(2, '0')}`;
+	                      const whiteDayDatesSet = new Set<string>(
+	                        fastingData?.white_days?.days
                           ? Object.values(fastingData.white_days.days as Record<string, string>).filter(Boolean)
                           : []
                       );
                       const isWhiteDay = !isToday && !isEidFitr && !isEidAdha && !isArafah && !isAshura && !isRamadan
                         && whiteDayDatesSet.has(isoGregDate);
 
-                      // Determine row background color (priority order)
-                      let rowBgClass = 'hover:bg-gray-50';
-                      if (isToday) {
-                        rowBgClass = 'bg-emerald-100 hover:bg-emerald-100';
-                      } else if (isEidFitr) {
-                        rowBgClass = 'bg-green-100 hover:bg-green-100';
-                      } else if (isEidAdha) {
+	                      // Determine row background color (priority order)
+	                      let rowBgClass = 'hover:bg-gray-50';
+	                      let rowBorderClass = '';
+	                      if (isToday) {
+	                        rowBgClass = 'bg-emerald-50 hover:bg-emerald-50';
+	                        rowBorderClass = 'ring-2 ring-inset ring-emerald-400';
+	                      } else if (isEidFitr) {
+	                        rowBgClass = 'bg-green-100 hover:bg-green-100';
+	                      } else if (isEidAdha) {
                         rowBgClass = 'bg-red-100 hover:bg-red-100';
                       } else if (isArafah) {
                         rowBgClass = 'bg-purple-100 hover:bg-purple-100';
@@ -2049,29 +2442,44 @@ const PrayerTimes: React.FC = () => {
                         rowBgClass = 'bg-indigo-50 hover:bg-indigo-50';
                       }
 
-                      return (
-                        <tr key={idx} className={rowBgClass}>
-                          <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {day.date.gregorian.day}
-                          </td>
-                          <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-sm text-gray-500">
-                            {day.date.gregorian.weekday.en}
-                          </td>
-                          <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-sm text-gray-900">{formatTimeForDisplay(day.timings.Fajr)}</td>
+	                      return (
+	                        <tr key={idx} className={`${rowBgClass} ${rowBorderClass}`}>
+	                          <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+	                            <div className="flex items-center gap-2">
+	                              <span className={`inline-flex min-w-[2rem] items-center justify-center rounded-full px-2 py-1 text-sm font-bold ${
+	                                isToday
+	                                  ? 'bg-emerald-600 text-white shadow-sm'
+	                                  : 'bg-gray-100 text-gray-700'
+	                              }`}>
+	                                {day.date.gregorian.day}
+	                              </span>
+	                              {isToday && (
+	                                <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-emerald-700">
+	                                  Today
+	                                </span>
+	                              )}
+	                            </div>
+	                          </td>
+	                          <td className={`px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-sm ${isToday ? 'font-semibold text-emerald-800' : 'text-gray-500'}`}>
+	                            {day.date.gregorian.weekday.en}
+	                          </td>
+	                          <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-sm text-gray-900">{formatTimeForDisplay(day.timings.Fajr)}</td>
                           <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-sm text-gray-500">{formatTimeForDisplay(day.timings.Sunrise)}</td>
                           <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-sm text-gray-900">{formatTimeForDisplay(day.timings.Dhuhr)}</td>
                           <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-sm text-gray-900">{formatTimeForDisplay(day.timings.Asr)}</td>
                           <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-sm text-gray-900">{formatTimeForDisplay(day.timings.Maghrib)}</td>
                           <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-sm text-gray-900">{formatTimeForDisplay(day.timings.Isha)}</td>
-                          <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-sm text-gray-500">
-                            <span className="flex items-center gap-1">
-                              {isWhiteDay && (
-                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" title="White Day"></span>
-                              )}
-                              {displayHijriDay} {day.date.hijri.month.en}
-                            </span>
-                          </td>
-                        </tr>
+	                          <td className="px-3 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-sm text-gray-500">
+	                            <span className="flex items-center gap-1">
+	                              {isWhiteDay && (
+	                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" title="White Day"></span>
+	                              )}
+	                              <span className={isToday ? 'font-semibold text-emerald-800' : ''}>
+	                                {hijriDay} {hijriMonth}
+	                              </span>
+	                            </span>
+	                          </td>
+	                        </tr>
                       );
                     })}
                   </tbody>
@@ -2242,6 +2650,14 @@ const PrayerTimes: React.FC = () => {
                             </div>
                         </div>
                     </div>
+
+                    {prayer.name === 'Dhuhr' && isFriday && (
+                      <div className="mb-3 flex justify-center">
+                        <span className="inline-flex min-w-[160px] items-center justify-center rounded-full border border-emerald-300 bg-emerald-100 px-6 py-2 text-sm font-extrabold text-emerald-700 shadow-sm animate-pulse">
+                          Friday
+                        </span>
+                      </div>
+                    )}
 
                     {/* Footer Section: Fasting Info & Weather */}
                     <div className="mt-4 flex min-h-[92px] items-end justify-between border-t border-gray-50 pt-3 sm:min-h-[104px]">
@@ -2422,7 +2838,7 @@ const PrayerTimes: React.FC = () => {
 
           {/* Calendar Column */}
           <div className="xl:col-span-1">
-            <IslamicCalendar whiteDays={activeFastingData?.white_days || fastingData?.white_days} todayHijri={effectiveHijriDate || prayerData?.date?.hijri} />
+            <IslamicCalendar whiteDays={activeFastingData?.white_days || fastingData?.white_days} todayHijri={displayHijriDate || effectiveHijriDate || prayerData?.date?.hijri} />
           </div>
         </div>
 

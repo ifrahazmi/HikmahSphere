@@ -2,6 +2,8 @@ import React, { useEffect, useState, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 const EID_DATE = new Date("2026-03-21T00:00:00");
+const RAMADAN_POPUP_SESSION_KEY = "ramadanEliteShown";
+const EID_POPUP_SESSION_KEY = "eidMubarakShown";
 
 interface TimeLeft {
   days: number;
@@ -21,13 +23,13 @@ interface LanguageText {
 const EidMubarakCard = ({ visible, setVisible, darkMode, lang, toggleSound, soundOn, audioRef }) => {
   const text = {
     en: {
-      title: "Eid-Ul-Fitr Mubarak! 🎉",
+      title: "Eid Mubarak 🌙",
       greeting: "To you and your family from the HikmahSphere family.",
       dua: "May Allah's blessings be with you today, tomorrow, and always. May He accept our fasts and prayers.",
       continue: "Continue to Website",
     },
     ar: {
-      title: "عيد الفطر مبارك! 🎉",
+      title: "عيد مبارك",
       greeting: "لكم ولعائلتكم من عائلة HikmahSphere.",
       dua: "تقبل الله منا ومنكم صالح الأعمال. عيدكم مبارك.",
       continue: "دخول الموقع",
@@ -72,9 +74,30 @@ const EidMubarakCard = ({ visible, setVisible, darkMode, lang, toggleSound, soun
             ✕
           </button>
 
-          <h1 className="text-4xl font-extrabold mb-3 text-center text-yellow-300" dir={lang === "ar" ? "rtl" : "ltr"}>
-            {text[lang].title}
-          </h1>
+          {lang === "ar" ? (
+            <div className="mb-3 flex items-center justify-center gap-2 text-yellow-300" dir="rtl">
+              <span className="eid-arabic-text text-[2rem] sm:text-[2.35rem]">
+                {text.ar.title}
+              </span>
+              <span className="shrink-0 text-2xl leading-none sm:text-3xl" aria-hidden="true">🌙</span>
+            </div>
+          ) : (
+            <h1 className="text-4xl font-extrabold mb-3 text-center text-yellow-300" dir="ltr">
+              {text.en.title}
+            </h1>
+          )}
+
+          <div className="mb-5 rounded-2xl border border-white/20 bg-white/10 px-4 py-4 text-center shadow-inner">
+            <div className="flex items-center justify-center gap-2 text-yellow-100" dir="rtl">
+              <span className="eid-arabic-text text-[2rem] sm:text-[2.3rem]">
+                عيد مبارك
+              </span>
+              <span className="shrink-0 text-2xl leading-none sm:text-3xl" aria-hidden="true">🌙</span>
+            </div>
+            <p className="eid-arabic-text mt-1 text-[1.6rem] text-white sm:text-[1.9rem]" dir="rtl">
+              تقبل الله منا ومنكم.
+            </p>
+          </div>
 
           <p className="text-center text-lg mb-5" dir={lang === "ar" ? "rtl" : "ltr"}>
             {text[lang].greeting}
@@ -127,14 +150,24 @@ export default function RamadanElitePopup() {
   const [isEidDay, setIsEidDay] = useState(false);
 
   useEffect(() => {
-    const today = new Date();
-    if (
-      today.getFullYear() === EID_DATE.getFullYear() &&
-      today.getMonth() === EID_DATE.getMonth() &&
-      today.getDate() === EID_DATE.getDate()
-    ) {
-      setIsEidDay(true);
-    }
+    const syncOccasionPopup = () => {
+      const reachedEid = Date.now() >= EID_DATE.getTime();
+      setIsEidDay(reachedEid);
+
+      const storageKey = reachedEid ? EID_POPUP_SESSION_KEY : RAMADAN_POPUP_SESSION_KEY;
+      if (!sessionStorage.getItem(storageKey)) {
+        setVisible(true);
+        sessionStorage.setItem(storageKey, "true");
+      }
+    };
+
+    const initialTimer = window.setTimeout(syncOccasionPopup, 1000);
+    const occasionWatcher = window.setInterval(syncOccasionPopup, 30 * 1000);
+
+    return () => {
+      window.clearTimeout(initialTimer);
+      window.clearInterval(occasionWatcher);
+    };
   }, []);
   
   // Detect Language
@@ -147,14 +180,6 @@ export default function RamadanElitePopup() {
   useEffect(() => {
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     setDarkMode(prefersDark);
-  }, []);
-
-  // Show Once Per Session
-  useEffect(() => {
-    if (!sessionStorage.getItem("ramadanEliteShown")) {
-      setTimeout(() => setVisible(true), 1000);
-      sessionStorage.setItem("ramadanEliteShown", "true");
-    }
   }, []);
 
   // Countdown Timer
