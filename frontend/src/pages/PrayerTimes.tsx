@@ -350,6 +350,29 @@ const buildHijriDateFromGregorianDate = (date: Date): HijriDate | null => {
   };
 };
 
+const getHijriObservationOffsetDays = (country?: string): number => {
+  const normalizedCountry = String(country || '').trim().toLowerCase();
+
+  // India frequently follows local moon sighting one day behind
+  // the astronomical calendar source used by Aladhan/Umm al-Qura.
+  if (normalizedCountry.includes('india')) {
+    return -1;
+  }
+
+  return 0;
+};
+
+const buildLocationAwareHijriDateFromGregorianDate = (date: Date, country?: string): HijriDate | null => {
+  const adjustedDate = new Date(date);
+  const offsetDays = getHijriObservationOffsetDays(country);
+
+  if (offsetDays !== 0) {
+    adjustedDate.setDate(adjustedDate.getDate() + offsetDays);
+  }
+
+  return buildHijriDateFromGregorianDate(adjustedDate);
+};
+
 const formatHijriReadable = (hijri?: HijriDate | null): string => {
   if (!hijri) return '';
 
@@ -1617,6 +1640,7 @@ const PrayerTimes: React.FC = () => {
   const nextFastingEntry = nextDayFastingData?.fasting?.[0];
   const baseFastingHijriDate = buildHijriDateFromFastingEntry(baseFastingEntry);
   const baseHijriDate = resolvePreferredHijriDate(prayerSourceHijriDate, baseFastingHijriDate);
+  const shouldPreferLocalHijriObservation = getHijriObservationOffsetDays(activeCountry) !== 0;
 
   const nowForHijri = new Date();
   const maghribTimeToday = prayerData?.times?.Maghrib
@@ -1639,10 +1663,12 @@ const PrayerTimes: React.FC = () => {
   const effectiveHijriDate = isAfterMaghrib
     ? (resolvedNextHijriDate || baseHijriDate)
     : baseHijriDate;
-  const fallbackCurrentHijriDate = buildHijriDateFromGregorianDate(activeIslamicGregorianDate);
-  const displayHijriDate = resolvePreferredHijriDate(effectiveHijriDate, fallbackCurrentHijriDate)
-    || effectiveHijriDate
-    || fallbackCurrentHijriDate;
+  const fallbackCurrentHijriDate = buildLocationAwareHijriDateFromGregorianDate(activeIslamicGregorianDate, activeCountry);
+  const displayHijriDate = shouldPreferLocalHijriObservation
+    ? (fallbackCurrentHijriDate || effectiveHijriDate)
+    : (resolvePreferredHijriDate(effectiveHijriDate, fallbackCurrentHijriDate)
+      || effectiveHijriDate
+      || fallbackCurrentHijriDate);
   const activePrayerData = isAfterMaghrib && nextDayPrayerData?.times
     ? nextDayPrayerData
     : prayerData;
@@ -1651,11 +1677,7 @@ const PrayerTimes: React.FC = () => {
     : fastingData;
   const activeFastingEntry = activeFastingData?.fasting?.[0];
 
-  const baseHijriReadable = formatHijriReadable(displayHijriDate || baseHijriDate);
-  const nextHijriReadable = formatHijriReadable(resolvedNextHijriDate);
-  const effectiveHijriReadable = isAfterMaghrib
-    ? (nextHijriReadable || baseHijriReadable)
-    : baseHijriReadable;
+  const displayHijriReadable = formatHijriReadable(displayHijriDate || effectiveHijriDate || baseHijriDate);
   const visibleIslamicEvents = islamicEvents.filter((event) => event.name !== 'Ramadan');
   const activeGregorianDate = parseGregorianDDMMYYYY(activePrayerData?.date?.gregorian?.date) || activeIslamicGregorianDate;
   const isFriday = activeGregorianDate.getDay() === 5;
@@ -2246,7 +2268,7 @@ const PrayerTimes: React.FC = () => {
                 </p>
                 <span className="text-gray-400">•</span>
                 <p className="font-arabic text-gray-700">
-                    {effectiveHijriReadable ? `${effectiveHijriReadable} AH` : ''}
+                    {displayHijriReadable ? `${displayHijriReadable} AH` : ''}
                 </p>
 
                 {/* Current Weather Display next to date */}
@@ -2338,10 +2360,12 @@ const PrayerTimes: React.FC = () => {
 	                        || new Date(gd.year, Number(gd.month?.number || 1) - 1, Number(gd.day || 1));
 	                      const isToday = rowGregorianDate.toDateString() === activeIslamicGregorianDate.toDateString();
 	                      const rowPrayerHijriDate = buildHijriDateFromPrayerSource(day.date?.hijri);
-	                      const fallbackRowHijriDate = buildHijriDateFromGregorianDate(rowGregorianDate);
-	                      const resolvedRowHijriDate = resolvePreferredHijriDate(rowPrayerHijriDate, fallbackRowHijriDate)
-	                        || rowPrayerHijriDate
-	                        || fallbackRowHijriDate;
+	                      const fallbackRowHijriDate = buildLocationAwareHijriDateFromGregorianDate(rowGregorianDate, activeCountry);
+	                      const resolvedRowHijriDate = shouldPreferLocalHijriObservation
+	                        ? (fallbackRowHijriDate || rowPrayerHijriDate)
+	                        : (resolvePreferredHijriDate(rowPrayerHijriDate, fallbackRowHijriDate)
+	                          || rowPrayerHijriDate
+	                          || fallbackRowHijriDate);
 	                      const rowHijriDate = isToday
 	                        ? (resolvePreferredHijriDate(displayHijriDate, resolvedRowHijriDate) || displayHijriDate || resolvedRowHijriDate)
 	                        : resolvedRowHijriDate;
@@ -3334,8 +3358,8 @@ const PrayerTimes: React.FC = () => {
                     ? (parseInt(day.hijri.split('-')[2] || String(idx + 1)) || idx + 1)
                     : idx + 1;
                   const dateObj = dayDate;
-                  const hijriText = isToday && effectiveHijriReadable
-                    ? effectiveHijriReadable
+                  const hijriText = isToday && displayHijriReadable
+                    ? displayHijriReadable
                     : (day.hijri_readable || day.hijri || 'Ramadan');
 
                   return (
