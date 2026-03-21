@@ -2367,10 +2367,14 @@ const PrayerTimes: React.FC = () => {
 	                      const isToday = rowGregorianDate.toDateString() === activeIslamicGregorianDate.toDateString();
 	                      const rowPrayerHijriDate = buildHijriDateFromPrayerSource(day.date?.hijri);
 	                      const fallbackRowHijriDate = buildLocationAwareHijriDateFromGregorianDate(rowGregorianDate, activeCountry);
-	                      // Prioritize API data over local calculation with offset
-	                      const resolvedRowHijriDate = resolvePreferredHijriDate(rowPrayerHijriDate, fallbackRowHijriDate)
+	                      // For India and similar regions, prefer local calculation with moon sighting offset
+                      // For other regions, prefer API data
+                      const shouldUseLocalObservation = getHijriObservationOffsetDays(activeCountry) !== 0;
+	                      const resolvedRowHijriDate = shouldUseLocalObservation
+                        ? (fallbackRowHijriDate || rowPrayerHijriDate)
+                        : (resolvePreferredHijriDate(rowPrayerHijriDate, fallbackRowHijriDate)
 	                        || rowPrayerHijriDate
-	                        || fallbackRowHijriDate;
+	                        || fallbackRowHijriDate);
 	                      const rowHijriDate = isToday
 	                        ? (resolvePreferredHijriDate(displayHijriDate, resolvedRowHijriDate) || displayHijriDate || resolvedRowHijriDate)
 	                        : resolvedRowHijriDate;
