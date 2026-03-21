@@ -61,6 +61,55 @@ const IOS_PUSH_GUIDE_SHOWN_KEY = 'iosPushGuideShown';
 
 const AppContent: React.FC = () => {
   const { user, loading } = useAuth();
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    const sendHeartbeat = async () => {
+      const authToken = localStorage.getItem('token');
+      if (!authToken) {
+        return;
+      }
+
+      try {
+        const support = await getPushSupportInfo();
+        await axios.post(`${API_URL}/notifications/heartbeat`, {
+          deviceId: getPushDeviceId(),
+          permission: typeof Notification !== 'undefined' ? Notification.permission : 'unknown',
+          capability: {
+            supportsWebPush: support.supported,
+            isIOS: support.isIOS,
+            isStandalone: support.isStandalone,
+          },
+          heartbeatAt: new Date().toISOString(),
+        }, {
+          headers: { Authorization: `Bearer ${authToken}` }
+        });
+      } catch (error) {
+        console.error('Heartbeat update failed:', error);
+      }
+    };
+
+    void sendHeartbeat();
+    const heartbeatInterval = window.setInterval(() => {
+      void sendHeartbeat();
+    }, 60 * 1000);
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void sendHeartbeat();
+      }
+    };
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      window.clearInterval(heartbeatInterval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [user]);
   
   useEffect(() => {
     // 1. Request Token & Register with Backend
@@ -107,6 +156,13 @@ const AppContent: React.FC = () => {
                           token,
                           deviceId: getPushDeviceId(),
                           userAgent: navigator.userAgent,
+                          permission: typeof Notification !== 'undefined' ? Notification.permission : 'unknown',
+                          capability: {
+                            supportsWebPush: pushSupport.supported,
+                            isIOS: pushSupport.isIOS,
+                            isStandalone: pushSupport.isStandalone,
+                          },
+                          heartbeatAt: new Date().toISOString(),
                         },
                         { headers: { Authorization: `Bearer ${authToken}` } }
                     );
@@ -121,6 +177,25 @@ const AppContent: React.FC = () => {
             console.log("No FCM token generated. Push support:", pushSupport);
             if (pushSupport.isIOS) {
               console.log("iOS detected - ensure PWA is installed to Home Screen and permission granted");
+            }
+            const authToken = localStorage.getItem('token');
+            if (authToken) {
+              try {
+                await axios.post(`${API_URL}/notifications/heartbeat`, {
+                  deviceId: getPushDeviceId(),
+                  permission: typeof Notification !== 'undefined' ? Notification.permission : 'unknown',
+                  capability: {
+                    supportsWebPush: pushSupport.supported,
+                    isIOS: pushSupport.isIOS,
+                    isStandalone: pushSupport.isStandalone,
+                  },
+                  heartbeatAt: new Date().toISOString(),
+                }, {
+                  headers: { Authorization: `Bearer ${authToken}` }
+                });
+              } catch (apiError) {
+                console.error('❌ Failed to update notification permission status:', apiError);
+              }
             }
         }
       } catch (err) {

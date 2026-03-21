@@ -6,7 +6,7 @@ interface AuthRequest extends Request {
   user?: any;
 }
 
-export const authMiddleware = (req: AuthRequest, res: Response, next: NextFunction) => {
+export const authMiddleware = async (req: AuthRequest, res: Response, next: NextFunction) => {
   // Get token from header
   const token = req.header('Authorization')?.replace('Bearer ', '');
 
@@ -21,9 +21,32 @@ export const authMiddleware = (req: AuthRequest, res: Response, next: NextFuncti
     const decoded = jwt.verify(
       token,
       process.env.JWT_SECRET || 'your_jwt_secret'
-    );
+    ) as { userId?: string };
 
-    req.user = decoded;
+    if (!decoded?.userId) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Token is not valid',
+      });
+    }
+
+    const dbUser = await User.findById(decoded.userId).select('email firstName lastName username role isAdmin');
+    if (!dbUser) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Token is not valid',
+      });
+    }
+
+    req.user = {
+      ...decoded,
+      userId: decoded.userId,
+      email: dbUser.email,
+      username: dbUser.username,
+      name: `${dbUser.firstName || ''} ${dbUser.lastName || ''}`.trim() || dbUser.username,
+      role: dbUser.role,
+      isAdmin: dbUser.isAdmin,
+    };
     return next();
   } catch (err) {
     return res.status(401).json({

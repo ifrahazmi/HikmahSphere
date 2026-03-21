@@ -378,8 +378,19 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
         ? (value as Record<string, unknown>).translationAudioMode
         : null;
 
+    const rawArabicFont =
+      value && typeof value === 'object' && typeof (value as Record<string, unknown>).arabicFont === 'string'
+        ? (value as Record<string, unknown>).arabicFont
+        : null;
+
+    const normalizedArabicFont =
+      rawArabicFont === 'indopak-nastaleeq'
+        ? 'indopak-nastaleeq-v3'
+        : mergedSettings.arabicFont;
+
     return {
       ...mergedSettings,
+      arabicFont: normalizedArabicFont,
       selectedTranslations: normalizeSelectedTranslations(mergedSettings.selectedTranslations),
       translationAudioEnabled:
         typeof mergedSettings.translationAudioEnabled === 'boolean'

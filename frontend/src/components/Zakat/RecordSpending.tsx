@@ -29,13 +29,17 @@ const RECIPIENT_TYPES: RecipientTypeOption[] = [
 ];
 
 interface RecordSpendingProps {
-  currentBalance: number;
+  purposeBalances: {
+    zakat: number;
+    sadaqah: number;
+  };
   onSuccess?: () => void;
   onClose?: () => void;
 }
 
-const RecordSpending: React.FC<RecordSpendingProps> = ({ currentBalance, onSuccess, onClose }) => {
+const RecordSpending: React.FC<RecordSpendingProps> = ({ purposeBalances, onSuccess, onClose }) => {
   const [formData, setFormData] = useState({
+    purpose: 'Zakat' as 'Zakat' | 'Sadaqah',
     recipientName: '',
     recipientType: 'Individual' as 'Individual' | 'Family' | 'Mosque' | 'Madrasa' | 'NGO' | 'Other',
     amount: '',
@@ -52,6 +56,10 @@ const RecordSpending: React.FC<RecordSpendingProps> = ({ currentBalance, onSucce
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [proofPreview, setProofPreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const selectedPurposeBalance = formData.purpose === 'Sadaqah'
+    ? purposeBalances.sadaqah
+    : purposeBalances.zakat;
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -164,8 +172,8 @@ const RecordSpending: React.FC<RecordSpendingProps> = ({ currentBalance, onSucce
 
     // Check if amount exceeds current balance
     const amount = parseFloat(formData.amount);
-    if (amount > currentBalance) {
-      toast.error(`Insufficient balance. Available: ₹${currentBalance.toLocaleString('en-IN')}, Requested: ₹${amount.toLocaleString('en-IN')}`);
+    if (amount > selectedPurposeBalance) {
+      toast.error(`Insufficient ${formData.purpose} balance. Available: ₹${selectedPurposeBalance.toLocaleString('en-IN')}, Requested: ₹${amount.toLocaleString('en-IN')}`);
       return;
     }
 
@@ -176,6 +184,7 @@ const RecordSpending: React.FC<RecordSpendingProps> = ({ currentBalance, onSucce
       const formDataToSend = new FormData();
 
       formDataToSend.append('type', 'spending');
+      formDataToSend.append('purpose', formData.purpose);
       formDataToSend.append('recipientName', formData.recipientName.trim());
       formDataToSend.append('recipientType', formData.recipientType);
       formDataToSend.append('amount', formData.amount);
@@ -220,6 +229,7 @@ const RecordSpending: React.FC<RecordSpendingProps> = ({ currentBalance, onSucce
         toast.success('Zakat spending recorded successfully!');
         
         setFormData({
+          purpose: 'Zakat',
           recipientName: '',
           recipientType: 'Individual',
           amount: '',
@@ -289,6 +299,40 @@ const RecordSpending: React.FC<RecordSpendingProps> = ({ currentBalance, onSucce
               className="w-full px-3 sm:px-4 py-2.5 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm sm:text-base"
               required
             />
+          </div>
+
+          {/* Purpose */}
+          <div>
+            <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5">
+              Purpose <span className="text-red-500">*</span>
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => handleInputChange('purpose', 'Zakat')}
+                className={`px-3 py-2.5 rounded-xl border-2 text-sm font-medium transition-all ${
+                  formData.purpose === 'Zakat'
+                    ? 'border-red-500 bg-red-50 text-red-700'
+                    : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                }`}
+              >
+                Zakat
+              </button>
+              <button
+                type="button"
+                onClick={() => handleInputChange('purpose', 'Sadaqah')}
+                className={`px-3 py-2.5 rounded-xl border-2 text-sm font-medium transition-all ${
+                  formData.purpose === 'Sadaqah'
+                    ? 'border-red-500 bg-red-50 text-red-700'
+                    : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                }`}
+              >
+                Sadaqah
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Available {formData.purpose} balance: ₹{selectedPurposeBalance.toLocaleString('en-IN')}
+            </p>
           </div>
 
           {/* Recipient Type */}

@@ -21,6 +21,7 @@ import DonorSummary from './DonorSummary';
 interface ZakatTransaction {
   _id: string;
   type: 'collection' | 'spending';
+  purpose: 'Zakat' | 'Sadaqah';
   donorId?: {
     _id: string;
     name: string;
@@ -44,9 +45,16 @@ interface ZakatTransaction {
 }
 
 interface ZakatStats {
-  totalCollected: number;
-  totalSpent: number;
-  currentBalance: number;
+  zakat: {
+    collected: number;
+    spent: number;
+    currentBalance: number;
+  };
+  sadaqah: {
+    collected: number;
+    spent: number;
+    currentBalance: number;
+  };
 }
 
 interface ZakatManagementProps {
@@ -71,7 +79,10 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
   const { hasRole } = useAuth();
   const isAdmin = hasRole(['superadmin', 'manager']);
   
-  const [zakatStats, setZakatStats] = useState<ZakatStats>({ totalCollected: 0, totalSpent: 0, currentBalance: 0 });
+  const [zakatStats, setZakatStats] = useState<ZakatStats>({
+    zakat: { collected: 0, spent: 0, currentBalance: 0 },
+    sadaqah: { collected: 0, spent: 0, currentBalance: 0 },
+  });
   const [zakatTransactions, setZakatTransactions] = useState<ZakatTransaction[]>([]);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<ZakatTransaction | null>(null);
@@ -89,6 +100,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
 
   // Filter state
   const [filterType, setFilterType] = useState<'all' | 'collection' | 'spending'>('all');
+  const [filterPurpose, setFilterPurpose] = useState<'all' | 'Zakat' | 'Sadaqah'>('all');
   const [searchTerm, setSearchTerm] = useState('');
 
   // Export State
@@ -125,7 +137,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
     try {
       const token = localStorage.getItem('token');
       const [statsRes, transRes] = await Promise.all([
-        fetch(`${API_URL}/zakat/stats`, { 
+        fetch(`${API_URL}/zakat/stats/split`, { 
           headers: { 'Authorization': `Bearer ${token}` } 
         }),
         fetch(`${API_URL}/zakat/payments?limit=100`, { 
@@ -182,6 +194,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
       const formData = new FormData();
       
       formData.append('type', editingTransaction.type);
+      formData.append('purpose', editingTransaction.purpose || 'Zakat');
       formData.append('amount', editingTransaction.amount.toString());
       formData.append('paymentDate', new Date(editingTransaction.paymentDate).toISOString().split('T')[0]);
       formData.append('paymentMethod', editingTransaction.paymentMethod);
@@ -229,7 +242,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
 
   // Export Functions
   const exportToCSV = () => {
-    const headers = ['Date', 'Type', 'Party Name', 'Party Type', 'Amount', 'Method', 'Reference ID', 'Notes'];
+    const headers = ['Date', 'Type', 'Purpose', 'Party Name', 'Party Type', 'Amount', 'Method', 'Reference ID', 'Notes'];
     const csvContent = [
       headers.join(','),
       ...zakatTransactions.map(t => {
@@ -238,6 +251,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
         return [
           new Date(t.paymentDate).toLocaleDateString(),
           t.type,
+          t.purpose || 'Zakat',
           `"${partyName || ''}"`,
           partyType,
           t.amount,
@@ -268,18 +282,35 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
     toast.success('JSON exported successfully');
   };
 
+  const matchesSearchFilter = (transaction: ZakatTransaction) => {
+    if (!searchTerm) return true;
+
+    const searchLower = searchTerm.toLowerCase();
+    const name = transaction.type === 'collection' ? transaction.donorName : transaction.recipientName;
+    const normalizedPurpose = (transaction.purpose || 'Zakat').toLowerCase();
+
+    return name?.toLowerCase().includes(searchLower) ||
+      normalizedPurpose.includes(searchLower) ||
+      transaction.transactionRefId?.includes(searchTerm) ||
+      transaction.chequeNumber?.includes(searchTerm) ||
+      transaction.notes?.toLowerCase().includes(searchLower);
+  };
+
+  const typeAndSearchFiltered = zakatTransactions.filter((transaction) => {
+    if (filterType !== 'all' && transaction.type !== filterType) return false;
+    return matchesSearchFilter(transaction);
+  });
+
+  const purposeCounts = {
+    all: typeAndSearchFiltered.length,
+    zakat: typeAndSearchFiltered.filter((transaction) => (transaction.purpose || 'Zakat') === 'Zakat').length,
+    sadaqah: typeAndSearchFiltered.filter((transaction) => transaction.purpose === 'Sadaqah').length,
+  };
+
   // Filter transactions
-  const filteredTransactions = zakatTransactions.filter(t => {
-    if (filterType !== 'all' && t.type !== filterType) return false;
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase();
-      const name = t.type === 'collection' ? t.donorName : t.recipientName;
-      return name?.toLowerCase().includes(searchLower) || 
-             t.transactionRefId?.includes(searchTerm) ||
-             t.chequeNumber?.includes(searchTerm) ||
-             t.notes?.toLowerCase().includes(searchLower);
-    }
-    return true;
+  const filteredTransactions = typeAndSearchFiltered.filter((transaction) => {
+    if (filterPurpose === 'all') return true;
+    return (transaction.purpose || 'Zakat') === filterPurpose;
   });
 
   useEffect(() => {
@@ -352,8 +383,8 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
       {/* Header */}
       <div className="flex justify-between items-center flex-wrap gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Zakat Center</h2>
-          <p className="text-sm text-gray-500 mt-1">Manage collections and distributions</p>
+          <h2 className="text-2xl font-bold text-gray-900">Zakat Collection Management</h2>
+          <p className="text-sm text-gray-500 mt-1">Manage Zakat and Sadaqah collections and spending</p>
         </div>
         {onClose && (
           <button
@@ -367,16 +398,16 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
 
       {/* Stats Cards - Admin Only */}
       {canViewStats && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           <div className="bg-white p-6 rounded-xl shadow-md border-l-4 border-green-500 hover:shadow-lg transition-shadow">
             <div className="flex justify-between items-center">
               <div>
                 <p className="text-sm font-medium text-gray-500 flex items-center gap-2">
                   <ArrowUpIcon className="h-4 w-4 text-green-600" />
-                  Total Collected
+                  Zakat Collected
                 </p>
                 <p className="text-3xl font-bold text-green-700 mt-2">
-                  ₹{zakatStats.totalCollected.toLocaleString('en-IN')}
+                  ₹{zakatStats.zakat.collected.toLocaleString('en-IN')}
                 </p>
               </div>
               <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center">
@@ -384,16 +415,16 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
               </div>
             </div>
           </div>
-          
+
           <div className="bg-white p-6 rounded-xl shadow-md border-l-4 border-red-500 hover:shadow-lg transition-shadow">
             <div className="flex justify-between items-center">
               <div>
                 <p className="text-sm font-medium text-gray-500 flex items-center gap-2">
                   <ArrowDownIcon className="h-4 w-4 text-red-600" />
-                  Total Spent
+                  Zakat Spent
                 </p>
                 <p className="text-3xl font-bold text-red-700 mt-2">
-                  ₹{zakatStats.totalSpent.toLocaleString('en-IN')}
+                  ₹{zakatStats.zakat.spent.toLocaleString('en-IN')}
                 </p>
               </div>
               <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center">
@@ -401,22 +432,75 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
               </div>
             </div>
           </div>
-          
+
           <div className="bg-white p-6 rounded-xl shadow-md border-l-4 border-blue-500 hover:shadow-lg transition-shadow">
             <div className="flex justify-between items-center">
               <div>
                 <p className="text-sm font-medium text-gray-500 flex items-center gap-2">
                   <CurrencyRupeeIcon className="h-4 w-4 text-blue-600" />
-                  Current Balance
+                  Zakat Current Balance
                 </p>
                 <p className={`text-3xl font-bold mt-2 ${
-                  zakatStats.currentBalance >= 0 ? 'text-blue-700' : 'text-red-700'
+                  zakatStats.zakat.currentBalance >= 0 ? 'text-blue-700' : 'text-red-700'
                 }`}>
-                  ₹{zakatStats.currentBalance.toLocaleString('en-IN')}
+                  ₹{zakatStats.zakat.currentBalance.toLocaleString('en-IN')}
                 </p>
               </div>
               <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center">
                 <CurrencyRupeeIcon className="h-7 w-7 text-blue-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-xl shadow-md border-l-4 border-emerald-500 hover:shadow-lg transition-shadow">
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="text-sm font-medium text-gray-500 flex items-center gap-2">
+                  <ArrowUpIcon className="h-4 w-4 text-emerald-600" />
+                  Sadaqah Collected
+                </p>
+                <p className="text-3xl font-bold text-emerald-700 mt-2">
+                  ₹{zakatStats.sadaqah.collected.toLocaleString('en-IN')}
+                </p>
+              </div>
+              <div className="w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center">
+                <ArrowUpOnSquareIcon className="h-7 w-7 text-emerald-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-xl shadow-md border-l-4 border-orange-500 hover:shadow-lg transition-shadow">
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="text-sm font-medium text-gray-500 flex items-center gap-2">
+                  <ArrowDownIcon className="h-4 w-4 text-orange-600" />
+                  Sadaqah Spent
+                </p>
+                <p className="text-3xl font-bold text-orange-700 mt-2">
+                  ₹{zakatStats.sadaqah.spent.toLocaleString('en-IN')}
+                </p>
+              </div>
+              <div className="w-14 h-14 bg-orange-100 rounded-full flex items-center justify-center">
+                <ArrowDownOnSquareIcon className="h-7 w-7 text-orange-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-xl shadow-md border-l-4 border-cyan-500 hover:shadow-lg transition-shadow">
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="text-sm font-medium text-gray-500 flex items-center gap-2">
+                  <CurrencyRupeeIcon className="h-4 w-4 text-cyan-600" />
+                  Sadaqah Current Balance
+                </p>
+                <p className={`text-3xl font-bold mt-2 ${
+                  zakatStats.sadaqah.currentBalance >= 0 ? 'text-cyan-700' : 'text-red-700'
+                }`}>
+                  ₹{zakatStats.sadaqah.currentBalance.toLocaleString('en-IN')}
+                </p>
+              </div>
+              <div className="w-14 h-14 bg-cyan-100 rounded-full flex items-center justify-center">
+                <CurrencyRupeeIcon className="h-7 w-7 text-cyan-600" />
               </div>
             </div>
           </div>
@@ -431,51 +515,80 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
         <div className="flex flex-col sm:flex-row flex-wrap gap-3">
           <button
             onClick={() => setShowCollectionModal(true)}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl hover:from-emerald-700 hover:to-teal-700 transition-all font-semibold shadow-md hover:shadow-lg active:scale-95"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 text-sm bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg hover:from-emerald-700 hover:to-teal-700 transition-all font-semibold shadow-sm hover:shadow-md active:scale-95"
           >
-            <ArrowUpOnSquareIcon className="h-5 w-5" />
+            <ArrowUpOnSquareIcon className="h-4 w-4" />
             <span>Record Collection</span>
           </button>
 
           <button
             onClick={() => setShowSpendingModal(true)}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-red-600 to-orange-600 text-white rounded-xl hover:from-red-700 hover:to-orange-700 transition-all font-semibold shadow-md hover:shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={zakatStats.currentBalance <= 0}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 text-sm bg-gradient-to-r from-red-600 to-orange-600 text-white rounded-lg hover:from-red-700 hover:to-orange-700 transition-all font-semibold shadow-sm hover:shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={(zakatStats.zakat.currentBalance + zakatStats.sadaqah.currentBalance) <= 0}
           >
-            <ArrowDownOnSquareIcon className="h-5 w-5" />
+            <ArrowDownOnSquareIcon className="h-4 w-4" />
             <span>Record Spending</span>
           </button>
 
           <div className="flex-1" />
 
-          {/* Filter */}
+          {/* Filters */}
           {showFilters && (
-          <div className="flex items-center gap-2 bg-white rounded-xl border border-gray-200 p-1 overflow-x-auto">
-            <button
-              onClick={() => setFilterType('all')}
-              className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                filterType === 'all' ? 'bg-emerald-100 text-emerald-700' : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              All
-            </button>
-            <button
-              onClick={() => setFilterType('collection')}
-              className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                filterType === 'collection' ? 'bg-green-100 text-green-700' : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              Collections
-            </button>
-            <button
-              onClick={() => setFilterType('spending')}
-              className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                filterType === 'spending' ? 'bg-red-100 text-red-700' : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              Spending
-            </button>
-          </div>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2 bg-white rounded-xl border border-gray-200 p-1 overflow-x-auto">
+                <button
+                  onClick={() => setFilterType('all')}
+                  className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                    filterType === 'all' ? 'bg-emerald-100 text-emerald-700' : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  All Types
+                </button>
+                <button
+                  onClick={() => setFilterType('collection')}
+                  className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                    filterType === 'collection' ? 'bg-green-100 text-green-700' : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  Collections
+                </button>
+                <button
+                  onClick={() => setFilterType('spending')}
+                  className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                    filterType === 'spending' ? 'bg-red-100 text-red-700' : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  Spending
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 bg-white rounded-xl border border-gray-200 p-1 overflow-x-auto">
+                <button
+                  onClick={() => setFilterPurpose('all')}
+                  className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                    filterPurpose === 'all' ? 'bg-emerald-100 text-emerald-700' : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  All Purposes ({purposeCounts.all})
+                </button>
+                <button
+                  onClick={() => setFilterPurpose('Zakat')}
+                  className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                    filterPurpose === 'Zakat' ? 'bg-emerald-100 text-emerald-700' : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  Zakat ({purposeCounts.zakat})
+                </button>
+                <button
+                  onClick={() => setFilterPurpose('Sadaqah')}
+                  className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                    filterPurpose === 'Sadaqah' ? 'bg-cyan-100 text-cyan-700' : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  Sadaqah ({purposeCounts.sadaqah})
+                </button>
+              </div>
+            </div>
           )}
 
           {/* Search */}
@@ -552,6 +665,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Purpose</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Party</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment Details</th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
@@ -580,6 +694,13 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                             : 'bg-red-100 text-red-800'
                         }`}>
                           {t.type === 'collection' ? 'Collection' : 'Spending'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          t.purpose === 'Sadaqah' ? 'bg-cyan-100 text-cyan-800' : 'bg-emerald-100 text-emerald-800'
+                        }`}>
+                          {t.purpose || 'Zakat'}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -664,6 +785,11 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                           : 'bg-red-100 text-red-800'
                       }`}>
                         {t.type === 'collection' ? '💰 Collection' : '💸 Spending'}
+                      </span>
+                      <span className={`ml-2 px-2.5 py-1 inline-flex text-xs font-semibold rounded-full ${
+                        t.purpose === 'Sadaqah' ? 'bg-cyan-100 text-cyan-800' : 'bg-emerald-100 text-emerald-800'
+                      }`}>
+                        {t.purpose || 'Zakat'}
                       </span>
                       <p className="text-xs text-gray-500 mt-1">
                         {new Date(t.paymentDate).toLocaleDateString('en-IN', {
@@ -756,7 +882,10 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
       {/* Record Spending Modal */}
       {showSpendingModal && (
         <RecordSpending 
-          currentBalance={zakatStats.currentBalance}
+          purposeBalances={{
+            zakat: zakatStats.zakat.currentBalance,
+            sadaqah: zakatStats.sadaqah.currentBalance,
+          }}
           onSuccess={fetchZakatData}
           onClose={() => setShowSpendingModal(false)}
         />
@@ -824,6 +953,10 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                       ? viewingTransaction.donorType 
                       : viewingTransaction.recipientType}
                   </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Purpose</p>
+                  <p className="font-medium">{viewingTransaction.purpose || 'Zakat'}</p>
                 </div>
                 {viewingTransaction.bankName && (
                   <div>
@@ -952,6 +1085,18 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                   <option>Cash</option>
                   <option>Cheque</option>
                   <option>QR Scanner</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Purpose</label>
+                <select
+                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  value={editingTransaction.purpose || 'Zakat'}
+                  onChange={e => setEditingTransaction({ ...editingTransaction, purpose: e.target.value as 'Zakat' | 'Sadaqah' })}
+                >
+                  <option value="Zakat">Zakat</option>
+                  <option value="Sadaqah">Sadaqah</option>
                 </select>
               </div>
 

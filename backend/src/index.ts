@@ -49,6 +49,106 @@ if (apiKey) {
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '5000', 10);
+const NOTIFICATION_LIVE_WINDOW_MS = 5 * 60 * 1000;
+
+type NotificationPermissionState = 'granted' | 'denied' | 'default' | 'unknown';
+
+type NotificationDeviceStatus = {
+  deviceId: string;
+  token: string;
+  permission: NotificationPermissionState;
+  supportsWebPush: boolean;
+  isIOS: boolean;
+  isStandalone: boolean;
+  lastSeenAt: Date | null;
+  updatedAt: Date | null;
+  isLive: boolean;
+  canReceiveNotification: boolean;
+};
+
+const normalizePermission = (value: unknown): NotificationPermissionState => {
+  if (value === 'granted' || value === 'denied' || value === 'default') {
+    return value;
+  }
+  return 'unknown';
+};
+
+const toDateOrNull = (value: unknown): Date | null => {
+  const parsed = new Date(value as string | number | Date);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return parsed;
+};
+
+const normalizeDeviceStatus = (rawDevice: any): NotificationDeviceStatus | null => {
+  const deviceId = typeof rawDevice?.deviceId === 'string' ? rawDevice.deviceId.trim() : '';
+  const token = typeof rawDevice?.token === 'string' ? rawDevice.token.trim() : '';
+  if (!deviceId || !token) {
+    return null;
+  }
+
+  const permission = normalizePermission(rawDevice?.permission);
+  const supportsWebPush = rawDevice?.supportsWebPush === true;
+  const isIOS = rawDevice?.isIOS === true;
+  const isStandalone = rawDevice?.isStandalone === true;
+  const lastSeenAt = toDateOrNull(rawDevice?.lastSeenAt);
+  const updatedAt = toDateOrNull(rawDevice?.updatedAt);
+  const referenceTime = lastSeenAt || updatedAt;
+  const isLive = Boolean(referenceTime && (Date.now() - referenceTime.getTime()) <= NOTIFICATION_LIVE_WINDOW_MS);
+  const iosBlocked = isIOS && !isStandalone;
+  const canReceiveNotification = permission === 'granted' && supportsWebPush && !iosBlocked;
+
+  return {
+    deviceId,
+    token,
+    permission,
+    supportsWebPush,
+    isIOS,
+    isStandalone,
+    lastSeenAt,
+    updatedAt,
+    isLive,
+    canReceiveNotification,
+  };
+};
+
+const deriveUserNotificationStatus = (rawUser: any) => {
+  const devices = Array.isArray(rawUser?.notificationDevices)
+    ? rawUser.notificationDevices.map(normalizeDeviceStatus).filter(Boolean) as NotificationDeviceStatus[]
+    : [];
+
+  const lastSeenAt = devices.reduce<Date | null>((latest, device) => {
+    const candidate = device.lastSeenAt || device.updatedAt;
+    if (!candidate) return latest;
+    if (!latest || candidate.getTime() > latest.getTime()) {
+      return candidate;
+    }
+    return latest;
+  }, null);
+
+  const hasValidNotificationDevice = devices.some((device) => device.canReceiveNotification);
+  const isNotificationLive = devices.some((device) => device.isLive);
+  const topLevelPermission = normalizePermission(rawUser?.notificationPermission);
+  const effectivePermission = topLevelPermission !== 'unknown'
+    ? topLevelPermission
+    : (devices[0]?.permission || 'unknown');
+
+  return {
+    notificationPermission: effectivePermission,
+    notificationPermissionUpdatedAt: rawUser?.notificationPermissionUpdatedAt || null,
+    notificationPreference: {
+      prayers: rawUser?.preferences?.notifications?.prayers !== false,
+      events: rawUser?.preferences?.notifications?.events !== false,
+      community: rawUser?.preferences?.notifications?.community !== false,
+    },
+    hasValidNotificationDevice,
+    isNotificationLive,
+    notificationDeviceCount: devices.length,
+    notificationLastSeenAt: lastSeenAt,
+    notificationDevices: devices,
+  };
+};
 
 // Trust Proxy for IDX/Cloud environments
 app.set('trust proxy', 1);
@@ -243,14 +343,59 @@ app.use('/api/games', gamesRoutes);
 // Get All Users
 app.get('/api/admin/users', authMiddleware, superAdminMiddleware, async (req: any, res: any) => {
     try {
-        const users = await User.find({}, '-password'); // Exclude passwords
+    const users = await User.find({}, '-password'); // Exclude passwords
+    const enrichedUsers = users.map((user) => {
+      const rawUser = user.toObject();
+      const notificationStatus = deriveUserNotificationStatus(rawUser);
+      const profileHistory = Array.isArray(rawUser.profileAudit?.history) ? rawUser.profileAudit.history : [];
+      const hasProfileEdits = profileHistory.length > 0;
+
+      return {
+        ...rawUser,
+        ...notificationStatus,
+        profileEdited: hasProfileEdits,
+        profileEditedAt: rawUser.profileAudit?.lastEditedAt || (hasProfileEdits ? profileHistory[0]?.editedAt : null),
+        profileEditCount: profileHistory.length,
+      };
+    });
+
         res.json({
             status: 'success',
-            data: { users }
+      data: { users: enrichedUsers }
         });
     } catch (error: any) {
         res.status(500).json({ status: 'error', message: error.message });
     }
+});
+
+// Get detailed user profile + profile edit history
+app.get('/api/admin/users/:id/profile', authMiddleware, superAdminMiddleware, async (req: any, res: any) => {
+  try {
+    const user = await User.findById(req.params.id, '-password');
+    if (!user) {
+      return res.status(404).json({ status: 'error', message: 'User not found' });
+    }
+
+    const rawUser = user.toObject();
+    const notificationStatus = deriveUserNotificationStatus(rawUser);
+    const profileHistory = Array.isArray(rawUser.profileAudit?.history) ? rawUser.profileAudit.history : [];
+    const hasProfileEdits = profileHistory.length > 0;
+
+    return res.json({
+      status: 'success',
+      data: {
+        user: {
+          ...rawUser,
+          ...notificationStatus,
+          profileEdited: hasProfileEdits,
+          profileEditedAt: rawUser.profileAudit?.lastEditedAt || (hasProfileEdits ? profileHistory[0]?.editedAt : null),
+          profileEditCount: profileHistory.length,
+        },
+      },
+    });
+  } catch (error: any) {
+    return res.status(500).json({ status: 'error', message: error.message });
+  }
 });
 
 // Create User (Manager/User)

@@ -2,6 +2,7 @@
 
 import express, { Request, Response } from 'express';
 import User from '../models/User';
+import UserNotification from '../models/UserNotification';
 import { authMiddleware, superAdminMiddleware } from '../middleware/auth';
 import { sendMulticastNotification } from '../config/firebaseAdmin'; // Use the helper directly
 
@@ -17,8 +18,23 @@ type NormalizedNotificationDevice = {
     deviceId: string;
     token: string;
     userAgent?: string;
+    permission?: 'granted' | 'denied' | 'default' | 'unknown';
+    supportsWebPush?: boolean;
+    isIOS?: boolean;
+    isStandalone?: boolean;
+    lastSeenAt?: Date;
     updatedAt: Date;
 };
+
+type NotificationPermissionState = 'granted' | 'denied' | 'default' | 'unknown';
+
+type DeviceCapabilityInput = {
+    supportsWebPush?: boolean;
+    isIOS?: boolean;
+    isStandalone?: boolean;
+};
+
+const LIVE_WINDOW_MS = 5 * 60 * 1000;
 
 const normalizeNonEmptyString = (value: unknown): string | null => {
     if (typeof value !== 'string') {
@@ -27,6 +43,27 @@ const normalizeNonEmptyString = (value: unknown): string | null => {
 
     const normalizedValue = value.trim();
     return normalizedValue.length > 0 ? normalizedValue : null;
+};
+
+const normalizePermission = (value: unknown): NotificationPermissionState => {
+    if (value === 'granted' || value === 'denied' || value === 'default') {
+        return value;
+    }
+    return 'unknown';
+};
+
+const normalizeCapability = (value: unknown): DeviceCapabilityInput => {
+    const raw = (value && typeof value === 'object') ? value as Record<string, unknown> : {};
+    return {
+        supportsWebPush: raw.supportsWebPush === true,
+        isIOS: raw.isIOS === true,
+        isStandalone: raw.isStandalone === true,
+    };
+};
+
+const normalizeDateOrNow = (value: unknown): Date => {
+    const parsed = new Date(value as string | number | Date);
+    return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
 };
 
 const extractUniqueTokens = (tokens: unknown): string[] => {
@@ -71,6 +108,11 @@ const normalizeNotificationDevices = (devices: unknown): NormalizedNotificationD
         const normalizedDevice: NormalizedNotificationDevice = {
             deviceId: normalizedDeviceId,
             token: normalizedToken,
+            permission: normalizePermission((device as any)?.permission),
+            supportsWebPush: (device as any)?.supportsWebPush === true,
+            isIOS: (device as any)?.isIOS === true,
+            isStandalone: (device as any)?.isStandalone === true,
+            lastSeenAt: normalizeDateOrNow((device as any)?.lastSeenAt),
             updatedAt: Number.isNaN(normalizedUpdatedAt.getTime()) ? new Date(0) : normalizedUpdatedAt,
         };
         const normalizedUserAgent = normalizeNonEmptyString((device as any)?.userAgent);
@@ -119,8 +161,57 @@ const areDevicesEqual = (first: NormalizedNotificationDevice, second: Normalized
         first.deviceId === second.deviceId &&
         first.token === second.token &&
         (first.userAgent || '') === (second.userAgent || '') &&
+        (first.permission || 'unknown') === (second.permission || 'unknown') &&
+        Boolean(first.supportsWebPush) === Boolean(second.supportsWebPush) &&
+        Boolean(first.isIOS) === Boolean(second.isIOS) &&
+        Boolean(first.isStandalone) === Boolean(second.isStandalone) &&
+        (first.lastSeenAt?.getTime() || 0) === (second.lastSeenAt?.getTime() || 0) &&
         first.updatedAt.getTime() === second.updatedAt.getTime()
     );
+};
+
+const deriveNotificationStatus = (user: {
+    notificationPermission?: NotificationPermissionState;
+    preferences?: { notifications?: { prayers?: boolean; events?: boolean; community?: boolean } };
+    notificationDevices?: unknown;
+}): {
+    permission: NotificationPermissionState;
+    preferences: { prayers: boolean; events: boolean; community: boolean };
+    hasValidNotificationDevice: boolean;
+    isLive: boolean;
+    lastSeenAt: Date | null;
+} => {
+    const devices = normalizeNotificationDevices(user.notificationDevices);
+    const now = Date.now();
+
+    const hasValidNotificationDevice = devices.some((device) => {
+        const permission = device.permission || user.notificationPermission || 'unknown';
+        const iosBlocked = Boolean(device.isIOS) && !Boolean(device.isStandalone);
+        return permission === 'granted' && Boolean(device.token) && Boolean(device.supportsWebPush) && !iosBlocked;
+    });
+
+    const latestSeen = devices.reduce<Date | null>((latest, device) => {
+        const seenAt = device.lastSeenAt || device.updatedAt;
+        if (!latest) {
+            return seenAt;
+        }
+        return seenAt.getTime() > latest.getTime() ? seenAt : latest;
+    }, null);
+
+    const isLive = Boolean(latestSeen && (now - latestSeen.getTime()) <= LIVE_WINDOW_MS);
+    const preferences = {
+        prayers: user.preferences?.notifications?.prayers !== false,
+        events: user.preferences?.notifications?.events !== false,
+        community: user.preferences?.notifications?.community !== false,
+    };
+
+    return {
+        permission: user.notificationPermission || devices[0]?.permission || 'unknown',
+        preferences,
+        hasValidNotificationDevice,
+        isLive,
+        lastSeenAt: latestSeen,
+    };
 };
 
 const shouldUpdateStoredTargets = (
@@ -177,10 +268,125 @@ const removeInvalidTokens = async (tokens: string[], responses: Array<{ success:
     );
 };
 
+const persistNotificationsForUsers = async (
+    userIds: Array<string | { toString: () => string }>,
+    title: string,
+    body: string,
+    data: Record<string, string> | undefined,
+    source: 'admin-direct' | 'admin-broadcast'
+) => {
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+        return;
+    }
+
+    const uniqueIds = Array.from(new Set(userIds.map((id) => id.toString())));
+    const rows = uniqueIds.map((userId) => ({
+        userId,
+        title,
+        body,
+        data: data || {},
+        source,
+        read: false,
+    }));
+
+    await UserNotification.insertMany(rows, { ordered: false });
+};
+
+// Get current user notification history
+router.get('/history', authMiddleware, async (req: any, res: Response) => {
+    try {
+        const limit = Math.min(Math.max(parseInt(String(req.query.limit || '100'), 10) || 100, 1), 300);
+        const page = Math.max(parseInt(String(req.query.page || '1'), 10) || 1, 1);
+
+        const [rows, total] = await Promise.all([
+            UserNotification.find({ userId: req.user.userId })
+                .sort({ createdAt: -1 })
+                .limit(limit)
+                .skip((page - 1) * limit)
+                .lean(),
+            UserNotification.countDocuments({ userId: req.user.userId }),
+        ]);
+
+        const unreadCount = await UserNotification.countDocuments({ userId: req.user.userId, read: false });
+
+        res.json({
+            status: 'success',
+            data: {
+                notifications: rows,
+                unreadCount,
+                pagination: {
+                    total,
+                    page,
+                    limit,
+                    pages: Math.ceil(total / limit),
+                },
+            },
+        });
+    } catch (error: any) {
+        console.error('Error fetching notification history:', error);
+        res.status(500).json({ status: 'error', message: 'Failed to fetch notification history' });
+    }
+});
+
+// Mark one notification as read
+router.patch('/history/:id/read', authMiddleware, async (req: any, res: Response) => {
+    try {
+        const updated = await UserNotification.findOneAndUpdate(
+            { _id: req.params.id, userId: req.user.userId },
+            { $set: { read: true, readAt: new Date() } },
+            { new: true }
+        );
+
+        if (!updated) {
+            res.status(404).json({ status: 'error', message: 'Notification not found' });
+            return;
+        }
+
+        res.json({ status: 'success', data: { notification: updated } });
+    } catch (error: any) {
+        console.error('Error marking notification as read:', error);
+        res.status(500).json({ status: 'error', message: 'Failed to update notification' });
+    }
+});
+
+// Mark all notifications as read for current user
+router.patch('/history/read-all', authMiddleware, async (req: any, res: Response) => {
+    try {
+        await UserNotification.updateMany(
+            { userId: req.user.userId, read: false },
+            { $set: { read: true, readAt: new Date() } }
+        );
+        res.json({ status: 'success', message: 'All notifications marked as read' });
+    } catch (error: any) {
+        console.error('Error marking all notifications as read:', error);
+        res.status(500).json({ status: 'error', message: 'Failed to update notifications' });
+    }
+});
+
+// Delete one notification for current user
+router.delete('/history/:id', authMiddleware, async (req: any, res: Response) => {
+    try {
+        const deleted = await UserNotification.findOneAndDelete({
+            _id: req.params.id,
+            userId: req.user.userId,
+        });
+
+        if (!deleted) {
+            res.status(404).json({ status: 'error', message: 'Notification not found' });
+            return;
+        }
+
+        res.json({ status: 'success', message: 'Notification deleted' });
+    } catch (error: any) {
+        console.error('Error deleting notification:', error);
+        res.status(500).json({ status: 'error', message: 'Failed to delete notification' });
+    }
+});
+
 // Store FCM Token for the authenticated user
 router.post('/token', authMiddleware, async (req: any, res: Response) => {
     try {
-        const { token, deviceId, userAgent } = req.body;
+        const { token, deviceId, userAgent, permission, capability, heartbeatAt } = req.body;
         const normalizedToken = normalizeNonEmptyString(token);
         if (!normalizedToken) {
             res.status(400).json({ status: 'error', message: 'Token is required' });
@@ -188,6 +394,9 @@ router.post('/token', authMiddleware, async (req: any, res: Response) => {
         }
         const normalizedDeviceId = normalizeNonEmptyString(deviceId);
         const normalizedUserAgent = normalizeNonEmptyString(userAgent);
+        const normalizedPermission = normalizePermission(permission);
+        const normalizedCapability = normalizeCapability(capability);
+        const normalizedHeartbeatAt = normalizeDateOrNow(heartbeatAt);
 
         const userId = req.user.userId;
 
@@ -213,6 +422,11 @@ router.post('/token', authMiddleware, async (req: any, res: Response) => {
                 deviceId: normalizedDeviceId,
                 token: normalizedToken,
                 ...(normalizedUserAgent ? { userAgent: normalizedUserAgent.slice(0, 500) } : {}),
+                permission: normalizedPermission,
+                supportsWebPush: normalizedCapability.supportsWebPush === true,
+                isIOS: normalizedCapability.isIOS === true,
+                isStandalone: normalizedCapability.isStandalone === true,
+                lastSeenAt: normalizedHeartbeatAt,
                 updatedAt: new Date(),
             }]
             : [];
@@ -221,6 +435,8 @@ router.post('/token', authMiddleware, async (req: any, res: Response) => {
         // keep exactly one active key per user to avoid duplicate delivery.
         user.notificationDevices = latestDeviceEntry;
         user.fcmTokens = [normalizedToken];
+        user.notificationPermission = normalizedPermission;
+        user.notificationPermissionUpdatedAt = new Date();
 
         await user.save();
 
@@ -236,6 +452,52 @@ router.post('/token', authMiddleware, async (req: any, res: Response) => {
     } catch (error: any) {
         console.error('Error saving FCM token:', error);
         res.status(500).json({ status: 'error', message: 'Failed to save token' });
+    }
+});
+
+router.post('/heartbeat', authMiddleware, async (req: any, res: Response) => {
+    try {
+        const { deviceId, permission, capability, heartbeatAt } = req.body;
+        const normalizedDeviceId = normalizeNonEmptyString(deviceId);
+        if (!normalizedDeviceId) {
+            res.status(400).json({ status: 'error', message: 'deviceId is required' });
+            return;
+        }
+
+        const normalizedPermission = normalizePermission(permission);
+        const normalizedCapability = normalizeCapability(capability);
+        const normalizedHeartbeatAt = normalizeDateOrNow(heartbeatAt);
+        const user = await User.findById(req.user.userId);
+
+        if (!user) {
+            res.status(404).json({ status: 'error', message: 'User not found' });
+            return;
+        }
+
+        const currentDevices = Array.isArray(user.notificationDevices) ? user.notificationDevices : [];
+        const deviceIndex = currentDevices.findIndex((device) => device.deviceId === normalizedDeviceId);
+
+        if (deviceIndex !== -1) {
+            const targetDevice = currentDevices[deviceIndex];
+            if (targetDevice) {
+                targetDevice.permission = normalizedPermission;
+                targetDevice.supportsWebPush = normalizedCapability.supportsWebPush === true;
+                targetDevice.isIOS = normalizedCapability.isIOS === true;
+                targetDevice.isStandalone = normalizedCapability.isStandalone === true;
+                targetDevice.lastSeenAt = normalizedHeartbeatAt;
+                targetDevice.updatedAt = new Date();
+            }
+            user.notificationDevices = currentDevices;
+        }
+
+        user.notificationPermission = normalizedPermission;
+        user.notificationPermissionUpdatedAt = new Date();
+        await user.save();
+
+        res.json({ status: 'success', message: 'Heartbeat updated' });
+    } catch (error: any) {
+        console.error('Error updating heartbeat:', error);
+        res.status(500).json({ status: 'error', message: 'Failed to update heartbeat' });
     }
 });
 
@@ -306,13 +568,14 @@ router.get('/search-users', authMiddleware, superAdminMiddleware, async (req: an
         const users = await User.find({
             username: searchRegex
         })
-        .select('username email _id')
+        .select('username email _id notificationPermission notificationDevices preferences.notifications')
         .limit(10); // Limit to 10 suggestions
 
         const formattedUsers = users.map(user => ({
             id: user._id,
             username: user.username,
-            email: user.email
+            email: user.email,
+            ...deriveNotificationStatus(user),
         }));
 
         res.json({
@@ -344,6 +607,7 @@ router.post('/send-user', authMiddleware, superAdminMiddleware, async (req: any,
         }
 
         const { token: deliveryToken, tokens: normalizedTokens, devices: normalizedDevices } = resolveSingleDeliveryTarget(user);
+        const deliveryStatus = deriveNotificationStatus(user);
         if (shouldUpdateStoredTargets(user, normalizedTokens, normalizedDevices)) {
             user.fcmTokens = normalizedTokens;
             user.notificationDevices = normalizedDevices;
@@ -358,6 +622,11 @@ router.post('/send-user', authMiddleware, superAdminMiddleware, async (req: any,
         }
 
         const notificationId = createNotificationId();
+        await persistNotificationsForUsers([userId], title, body, {
+            ...(data || {}),
+            notificationId,
+        }, 'admin-direct');
+
         const response = await sendMulticastNotification(tokens, title, body, {
             ...data,
             notificationId,
@@ -369,7 +638,8 @@ router.post('/send-user', authMiddleware, superAdminMiddleware, async (req: any,
             message: `Sent ${response.successCount} messages, failed ${response.failureCount}`,
             details: {
                 successCount: response.successCount,
-                failureCount: response.failureCount
+                failureCount: response.failureCount,
+                notificationStatus: deliveryStatus,
             }
         });
 
@@ -463,6 +733,17 @@ router.post('/broadcast', authMiddleware, superAdminMiddleware, async (req: any,
         let successCount = 0;
         let failureCount = 0;
         const notificationId = createNotificationId();
+
+        await persistNotificationsForUsers(
+            users.map((user) => user._id),
+            title,
+            body,
+            {
+                ...(data || {}),
+                notificationId,
+            },
+            'admin-broadcast'
+        );
 
         for (let i = 0; i < uniqueDeliveryTokens.length; i += batchSize) {
             const batchTokens = uniqueDeliveryTokens.slice(i, i + batchSize);

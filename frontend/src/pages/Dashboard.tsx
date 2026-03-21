@@ -18,11 +18,51 @@ import AdminNotificationPanel from '../components/Notifications/AdminNotificatio
 import ZakatManagement from '../components/Zakat/ZakatManagement';
 import PageSEO from '../components/PageSEO';
 
+interface ProfileFieldChange {
+    field: string;
+    before?: string;
+    after?: string;
+}
+
+interface ProfileAuditEntry {
+    editedAt: string;
+    actorName?: string;
+    changedFields: ProfileFieldChange[];
+}
+
+interface DashboardUser {
+    _id: string;
+    username: string;
+    email: string;
+    role: 'superadmin' | 'manager' | 'user';
+    isAdmin?: boolean;
+    isBlocked: boolean;
+    createdAt?: string;
+    profileEdited?: boolean;
+    profileEditedAt?: string | null;
+    profileEditCount?: number;
+    notificationPermission?: 'granted' | 'denied' | 'default' | 'unknown';
+    hasValidNotificationDevice?: boolean;
+    isNotificationLive?: boolean;
+    notificationDeviceCount?: number;
+    notificationLastSeenAt?: string | null;
+    notificationPreference?: {
+        prayers: boolean;
+        events: boolean;
+        community: boolean;
+    };
+    profileAudit?: {
+        history?: ProfileAuditEntry[];
+    };
+}
+
 const Dashboard: React.FC = () => {
   const { user, hasRole } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
-  const [users, setUsers] = useState<any[]>([]);
+    const [users, setUsers] = useState<DashboardUser[]>([]);
+    const [selectedUserProfile, setSelectedUserProfile] = useState<DashboardUser | null>(null);
+    const [loadingProfile, setLoadingProfile] = useState(false);
 
   // Overview Stats
   const [totalUsers, setTotalUsers] = useState(0);
@@ -31,6 +71,28 @@ const Dashboard: React.FC = () => {
   const [activityLogs, setActivityLogs] = useState<any[]>([]);
   const [activityStats, setActivityStats] = useState<any>(null);
   const [loadingActivities, setLoadingActivities] = useState(false);
+
+    const formatPermissionLabel = (permission?: string) => {
+        if (permission === 'granted') return 'Permission Granted';
+        if (permission === 'denied') return 'Permission Denied';
+        if (permission === 'default') return 'Permission Default';
+        return 'Permission Unknown';
+    };
+
+    const formatLiveLabel = (isLive?: boolean) => (isLive ? 'Live' : 'Offline');
+
+    const formatDateTime = (value?: string | null) => {
+        if (!value) return 'N/A';
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) return 'N/A';
+        return parsed.toLocaleString('en-IN', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+        });
+    };
 
   // User Creation State
   const [showCreateUserModal, setShowCreateUserModal] = useState(false);
@@ -168,6 +230,26 @@ const Dashboard: React.FC = () => {
       } catch (error) {
           toast.error('Delete failed');
           fetchUsers();
+      }
+  };
+
+  const handleViewProfile = async (userId: string) => {
+      try {
+          setLoadingProfile(true);
+          const token = localStorage.getItem('token');
+          const response = await fetch(`${API_URL}/admin/users/${userId}/profile`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const data = await response.json();
+          if (data.status === 'success') {
+              setSelectedUserProfile(data.data.user);
+              return;
+          }
+          toast.error(data.message || 'Failed to load profile details');
+      } catch (error) {
+          toast.error('Failed to load profile details');
+      } finally {
+          setLoadingProfile(false);
       }
   };
 
@@ -472,6 +554,8 @@ const Dashboard: React.FC = () => {
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Notification</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Capability</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
                                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                                 </tr>
@@ -499,10 +583,40 @@ const Dashboard: React.FC = () => {
                                                 {u.isBlocked ? 'Blocked' : 'Active'}
                                             </span>
                                         </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="flex flex-col gap-1">
+                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${u.notificationPermission === 'granted' ? 'bg-emerald-100 text-emerald-800' : u.notificationPermission === 'denied' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-700'}`}>
+                                                    {formatPermissionLabel(u.notificationPermission)}
+                                                </span>
+                                                <span className="text-xs text-gray-500">
+                                                    App Pref: {u.notificationPreference?.prayers || u.notificationPreference?.events || u.notificationPreference?.community ? 'Enabled' : 'Disabled'}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="flex flex-col gap-1">
+                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${u.hasValidNotificationDevice ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                                                    {u.hasValidNotificationDevice ? 'Can Receive' : 'No Valid Device'}
+                                                </span>
+                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${u.isNotificationLive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'}`}>
+                                                    {formatLiveLabel(u.isNotificationLive)}
+                                                </span>
+                                                <span className="text-xs text-gray-500">
+                                                    Devices: {u.notificationDeviceCount || 0} | Last Seen: {formatDateTime(u.notificationLastSeenAt)}
+                                                </span>
+                                            </div>
+                                        </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                             {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : 'N/A'}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                            <button
+                                                onClick={() => handleViewProfile(u._id)}
+                                                className="text-emerald-600 hover:text-emerald-800 mr-4"
+                                                title="View Profile Info"
+                                            >
+                                                View Profile
+                                            </button>
                                             {/* Hide delete/block for self OR if target is superadmin (optional policy) */}
                                             {u._id !== user?.id && (
                                                 <>
@@ -529,6 +643,67 @@ const Dashboard: React.FC = () => {
                         </table>
                     </div>
                 </div>
+            </div>
+        )}
+
+        {selectedUserProfile && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+                <div className="bg-white rounded-lg w-full max-w-3xl max-h-[85vh] overflow-y-auto p-6">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-semibold text-gray-900">User Profile Details</h3>
+                        <button
+                            onClick={() => setSelectedUserProfile(null)}
+                            className="text-gray-400 hover:text-gray-500"
+                        >
+                            <XMarkIcon className="h-6 w-6" />
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-6">
+                        <div><span className="font-medium text-gray-700">Username:</span> {selectedUserProfile.username}</div>
+                        <div><span className="font-medium text-gray-700">Email:</span> {selectedUserProfile.email}</div>
+                        <div><span className="font-medium text-gray-700">Role:</span> {selectedUserProfile.role}</div>
+                        <div><span className="font-medium text-gray-700">Permission:</span> {formatPermissionLabel(selectedUserProfile.notificationPermission)}</div>
+                        <div><span className="font-medium text-gray-700">Capability:</span> {selectedUserProfile.hasValidNotificationDevice ? 'Can Receive Notifications' : 'Cannot Receive Notifications'}</div>
+                        <div><span className="font-medium text-gray-700">Live:</span> {formatLiveLabel(selectedUserProfile.isNotificationLive)}</div>
+                        <div><span className="font-medium text-gray-700">Device Count:</span> {selectedUserProfile.notificationDeviceCount || 0}</div>
+                        <div><span className="font-medium text-gray-700">Last Seen:</span> {formatDateTime(selectedUserProfile.notificationLastSeenAt)}</div>
+                        <div><span className="font-medium text-gray-700">Profile Edited:</span> {selectedUserProfile.profileEdited ? 'Yes' : 'No'}</div>
+                        <div><span className="font-medium text-gray-700">Last Edit:</span> {formatDateTime(selectedUserProfile.profileEditedAt)}</div>
+                    </div>
+
+                    <div className="border rounded-lg">
+                        <div className="px-4 py-3 border-b bg-gray-50">
+                            <h4 className="font-medium text-gray-900">Profile Change History</h4>
+                        </div>
+                        <div className="p-4 space-y-4">
+                            {Array.isArray(selectedUserProfile.profileAudit?.history) && selectedUserProfile.profileAudit.history.length > 0 ? (
+                                selectedUserProfile.profileAudit.history.map((entry, index) => (
+                                    <div key={index} className="border rounded-md p-3">
+                                        <div className="text-xs text-gray-500 mb-2">
+                                            {formatDateTime(entry.editedAt)} by {entry.actorName || 'User'}
+                                        </div>
+                                        <div className="space-y-1">
+                                            {entry.changedFields.map((changed, changedIndex) => (
+                                                <div key={`${changed.field}-${changedIndex}`} className="text-sm text-gray-700">
+                                                    <span className="font-medium">{changed.field}</span>: "{changed.before || ''}" {'->'} "{changed.after || ''}"
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="text-sm text-gray-500">No profile changes recorded yet.</div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {loadingProfile && (
+            <div className="fixed inset-0 z-40 bg-black/20 flex items-center justify-center">
+                <div className="bg-white px-4 py-3 rounded-lg shadow text-sm text-gray-700">Loading profile details...</div>
             </div>
         )}
 

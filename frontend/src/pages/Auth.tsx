@@ -13,6 +13,7 @@ const Auth: React.FC = () => {
   const [passwordChangeToken, setPasswordChangeToken] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showRecoveryModal, setShowRecoveryModal] = useState(false);
 
   const { login, register, user } = useAuth();
   const navigate = useNavigate();
@@ -92,7 +93,13 @@ const Auth: React.FC = () => {
                     navigate(redirectParam || '/profile', { replace: true });
                 }
             } else {
-                toast.error(data.message || 'Login failed. Please check your credentials.');
+                  const normalizedMessage = typeof data.message === 'string' ? data.message : '';
+                  // Treat any missing-user or wiped-credential responses as a prompt to re-register
+                  const shouldShowRecovery = /invalid user|invalid credentials|user not found|account not found|no user/i.test(normalizedMessage);
+                  if (shouldShowRecovery) {
+                    setShowRecoveryModal(true);
+                  }
+                  toast.error(normalizedMessage || 'Login failed. Please check your credentials.');
             }
 
         } else {
@@ -370,6 +377,25 @@ const Auth: React.FC = () => {
         </div>
       </div>
       </div>
+
+      {showRecoveryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 sm:px-6">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" aria-hidden="true"></div>
+          <div className="relative w-full max-w-lg rounded-2xl bg-white shadow-2xl p-6 sm:p-8 text-center space-y-4">
+            <h3 className="text-2xl font-bold text-gray-900">We are really sorry</h3>
+            <p className="text-sm sm:text-base text-gray-700 leading-relaxed">
+              Last Saturday, a technical issue caused a server crash and we lost all saved credentials. If you had already registered, please create your account again so we can keep you connected. If you are signing up for the first time, you can safely continue to register now.
+            </p>
+            <button
+              type="button"
+              onClick={() => { setIsLogin(false); setShowRecoveryModal(false); }}
+              className="w-full inline-flex justify-center items-center rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-3 text-sm sm:text-base font-semibold text-white shadow-lg hover:from-emerald-600 hover:to-teal-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500"
+            >
+              Go to registration
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 };

@@ -266,10 +266,10 @@ router.get('/profile', authMiddleware, async (req: any, res: Response) => {
  * @desc    Update user profile
  */
 router.put('/profile', authMiddleware, [
-    body('firstName').optional().trim().notEmpty(),
-    body('lastName').optional().trim().notEmpty(),
-    body('phoneNumber').optional().trim(),
-    body('gender').optional().isIn(['male', 'female']),
+  body('firstName').optional({ checkFalsy: true }).trim().notEmpty(),
+  body('lastName').optional({ checkFalsy: true }).trim().notEmpty(),
+  body('phoneNumber').optional({ checkFalsy: true }).trim(),
+  body('gender').optional({ checkFalsy: true }).isIn(['male', 'female']),
 ], async (req: any, res: any) => {
     try {
         const errors = validationResult(req);
@@ -278,38 +278,148 @@ router.put('/profile', authMiddleware, [
         }
 
         const { firstName, lastName, phoneNumber, gender, madhab, street, city, country, bio, avatar } = req.body;
-        
-        const updateData: any = {};
-        
-        // Update root level fields
-        if (firstName) updateData.firstName = firstName;
-        if (lastName) updateData.lastName = lastName;
-        if (phoneNumber) updateData.phoneNumber = phoneNumber;
-        if (gender) updateData.gender = gender;
-        
-        // Update nested preferences
-        if (madhab) updateData['preferences.madhab'] = madhab;
-        
-        // Update nested address
-        if (street || city || country) {
-            if (street) updateData['address.street'] = street;
-            if (city) updateData['address.city'] = city;
-            if (country) updateData['address.country'] = country;
-        }
-        
-        // Update nested profile
-        if (bio !== undefined) updateData['profile.bio'] = bio;
-        if (avatar !== undefined) updateData['profile.avatar'] = avatar;
-        
-        const user = await User.findByIdAndUpdate(
-            req.user.userId, 
-            { $set: updateData }, 
-            { new: true, runValidators: true }
-        );
+        const normalizeOptional = (value: unknown): string | undefined => {
+          if (typeof value !== 'string') {
+            return undefined;
+          }
+          const normalizedValue = value.trim();
+          return normalizedValue.length > 0 ? normalizedValue : undefined;
+        };
+
+        const normalizedFirstName = normalizeOptional(firstName);
+        const normalizedLastName = normalizeOptional(lastName);
+        const normalizedPhoneNumber = normalizeOptional(phoneNumber);
+        const normalizedGender = normalizeOptional(gender);
+        const normalizedMadhab = normalizeOptional(madhab);
+        const normalizedStreet = normalizeOptional(street);
+        const normalizedCity = normalizeOptional(city);
+        const normalizedCountry = normalizeOptional(country);
+        const normalizedBio = normalizeOptional(bio);
+        const normalizedAvatar = normalizeOptional(avatar);
+        const user = await User.findById(req.user.userId);
         
         if (!user) {
             return res.status(404).json({ status: 'error', message: 'User not found' });
         }
+
+        const changedFields: Array<{ field: string; before?: string; after?: string }> = [];
+        const stringifiedValue = (value: unknown): string => {
+          if (value === null || value === undefined) return '';
+          if (typeof value === 'string') return value;
+          return String(value);
+        };
+
+        const applyChange = (field: string, nextValue: unknown, currentValue: unknown, setter: () => void) => {
+          const beforeValue = stringifiedValue(currentValue);
+          const afterValue = stringifiedValue(nextValue);
+          if (beforeValue === afterValue) {
+            return;
+          }
+          setter();
+          changedFields.push({ field, before: beforeValue, after: afterValue });
+        };
+
+        if (normalizedFirstName !== undefined) {
+          applyChange('firstName', normalizedFirstName, user.firstName, () => {
+            user.firstName = normalizedFirstName;
+          });
+        }
+        if (normalizedLastName !== undefined) {
+          applyChange('lastName', normalizedLastName, user.lastName, () => {
+            user.lastName = normalizedLastName;
+          });
+        }
+        if (normalizedPhoneNumber !== undefined) {
+          applyChange('phoneNumber', normalizedPhoneNumber, user.phoneNumber, () => {
+            user.phoneNumber = normalizedPhoneNumber;
+          });
+        }
+        if (normalizedGender !== undefined) {
+          applyChange('gender', normalizedGender, user.gender, () => {
+            user.gender = normalizedGender as 'male' | 'female';
+          });
+        }
+        if (normalizedMadhab !== undefined) {
+          const currentMadhab = user.preferences?.madhab;
+          applyChange('preferences.madhab', normalizedMadhab, currentMadhab, () => {
+            if (!user.preferences) {
+              user.preferences = {
+                language: 'en',
+                prayerCalculationMethod: 'MWL',
+                madhab: 'hanafi',
+                notifications: {
+                  prayers: true,
+                  events: true,
+                  community: true,
+                },
+              };
+            }
+            user.preferences.madhab = normalizedMadhab as 'hanafi' | 'shafi' | 'maliki' | 'hanbali';
+          });
+        }
+        if (normalizedStreet !== undefined) {
+          applyChange('address.street', normalizedStreet, user.address?.street, () => {
+            const nextAddress = user.address || ({} as any);
+            nextAddress.street = normalizedStreet;
+            user.address = nextAddress;
+          });
+        }
+        if (normalizedCity !== undefined) {
+          applyChange('address.city', normalizedCity, user.address?.city, () => {
+            const nextAddress = user.address || ({} as any);
+            nextAddress.city = normalizedCity;
+            user.address = nextAddress;
+          });
+        }
+        if (normalizedCountry !== undefined) {
+          applyChange('address.country', normalizedCountry, user.address?.country, () => {
+            const nextAddress = user.address || ({} as any);
+            nextAddress.country = normalizedCountry;
+            user.address = nextAddress;
+          });
+        }
+        if (normalizedBio !== undefined) {
+          applyChange('profile.bio', normalizedBio, user.profile?.bio, () => {
+            if (!user.profile) user.profile = { interests: [] };
+            user.profile.bio = normalizedBio;
+          });
+        }
+        if (normalizedAvatar !== undefined) {
+          applyChange('profile.avatar', normalizedAvatar, user.profile?.avatar, () => {
+            if (!user.profile) user.profile = { interests: [] };
+            user.profile.avatar = normalizedAvatar;
+          });
+        }
+
+        if (changedFields.length > 0) {
+          if (!user.profileAudit) {
+            user.profileAudit = { history: [] };
+          }
+          const actorName = (typeof req.user?.name === 'string' && req.user.name.trim().length > 0)
+            ? req.user.name.trim()
+            : (typeof req.user?.email === 'string' ? req.user.email : 'User');
+
+          user.profileAudit.lastEditedAt = new Date();
+          user.profileAudit.history = [
+            {
+              editedAt: new Date(),
+              editedByUserId: req.user.userId,
+              actorName,
+              changedFields,
+            },
+            ...(Array.isArray(user.profileAudit.history) ? user.profileAudit.history : []),
+          ].slice(0, 50);
+
+          await logUserActivity(
+            req,
+            'profile_update',
+            'profile',
+            `${actorName} updated profile fields: ${changedFields.map((field) => field.field).join(', ')}`,
+            { changedFields: changedFields.map((field) => field.field) }
+          );
+        }
+
+        await user.save();
         
         res.json({ status: 'success', data: { user }, message: 'Profile updated successfully' });
     } catch (error) {

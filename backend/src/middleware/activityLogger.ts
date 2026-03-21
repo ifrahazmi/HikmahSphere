@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import UserActivity from '../models/UserActivity';
+import User from '../models/User';
 
 export interface AuthenticatedRequest extends Request {
   user?: {
@@ -21,6 +22,39 @@ const UserActivityModel = UserActivity as typeof UserActivity & {
     ipAddress?: string,
     userAgent?: string
   ) => Promise<any>;
+};
+
+const resolveActor = async (req: AuthenticatedRequest): Promise<{ userId: string; userName: string; userEmail: string } | null> => {
+  if (!req.user?.userId) {
+    return null;
+  }
+
+  const initialName = typeof req.user.name === 'string' ? req.user.name.trim() : '';
+  const initialEmail = typeof req.user.email === 'string' ? req.user.email.trim() : '';
+
+  if (initialName && initialEmail) {
+    return {
+      userId: req.user.userId,
+      userName: initialName,
+      userEmail: initialEmail,
+    };
+  }
+
+  const user = await User.findById(req.user.userId).select('email firstName lastName username');
+  if (!user) {
+    return {
+      userId: req.user.userId,
+      userName: initialName || req.user.userId,
+      userEmail: initialEmail || `${req.user.userId}@unknown.local`,
+    };
+  }
+
+  const fallbackName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username;
+  return {
+    userId: req.user.userId,
+    userName: initialName || fallbackName,
+    userEmail: initialEmail || user.email,
+  };
 };
 
 /**
@@ -47,17 +81,25 @@ export const logActivity = (
         const metadata = metadataFn ? metadataFn(req, res) : undefined;
         
         // Log activity asynchronously (don't wait)
-        UserActivityModel.logActivity(
-          req.user.userId,
-          req.user.name || req.user.email || 'Unknown',
-          req.user.email || 'unknown@example.com',
-          action,
-          category,
-          description,
-          metadata,
-          req.ip,
-          req.get('user-agent')
-        ).catch((err: Error) => console.error('Activity logging error:', err));
+        resolveActor(req)
+          .then((actor) => {
+            if (!actor) {
+              return;
+            }
+
+            return UserActivityModel.logActivity(
+              actor.userId,
+              actor.userName,
+              actor.userEmail,
+              action,
+              category,
+              description,
+              metadata,
+              req.ip,
+              req.get('user-agent')
+            );
+          })
+          .catch((err: Error) => console.error('Activity logging error:', err));
       }
       
       return originalJson.call(this, data);
@@ -81,10 +123,15 @@ export const logUserActivity = async (
   if (!req.user) return;
   
   try {
+    const actor = await resolveActor(req);
+    if (!actor) {
+      return;
+    }
+
     await UserActivityModel.logActivity(
-      req.user.userId,
-      req.user.name || req.user.email || 'Unknown',
-      req.user.email || 'unknown@example.com',
+      actor.userId,
+      actor.userName,
+      actor.userEmail,
       action,
       category,
       description,

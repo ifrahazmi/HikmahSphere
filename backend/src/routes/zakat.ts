@@ -13,6 +13,10 @@ import { logUserActivity } from '../middleware/activityLogger';
 const ZakatPaymentModel = ZakatPayment as typeof ZakatPayment & {
   hasDuplicateRefId: (refId: string, paymentMethod: string, excludeId?: string) => Promise<boolean>;
   getTotals: () => Promise<{ totalCollected: number; totalSpent: number; currentBalance: number }>;
+  getTotalsByPurpose: () => Promise<{
+    zakat: { collected: number; spent: number; currentBalance: number };
+    sadaqah: { collected: number; spent: number; currentBalance: number };
+  }>;
   getDonorSummary: () => Promise<Array<{
     rank: number;
     donorId: string | null;
@@ -567,6 +571,7 @@ router.post('/transaction', [
   adminMiddleware,
   upload.single('proofOfPayment'),
   body('type').isIn(['collection', 'spending']).withMessage('Invalid transaction type'),
+  body('purpose').optional().isIn(['Zakat', 'Sadaqah']).withMessage('Invalid purpose'),
   body('amount').isFloat({ min: 0.01 }).withMessage('Amount must be greater than 0'),
   body('paymentMethod').isIn(['Bank Transfer', 'UPI Transfer', 'Cash', 'Cheque', 'QR Scanner'])
     .withMessage('Invalid payment method'),
@@ -581,6 +586,7 @@ router.post('/transaction', [
 
     const {
       type,
+      purpose = 'Zakat',
       donorId,
       donorName,
       donorType,
@@ -684,8 +690,10 @@ router.post('/transaction', [
 
     // Check balance for spending transactions
     if (type === 'spending') {
-      const totals = await ZakatPaymentModel.getTotals();
-      const availableBalance = totals.currentBalance;
+      const splitTotals = await ZakatPaymentModel.getTotalsByPurpose();
+      const availableBalance = purpose === 'Sadaqah'
+        ? splitTotals.sadaqah.currentBalance
+        : splitTotals.zakat.currentBalance;
       const spendAmount = parseFloat(amount);
 
       if (spendAmount > availableBalance) {
@@ -727,6 +735,7 @@ router.post('/transaction', [
     const newTransaction = new ZakatPayment({
       userId: req.user.userId,
       type,
+      purpose,
       donorId: finalDonorId,
       donorName: type === 'collection' ? donorName?.trim() : undefined,
       donorType: type === 'collection' ? donorType : undefined,
@@ -753,10 +762,11 @@ router.post('/transaction', [
       req,
       newTransaction.type === 'collection' ? 'zakat_collection_add' : 'zakat_spending_add',
       'zakat',
-      `${newTransaction.type === 'collection' ? 'Collection' : 'Spending'} recorded: ₹${newTransaction.amount} by ${req.user.email}`,
+      `${newTransaction.purpose} ${newTransaction.type === 'collection' ? 'collection' : 'spending'} recorded: ₹${newTransaction.amount} by ${req.user.email}`,
       {
         transactionId: newTransaction._id,
         type: newTransaction.type,
+        purpose: newTransaction.purpose,
         amount: newTransaction.amount,
         paymentMethod: newTransaction.paymentMethod,
       }
@@ -816,17 +826,40 @@ router.get('/stats', authMiddleware, adminMiddleware, async (req: any, res: any)
 });
 
 /**
+ * @route   GET /api/zakat/stats/split
+ * @desc    Get Zakat statistics split by purpose (Zakat vs Sadaqah)
+ * @access  Private (Admin/Manager)
+ */
+router.get('/stats/split', authMiddleware, adminMiddleware, async (req: any, res: any) => {
+  try {
+    const splitTotals = await ZakatPaymentModel.getTotalsByPurpose();
+
+    res.json({
+      status: 'success',
+      data: splitTotals,
+    });
+  } catch (error) {
+    console.error('Get split stats error:', error);
+    res.status(500).json({ status: 'error', message: 'Failed to get split stats' });
+  }
+});
+
+/**
  * @route   GET /api/zakat/payments
  * @desc    Get all Zakat transactions with optional filtering
  * @access  Private (Admin/Manager)
  */
 router.get('/payments', authMiddleware, adminMiddleware, async (req: any, res: any) => {
   try {
-    const { type, limit = 100, page = 1 } = req.query;
+    const { type, purpose, limit = 100, page = 1 } = req.query;
     
     const query: any = {};
     if (type && ['collection', 'spending'].includes(type)) {
       query.type = type;
+    }
+
+    if (purpose && ['Zakat', 'Sadaqah'].includes(purpose)) {
+      query.purpose = purpose;
     }
 
     const payments = await ZakatPayment.find(query)
@@ -961,6 +994,7 @@ router.put('/payment/:id', [
 
     // Update other fields
     if (updates.type) payment.type = updates.type;
+    if (updates.purpose && ['Zakat', 'Sadaqah'].includes(updates.purpose)) payment.purpose = updates.purpose;
     if (updates.donorName) payment.donorName = updates.donorName;
     if (updates.donorType) payment.donorType = updates.donorType;
     if (updates.recipientName) payment.recipientName = updates.recipientName;

@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useCa
 import { onMessageListener } from '../firebase';
 import { toast } from 'react-hot-toast';
 import { MessagePayload } from 'firebase/messaging';
+import { API_URL } from '../config';
+import { useAuth } from '../hooks/useAuth';
 
 export interface Notification {
   id: string;
@@ -24,6 +26,7 @@ interface NotificationContextType {
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 const STORAGE_KEY = 'notifications';
 const SW_MESSAGE_TYPE = 'HIKMAH_BACKGROUND_NOTIFICATION';
+const MONGO_OBJECT_ID_REGEX = /^[a-f0-9]{24}$/i;
 
 interface BackgroundNotificationPayload {
   id?: string;
@@ -55,6 +58,63 @@ const parseStoredNotifications = (): Notification[] => {
   }
 };
 
+const isServerNotificationId = (id: string): boolean => MONGO_OBJECT_ID_REGEX.test(id);
+
+const getDedupKey = (notification: Notification): string => {
+  const dataNotificationId = notification.data?.notificationId;
+  return dataNotificationId && typeof dataNotificationId === 'string' ? dataNotificationId : notification.id;
+};
+
+const mergeNotifications = (incoming: Notification[], existing: Notification[]): Notification[] => {
+  const mergedByKey = new Map<string, Notification>();
+
+  for (const notification of [...incoming, ...existing]) {
+    const key = getDedupKey(notification);
+    const prev = mergedByKey.get(key);
+
+    if (!prev) {
+      mergedByKey.set(key, notification);
+      continue;
+    }
+
+    const prevTime = new Date(prev.timestamp).getTime();
+    const nextTime = new Date(notification.timestamp).getTime();
+    const preferCurrent = Number.isNaN(prevTime) || (!Number.isNaN(nextTime) && nextTime >= prevTime);
+    const source = preferCurrent ? notification : prev;
+    const fallback = preferCurrent ? prev : notification;
+
+    mergedByKey.set(key, {
+      ...fallback,
+      ...source,
+      read: prev.read || notification.read,
+      data: { ...(fallback.data || {}), ...(source.data || {}) },
+    });
+  }
+
+  return Array.from(mergedByKey.values()).sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  );
+};
+
+type ApiHistoryNotification = {
+  _id: string;
+  title: string;
+  body: string;
+  data?: Record<string, string>;
+  read?: boolean;
+  createdAt?: string;
+};
+
+const toClientNotification = (row: ApiHistoryNotification): Notification => ({
+  id: row._id,
+  title: row.title || 'New Notification',
+  body: row.body || '',
+  timestamp: row.createdAt || new Date().toISOString(),
+  read: row.read === true,
+  type: 'info',
+  data: row.data || {},
+});
+
 const createNotificationFromPayload = (payload: MessagePayload): Notification => {
   const generatedId = `fcm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -84,18 +144,53 @@ const createNotificationFromServiceWorkerPayload = (payload: BackgroundNotificat
 };
 
 export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>(parseStoredNotifications);
   const processedNotificationIdsRef = useRef(new Set(parseStoredNotifications().map((notification) => notification.id)));
 
   const unreadCount = notifications.filter(n => !n.read).length;
   const addNotification = useCallback((newNotification: Notification) => {
     setNotifications(prev => {
-      if (prev.some(existing => existing.id === newNotification.id)) {
-        return prev;
-      }
-      return [newNotification, ...prev];
+      return mergeNotifications([newNotification], prev);
     });
   }, []);
+
+  const syncServerHistory = useCallback(async () => {
+    if (!user) {
+      return;
+    }
+
+    const authToken = localStorage.getItem('token');
+    if (!authToken) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/notifications/history?limit=300`, {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+
+      const payload = await response.json();
+      if (!response.ok || payload?.status !== 'success') {
+        return;
+      }
+
+      const serverRows: ApiHistoryNotification[] = Array.isArray(payload?.data?.notifications)
+        ? payload.data.notifications
+        : [];
+      const serverNotifications = serverRows.map(toClientNotification);
+
+      setNotifications((prev) => {
+        const merged = mergeNotifications(serverNotifications, prev);
+        processedNotificationIdsRef.current = new Set(merged.map((notification) => notification.id));
+        return merged;
+      });
+    } catch (error) {
+      console.error('Failed to sync notification history', error);
+    }
+  }, [user]);
 
   const shouldProcessNotification = useCallback((notificationId: string) => {
     if (processedNotificationIdsRef.current.has(notificationId)) {
@@ -140,6 +235,28 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     // Save to local storage whenever notifications change
     localStorage.setItem(STORAGE_KEY, JSON.stringify(notifications));
   }, [notifications]);
+
+  useEffect(() => {
+    if (!user) {
+      setNotifications([]);
+      processedNotificationIdsRef.current = new Set();
+      return;
+    }
+
+    void syncServerHistory();
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void syncServerHistory();
+      }
+    };
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [syncServerHistory, user]);
 
   useEffect(() => {
     const unsubscribe = onMessageListener((payload: MessagePayload) => {
@@ -236,20 +353,76 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     };
   }, [addNotification, shouldProcessNotification]);
 
-  const markAsRead = (id: string) => {
+  const markAsRead = useCallback(async (id: string) => {
     setNotifications(prev => 
       prev.map(n => n.id === id ? { ...n, read: true } : n)
     );
-  };
 
-  const markAllAsRead = () => {
+    if (!isServerNotificationId(id)) {
+      return;
+    }
+
+    const authToken = localStorage.getItem('token');
+    if (!authToken) {
+      return;
+    }
+
+    try {
+      await fetch(`${API_URL}/notifications/history/${id}/read`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+    } catch (error) {
+      console.error('Failed to mark notification as read', error);
+    }
+  }, []);
+
+  const markAllAsRead = useCallback(async () => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     toast.success('All notifications marked as read');
-  };
 
-  const deleteNotification = (id: string) => {
+    const authToken = localStorage.getItem('token');
+    if (!authToken || !user) {
+      return;
+    }
+
+    try {
+      await fetch(`${API_URL}/notifications/history/read-all`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+    } catch (error) {
+      console.error('Failed to mark all notifications as read', error);
+    }
+  }, [user]);
+
+  const deleteNotification = useCallback(async (id: string) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
-  };
+
+    if (!isServerNotificationId(id)) {
+      return;
+    }
+
+    const authToken = localStorage.getItem('token');
+    if (!authToken) {
+      return;
+    }
+
+    try {
+      await fetch(`${API_URL}/notifications/history/${id}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+    } catch (error) {
+      console.error('Failed to delete notification', error);
+    }
+  }, []);
 
   return (
     <NotificationContext.Provider value={{ 

@@ -36,6 +36,7 @@ interface RecordCollectionProps {
 const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose }) => {
   const [formData, setFormData] = useState({
     donorName: '',
+    purpose: 'Zakat' as 'Zakat' | 'Sadaqah',
     donorType: 'Individual' as 'Individual' | 'Organization' | 'Charity',
     amount: '',
     paymentDate: new Date().toISOString().split('T')[0],
@@ -268,6 +269,7 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
       const formDataToSend = new FormData();
 
       formDataToSend.append('type', 'collection');
+      formDataToSend.append('purpose', formData.purpose);
       formDataToSend.append('donorName', formData.donorName.trim());
       formDataToSend.append('donorType', formData.donorType);
       formDataToSend.append('amount', formData.amount);
@@ -314,6 +316,7 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
         
         setFormData({
           donorName: '',
+          purpose: 'Zakat',
           donorType: 'Individual',
           amount: '',
           paymentDate: new Date().toISOString().split('T')[0],
@@ -514,6 +517,37 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
                 <BuildingLibraryIcon className="w-4 h-4" />
                 <span className="hidden sm:inline">Charity</span>
                 <span className="sm:hidden">Char</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Purpose */}
+          <div>
+            <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5">
+              Purpose <span className="text-red-500">*</span>
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => handleInputChange('purpose', 'Zakat')}
+                className={`px-3 py-2.5 rounded-xl border-2 text-sm font-medium transition-all ${
+                  formData.purpose === 'Zakat'
+                    ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                    : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                }`}
+              >
+                Zakat
+              </button>
+              <button
+                type="button"
+                onClick={() => handleInputChange('purpose', 'Sadaqah')}
+                className={`px-3 py-2.5 rounded-xl border-2 text-sm font-medium transition-all ${
+                  formData.purpose === 'Sadaqah'
+                    ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                    : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                }`}
+              >
+                Sadaqah
               </button>
             </div>
           </div>

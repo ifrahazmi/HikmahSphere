@@ -7,7 +7,35 @@ interface UserSuggestion {
     id: string;
     username: string;
     email: string;
+    permission: 'granted' | 'denied' | 'default' | 'unknown';
+    preferences: {
+        prayers: boolean;
+        events: boolean;
+        community: boolean;
+    };
+    hasValidNotificationDevice: boolean;
+    isLive: boolean;
+    lastSeenAt: string | null;
 }
+
+const formatPermissionLabel = (permission: UserSuggestion['permission']) => {
+    if (permission === 'granted') return 'Permission Granted';
+    if (permission === 'denied') return 'Permission Denied';
+    if (permission === 'default') return 'Permission Default';
+    return 'Permission Unknown';
+};
+
+const formatLastSeen = (value: string | null) => {
+    if (!value) return 'N/A';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'N/A';
+    return date.toLocaleString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+};
 
 const AdminNotificationPanel = () => {
     const [targetType, setTargetType] = useState<'broadcast' | 'user'>('broadcast');
@@ -87,6 +115,22 @@ const AdminNotificationPanel = () => {
 
     const handleSend = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (targetType === 'user' && selectedUser) {
+            if (!selectedUser.hasValidNotificationDevice) {
+                toast.error('Cannot send: selected user has no valid notification device/token.');
+                return;
+            }
+
+            if (selectedUser.permission === 'denied') {
+                toast('Warning: user denied browser notification permission. Delivery may fail.', { icon: '!' });
+            }
+
+            if (!selectedUser.isLive) {
+                toast('Warning: user is offline right now. Notification may arrive later.', { icon: '!' });
+            }
+        }
+
         setLoading(true);
 
         try {
@@ -237,9 +281,28 @@ const AdminNotificationPanel = () => {
                             )}
                         </div>
                         {selectedUser && (
-                            <div className="flex items-center gap-2 text-xs text-emerald-600 bg-emerald-50 px-3 py-2 rounded-lg">
-                                <Check className="w-4 h-4" />
-                                Selected: @{selectedUser.username} ({selectedUser.email})
+                            <div className="space-y-2 text-xs bg-emerald-50 px-3 py-3 rounded-lg border border-emerald-100">
+                                <div className="flex items-center gap-2 text-emerald-700">
+                                    <Check className="w-4 h-4" />
+                                    Selected: @{selectedUser.username} ({selectedUser.email})
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    <span className={`px-2 py-1 rounded-full font-medium ${selectedUser.permission === 'granted' ? 'bg-emerald-100 text-emerald-800' : selectedUser.permission === 'denied' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-700'}`}>
+                                        {formatPermissionLabel(selectedUser.permission)}
+                                    </span>
+                                    <span className={`px-2 py-1 rounded-full font-medium ${selectedUser.hasValidNotificationDevice ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'}`}>
+                                        {selectedUser.hasValidNotificationDevice ? 'Valid Device' : 'No Valid Device'}
+                                    </span>
+                                    <span className={`px-2 py-1 rounded-full font-medium ${selectedUser.isLive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'}`}>
+                                        {selectedUser.isLive ? 'Live' : 'Offline'}
+                                    </span>
+                                </div>
+                                <div className="text-gray-600">
+                                    Last seen: {formatLastSeen(selectedUser.lastSeenAt)}
+                                </div>
+                                <div className="text-gray-600">
+                                    In-app prefs: {selectedUser.preferences.prayers || selectedUser.preferences.events || selectedUser.preferences.community ? 'Enabled' : 'Disabled'}
+                                </div>
                             </div>
                         )}
                     </div>
@@ -299,7 +362,7 @@ const AdminNotificationPanel = () => {
                 {/* Submit Button */}
                 <button
                     type="submit"
-                    disabled={loading || !title || !body || (targetType === 'user' && !userId)}
+                    disabled={loading || !title || !body || (targetType === 'user' && (!userId || !selectedUser?.hasValidNotificationDevice))}
                     className={`w-full py-3.5 rounded-xl font-semibold text-white flex items-center justify-center gap-2 transition-all transform active:scale-[0.98] ${
                         loading 
                         ? 'bg-gray-400 cursor-not-allowed' 

@@ -20,8 +20,15 @@ export interface IUser extends Document {
     deviceId: string;
     token: string;
     userAgent?: string;
+    permission?: 'granted' | 'denied' | 'default' | 'unknown';
+    supportsWebPush?: boolean;
+    isIOS?: boolean;
+    isStandalone?: boolean;
+    lastSeenAt?: Date;
     updatedAt: Date;
   }>;
+  notificationPermission?: 'granted' | 'denied' | 'default' | 'unknown';
+  notificationPermissionUpdatedAt?: Date;
   location?: {
     city: string;
     country: string;
@@ -142,6 +149,19 @@ export interface IUser extends Document {
     expiresAt?: Date;
     features: string[];
   };
+  profileAudit?: {
+    lastEditedAt?: Date;
+    history: Array<{
+      editedAt: Date;
+      editedByUserId?: Types.ObjectId;
+      actorName?: string;
+      changedFields: Array<{
+        field: string;
+        before?: string;
+        after?: string;
+      }>;
+    }>;
+  };
   createdAt: Date;
   updatedAt: Date;
   
@@ -221,11 +241,40 @@ const UserSchema = new Schema<IUser>({
       type: String,
       trim: true,
     },
+    permission: {
+      type: String,
+      enum: ['granted', 'denied', 'default', 'unknown'],
+      default: 'unknown',
+    },
+    supportsWebPush: {
+      type: Boolean,
+      default: false,
+    },
+    isIOS: {
+      type: Boolean,
+      default: false,
+    },
+    isStandalone: {
+      type: Boolean,
+      default: false,
+    },
+    lastSeenAt: {
+      type: Date,
+      default: Date.now,
+    },
     updatedAt: {
       type: Date,
       default: Date.now,
     },
   }],
+  notificationPermission: {
+    type: String,
+    enum: ['granted', 'denied', 'default', 'unknown'],
+    default: 'unknown',
+  },
+  notificationPermissionUpdatedAt: {
+    type: Date,
+  },
   dateOfBirth: {
     type: Date,
     validate: {
@@ -386,6 +435,19 @@ const UserSchema = new Schema<IUser>({
     },
     expiresAt: { type: Date },
     features: [{ type: String }],
+  },
+  profileAudit: {
+    lastEditedAt: { type: Date },
+    history: [{
+      editedAt: { type: Date, default: Date.now },
+      editedByUserId: { type: Schema.Types.ObjectId, ref: 'User' },
+      actorName: { type: String, trim: true },
+      changedFields: [{
+        field: { type: String, required: true, trim: true },
+        before: { type: String, trim: true },
+        after: { type: String, trim: true },
+      }],
+    }],
   },
 }, {
   timestamps: true,

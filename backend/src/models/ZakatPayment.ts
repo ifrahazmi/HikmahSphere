@@ -3,6 +3,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 export interface IZakatPayment extends Document {
   userId?: mongoose.Types.ObjectId;
   type: 'collection' | 'spending';
+  purpose: 'Zakat' | 'Sadaqah';
   donorId?: mongoose.Types.ObjectId;
   donorName?: string;
   donorType?: 'Individual' | 'Organization' | 'Charity';
@@ -33,6 +34,12 @@ const ZakatPaymentSchema = new Schema<IZakatPayment>({
     type: String,
     enum: ['collection', 'spending'],
     required: [true, 'Transaction type is required'],
+  },
+  purpose: {
+    type: String,
+    enum: ['Zakat', 'Sadaqah'],
+    default: 'Zakat',
+    required: [true, 'Purpose is required'],
   },
   donorId: {
     type: Schema.Types.ObjectId,
@@ -107,6 +114,7 @@ const ZakatPaymentSchema = new Schema<IZakatPayment>({
 
 // Indexes for efficient queries
 ZakatPaymentSchema.index({ type: 1, paymentDate: -1 });
+ZakatPaymentSchema.index({ type: 1, purpose: 1, paymentDate: -1 });
 ZakatPaymentSchema.index({ donorId: 1 });
 ZakatPaymentSchema.index({ transactionRefId: 1, paymentMethod: 1 });
 
@@ -190,6 +198,53 @@ ZakatPaymentSchema.statics.getTotals = async function() {
     totalSpent: spendings[0]?.total || 0,
     currentBalance: (collections[0]?.total || 0) - (spendings[0]?.total || 0),
   };
+};
+
+// Static method to get totals split by purpose
+ZakatPaymentSchema.statics.getTotalsByPurpose = async function() {
+  const rows = await this.aggregate([
+    {
+      $group: {
+        _id: {
+          purpose: '$purpose',
+          type: '$type',
+        },
+        totalAmount: { $sum: '$amount' },
+      },
+    },
+  ]);
+
+  const splitTotals = {
+    zakat: {
+      collected: 0,
+      spent: 0,
+      currentBalance: 0,
+    },
+    sadaqah: {
+      collected: 0,
+      spent: 0,
+      currentBalance: 0,
+    },
+  };
+
+  rows.forEach((row: any) => {
+    const purposeKey = row?._id?.purpose === 'Sadaqah' ? 'sadaqah' : 'zakat';
+    const amount = Number(row?.totalAmount || 0);
+
+    if (row?._id?.type === 'collection') {
+      splitTotals[purposeKey].collected = amount;
+      return;
+    }
+
+    if (row?._id?.type === 'spending') {
+      splitTotals[purposeKey].spent = amount;
+    }
+  });
+
+  splitTotals.zakat.currentBalance = splitTotals.zakat.collected - splitTotals.zakat.spent;
+  splitTotals.sadaqah.currentBalance = splitTotals.sadaqah.collected - splitTotals.sadaqah.spent;
+
+  return splitTotals;
 };
 
 // Static method to get donor summary with rankings
