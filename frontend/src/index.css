@@ -252,27 +252,67 @@ code {
    WORD CONTAINER - Prevents breaking Arabic shaping
    ============================================================ */
 .indopak-v3-word-container {
-  display: inline-flex;
-  align-items: baseline;
-  justify-content: flex-start;
-  min-height: 2.2em;
+  display: inline-block !important;
   vertical-align: baseline;
-  line-height: 2.8;
+  line-height: inherit;
   direction: rtl;
   unicode-bidi: embed;
-  
+
   /* Prevent word breaks - CRITICAL for Arabic shaping */
-  white-space: nowrap;
-  word-break: keep-all;
-  overflow-wrap: normal;
-  break-word: normal;
-  break-all: normal;
-  
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  overflow-wrap: normal !important;
+  word-wrap: normal !important;
+  break-word: normal !important;
+  break-all: normal !important;
+  flex-wrap: nowrap !important;
+
   /* Font shaping */
   font-variant-ligatures: contextual common-ligatures;
-  font-feature-settings: "calt" 1, "liga" 1, "clig" 1, "rlig" 1, "ccmp" 1;
+  font-feature-settings: "calt" 1, "liga" 1, "clig" 1, "rlig" 1, "ccmp" 1, "mark" 1, "mkmk" 1;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+  
+  /* Remove any default margins/padding that could cause gaps */
+  margin: 0 !important;
+  padding: 0 !important;
+  min-height: auto !important;
+}
+
+/* ============================================================
+   AYAH CONTAINER - Continuous Arabic text flow
+   ============================================================ */
+.indopak-ayah-container {
+  display: block !important;
+  direction: rtl;
+  text-align: right;
+  unicode-bidi: embed;
+  
+  /* Critical for continuous text flow - no gaps between words */
+  line-height: 2.6;
+  letter-spacing: 0 !important;
+  word-spacing: 0 !important;
+  
+  /* Font shaping for entire ayah */
+  font-variant-ligatures: contextual common-ligatures;
+  font-feature-settings: 
+    "calt" 1,  /* Contextual alternates - ESSENTIAL */
+    "liga" 1,  /* Standard ligatures */
+    "clig" 1,  /* Contextual ligatures */
+    "rlig" 1,  /* Required ligatures */
+    "ccmp" 1,  /* Composition - prevents broken characters */
+    "mark" 1,  /* Mark positioning */
+    "mkmk" 1;  /* Mark-to-mark positioning */
+  
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+  
+  /* Prevent any breaking */
+  white-space: normal !important;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
 }
 
 /* ============================================================
@@ -338,23 +378,71 @@ code {
 }
 
 /* ============================================================
+   TRANSLATION - Prevent breaking on mobile/iOS
+   ============================================================ */
+.translation-container {
+  display: block !important;
+  width: 100% !important;
+  direction: ltr !important;
+  unicode-bidi: embed !important;
+}
+
+.translation-item {
+  display: block !important;
+  width: 100% !important;
+  direction: ltr !important;
+  text-align: left !important;
+  unicode-bidi: embed !important;
+  
+  /* Prevent unwanted breaks */
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+  hyphens: auto !important;
+  -webkit-hyphens: auto !important;
+  -moz-hyphens: auto !important;
+}
+
+.translation-item p {
+  display: block !important;
+  width: 100% !important;
+  margin: 0 !important;
+  line-height: 1.6 !important;
+}
+
+/* ============================================================
    MOBILE OPTIMIZATIONS
    ============================================================ */
 @media (max-width: 640px) {
   .font-indopak-nastaleeq-v3 {
     line-height: 3.0;
-    letter-spacing: 0.05em;
-    word-spacing: 0.18em;
+    letter-spacing: 0 !important;
+    word-spacing: 0 !important;
   }
-  
-  .indopak-v3-word-container {
-    min-height: 2.4em;
+
+  .indopak-ayah-container {
     line-height: 3.0;
+    letter-spacing: 0 !important;
+    word-spacing: 0 !important;
   }
-  
+
+  .indopak-v3-word-container {
+    min-height: auto !important;
+    line-height: inherit !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
   .indopak-waqf-marker {
     font-size: 0.85em;
     margin-inline: 0.15em;
+  }
+  
+  /* Mobile translation fixes */
+  .translation-item p {
+    font-size: 0.875rem !important;
+    line-height: 1.7 !important;
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
   }
 }
 
@@ -540,28 +628,80 @@ code {
   transform: translateY(-0.02em);
 }
 
-/* iOS Safari Arabic Text Rendering Fixes */
+/* iOS Safari Arabic Text Rendering Fixes - AGGRESSIVE */
 @supports (-webkit-touch-callout: none) {
-  .font-indopak-nastaleeq,
-  .indopak-word-container {
-    -webkit-font-smoothing: subpixel-antialiased;
-    text-rendering: auto;
-    letter-spacing: -0.02em;
-    word-spacing: 0.05em;
-    font-variant-ligatures: common-ligatures contextual;
-    font-feature-settings: "liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1;
-    -webkit-text-size-adjust: 100%;
+  /* Force continuous Arabic text on iOS */
+  .font-indopak-nastaleeq-v3,
+  .indopak-ayah-container {
+    -webkit-font-smoothing: antialiased !important;
+    text-rendering: optimizeLegibility !important;
+    letter-spacing: 0 !important;
+    word-spacing: 0 !important;
+    font-variant-ligatures: common-ligatures contextual !important;
+    font-feature-settings: "liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1, "ccmp" 1, "rlig" 1 !important;
+    -webkit-text-size-adjust: 100% !important;
+    text-size-adjust: 100% !important;
   }
 
-  .font-indopak-nastaleeq > div {
-    line-height: 2.0 !important;
+  /* iOS word container fix - CRITICAL: prevent gaps */
+  .indopak-v3-word-container {
+    display: inline-block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-font-smoothing: antialiased !important;
+    text-rendering: optimizeLegibility !important;
+    white-space: nowrap !important;
+    word-break: keep-all !important;
+    overflow-wrap: normal !important;
+    word-wrap: normal !important;
+    flex-wrap: nowrap !important;
+    min-height: auto !important;
+    vertical-align: baseline !important;
+    line-height: inherit !important;
   }
-  
+
+  /* Ensure continuous baseline alignment on iOS */
+  .indopak-ayah-container > .indopak-v3-word-container {
+    vertical-align: baseline !important;
+    line-height: inherit !important;
+    display: inline-block !important;
+  }
+
+  .font-indopak-nastaleeq-v3 > div,
+  .indopak-ayah-container {
+    line-height: 2.6 !important;
+  }
+
   /* iOS-specific tajweed mark fixes */
   .tajweed-mark,
   .indopak-waqf-marker {
-    -webkit-font-smoothing: antialiased;
+    -webkit-font-smoothing: antialiased !important;
     transform: translateY(-0.05em);
+  }
+  
+  /* iOS translation fixes - prevent breaking */
+  .translation-container,
+  .translation-item,
+  .translation-item p {
+    -webkit-text-size-adjust: 100% !important;
+    text-size-adjust: 100% !important;
+    word-break: normal !important;
+    overflow-wrap: break-word !important;
+    -webkit-hyphens: auto !important;
+    hyphens: auto !important;
+  }
+  
+  .translation-item p {
+    line-height: 1.65 !important;
+    -webkit-font-smoothing: antialiased !important;
+  }
+  
+  /* CRITICAL: Force no gaps in translation mode on iOS */
+  .font-indopak-nastaleeq-v3 .indopak-v3-word-container {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
   }
 }
 

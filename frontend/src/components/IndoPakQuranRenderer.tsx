@@ -38,7 +38,7 @@ interface IndoPakQuranRendererProps {
 
 /**
  * Renders a single word with proper Arabic shaping
- * Uses inline-flex to prevent breaking the shaping context
+ * Uses inline-block to prevent breaking the shaping context on iOS
  */
 const WordSpan: React.FC<{
   word: Word;
@@ -54,19 +54,29 @@ const WordSpan: React.FC<{
 
   return (
     <span
-      className="indopak-v3-word-container px-[0.06em] sm:px-[0.12em] my-[0.04em] rounded transition-colors cursor-pointer hover:bg-emerald-100 hover:bg-opacity-30"
+      className="indopak-v3-word-container px-[0.02em] sm:px-[0.04em] my-[0.01em] rounded transition-colors cursor-pointer hover:bg-emerald-100 hover:bg-opacity-30"
       onClick={() => onClick?.(word)}
       title={`Word ${word.position}: ${word.location}`}
       style={{
-        // Prevent React from breaking the text shaping
-        textRendering: 'auto',
+        // Critical for iOS - prevent any breaking
+        display: 'inline-block',
+        whiteSpace: 'nowrap',
+        wordBreak: 'keep-all',
+        overflowWrap: 'normal',
+        
+        // Font shaping
+        textRendering: 'optimizeLegibility',
         WebkitFontSmoothing: 'antialiased',
         MozOsxFontSmoothing: 'grayscale',
         WebkitTextSizeAdjust: '100%',
         fontVariantLigatures: 'contextual common-ligatures',
-        fontFeatureSettings: '"calt" 1, "liga" 1, "clig" 1, "rlig" 1, "ccmp" 1',
-        letterSpacing: '0.02em',
-        wordSpacing: '0.08em',
+        fontFeatureSettings: '"calt" 1, "liga" 1, "clig" 1, "rlig" 1, "ccmp" 1, "mark" 1, "mkmk" 1',
+        
+        // Zero spacing - parent handles this
+        letterSpacing: '0',
+        wordSpacing: '0',
+        margin: '0',
+        padding: '0',
       }}
     >
       {word.text}
@@ -161,14 +171,12 @@ export const IndoPakQuranRenderer: React.FC<IndoPakQuranRendererProps> = ({
                 lang="ar"
               >
                 <div
-                  className="flex flex-wrap items-baseline gap-[0.08em] sm:gap-[0.12em] leading-[2.4] sm:leading-[2.6]"
+                  className="indopak-ayah-container leading-[2.4] sm:leading-[2.6]"
                   style={{
                     fontSize: `${fontSize}px`,
-                    textRendering: 'auto',
-                    WebkitFontSmoothing: 'antialiased',
-                    MozOsxFontSmoothing: 'grayscale',
-                    fontVariantLigatures: 'contextual common-ligatures',
-                    fontFeatureSettings: '"calt" 1, "liga" 1, "clig" 1, "rlig" 1, "mark" 1, "mkmk" 1',
+                    // Critical for iOS - prevent any text size adjustment
+                    WebkitTextSizeAdjust: '100%',
+                    textRendering: 'optimizeLegibility',
                   }}
                 >
                   {/* Render each word */}
@@ -182,7 +190,6 @@ export const IndoPakQuranRenderer: React.FC<IndoPakQuranRendererProps> = ({
                       onClick={handleWordClick}
                     />
                   ))}
-
                 </div>
               </div>
 
@@ -205,9 +212,9 @@ export const IndoPakQuranRenderer: React.FC<IndoPakQuranRendererProps> = ({
 
               {/* Translations (if enabled) */}
               {showTranslation && translations.length > 0 && (
-                <div className="space-y-2">
+                <div className="space-y-2 translation-container">
                   {translations.map((translation, index) => (
-                    <div key={index} className="text-left" dir="ltr">
+                    <div key={index} className="text-left translation-item" dir="ltr">
                       <p className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
                         {translation}
                       </p>

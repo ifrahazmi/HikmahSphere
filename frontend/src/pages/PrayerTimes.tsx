@@ -428,10 +428,16 @@ const incrementHijriByOneDay = (hijri?: HijriDate | null): HijriDate | null => {
   if (!currentDay || !year) return null;
   if (!monthNum) monthNum = 1;
 
-  // Fallback only when next-day API data is unavailable.
-  // We use 30 as a safe maximum length to keep the date moving forward.
+  // Days in each Hijri month (approximate - actual moon sighting may vary)
+  // Months with 30 days: 1, 3, 5, 7, 9, 11 (Muharram, Rabi I, Jumada I, Rajab, Ramadan, Dhul Qada)
+  // Months with 29 days: 2, 4, 6, 8, 10, 12 (Safar, Rabi II, Jumada II, Sha'ban, Shawwal, Dhul Hijjah)
+  // Note: Dhul Hijjah can have 30 days in leap years
+  const daysInMonth = [0, 30, 29, 30, 29, 30, 29, 30, 29, 30, 29, 30, 29];
+  
+  const maxDaysInCurrentMonth = monthNum >= 1 && monthNum <= 12 ? daysInMonth[monthNum] : 30;
+  
   let nextDay = currentDay + 1;
-  if (nextDay > 30) {
+  if (nextDay > maxDaysInCurrentMonth) {
     nextDay = 1;
     monthNum += 1;
     if (monthNum > 12) {
@@ -1640,7 +1646,6 @@ const PrayerTimes: React.FC = () => {
   const nextFastingEntry = nextDayFastingData?.fasting?.[0];
   const baseFastingHijriDate = buildHijriDateFromFastingEntry(baseFastingEntry);
   const baseHijriDate = resolvePreferredHijriDate(prayerSourceHijriDate, baseFastingHijriDate);
-  const shouldPreferLocalHijriObservation = getHijriObservationOffsetDays(activeCountry) !== 0;
 
   const nowForHijri = new Date();
   const maghribTimeToday = prayerData?.times?.Maghrib
@@ -1663,12 +1668,13 @@ const PrayerTimes: React.FC = () => {
   const effectiveHijriDate = isAfterMaghrib
     ? (resolvedNextHijriDate || baseHijriDate)
     : baseHijriDate;
+  
+  // For India and similar regions, use local Hijri observation only as fallback
+  // Priority: API data > Local calculation with offset
   const fallbackCurrentHijriDate = buildLocationAwareHijriDateFromGregorianDate(activeIslamicGregorianDate, activeCountry);
-  const displayHijriDate = shouldPreferLocalHijriObservation
-    ? (fallbackCurrentHijriDate || effectiveHijriDate)
-    : (resolvePreferredHijriDate(effectiveHijriDate, fallbackCurrentHijriDate)
-      || effectiveHijriDate
-      || fallbackCurrentHijriDate);
+  const displayHijriDate = resolvePreferredHijriDate(effectiveHijriDate, fallbackCurrentHijriDate)
+    || effectiveHijriDate
+    || fallbackCurrentHijriDate;
   const activePrayerData = isAfterMaghrib && nextDayPrayerData?.times
     ? nextDayPrayerData
     : prayerData;

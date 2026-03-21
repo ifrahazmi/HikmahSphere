@@ -660,20 +660,21 @@ const IslamicGames: React.FC = () => {
 
   if (view === 'quiz' && currentQuestion) {
     return (
-      <div className="max-w-2xl mx-auto space-y-4">
-        <div className="flex items-start justify-between gap-3">
+      <div className="max-w-2xl mx-auto space-y-3 sm:space-y-4">
+        {/* Header - Compact */}
+        <div className="flex items-start justify-between gap-2 sm:gap-3">
           <div className="flex items-center gap-2">
-            <span className="text-2xl">{isDaily ? '⭐' : CATEGORY_META[currentQuestion.category]?.icon}</span>
+            <span className="text-xl sm:text-2xl">{isDaily ? '⭐' : CATEGORY_META[currentQuestion.category]?.icon}</span>
             <div>
-              <p className="text-sm font-semibold text-gray-700">
+              <p className="text-xs sm:text-sm font-semibold text-gray-700">
                 {isDaily ? 'Daily Challenge' : CATEGORY_META[currentQuestion.category]?.label}
               </p>
-              <p className="text-xs text-gray-500">
-                Question {currentQuestionIndex + 1} of {questions.length}
+              <p className="text-[10px] sm:text-xs text-gray-500">
+                Q{currentQuestionIndex + 1}/{questions.length}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             {!isDaily && (
               <button
                 onClick={() => {
@@ -683,19 +684,20 @@ const IslamicGames: React.FC = () => {
                   }
                   setShowQuitConfirm(true);
                 }}
-                className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-100"
+                className="rounded-lg sm:rounded-xl border border-red-200 bg-red-50 px-2 py-1.5 sm:px-3 sm:py-2 text-[10px] sm:text-sm font-semibold text-red-600 hover:bg-red-100"
               >
-                Quit Quiz
+                Quit
               </button>
             )}
             <div className="text-right">
-              <span className={`text-2xl font-bold ${timeLeft <= 10 ? 'text-red-500 animate-pulse' : 'text-emerald-600'}`}>
+              <span className={`text-lg sm:text-2xl font-bold ${timeLeft <= 10 ? 'text-red-500 animate-pulse' : 'text-emerald-600'}`}>
                 {timeLeft}s
               </span>
             </div>
           </div>
         </div>
 
+        {/* Timer Bar */}
         <div className="w-full bg-gray-200 rounded-full h-2">
           <div
             className={`h-2 rounded-full transition-all duration-1000 ${
@@ -705,18 +707,20 @@ const IslamicGames: React.FC = () => {
           />
         </div>
 
-        <div className="bg-white rounded-2xl shadow-md p-6 border border-gray-100">
-          <div className="flex items-center gap-2 mb-4">
-            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${DIFFICULTY_META[currentQuestion.difficulty].bgColor} ${DIFFICULTY_META[currentQuestion.difficulty].color}`}>
+        {/* Question Card - Compact */}
+        <div className="bg-white rounded-xl sm:rounded-2xl shadow-md p-3 sm:p-4 md:p-6 border border-gray-100">
+          <div className="flex items-center gap-1.5 sm:gap-2 mb-2 sm:mb-4 flex-wrap">
+            <span className={`px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold ${DIFFICULTY_META[currentQuestion.difficulty].bgColor} ${DIFFICULTY_META[currentQuestion.difficulty].color}`}>
               {DIFFICULTY_META[currentQuestion.difficulty].label}
             </span>
-            <span className="text-xs text-gray-500">{currentQuestion.points} pts</span>
-            {isDaily && <span className="text-xs text-amber-600 font-bold">2× Daily Bonus</span>}
+            <span className="text-[10px] sm:text-xs text-gray-500">{currentQuestion.points} pts</span>
+            {isDaily && <span className="text-[10px] sm:text-xs text-amber-600 font-bold">2× Daily</span>}
           </div>
-          <p className="text-lg font-semibold text-gray-900 leading-relaxed">{currentQuestion.question}</p>
+          <p className="text-base sm:text-lg font-semibold text-gray-900 leading-relaxed">{currentQuestion.question}</p>
         </div>
 
-        <div className="grid grid-cols-1 gap-3">
+        {/* Answer Options - Compact spacing */}
+        <div className="grid grid-cols-1 gap-2 sm:gap-3">
           {currentQuestion.options.map((option, idx) => {
             let btnClass = 'bg-white border-2 border-gray-200 text-gray-800 hover:border-emerald-400 hover:bg-emerald-50';
             if (selectedAnswer !== null) {
@@ -731,31 +735,35 @@ const IslamicGames: React.FC = () => {
                 key={idx}
                 onClick={() => handleAnswerSelect(idx)}
                 disabled={selectedAnswer !== null}
-                className={`w-full text-left px-5 py-4 rounded-xl font-medium transition-all ${btnClass}`}
+                className={`w-full text-left px-3 sm:px-5 py-3 sm:py-4 rounded-xl font-medium transition-all text-sm sm:text-base ${btnClass}`}
               >
-                <span className="font-bold mr-3 text-gray-400">{String.fromCharCode(65 + idx)}.</span>
+                <span className="font-bold mr-2 sm:mr-3 text-gray-400">{String.fromCharCode(65 + idx)}.</span>
                 {option}
               </button>
             );
           })}
         </div>
 
+        {/* Explanation - Compact */}
         {showExplanation && (
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-            <p className="text-sm font-semibold text-blue-800 mb-1">💡 Explanation</p>
-            <p className="text-sm text-blue-700">
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 sm:p-4">
+            <p className="text-xs sm:text-sm font-semibold text-blue-800 mb-1">💡 Explanation</p>
+            <p className="text-xs sm:text-sm text-blue-700">
               Keep going! The full explanation will be shown in your results.
             </p>
           </div>
         )}
 
+        {/* Next Question Button - Sticky on mobile */}
         {selectedAnswer !== null && (
-          <button
-            onClick={handleNextQuestion}
-            className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 text-white py-4 rounded-xl font-bold text-lg hover:from-emerald-600 hover:to-teal-600 transition-all transform hover:scale-105 shadow-lg"
-          >
-            {currentQuestionIndex + 1 >= questions.length ? 'See Results 🎉' : 'Next Question →'}
-          </button>
+          <div className="sticky bottom-4 z-40">
+            <button
+              onClick={handleNextQuestion}
+              className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 text-white py-3 sm:py-4 rounded-xl font-bold text-base sm:text-lg hover:from-emerald-600 hover:to-teal-600 transition-all transform hover:scale-105 shadow-lg"
+            >
+              {currentQuestionIndex + 1 >= questions.length ? 'See Results 🎉' : 'Next →'}
+            </button>
+          </div>
         )}
 
         {loading && (
@@ -928,22 +936,25 @@ const IslamicGames: React.FC = () => {
           </button>
           <h2 className="text-xl font-bold text-gray-900">Choose a Category</h2>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {(Object.keys(CATEGORY_META) as Category[]).map((category) => {
             const meta = CATEGORY_META[category];
             const info = categories.find((entry) => entry.category === category);
             return (
               <button
                 key={category}
-                onClick={() => {
+                onClick={(e) => {
+                  e.preventDefault();
                   setSelectedCategory(category);
                   setQuizRequestCategory(category);
                   setView('difficulty');
+                  // Prevent scroll on mobile
+                  window.scrollTo({ top: 0, behavior: 'auto' });
                 }}
-                className={`${meta.bgColor} ${meta.borderColor} border-2 rounded-2xl p-5 text-left hover:shadow-md transition-all hover:scale-105`}
+                className={`${meta.bgColor} ${meta.borderColor} border-2 rounded-2xl p-4 sm:p-5 text-left hover:shadow-md transition-all hover:scale-105`}
               >
-                <div className="text-4xl mb-2">{meta.icon}</div>
-                <p className={`font-bold text-base ${meta.color}`}>{meta.label}</p>
+                <div className="text-3xl sm:text-4xl mb-2">{meta.icon}</div>
+                <p className={`font-bold text-sm sm:text-base ${meta.color}`}>{meta.label}</p>
                 {info && (
                   <p className="text-xs text-gray-500 mt-1">{info.total} questions</p>
                 )}
@@ -958,30 +969,39 @@ const IslamicGames: React.FC = () => {
   if (view === 'difficulty' && selectedCategory) {
     const categoryMeta = CATEGORY_META[selectedCategory];
     return (
-      <div className="space-y-4 max-w-lg mx-auto">
+      <div className="space-y-3 sm:space-y-4 max-w-lg mx-auto">
         <div className="flex items-center gap-3">
-          <button onClick={() => setView('category')} className="text-gray-500 hover:text-gray-700">
+          <button 
+            onClick={() => {
+              setView('category');
+              window.scrollTo({ top: 0, behavior: 'auto' });
+            }} 
+            className="text-gray-500 hover:text-gray-700"
+          >
             ← Back
           </button>
-          <h2 className="text-xl font-bold text-gray-900">
+          <h2 className="text-lg sm:text-xl font-bold text-gray-900">
             {categoryMeta.icon} {categoryMeta.label}
           </h2>
         </div>
         <p className="text-gray-600 text-sm">Choose your difficulty level:</p>
-        <div className="space-y-3">
+        <div className="space-y-2 sm:space-y-3">
           {(['easy', 'medium', 'hard'] as Difficulty[]).map((difficulty) => {
             const difficultyMeta = DIFFICULTY_META[difficulty];
             return (
               <button
                 key={difficulty}
-                onClick={() => openQuestionCountStep(selectedCategory, difficulty, 'category')}
-                className={`w-full ${difficultyMeta.bgColor} border-2 rounded-2xl p-5 text-left hover:shadow-md transition-all hover:scale-105 flex items-center justify-between`}
+                onClick={() => {
+                  openQuestionCountStep(selectedCategory, difficulty, 'category');
+                  window.scrollTo({ top: 0, behavior: 'auto' });
+                }}
+                className={`w-full ${difficultyMeta.bgColor} border-2 rounded-xl sm:rounded-2xl p-4 sm:p-5 text-left hover:shadow-md transition-all hover:scale-105 flex items-center justify-between`}
               >
                 <div>
-                  <p className={`font-bold text-lg ${difficultyMeta.color}`}>{difficultyMeta.label}</p>
+                  <p className={`font-bold text-base sm:text-lg ${difficultyMeta.color}`}>{difficultyMeta.label}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{difficultyMeta.points} base points per question</p>
                 </div>
-                <span className="text-2xl">
+                <span className="text-xl sm:text-2xl">
                   {difficulty === 'easy' ? '🌱' : difficulty === 'medium' ? '⚡' : '🔥'}
                 </span>
               </button>
@@ -994,13 +1014,19 @@ const IslamicGames: React.FC = () => {
 
   if (view === 'questionCount' && quizRequestCategory && selectedDifficulty) {
     return (
-      <div className="max-w-xl mx-auto space-y-5">
+      <div className="max-w-xl mx-auto space-y-4 sm:space-y-5">
         <div className="flex items-center gap-3">
-          <button onClick={handleQuestionCountBack} className="text-gray-500 hover:text-gray-700">
+          <button 
+            onClick={() => {
+              handleQuestionCountBack();
+              window.scrollTo({ top: 0, behavior: 'auto' });
+            }} 
+            className="text-gray-500 hover:text-gray-700"
+          >
             ← Back
           </button>
           <div>
-            <h2 className="text-xl font-bold text-gray-900">Choose question count</h2>
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900">Choose question count</h2>
             <p className="text-sm text-gray-500">{questionCountContextLabel}</p>
           </div>
         </div>
@@ -1111,13 +1137,16 @@ const IslamicGames: React.FC = () => {
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-lg font-bold text-gray-900">🎯 Quiz Categories</h3>
           <button
-            onClick={() => setView('category')}
+            onClick={() => {
+              setView('category');
+              window.scrollTo({ top: 0, behavior: 'auto' });
+            }}
             className="text-sm text-emerald-600 hover:text-emerald-700 font-medium"
           >
             View All →
           </button>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
           {(Object.keys(CATEGORY_META) as Category[]).map((category) => {
             const meta = CATEGORY_META[category];
             const stats = categoryStats.find((entry) => entry.id === category);
@@ -1128,15 +1157,16 @@ const IslamicGames: React.FC = () => {
                   setSelectedCategory(category);
                   setQuizRequestCategory(category);
                   setView('difficulty');
+                  window.scrollTo({ top: 0, behavior: 'auto' });
                 }}
-                className={`${meta.bgColor} ${meta.borderColor} border-2 rounded-xl p-4 text-center hover:shadow-md transition-all hover:scale-105`}
+                className={`${meta.bgColor} ${meta.borderColor} border-2 rounded-xl p-3 sm:p-4 text-center hover:shadow-md transition-all hover:scale-105`}
               >
-                <div className="text-3xl mb-1">{meta.icon}</div>
-                <p className={`text-xs font-bold ${meta.color}`}>{meta.label}</p>
+                <div className="text-2xl sm:text-3xl mb-1">{meta.icon}</div>
+                <p className={`text-[10px] sm:text-xs font-bold ${meta.color}`}>{meta.label}</p>
                 {stats ? (
-                  <p className="text-xs text-gray-400 mt-0.5">{stats.totalQuestions} Qs</p>
+                  <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5">{stats.totalQuestions} Qs</p>
                 ) : (
-                  <p className="text-xs text-gray-400 mt-0.5">Loading...</p>
+                  <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5">Loading...</p>
                 )}
               </button>
             );
