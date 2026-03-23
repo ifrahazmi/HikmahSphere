@@ -60,6 +60,16 @@ const formatOrdinal = (value: number): string => {
   return `${value}th`;
 };
 
+const normalizeHijriMonthName = (value: string): string => (
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+);
+
 const getDaysInMonth = (date: Date) => {
   const year = date.getFullYear();
   const month = date.getMonth();
@@ -122,7 +132,7 @@ const PrayerTimesIslamicCalendar: React.FC<IslamicCalendarProps> = ({ whiteDays,
   displayedDays.forEach(({ hijri }) => {
     if (!hijri.monthEn || !hijri.year) return;
 
-    const key = `${hijri.monthEn}-${hijri.year}`;
+    const key = `${normalizeHijriMonthName(hijri.monthEn)}-${hijri.year}`;
     const existing = hijriMonthCounts.get(key);
 
     if (existing) {
@@ -149,9 +159,13 @@ const PrayerTimesIslamicCalendar: React.FC<IslamicCalendarProps> = ({ whiteDays,
   );
   const primaryHijriMonthKey = primaryHijriMonthEntry?.[0] ?? '';
   const primaryHijriMonthLabel = primaryHijriMonthEntry?.[1].label ?? fallbackHijriLabel;
+  const currentHijriMonthLabel = isCurrentMonthView && todayHijri?.month?.en && todayHijri?.year
+    ? `${todayHijri.month.en} ${todayHijri.year} AH`
+    : primaryHijriMonthLabel;
   const displayedHijriMonthLabel = orderedHijriMonthLabels.length > 0
     ? orderedHijriMonthLabels.join(' / ')
     : primaryHijriMonthLabel;
+  const showHijriRange = displayedHijriMonthLabel !== currentHijriMonthLabel && orderedHijriMonthLabels.length > 1;
 
   const whiteDayMap = new Map<string, WhiteDayEntry>();
   displayedDays.forEach(({ date, iso, hijri }) => {
@@ -278,8 +292,13 @@ const PrayerTimesIslamicCalendar: React.FC<IslamicCalendarProps> = ({ whiteDays,
 
       <div className="mb-2">
         <div className="mb-4 flex flex-col">
-          <span className="text-lg font-semibold text-emerald-600">{displayedHijriMonthLabel}</span>
-          <span className="text-sm text-gray-500">{monthName} {year}</span>
+          <span className="text-2xl font-extrabold tracking-tight text-emerald-700">{currentHijriMonthLabel}</span>
+          {showHijriRange && (
+            <span className="mt-1 inline-flex w-fit rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200">
+              {displayedHijriMonthLabel}
+            </span>
+          )}
+          <span className="mt-1 text-sm text-gray-500">{monthName} {year}</span>
         </div>
 
         <div className="grid grid-cols-7 gap-1 text-center text-xs">

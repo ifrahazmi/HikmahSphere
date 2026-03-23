@@ -280,6 +280,14 @@ router.get('/hijri-date', [
     .optional()
     .isString()
     .withMessage('Country must be text'),
+  query('mode')
+    .optional()
+    .isIn(['date-only', 'maghrib-auto'])
+    .withMessage('Mode must be date-only or maghrib-auto'),
+  query('maghribTime')
+    .optional()
+    .matches(/^\d{1,2}:\d{2}/)
+    .withMessage('maghribTime must be HH:MM format'),
 ], optionalAuthMiddleware, async (req: Request, res: Response) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -295,16 +303,46 @@ router.get('/hijri-date', [
     latitude,
     longitude,
     country,
+    mode = 'date-only',
+    maghribTime,
   } = req.query as {
     date: string;
     latitude: string;
     longitude: string;
     country?: string;
+    mode?: 'date-only' | 'maghrib-auto';
+    maghribTime?: string;
   };
 
   try {
+    let hijriDateRequest = date;
+    let maghribTimeUsed: string | null = null;
+    let rolledOverAfterMaghrib = false;
+
+    if (mode === 'maghrib-auto') {
+      maghribTimeUsed = maghribTime || null;
+
+      if (!maghribTimeUsed) {
+        try {
+          const timingsUrl = `${API_BASE_URL}/${date}?latitude=${latitude}&longitude=${longitude}&method=3&school=0`;
+          const timingsResponse = await fetchWithTimeout(timingsUrl, 8000);
+          if (timingsResponse.ok) {
+            const timingsPayload: any = await timingsResponse.json();
+            maghribTimeUsed = timingsPayload?.data?.timings?.Maghrib || null;
+          }
+        } catch (timingError) {
+          console.warn('⚠️ Failed to auto-fetch Maghrib time for hijri-date mode=maghrib-auto:', timingError);
+        }
+      }
+
+      if (maghribTimeUsed && isAfterMaghrib(maghribTimeUsed)) {
+        hijriDateRequest = addDaysToDDMMYYYY(date, 1);
+        rolledOverAfterMaghrib = true;
+      }
+    }
+
     const correctedHijri = await getCorrectedHijriDate({
-      date,
+      date: hijriDateRequest,
       latitude,
       longitude,
       ...(country ? { country } : {}),
@@ -321,6 +359,11 @@ router.get('/hijri-date', [
           readable: correctedHijri.readable,
         },
         fallback: correctedHijri.isFallback,
+        mode,
+        requestDate: date,
+        effectiveDate: hijriDateRequest,
+        rolledOverAfterMaghrib,
+        maghribTimeUsed,
       },
     });
   } catch (error: any) {

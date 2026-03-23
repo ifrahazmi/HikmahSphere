@@ -1690,6 +1690,9 @@ const PrayerTimes: React.FC = () => {
   const isAfterMaghrib = Boolean(maghribTimeToday && nowForHijri >= maghribTimeToday);
   const activeIslamicGregorianDate = new Date(nowForHijri);
   activeIslamicGregorianDate.setHours(0, 0, 0, 0);
+  if (isAfterMaghrib) {
+    activeIslamicGregorianDate.setDate(activeIslamicGregorianDate.getDate() + 1);
+  }
   const fallbackNextHijri = incrementHijriByOneDay(baseHijriDate);
   const nextPrayerHijriDate = buildHijriDateFromPrayerSource(nextDayPrayerData?.date?.hijri);
   const nextFastingHijriDate = buildHijriDateFromFastingEntry(nextFastingEntry);
@@ -1698,7 +1701,9 @@ const PrayerTimes: React.FC = () => {
     || nextPrayerHijriDate
     || nextFastingHijriDate
     || fallbackNextHijri;
-  const effectiveHijriDate = baseHijriDate;
+  const effectiveHijriDate = isAfterMaghrib
+    ? (resolvedNextHijriDate || baseHijriDate)
+    : baseHijriDate;
   
   // Final fallback only: local calculation with offset when all API sources fail.
   const fallbackCurrentHijriDate = buildLocationAwareHijriDateFromGregorianDate(activeIslamicGregorianDate, activeCountry);
