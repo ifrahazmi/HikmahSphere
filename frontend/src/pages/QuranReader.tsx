@@ -186,6 +186,7 @@ const QuranReader: React.FC = () => {
   const [showSurahSearch, setShowSurahSearch] = useState(false);
   const [tempSettings, setTempSettings] = useState(settings);
   const [selectedAyahForPlay, setSelectedAyahForPlay] = useState<{surah: number, ayah: number} | null>(null);
+  const [pendingBookmarkTarget, setPendingBookmarkTarget] = useState<{ surahNumber: number; ayahNumber: number } | null>(null);
   const lockedScrollYRef = useRef<number | null>(null);
   
   // Enhanced mobile search state
@@ -398,6 +399,37 @@ const QuranReader: React.FC = () => {
   const cancelMobileSettings = () => {
     setShowMobileSettings(false);
   };
+
+  const navigateToBookmark = (surahNumber: number, ayahNumber: number, closeMobile = false) => {
+    goToSurah(surahNumber);
+    if (closeMobile) {
+      cancelMobileSettings();
+    }
+    setPendingBookmarkTarget({ surahNumber, ayahNumber });
+  };
+
+  useEffect(() => {
+    if (!pendingBookmarkTarget) return;
+    if (currentSurah !== pendingBookmarkTarget.surahNumber) return;
+
+    const isIndoPak = settings.arabicFont === 'indopak-nastaleeq-v3';
+    if (isIndoPak && (indopakV3Loading || !indopakV3Surah)) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      scrollToAyahNumber(pendingBookmarkTarget.ayahNumber);
+      setPendingBookmarkTarget(null);
+    }, isIndoPak ? 250 : 100);
+
+    return () => clearTimeout(timer);
+  }, [
+    pendingBookmarkTarget,
+    currentSurah,
+    settings.arabicFont,
+    indopakV3Loading,
+    indopakV3Surah,
+  ]);
 
   // Add to recent searches
   const addToRecentSearches = (term: string) => {
@@ -1812,12 +1844,7 @@ const QuranReader: React.FC = () => {
                           <div className="flex items-start justify-between">
                             <button
                               onClick={() => {
-                                goToSurah(bookmark.surahNumber);
-                                // IndoPak mode needs extra time to load word-by-word data
-                                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-                                const isIndoPak = settings.arabicFont === 'indopak-nastaleeq-v3';
-                                const delay = isIndoPak ? (isIOS ? 1500 : 1000) : (isIOS ? 1000 : 600);
-                                setTimeout(() => scrollToAyahNumber(bookmark.ayahNumber), delay);
+                                navigateToBookmark(bookmark.surahNumber, bookmark.ayahNumber, false);
                               }}
                               className="text-left flex-1"
                             >
@@ -2174,6 +2201,8 @@ const QuranReader: React.FC = () => {
                         const bookmarkColor = getBookmarkColor(surahData.number, ayahNum);
                         const bgClass = getBookmarkBackgroundClass(bookmarkColor);
 
+                        const firstWordIndex = ayah.words.findIndex((wordData) => !/^\d+$/.test(wordData.text.trim()));
+
                         return (
                           <React.Fragment key={ayahNum}>
                             {ayah.words.map((wordData, wordIndex) => {
@@ -2187,6 +2216,7 @@ const QuranReader: React.FC = () => {
                               return (
                                 <span
                                   key={`v3-continuous-surah${surahData.number}-ayah${ayahNum}-word${wordIndex}`}
+                                  id={wordIndex === firstWordIndex ? `ayah-${ayahNum}` : undefined}
                                   className={`inline-block px-[0.04em] sm:px-[0.08em] my-[0.02em] rounded transition-colors cursor-pointer ${
                                     isSelectedForWordBookmark ? 'bg-emerald-500 text-white' : 'hover:bg-emerald-100 hover:bg-opacity-30'
                                   } ${bgClass}`}
@@ -2925,13 +2955,7 @@ const QuranReader: React.FC = () => {
                           <div className="flex items-start justify-between">
                             <button
                               onClick={() => {
-                                goToSurah(bookmark.surahNumber);
-                                cancelMobileSettings();
-                                // IndoPak mode needs extra time to load word-by-word data
-                                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-                                const isIndoPak = settings.arabicFont === 'indopak-nastaleeq-v3';
-                                const delay = isIndoPak ? (isIOS ? 1800 : 1200) : (isIOS ? 1200 : 800);
-                                setTimeout(() => scrollToAyahNumber(bookmark.ayahNumber), delay);
+                                navigateToBookmark(bookmark.surahNumber, bookmark.ayahNumber, true);
                               }}
                               className="text-left flex-1"
                             >

@@ -13,6 +13,7 @@ import {
 import { CheckCircleIcon as CheckCircleSolidIcon } from '@heroicons/react/24/solid';
 import { API_URL } from '../../config';
 import toast from 'react-hot-toast';
+import { MAX_UPLOAD_SIZE_BYTES, optimizeImageForUpload, readFileAsDataUrl } from '../../utils/imageUpload';
 
 interface DonorSuggestion {
   id: string;
@@ -157,7 +158,7 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -168,22 +169,26 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('File size must be less than 5MB');
+    if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+      toast.error('File size must be 2MB or smaller');
       e.target.value = '';
       return;
     }
 
-    setProofFile(file);
+    try {
+      const finalFile = file.type.startsWith('image/') ? await optimizeImageForUpload(file) : file;
+      setProofFile(finalFile);
 
-    if (file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setProofPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    } else {
-      setProofPreview(null);
+      if (finalFile.type.startsWith('image/')) {
+        const previewUrl = await readFileAsDataUrl(finalFile);
+        setProofPreview(previewUrl);
+      } else {
+        setProofPreview(null);
+      }
+    } catch (error) {
+      console.error('Proof optimization failed:', error);
+      toast.error('Failed to process file. Please try again.');
+      e.target.value = '';
     }
   };
 
@@ -754,7 +759,7 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
                       <p className="text-sm text-gray-600">
                         <span className="font-semibold text-emerald-600">Click to upload</span> or drag and drop
                       </p>
-                      <p className="text-xs text-gray-500">PNG, JPG, PDF (Max 5MB)</p>
+                      <p className="text-xs text-gray-500">PNG, JPG, PDF (Max 2MB)</p>
                     </div>
                   )}
                 </label>

@@ -160,6 +160,15 @@ function getAuthHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+function getLeaderboardDisplayName(user: LeaderboardUser | undefined): string {
+  if (!user) return 'Unknown';
+  const firstName = typeof user.firstName === 'string' ? user.firstName.trim() : '';
+  const lastName = typeof user.lastName === 'string' ? user.lastName.trim() : '';
+  const fullName = `${firstName} ${lastName}`.trim();
+  if (fullName) return fullName;
+  return user.username || 'Unknown';
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 const BadgeChip: React.FC<{ badgeId: string }> = ({ badgeId }) => {
@@ -494,21 +503,23 @@ const IslamicGames: React.FC = () => {
     }
   };
 
-  const handleAnswerSelect = (index: number) => {
-    if (selectedAnswer !== null) return;
-    clearQuizTimer();
+  const finalizeCurrentAnswer = useCallback((overrideIndex?: number) => {
+    if (showExplanation) return;
 
     const currentQuizQuestion = questions[currentQuestionIndex];
     if (!currentQuizQuestion) return;
 
+    clearQuizTimer();
+    const selectedIndex = overrideIndex !== undefined ? overrideIndex : selectedAnswer;
+    const safeIndex = selectedIndex !== null && selectedIndex >= 0 ? selectedIndex : 0;
+
     const timeSpent = Math.round((Date.now() - questionStartTime) / 1000);
     const newAnswer: AnswerRecord = {
       questionId: currentQuizQuestion._id,
-      selectedIndex: index >= 0 ? index : 0,
+      selectedIndex: safeIndex,
       timeSpentSeconds: timeSpent,
     };
 
-    setSelectedAnswer(index);
     setShowExplanation(true);
     setPausedQuestionElapsedMs(0);
     setAnswers((prev) => {
@@ -516,9 +527,19 @@ const IslamicGames: React.FC = () => {
       answersRef.current = updated;
       return updated;
     });
+  }, [currentQuestionIndex, questionStartTime, questions, selectedAnswer, showExplanation]);
+
+  const handleAnswerSelect = (index: number) => {
+    if (showExplanation) return;
+    setSelectedAnswer(index);
   };
 
   const handleNextQuestion = () => {
+    if (!showExplanation) {
+      finalizeCurrentAnswer(selectedAnswer ?? -1);
+      return;
+    }
+
     const nextIndex = currentQuestionIndex + 1;
     if (nextIndex >= questions.length) {
       submitQuiz([...answersRef.current]);
@@ -571,11 +592,10 @@ const IslamicGames: React.FC = () => {
   };
 
   useEffect(() => {
-    if (timeLeft === 0 && view === 'quiz' && selectedAnswer === null) {
-      handleAnswerSelect(-1);
+    if (timeLeft === 0 && view === 'quiz' && !showExplanation) {
+      finalizeCurrentAnswer(selectedAnswer ?? -1);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeLeft, view, selectedAnswer]);
+  }, [finalizeCurrentAnswer, selectedAnswer, showExplanation, timeLeft, view]);
 
   useEffect(() => (
     () => {
@@ -661,6 +681,21 @@ const IslamicGames: React.FC = () => {
   if (view === 'quiz' && currentQuestion) {
     return (
       <div className="max-w-2xl mx-auto space-y-3 sm:space-y-4">
+        <div className="flex items-center">
+          <button
+            onClick={() => {
+              clearQuizTimer();
+              if (selectedAnswer === null) {
+                setPausedQuestionElapsedMs(Date.now() - questionStartTime);
+              }
+              setShowQuitConfirm(true);
+            }}
+            className="text-sm font-semibold text-gray-600 hover:text-gray-900"
+          >
+            ← Back
+          </button>
+        </div>
+
         {/* Header - Compact */}
         <div className="flex items-start justify-between gap-2 sm:gap-3">
           <div className="flex items-center gap-2">
@@ -723,18 +758,20 @@ const IslamicGames: React.FC = () => {
         <div className="grid grid-cols-1 gap-2 sm:gap-3">
           {currentQuestion.options.map((option, idx) => {
             let btnClass = 'bg-white border-2 border-gray-200 text-gray-800 hover:border-emerald-400 hover:bg-emerald-50';
-            if (selectedAnswer !== null) {
+            if (showExplanation) {
               if (idx === selectedAnswer && selectedAnswer >= 0) {
                 btnClass = 'bg-emerald-50 border-2 border-emerald-400 text-emerald-800';
               } else {
                 btnClass = 'bg-gray-50 border-2 border-gray-200 text-gray-400 cursor-not-allowed';
               }
+            } else if (selectedAnswer === idx) {
+              btnClass = 'bg-emerald-50 border-2 border-emerald-400 text-emerald-800';
             }
             return (
               <button
                 key={idx}
                 onClick={() => handleAnswerSelect(idx)}
-                disabled={selectedAnswer !== null}
+                disabled={showExplanation}
                 className={`w-full text-left px-3 sm:px-5 py-3 sm:py-4 rounded-xl font-medium transition-all text-sm sm:text-base ${btnClass}`}
               >
                 <span className="font-bold mr-2 sm:mr-3 text-gray-400">{String.fromCharCode(65 + idx)}.</span>
@@ -755,13 +792,15 @@ const IslamicGames: React.FC = () => {
         )}
 
         {/* Next Question Button - Sticky on mobile */}
-        {selectedAnswer !== null && (
+        {(selectedAnswer !== null || showExplanation) && (
           <div className="sticky bottom-4 z-40">
             <button
               onClick={handleNextQuestion}
               className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 text-white py-3 sm:py-4 rounded-xl font-bold text-base sm:text-lg hover:from-emerald-600 hover:to-teal-600 transition-all transform hover:scale-105 shadow-lg"
             >
-              {currentQuestionIndex + 1 >= questions.length ? 'See Results 🎉' : 'Next →'}
+              {!showExplanation
+                ? 'Lock Answer'
+                : (currentQuestionIndex + 1 >= questions.length ? 'See Results 🎉' : 'Next →')}
             </button>
           </div>
         )}
@@ -813,6 +852,12 @@ const IslamicGames: React.FC = () => {
 
     return (
       <div className="max-w-2xl mx-auto space-y-4">
+        <div className="flex items-center">
+          <button onClick={goHome} className="text-sm font-semibold text-gray-600 hover:text-gray-900">
+            ← Back
+          </button>
+        </div>
+
         <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl shadow-md p-6 border border-emerald-200 text-center">
           <div className="text-5xl mb-3">
             {quizResult && quizResult.correctCount / quizResult.totalCount >= 0.8 ? '🎉' :
@@ -1341,16 +1386,17 @@ const LeaderboardPreviewCard: React.FC<{
           {entries.map((entry) => {
             const entryUserId = entry.userId?._id || null;
             const isCurrentUser = Boolean(currentUserId && entryUserId === currentUserId);
+            const displayName = getLeaderboardDisplayName(entry.userId);
             return (
               <div
-                key={`preview-${entry.rank}-${entry.userId?.username || 'unknown'}`}
+                key={`preview-${entry.rank}-${entryUserId || displayName}`}
                 className={`flex items-center gap-3 rounded-xl border px-3 py-3 ${
                   isCurrentUser ? 'border-emerald-300 bg-emerald-50' : 'border-gray-100 bg-gray-50'
                 }`}
               >
                 <div className="w-8 text-center text-xl">{getRankIcon(entry.rank)}</div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-gray-900">{entry.userId?.username || 'Unknown'}</p>
+                  <p className="truncate text-sm font-semibold text-gray-900">{displayName}</p>
                   <p className="text-xs text-gray-500">{entry.accuracy}% accuracy • {entry.gamesPlayed} games</p>
                 </div>
                 <div className="text-right">
@@ -1418,7 +1464,7 @@ const LeaderboardView: React.FC<{
       ) : (
         <div className="space-y-2">
           {leaderboard.map((entry) => {
-            const username = entry.userId?.username || 'Unknown';
+            const displayName = getLeaderboardDisplayName(entry.userId);
             const entryUserId = entry.userId?._id || null;
             const isCurrentUser = Boolean(currentUserId && entryUserId === currentUserId);
             return (
@@ -1445,12 +1491,12 @@ const LeaderboardView: React.FC<{
 
                 {/* Avatar placeholder */}
                 <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-400 to-teal-400 flex items-center justify-center text-white font-bold text-sm shrink-0">
-                  {username.charAt(0).toUpperCase()}
+                  {displayName.charAt(0).toUpperCase()}
                 </div>
 
                 {/* Info */}
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-900 truncate">{username}</p>
+                  <p className="font-semibold text-gray-900 truncate">{displayName}</p>
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs text-gray-500">{entry.accuracy}% accuracy</span>
                     {entry.dailyStreak > 0 && (

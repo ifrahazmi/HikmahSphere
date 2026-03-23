@@ -81,7 +81,7 @@ const Home: React.FC = () => {
       path: '/zakat',
       description: hasManagementAccess
         ? 'Complete Zakat dashboard with donor tracking, collection/spending records, real-time balance, donor leaderboards, and export capabilities for transparent fund management'
-        : 'Intelligent Zakat calculator with live nisab rates, support for gold/silver/assets/crypto, 2.5% calculation, and multiple scholarly methodologies',
+        : 'Intelligent Zakat calculator with live nisab rates, support for gold/silver/assets/crypto, 2.5% calculation, and multiple verified authentic source methodologies',
       color: 'text-yellow-600',
       bgColor: 'bg-yellow-50',
       gradient: 'from-yellow-500 to-amber-500',
@@ -107,7 +107,7 @@ const Home: React.FC = () => {
     {
       icon: '/AI-Scholar-Assistant.png',
       title: 'AI Assistant',
-      description: 'Islamic AI assistant for religious questions and guidance — powered by verified scholarly sources',
+      description: 'Islamic AI assistant for religious questions and guidance — powered by verified authentic source references',
       color: 'text-gray-400',
       bgColor: 'bg-gray-100',
       disabled: true,
@@ -131,7 +131,7 @@ const Home: React.FC = () => {
   const stats = [
     {
       label: 'Precise Prayer Times',
-      description: 'Geolocation-based, multiple scholarly methods, Ramadan schedules',
+      description: 'Geolocation-based, multiple verified authentic source methods, Ramadan schedules',
       icon: ClockIcon,
       color: 'text-emerald-600',
       bgColor: 'bg-emerald-100',
@@ -474,7 +474,7 @@ const Home: React.FC = () => {
             <ul className="space-y-4 text-gray-700">
               <li className="flex items-start gap-3">
                 <CheckCircleIcon className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
-                <span><strong className="font-semibold text-gray-900">Accurate Prayer Times:</strong> GPS-powered Salah timings with multiple scholarly calculation methods (MWL, ISNA, Karachi, Umm al-Qura), Hanafi and Shafi Asr support, high-latitude corrections, and Ramadan fasting schedules — so you never miss a prayer, anywhere in the world.</span>
+                <span><strong className="font-semibold text-gray-900">Accurate Prayer Times:</strong> GPS-powered Salah timings with multiple verified authentic source calculation methods (MWL, ISNA, Karachi, Umm al-Qura), Hanafi and Shafi Asr support, high-latitude corrections, and Ramadan fasting schedules — so you never miss a prayer, anywhere in the world.</span>
               </li>
               <li className="flex items-start gap-3">
                 <CheckCircleIcon className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />

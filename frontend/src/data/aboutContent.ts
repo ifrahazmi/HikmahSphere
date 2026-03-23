@@ -74,7 +74,7 @@ export const pillars: Pillar[] = [
   {
     icon: "/Authenticity.png",
     title: "Authenticity",
-    description: "Every answer rooted in Quran and authentic Sunnah, reviewed by qualified scholars"
+    description: "Every answer rooted in Quran and authentic Sunnah, reviewed against verified authentic source references"
   },
   {
     icon: "/Accessibility.png",
@@ -107,14 +107,14 @@ export const timeline: TimelineItem[] = [
   {
     phase: "Phase 2",
     title: "The Assistant (Coming)",
-    description: "AI Scholar assistant providing instant access to reliable Islamic guidance and fatwa.",
+    description: "AI assistant providing instant access to reliable Islamic guidance and fatwa from verified authentic source references.",
     status: "in-progress",
     icon: Bot,
     period: "Q2 2026",
     features: [
       "AI-Powered Fatwa Assistant",
       "Instant Islamic Guidance",
-      "Scholar-Verified Answers",
+      "Verified Authentic Source Answers",
       "Du'a Collections & Translations",
       "Enhanced Community Forums"
     ]
@@ -144,18 +144,18 @@ export const approachPillars: Pillar[] = [
   },
   {
     icon: "🎓",
-    title: "Scholarly Oversight",
-    description: "Partner with recognized Islamic institutions and qualified scholars for authentic verification."
+    title: "Authenticity Oversight",
+    description: "Partner with recognized Islamic institutions and verified authentic source references for trustworthy verification."
   },
   {
     icon: "/Transparency.png",
     title: "Transparency",
-    description: "Every ruling shows its evidence and scholarly reasoning for your understanding and verification."
+    description: "Every ruling shows its evidence and verified authentic source reasoning for your understanding and verification."
   },
   {
     icon: "/Unity-in-Diversity.png",
     title: "Unity in Diversity",
-    description: "Respect valid scholarly differences while staying firmly rooted in Ahl al-Sunnah wal-Jama'ah."
+    description: "Respect valid interpretive differences while staying firmly rooted in Ahl al-Sunnah wal-Jama'ah."
   },
   {
     icon: "/Accessibility.png",
@@ -174,7 +174,7 @@ export const spiritualFeatures: SpiritualFeature[] = [
     icon: "/Smart-Prayer-Times.png",
     title: "Smart Prayer Times",
     path: "/prayers",
-    description: "Never miss the connection with your Lord. Ultra-precise calculations with real-time geolocation, multiple scholarly methods (MWL, ISNA, Umm al-Qura), high latitude corrections, and beautiful shareable prayer cards."
+    description: "Never miss the connection with your Lord. Ultra-precise calculations with real-time geolocation, multiple verified authentic source methods (MWL, ISNA, Umm al-Qura), high latitude corrections, and beautiful shareable prayer cards."
   },
   {
     icon: "/Quran-Reader.png",
@@ -221,8 +221,8 @@ export const promises = [
   {
     id: 'authentic',
     icon: ShieldCheckIcon,
-    title: 'Scholar-Verified Content',
-    description: 'All Islamic content is reviewed by qualified scholars and rooted in authentic Quran and Sunnah.',
+    title: 'Verified Authentic Source Content',
+    description: 'All Islamic content is validated using verified authentic source references and rooted in authentic Quran and Sunnah.',
     color: 'text-blue-600'
   },
   {

@@ -6,6 +6,8 @@ import toast from 'react-hot-toast';
 import PageSEO from '../components/PageSEO';
 import { API_URL } from '../config';
 
+const ONBOARDING_REQUIRED_KEY = 'onboardingRequiredAfterRegister';
+
 const Auth: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -14,6 +16,12 @@ const Auth: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showRecoveryModal, setShowRecoveryModal] = useState(false);
+  const [showOnboardingModal, setShowOnboardingModal] = useState(false);
+  const [onboardingSaving, setOnboardingSaving] = useState(false);
+  const [onboardingData, setOnboardingData] = useState({
+    gender: '',
+    madhab: '',
+  });
 
   const { login, register, user } = useAuth();
   const navigate = useNavigate();
@@ -26,6 +34,24 @@ const Auth: React.FC = () => {
     password: '',
     newPassword: ''
   });
+
+  React.useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    const shouldShowOnboarding = localStorage.getItem(ONBOARDING_REQUIRED_KEY) === '1';
+    if (!shouldShowOnboarding) {
+      return;
+    }
+
+    setOnboardingData((prev) => ({
+      gender: prev.gender || user.gender || '',
+      madhab: prev.madhab || user.madhab || '',
+    }));
+    setShowOnboardingModal(true);
+    setIsLogin(false);
+  }, [user]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -104,8 +130,13 @@ const Auth: React.FC = () => {
 
         } else {
             await register(submittedName, submittedEmail, submittedPassword);
-            toast.success('Account created successfully!');
-            navigate(redirectParam || '/profile', { replace: true });
+            toast.success('Account created successfully! You can optionally complete profile details.');
+            localStorage.setItem(ONBOARDING_REQUIRED_KEY, '1');
+            setOnboardingData({
+              gender: '',
+              madhab: '',
+            });
+            setShowOnboardingModal(true);
         }
     } catch (error: any) {
         console.error('Authentication error:', error);
@@ -120,7 +151,67 @@ const Auth: React.FC = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  if (user) {
+  const completeOnboardingAndContinue = () => {
+    localStorage.removeItem(ONBOARDING_REQUIRED_KEY);
+    setShowOnboardingModal(false);
+    const targetPath = redirectParam || '/profile';
+    window.location.assign(targetPath);
+  };
+
+  const handleOnboardingSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    const normalizedGender = onboardingData.gender === 'male' || onboardingData.gender === 'female'
+      ? onboardingData.gender
+      : '';
+    const normalizedMadhab = onboardingData.madhab;
+
+    if (!normalizedGender && !normalizedMadhab) {
+      completeOnboardingAndContinue();
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      toast.error('Session expired. Please login again.');
+      return;
+    }
+
+    setOnboardingSaving(true);
+    try {
+      const response = await fetch(`${API_URL}/auth/profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          ...(normalizedGender ? { gender: normalizedGender } : {}),
+          ...(normalizedMadhab ? { madhab: normalizedMadhab } : {}),
+        }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok || payload?.status !== 'success') {
+        throw new Error(payload?.message || 'Failed to save profile details');
+      }
+
+      if (payload?.data?.user) {
+        localStorage.setItem('user', JSON.stringify(payload.data.user));
+      }
+
+      toast.success('Profile info updated');
+      completeOnboardingAndContinue();
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to save profile details');
+    } finally {
+      setOnboardingSaving(false);
+    }
+  };
+
+  const onboardingRequired = localStorage.getItem(ONBOARDING_REQUIRED_KEY) === '1';
+
+  if (user && !showOnboardingModal && !onboardingRequired) {
     return <Navigate to="/profile" replace />;
   }
 
@@ -393,6 +484,72 @@ const Auth: React.FC = () => {
             >
               Go to registration
             </button>
+          </div>
+        </div>
+      )}
+
+      {showOnboardingModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 sm:px-6">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" aria-hidden="true"></div>
+          <div className="relative w-full max-w-lg rounded-2xl bg-white shadow-2xl p-6 sm:p-8 space-y-4">
+            <h3 className="text-2xl font-bold text-gray-900 text-center">Complete Your Profile</h3>
+            <p className="text-sm sm:text-base text-gray-700 text-center">
+              Optional: update your profile details now, or skip and continue.
+            </p>
+
+            <form className="space-y-4" onSubmit={handleOnboardingSubmit}>
+              <div>
+                <label htmlFor="onboarding-gender" className="block text-sm font-semibold text-gray-700 mb-2">
+                  Gender (Optional)
+                </label>
+                <select
+                  id="onboarding-gender"
+                  value={onboardingData.gender}
+                  onChange={(e) => setOnboardingData((prev) => ({ ...prev, gender: e.target.value }))}
+                  className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-gray-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="">Prefer not to say</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="onboarding-madhab" className="block text-sm font-semibold text-gray-700 mb-2">
+                  School of Thought (Optional)
+                </label>
+                <select
+                  id="onboarding-madhab"
+                  value={onboardingData.madhab}
+                  onChange={(e) => setOnboardingData((prev) => ({ ...prev, madhab: e.target.value }))}
+                  className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-gray-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="">Prefer not to say</option>
+                  <option value="hanafi">Hanafi</option>
+                  <option value="shafi">Shafi</option>
+                  <option value="maliki">Maliki</option>
+                  <option value="hanbali">Hanbali</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  disabled={onboardingSaving}
+                  onClick={completeOnboardingAndContinue}
+                  className="w-full inline-flex justify-center items-center rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm sm:text-base font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={onboardingSaving}
+                  className="w-full inline-flex justify-center items-center rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-3 text-sm sm:text-base font-semibold text-white shadow-lg hover:from-emerald-600 hover:to-teal-600 disabled:opacity-50"
+                >
+                  {onboardingSaving ? 'Saving...' : 'Save Info'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

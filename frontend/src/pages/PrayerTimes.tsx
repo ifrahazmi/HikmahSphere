@@ -55,6 +55,7 @@ interface DailyPrayerCacheData {
   weatherData: any;
   islamicEvents: any[];
   isRamadanMonth: boolean;
+  currentHijriDate: HijriDate | null;
   nextHijriDate: HijriDate | null;
   nextDayPrayerData: any;
   nextDayFastingData: any;
@@ -488,6 +489,7 @@ const PrayerTimes: React.FC = () => {
   const [monthlyData, setMonthlyData] = useState<any>(null);
   const [islamicEvents, setIslamicEvents] = useState<any[]>([]);
   const [currentReminder, setCurrentReminder] = useState<IslamicReminder | null>(null);
+  const [currentHijriDate, setCurrentHijriDate] = useState<HijriDate | null>(null);
   const [nextHijriDate, setNextHijriDate] = useState<HijriDate | null>(null);
   const [nextDayPrayerData, setNextDayPrayerData] = useState<any>(null);
   const [nextDayFastingData, setNextDayFastingData] = useState<any>(null);
@@ -638,6 +640,7 @@ const PrayerTimes: React.FC = () => {
   const fetchData = useCallback(async (lat: number, lon: number, city?: string, country?: string) => {
     setLoading(true);
     setError(null);
+    setCurrentHijriDate(null);
     setNextHijriDate(null);
     setNextDayPrayerData(null);
     setNextDayFastingData(null);
@@ -666,6 +669,7 @@ const PrayerTimes: React.FC = () => {
       setWeatherData(cachedDailyData.weatherData);
       setIslamicEvents(cachedDailyData.islamicEvents || []);
       setIsRamadanMonth(Boolean(cachedDailyData.isRamadanMonth));
+      setCurrentHijriDate(cachedDailyData.currentHijriDate || null);
       setNextHijriDate(cachedDailyData.nextHijriDate || null);
       setNextDayPrayerData(cachedDailyData.nextDayPrayerData || null);
       setNextDayFastingData(cachedDailyData.nextDayFastingData || null);
@@ -767,10 +771,44 @@ const PrayerTimes: React.FC = () => {
         console.warn('Fasting API Error:', fastingJson);
       }
 
-      // Pre-fetch tomorrow's Hijri date so UI can roll over exactly at Maghrib.
+      // Fetch corrected Hijri dates from backend service (AlAdhan gToH + admin adjustment).
       const tomorrowGregorianDate = typeof fastingGregorianDate === 'string' && /^\d{2}-\d{2}-\d{4}$/.test(fastingGregorianDate)
         ? addDaysToGregorianDDMMYYYY(fastingGregorianDate, 1)
         : null;
+      const currentHijriPromise = fetch(
+        `${API_URL}/prayers/hijri-date?latitude=${lat}&longitude=${lon}&date=${encodeURIComponent(requestGregorianDate)}&country=${encodeURIComponent(country || '')}`
+      )
+        .then((r) => r.json())
+        .then((hijriJson) => {
+          if (hijriJson.status === 'success' && hijriJson.data?.hijri) {
+            return hijriJson.data.hijri as HijriDate;
+          }
+
+          return null;
+        })
+        .catch((hijriError) => {
+          console.warn('Current corrected Hijri fetch error:', hijriError);
+          return null;
+        });
+
+      const nextHijriPromise = tomorrowGregorianDate
+        ? fetch(
+          `${API_URL}/prayers/hijri-date?latitude=${lat}&longitude=${lon}&date=${encodeURIComponent(tomorrowGregorianDate)}&country=${encodeURIComponent(country || '')}`
+        )
+          .then((r) => r.json())
+          .then((hijriJson) => {
+            if (hijriJson.status === 'success' && hijriJson.data?.hijri) {
+              return hijriJson.data.hijri as HijriDate;
+            }
+
+            return null;
+          })
+          .catch((hijriError) => {
+            console.warn('Next corrected Hijri fetch error:', hijriError);
+            return null;
+          })
+        : Promise.resolve(null);
+
       const weatherPromise = fetch(`${API_URL}/prayers/weather?latitude=${lat}&longitude=${lon}`)
         .then((response) => response.json())
         .then((weatherJson) => (weatherJson.status === 'success' ? weatherJson.data : null))
@@ -797,33 +835,17 @@ const PrayerTimes: React.FC = () => {
           })
         : Promise.resolve(null);
 
-      const aladhanSchool = selectedMadhab === 'hanafi' ? 1 : 0;
       const nextDayPrayerPromise = tomorrowGregorianDate
         ? fetch(
-          `https://api.aladhan.com/v1/timings/${tomorrowGregorianDate}?latitude=${lat}&longitude=${lon}&method=${calculationMethod}&school=${aladhanSchool}&latitudeAdjustmentMethod=${highLatitudeRule}`
+          `${API_URL}/prayers/times?latitude=${lat}&longitude=${lon}&method=${calculationMethod}&school=${school}&date=${encodeURIComponent(tomorrowGregorianDate)}`
         )
           .then((r) => r.json())
           .then((nextPrayerJson) => {
-            if (nextPrayerJson.code !== 200 || !nextPrayerJson.data) {
+            if (nextPrayerJson.status !== 'success' || !nextPrayerJson.data) {
               return null;
             }
 
-            const nextDay = nextPrayerJson.data;
-            return {
-              times: {
-                Fajr: nextDay.timings?.Fajr,
-                Sunrise: nextDay.timings?.Sunrise,
-                Dhuhr: nextDay.timings?.Dhuhr,
-                Asr: nextDay.timings?.Asr,
-                Maghrib: nextDay.timings?.Maghrib,
-                Isha: nextDay.timings?.Isha,
-                Imsak: nextDay.timings?.Imsak,
-                Midnight: nextDay.timings?.Midnight,
-              },
-              date: nextDay.date,
-              qibla: prayerJson.data?.qibla,
-              meta: nextDay.meta || prayerJson.data?.meta,
-            };
+            return nextPrayerJson.data;
           })
           .catch((nextPrayerError) => {
             console.warn('Next-day prayer fetch error:', nextPrayerError);
@@ -848,7 +870,16 @@ const PrayerTimes: React.FC = () => {
           })
         : Promise.resolve(null);
 
-      const [weatherPayload, nextDayFastingPayload, nextDayPrayerPayload, ramadanPayload] = await Promise.all([
+      const [
+        currentHijriPayload,
+        nextHijriPayload,
+        weatherPayload,
+        nextDayFastingPayload,
+        nextDayPrayerPayload,
+        ramadanPayload,
+      ] = await Promise.all([
+        currentHijriPromise,
+        nextHijriPromise,
         weatherPromise,
         nextDayFastingPromise,
         nextDayPrayerPromise,
@@ -857,8 +888,12 @@ const PrayerTimes: React.FC = () => {
 
       if (hijriFetchRequestIdRef.current !== requestId) return;
 
-      const resolvedNextHijriDate = buildHijriDateFromFastingEntry(nextDayFastingPayload?.fasting?.[0]);
+      const resolvedCurrentHijriDate = currentHijriPayload || buildHijriDateFromPrayerSource(prayerJson?.data?.date?.hijri);
+      const resolvedNextHijriDate = nextHijriPayload
+        || buildHijriDateFromPrayerSource(nextDayPrayerPayload?.date?.hijri)
+        || buildHijriDateFromFastingEntry(nextDayFastingPayload?.fasting?.[0]);
 
+      setCurrentHijriDate(resolvedCurrentHijriDate);
       setWeatherData(weatherPayload);
       setNextDayFastingData(nextDayFastingPayload);
       setNextHijriDate(resolvedNextHijriDate);
@@ -877,6 +912,7 @@ const PrayerTimes: React.FC = () => {
         weatherData: weatherPayload,
         islamicEvents: events,
         isRamadanMonth: isRamadan,
+        currentHijriDate: resolvedCurrentHijriDate,
         nextHijriDate: resolvedNextHijriDate,
         nextDayPrayerData: nextDayPrayerPayload,
         nextDayFastingData: nextDayFastingPayload,
@@ -1641,7 +1677,7 @@ const PrayerTimes: React.FC = () => {
     return () => clearTimeout(scrollTimeout);
   }, [prayerData, currentPrayerIndex, viewMode]);
 
-  const prayerSourceHijriDate = buildHijriDateFromPrayerSource(prayerData?.date?.hijri);
+  const prayerSourceHijriDate = currentHijriDate || buildHijriDateFromPrayerSource(prayerData?.date?.hijri);
   const baseFastingEntry = fastingData?.fasting?.[0];
   const nextFastingEntry = nextDayFastingData?.fasting?.[0];
   const baseFastingHijriDate = buildHijriDateFromFastingEntry(baseFastingEntry);
@@ -1654,9 +1690,6 @@ const PrayerTimes: React.FC = () => {
   const isAfterMaghrib = Boolean(maghribTimeToday && nowForHijri >= maghribTimeToday);
   const activeIslamicGregorianDate = new Date(nowForHijri);
   activeIslamicGregorianDate.setHours(0, 0, 0, 0);
-  if (isAfterMaghrib) {
-    activeIslamicGregorianDate.setDate(activeIslamicGregorianDate.getDate() + 1);
-  }
   const fallbackNextHijri = incrementHijriByOneDay(baseHijriDate);
   const nextPrayerHijriDate = buildHijriDateFromPrayerSource(nextDayPrayerData?.date?.hijri);
   const nextFastingHijriDate = buildHijriDateFromFastingEntry(nextFastingEntry);
@@ -1665,12 +1698,9 @@ const PrayerTimes: React.FC = () => {
     || nextPrayerHijriDate
     || nextFastingHijriDate
     || fallbackNextHijri;
-  const effectiveHijriDate = isAfterMaghrib
-    ? (resolvedNextHijriDate || baseHijriDate)
-    : baseHijriDate;
+  const effectiveHijriDate = baseHijriDate;
   
-  // For India and similar regions, use local Hijri observation only as fallback
-  // Priority: API data > Local calculation with offset
+  // Final fallback only: local calculation with offset when all API sources fail.
   const fallbackCurrentHijriDate = buildLocationAwareHijriDateFromGregorianDate(activeIslamicGregorianDate, activeCountry);
   const displayHijriDate = resolvePreferredHijriDate(effectiveHijriDate, fallbackCurrentHijriDate)
     || effectiveHijriDate

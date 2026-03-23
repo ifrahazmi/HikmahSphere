@@ -16,6 +16,7 @@ import { useAuth } from '../hooks/useAuth';
 import toast from 'react-hot-toast';
 import PageSEO from '../components/PageSEO';
 import { API_URL } from '../config';
+import { MAX_UPLOAD_SIZE_BYTES, optimizeImageForUpload, readFileAsDataUrl } from '../utils/imageUpload';
 import {
   PRAYER_EXEMPTION_REASON_LABEL,
   QURAN_STATUS_LABEL,
@@ -89,14 +90,30 @@ const Profile: React.FC = () => {
       setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData(prev => ({ ...prev, avatar: reader.result as string }));
-      };
-      reader.readAsDataURL(file);
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || !e.target.files[0]) return;
+
+    const file = e.target.files[0];
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      e.target.value = '';
+      return;
+    }
+
+    if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+      toast.error('Image size must be 2MB or smaller');
+      e.target.value = '';
+      return;
+    }
+
+    try {
+      const optimizedFile = await optimizeImageForUpload(file);
+      const avatarDataUrl = await readFileAsDataUrl(optimizedFile);
+      setFormData(prev => ({ ...prev, avatar: avatarDataUrl }));
+    } catch (error) {
+      console.error('Avatar optimization failed:', error);
+      toast.error('Failed to process image. Please try another image.');
+      e.target.value = '';
     }
   };
 

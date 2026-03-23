@@ -14,6 +14,7 @@ import {
 import { useAuth } from '../../hooks/useAuth';
 import { API_URL } from '../../config';
 import toast from 'react-hot-toast';
+import { MAX_UPLOAD_SIZE_BYTES, optimizeImageForUpload, readFileAsDataUrl } from '../../utils/imageUpload';
 import RecordCollection from './RecordCollection';
 import RecordSpending from './RecordSpending';
 import DonorSummary from './DonorSummary';
@@ -1226,17 +1227,25 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                   id="edit-proof-upload"
                   accept="image/jpeg,image/jpg,image/png,application/pdf"
                   className="hidden"
-                  onChange={(e) => {
+                  onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (file) {
-                      if (file.size > 5 * 1024 * 1024) {
-                        toast.error('File must be under 5MB');
+                      if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+                        toast.error('File must be 2MB or smaller');
+                        e.target.value = '';
                         return;
                       }
-                      setEditProofFile(file);
-                      const reader = new FileReader();
-                      reader.onloadend = () => setEditProofPreview(reader.result as string);
-                      reader.readAsDataURL(file);
+
+                      try {
+                        const finalFile = file.type.startsWith('image/') ? await optimizeImageForUpload(file) : file;
+                        setEditProofFile(finalFile);
+                        const previewData = await readFileAsDataUrl(finalFile);
+                        setEditProofPreview(previewData);
+                      } catch (error) {
+                        console.error('Proof optimization failed:', error);
+                        toast.error('Failed to process file. Please try again.');
+                        e.target.value = '';
+                      }
                     }
                   }}
                 />
@@ -1247,7 +1256,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                   <ArrowUpOnSquareIcon className="w-4 h-4" />
                   {editingTransaction.proofFilePath ? 'Replace Proof' : 'Upload Proof'}
                 </label>
-                <p className="text-xs text-gray-500 mt-1">JPEG, PNG, or PDF. Max 5MB.</p>
+                <p className="text-xs text-gray-500 mt-1">JPEG, PNG, or PDF. Max 2MB.</p>
               </div>
 
               <div className="flex gap-3 pt-4">

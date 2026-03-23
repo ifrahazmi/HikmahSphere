@@ -1,7 +1,12 @@
 import express, { Request, Response } from 'express';
 import { body, query, validationResult } from 'express-validator';
-import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth';
+import { adminMiddleware, authMiddleware, optionalAuthMiddleware } from '../middleware/auth';
 import redisClient from '../config/redis';
+import {
+  getCorrectedHijriDate,
+  getGlobalHijriAdjustment,
+  setGlobalHijriAdjustment,
+} from '../services/hijriDateService';
 
 const router = express.Router();
 
@@ -174,54 +179,79 @@ function isAfterMaghrib(maghribTime: string, timezone: string = 'UTC'): boolean 
 }
 
 /**
- * Helper: Get the Islamic date considering Maghrib rule
- * - Before Maghrib: Use today's Islamic date
- * - After Maghrib: Use tomorrow's Islamic date (Islamic day starts at Maghrib)
+ * Helper: Parse DD-MM-YYYY into a local date object
  */
-function getIslamicDateAtMaghrib(hijriDate: any, maghribTime: string, timezone: string = 'UTC'): any {
-  const afterMaghrib = isAfterMaghrib(maghribTime, timezone);
-  
-  if (!afterMaghrib || !hijriDate) {
-    // Before Maghrib or no date - return today's Islamic date
-    return hijriDate;
-  }
-  
-  // After Maghrib - Islamic date should be tomorrow
-  // Add 1 day to Islamic date
-  const nextDay = new Date();
-  nextDay.setDate(nextDay.getDate() + 1);
-  
-  // If hijriDate has day/month/year properties, increment day
-  if (hijriDate && typeof hijriDate === 'object') {
-    const currentDay = parseInt(hijriDate.day) || parseInt(hijriDate.date?.split('-')[2]) || 1;
-    const currentMonth = hijriDate.month?.number || parseInt(hijriDate.date?.split('-')[1]) || 1;
-    const currentYear = hijriDate.year || parseInt(hijriDate.date?.split('-')[0]) || 1446;
-    
-    // Simple day increment (doesn't handle month/year boundaries perfectly)
-    const nextDayNum = currentDay + 1;
-    const daysInMonth = 30; // Approximate Islamic month length
-    
-    if (nextDayNum > daysInMonth) {
-      // Next month
-      return {
-        ...hijriDate,
-        day: '1',
-        month: {
-          ...hijriDate.month,
-          number: currentMonth + 1,
-        },
-        year: currentYear,
-      };
-    }
-    
-    return {
-      ...hijriDate,
-      day: String(nextDayNum),
-      date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(nextDayNum).padStart(2, '0')}`,
-    };
-  }
-  
-  return hijriDate;
+function parseDDMMYYYY(value: string): Date {
+  const [ddRaw = '1', mmRaw = '1', yyyyRaw = '1970'] = value.split('-');
+  const dd = parseInt(ddRaw, 10) || 1;
+  const mm = parseInt(mmRaw, 10) || 1;
+  const yyyy = parseInt(yyyyRaw, 10) || 1970;
+  return new Date(yyyy, mm - 1, dd);
+}
+
+function formatDDMMYYYY(date: Date): string {
+  return `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}-${date.getFullYear()}`;
+}
+
+function addDaysToDDMMYYYY(value: string, days: number): string {
+  const date = parseDDMMYYYY(value);
+  date.setDate(date.getDate() + days);
+  return formatDDMMYYYY(date);
+}
+
+const convertCorrectedHijriForPayload = (corrected: {
+  day: string;
+  month: { number: number; en: string; ar?: string };
+  year: string;
+  date: string;
+  readable: string;
+}, fallbackHijri: any): any => {
+  return {
+    ...(fallbackHijri || {}),
+    day: corrected.day,
+    month: {
+      ...(fallbackHijri?.month || {}),
+      number: corrected.month.number,
+      en: corrected.month.en,
+      ar: corrected.month.ar || fallbackHijri?.month?.ar,
+    },
+    year: corrected.year,
+    date: corrected.date,
+    readable: corrected.readable,
+  };
+};
+
+const resolveCorrectedHijriAtMaghrib = async (params: {
+  requestDate: string;
+  maghribTime: string;
+  timezone?: string;
+  latitude: string | number;
+  longitude: string | number;
+  country?: string;
+  fallbackHijri: any;
+}): Promise<any> => {
+  const {
+    requestDate,
+    maghribTime,
+    timezone,
+    latitude,
+    longitude,
+    country,
+    fallbackHijri,
+  } = params;
+
+  const islamicDateSourceDate = isAfterMaghrib(maghribTime, timezone)
+    ? addDaysToDDMMYYYY(requestDate, 1)
+    : requestDate;
+
+  const corrected = await getCorrectedHijriDate({
+    date: islamicDateSourceDate,
+    latitude,
+    longitude,
+    ...(country ? { country } : {}),
+  });
+
+  return convertCorrectedHijriForPayload(corrected, fallbackHijri);
 }
 
 /**
@@ -235,6 +265,122 @@ function getPrayerTimesDate(): string {
   const datePart = isoString.split('T')[0];
   return String(datePart); // YYYY-MM-DD format
 }
+
+router.get('/hijri-date', [
+  query('date')
+    .matches(/^\d{2}-\d{2}-\d{4}$/)
+    .withMessage('Date must be DD-MM-YYYY'),
+  query('latitude')
+    .isFloat({ min: -90, max: 90 })
+    .withMessage('Valid latitude required (-90 to 90)'),
+  query('longitude')
+    .isFloat({ min: -180, max: 180 })
+    .withMessage('Valid longitude required (-180 to 180)'),
+  query('country')
+    .optional()
+    .isString()
+    .withMessage('Country must be text'),
+], optionalAuthMiddleware, async (req: Request, res: Response) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Validation failed',
+      errors: errors.array(),
+    });
+  }
+
+  const {
+    date,
+    latitude,
+    longitude,
+    country,
+  } = req.query as {
+    date: string;
+    latitude: string;
+    longitude: string;
+    country?: string;
+  };
+
+  try {
+    const correctedHijri = await getCorrectedHijriDate({
+      date,
+      latitude,
+      longitude,
+      ...(country ? { country } : {}),
+    });
+
+    return res.json({
+      status: 'success',
+      data: {
+        hijri: {
+          day: correctedHijri.day,
+          month: correctedHijri.month,
+          year: correctedHijri.year,
+          date: correctedHijri.date,
+          readable: correctedHijri.readable,
+        },
+        fallback: correctedHijri.isFallback,
+      },
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch Hijri date',
+      details: error.message,
+    });
+  }
+});
+
+router.get('/hijri-adjustment', authMiddleware, adminMiddleware, async (req: Request, res: Response) => {
+  try {
+    const adjustment = await getGlobalHijriAdjustment('India');
+    return res.json({
+      status: 'success',
+      data: { adjustment },
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch Hijri adjustment',
+      details: error.message,
+    });
+  }
+});
+
+router.put('/hijri-adjustment', [
+  authMiddleware,
+  adminMiddleware,
+  body('adjustment')
+    .isInt({ min: -1, max: 0 })
+    .withMessage('Adjustment must be one of -1 or 0'),
+], async (req: any, res: Response) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Validation failed',
+      errors: errors.array(),
+    });
+  }
+
+  try {
+    const nextValue = parseInt(String(req.body.adjustment), 10) as -1 | 0;
+    const updated = await setGlobalHijriAdjustment(nextValue, req.user?.userId);
+
+    return res.json({
+      status: 'success',
+      data: { adjustment: updated },
+      message: 'Hijri adjustment updated successfully',
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to update Hijri adjustment',
+      details: error.message,
+    });
+  }
+});
 
 /**
  * @route   GET /api/prayers/times
@@ -331,9 +477,15 @@ router.get('/times', [
           const d = islamicData.data;
           console.log(`✅ IslamicAPI prayer times OK — Fajr: ${d.times.Fajr}`);
           
-          // Apply Maghrib rule for Islamic date
-          // Islamic date changes at Maghrib time, not midnight
-          const adjustedHijriDate = getIslamicDateAtMaghrib(d.date.hijri, d.times.Maghrib, d.timezone?.name);
+          // Hijri date is fetched from AlAdhan gToH and corrected with global adjustment.
+          const adjustedHijriDate = await resolveCorrectedHijriAtMaghrib({
+            requestDate,
+            maghribTime: d.times.Maghrib,
+            timezone: d.timezone?.name,
+            latitude,
+            longitude,
+            fallbackHijri: d.date.hijri,
+          });
 
           responseData = {
             status: 'success',
@@ -416,9 +568,13 @@ router.get('/times', [
 
         console.log(`✅ Aladhan prayer times OK — Fajr: ${data.timings.Fajr}`);
         
-        // Apply Maghrib rule for Islamic date
-        // Islamic date changes at Maghrib time, not midnight
-        const adjustedHijriDate = getIslamicDateAtMaghrib(data.date.hijri, data.timings.Maghrib);
+        const adjustedHijriDate = await resolveCorrectedHijriAtMaghrib({
+          requestDate,
+          maghribTime: data.timings.Maghrib,
+          latitude,
+          longitude,
+          fallbackHijri: data.date.hijri,
+        });
 
         responseData = {
           status: 'success',
@@ -584,7 +740,25 @@ router.get('/timesByCity', [
 
 	    if (apiData.code === 200 && apiData.data) {
 	      const data = apiData.data;
-	      const adjustedHijriDate = getIslamicDateAtMaghrib(data.date?.hijri, data.timings?.Maghrib, data.meta?.timezone);
+          const derivedLatitude = data?.meta?.latitude;
+          const derivedLongitude = data?.meta?.longitude;
+          let adjustedHijriDate = data.date?.hijri;
+
+          if (typeof derivedLatitude !== 'undefined' && typeof derivedLongitude !== 'undefined') {
+            try {
+              adjustedHijriDate = await resolveCorrectedHijriAtMaghrib({
+                requestDate,
+                maghribTime: data.timings?.Maghrib,
+                timezone: data.meta?.timezone,
+                latitude: String(derivedLatitude),
+                longitude: String(derivedLongitude),
+                country,
+                fallbackHijri: data.date?.hijri,
+              });
+            } catch (hijriError) {
+              console.warn('⚠️ Hijri correction failed for city route; using source hijri:', hijriError);
+            }
+          }
 	      const responseData = {
 	        status: 'success',
 	        data: {

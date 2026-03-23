@@ -832,7 +832,7 @@ const About: React.FC = () => {
                       </div>
                       <div className="flex-1">
                         <div className="text-amber-200 font-semibold">Islamic Learning Hub</div>
-                        <div className="text-amber-300/60 text-sm">Free & paid courses from qualified scholars</div>
+                        <div className="text-amber-300/60 text-sm">Free & paid courses from verified authentic source references</div>
                       </div>
                       <div className="px-3 py-1 bg-amber-500/20 text-amber-200 text-xs font-semibold rounded-full">
                         Planned
@@ -880,7 +880,7 @@ const About: React.FC = () => {
               Join the Journey
             </h2>
             <p className="text-xl text-emerald-100 max-w-3xl mx-auto">
-              Whether you're a user, scholar, or developer—there's a place for you in HikmahSphere
+              Whether you're a user, learner, or developer—there's a place for you in HikmahSphere
             </p>
           </div>
 
