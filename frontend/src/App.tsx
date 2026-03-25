@@ -20,6 +20,7 @@ import Home from './pages/Home';
 import Auth from './pages/Auth';
 import Dashboard from './pages/Dashboard';
 import PrayerTimes from './pages/PrayerTimes';
+import QiblaDirection from './pages/QiblaDirection';
 import QuranReader from './pages/QuranReader';
 import ZakatCalculator from './pages/ZakatCalculator';
 import Community from './pages/Community';
@@ -228,6 +229,7 @@ const AppContent: React.FC = () => {
           <Route path="/hajj-guide" element={<HajjGuide />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/prayers" element={<PrayerTimes />} />
+          <Route path="/prayers/qibla" element={<QiblaDirection />} />
           <Route path="/quran" element={
             <QuranProvider>
               <QuranReader />

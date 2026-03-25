@@ -6,6 +6,7 @@ importScripts('https://www.gstatic.com/firebasejs/10.7.2/firebase-app-compat.js'
 importScripts('https://www.gstatic.com/firebasejs/10.7.2/firebase-messaging-compat.js');
 
 const CACHE_NAME = 'hikmahsphere-app-v3';
+const TILE_CACHE = 'hikmahsphere-tiles-v1';
 const APP_SHELL = ['/', '/index.html', '/manifest.json', '/logo.png', '/favicon.ico'];
 
 // Initialize the Firebase app in the service worker by passing in
@@ -45,7 +46,7 @@ self.addEventListener('activate', (event) => {
     caches
       .keys()
       .then((keys) =>
-        Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))
+        Promise.all(keys.filter((key) => key !== CACHE_NAME && key !== TILE_CACHE).map((key) => caches.delete(key)))
       )
       .then(() => self.clients.claim())
   );
@@ -56,6 +57,28 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
+
+  // Tile requests: cache-first so offline map works after pre-cache.
+  if (url.hostname.includes('basemaps.cartocdn.com')) {
+    event.respondWith(
+      caches.open(TILE_CACHE).then((cache) =>
+        cache.match(request).then((cached) => {
+          if (cached) return cached;
+
+          return fetch(request)
+            .then((response) => {
+              if (response && response.ok) {
+                cache.put(request, response.clone());
+              }
+              return response;
+            })
+            .catch(() => new Response('', { status: 404 }));
+        })
+      )
+    );
+    return;
+  }
+
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/api/')) return;
 
@@ -92,6 +115,76 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
+
+self.addEventListener('message', (event) => {
+  var data = event.data;
+  if (!data || !event.source) return;
+
+  if (data.type === 'PRECACHE_TILES') {
+    precacheTiles(data.tiles || [], event.source);
+  }
+
+  if (data.type === 'CLEAR_TILE_CACHE') {
+    caches.delete(TILE_CACHE).then(() => {
+      event.source.postMessage({ type: 'TILE_CACHE_CLEARED' });
+    });
+  }
+
+  if (data.type === 'GET_TILE_CACHE_SIZE') {
+    getTileCacheSize().then((info) => {
+      event.source.postMessage({ type: 'TILE_CACHE_SIZE', count: info.count, bytes: info.bytes });
+    });
+  }
+});
+
+async function precacheTiles(tileUrls, client) {
+  var cache = await caches.open(TILE_CACHE);
+  var total = tileUrls.length;
+  var done = 0;
+  var errors = 0;
+  var batchSize = 12;
+
+  for (var i = 0; i < total; i += batchSize) {
+    var batch = tileUrls.slice(i, i + batchSize);
+    var results = await Promise.allSettled(
+      batch.map(async function(url) {
+        var existing = await cache.match(url);
+        if (existing) return;
+
+        var response = await fetch(url);
+        if (!response || !response.ok) {
+          throw new Error('Tile request failed');
+        }
+        await cache.put(url, response);
+      })
+    );
+
+    done += batch.length;
+    errors += results.filter(function(result) { return result.status === 'rejected'; }).length;
+    client.postMessage({ type: 'PRECACHE_PROGRESS', done: done, total: total, errors: errors });
+  }
+
+  client.postMessage({ type: 'PRECACHE_COMPLETE', total: total, errors: errors });
+}
+
+async function getTileCacheSize() {
+  try {
+    var cache = await caches.open(TILE_CACHE);
+    var keys = await cache.keys();
+    var bytes = 0;
+
+    for (var i = 0; i < keys.length; i += 1) {
+      var response = await cache.match(keys[i]);
+      if (!response) continue;
+      var blob = await response.clone().blob();
+      bytes += blob.size;
+    }
+
+    return { count: keys.length, bytes: bytes };
+  } catch (error) {
+    return { count: 0, bytes: 0 };
+  }
+}
 
 const createNotificationPayload = (payload) => {
   const id = payload?.data?.notificationId || payload?.messageId || `sw-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
