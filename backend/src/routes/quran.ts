@@ -7,6 +7,15 @@ const router = express.Router();
 
 // Al-Quran Cloud API Configuration
 const QURAN_API_BASE = 'https://api.alquran.cloud/v1';
+const EDITIONS_CACHE_TTL_MS = 1000 * 60 * 10;
+
+type EditionsCacheEntry = {
+  expiresAt: number;
+  data: any;
+};
+
+const editionsCache = new Map<string, EditionsCacheEntry>();
+const editionsInFlight = new Map<string, Promise<any>>();
 
 type BookmarkColor = 'emerald' | 'blue' | 'purple' | 'amber' | 'rose';
 
@@ -358,13 +367,74 @@ router.get('/surah/:number/editions', [
       });
     }
 
-    const response = await fetch(`${QURAN_API_BASE}/surah/${surahNum}/editions/${editions}`);
-    const data: any = await response.json();
-    
-    if (data.code === 200 && data.data) {
+    const normalizedEditions = editions
+      .split(',')
+      .map((edition) => edition.trim())
+      .filter((edition) => /^[a-z0-9._-]+$/i.test(edition));
+
+    if (!normalizedEditions.length) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid editions parameter',
+      });
+    }
+
+    const editionsPath = normalizedEditions.map((edition) => encodeURIComponent(edition)).join(',');
+    const upstreamUrl = `${QURAN_API_BASE}/surah/${surahNum}/editions/${editionsPath}`;
+
+    const cacheKey = `${surahNum}|${normalizedEditions.join(',')}`;
+    const now = Date.now();
+    const cached = editionsCache.get(cacheKey);
+    if (cached && cached.expiresAt > now) {
+      return res.json({
+        status: 'success',
+        data: cached.data,
+      });
+    }
+
+    let requestPromise = editionsInFlight.get(cacheKey);
+    if (!requestPromise) {
+      requestPromise = (async () => {
+        try {
+          const response = await fetch(upstreamUrl);
+          const rawBody = await response.text();
+          const data = (() => {
+            try {
+              return JSON.parse(rawBody);
+            } catch {
+              return null;
+            }
+          })();
+
+          if (!response.ok) {
+            throw new Error(`Upstream HTTP ${response.status}`);
+          }
+
+          if (data?.code !== 200 || !data?.data) {
+            const upstreamMessage = data?.status || data?.message || 'Failed to fetch surah editions';
+            throw new Error(upstreamMessage);
+          }
+
+          editionsCache.set(cacheKey, {
+            data: data.data,
+            expiresAt: Date.now() + EDITIONS_CACHE_TTL_MS,
+          });
+
+          return data.data;
+        } finally {
+          editionsInFlight.delete(cacheKey);
+        }
+      })();
+
+      editionsInFlight.set(cacheKey, requestPromise);
+    }
+
+    const resolvedData = await requestPromise;
+
+    if (resolvedData) {
       res.json({
         status: 'success',
-        data: data.data
+        data: resolvedData
       });
     } else {
       throw new Error('Failed to fetch surah editions');

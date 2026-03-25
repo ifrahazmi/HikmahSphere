@@ -7,9 +7,14 @@ interface QiblaCompassProps {
   noCompassAvailable: boolean;
   statusText: string;
   isAligned: boolean;
+  isLowAccuracy: boolean;
+  isCalibrating: boolean;
+  locationAccuracyMeters: number | null;
+  permissionHelpMessage: string | null;
   distanceKm: number | null;
   userLat: number | null;
   userLng: number | null;
+  onCompassCircleClick: () => void;
   darkMode?: boolean;
 }
 
@@ -24,9 +29,14 @@ const QiblaCompass: React.FC<QiblaCompassProps> = ({
   noCompassAvailable,
   statusText,
   isAligned,
+  isLowAccuracy,
+  isCalibrating,
+  locationAccuracyMeters,
+  permissionHelpMessage,
   distanceKm,
   userLat,
   userLng,
+  onCompassCircleClick,
   darkMode = false,
 }) => {
   const compassRotation = noCompassAvailable ? 0 : -currentHeading;
@@ -59,16 +69,30 @@ const QiblaCompass: React.FC<QiblaCompassProps> = ({
 
   const tone = darkMode ? 'dark' : 'light';
   const valuesAligned = isAligned && !noCompassAvailable;
+  const statusLevelClass = permissionHelpMessage ? 'blocked' : isLowAccuracy ? 'warning' : isAligned ? 'active' : '';
+  const ringClass = isLowAccuracy && !noCompassAvailable ? 'low-accuracy' : isAligned && !noCompassAvailable ? 'aligned' : '';
 
   return (
     <div className={`qibla-compass-card ${tone}`}>
       <div className={`qibla-status-bar ${tone}`}>
-        <span className={`qibla-status-dot ${isAligned ? 'active' : ''}`} />
+        <span className={`qibla-status-dot ${statusLevelClass}`} />
         {statusText}
       </div>
 
-      <div className="qibla-compass-wrapper">
-        <div className={`qibla-compass-ring ${isAligned && !noCompassAvailable ? 'aligned' : ''}`} />
+      <div
+        className="qibla-compass-wrapper"
+        role="button"
+        tabIndex={0}
+        onClick={onCompassCircleClick}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onCompassCircleClick();
+          }
+        }}
+        title="Tap to retry compass permission or calibrate"
+      >
+        <div className={`qibla-compass-ring ${ringClass}`} />
         <div className="qibla-top-pointer" />
         <div className="qibla-compass-inner">
           <div className="qibla-compass-plate" style={{ transform: `rotate(${compassRotation}deg)` }}>
@@ -98,6 +122,20 @@ const QiblaCompass: React.FC<QiblaCompassProps> = ({
           </div>
         </div>
       </div>
+
+      {isLowAccuracy && !noCompassAvailable && (
+        <p className="qibla-calibration-hint">
+          {isCalibrating
+            ? 'Calibrating compass...'
+            : 'Low accuracy detected. Tap compass or press Calibrate and move phone in a figure-8 motion.'}
+        </p>
+      )}
+
+      {locationAccuracyMeters !== null && (
+        <p className="qibla-accuracy-readout">GPS accuracy: {Math.round(locationAccuracyMeters)}m</p>
+      )}
+
+      {permissionHelpMessage && <p className="qibla-permission-help">{permissionHelpMessage}</p>}
 
       <div className="qibla-degree-pair">
         <div className={`qibla-degree-chip ${tone} ${valuesAligned ? 'glow' : ''}`}>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { MoonIcon, SunIcon } from '@heroicons/react/24/outline';
+import { MoonIcon, SparklesIcon, SunIcon } from '@heroicons/react/24/outline';
 import PageSEO from '../components/PageSEO';
 import QiblaCompass from '../components/qibla/QiblaCompass';
 import QiblaMap from '../components/qibla/QiblaMap';
@@ -18,7 +18,12 @@ const QiblaDirection: React.FC = () => {
     noCompassAvailable,
     statusText,
     gpsError,
+    locationAccuracyMeters,
+    isLowAccuracy,
+    isCalibrating,
+    permissionHelpMessage,
     isAligned,
+    calibrateCompass,
   } = useQiblaCompass();
 
   useEffect(() => {
@@ -40,19 +45,37 @@ const QiblaDirection: React.FC = () => {
           <div className="mx-auto mb-6 max-w-5xl text-center">
             <div className="mx-auto mb-2 flex w-full max-w-3xl items-center justify-between gap-3">
               <h1 className={`text-2xl font-bold sm:text-3xl md:text-4xl ${darkMode ? 'text-[#C9A84C]' : 'text-gray-900'}`}>Qibla Direction 🕋</h1>
-              <button
-                type="button"
-                onClick={() => setDarkMode((prev) => !prev)}
-                aria-label={darkMode ? 'Disable dark mode' : 'Enable dark mode'}
-                title={darkMode ? 'Disable dark mode' : 'Enable dark mode'}
-                className={`inline-flex h-10 w-10 items-center justify-center rounded-full border shadow-sm transition ${
-                  darkMode
-                    ? 'border-[#C9A84C]/50 bg-[#111827] text-[#E8D48B] hover:bg-[#1a2438]'
-                    : 'border-sky-300 bg-white text-sky-700 hover:bg-sky-50'
-                }`}
-              >
-                {darkMode ? <SunIcon className="h-5 w-5" /> : <MoonIcon className="h-5 w-5" />}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={calibrateCompass}
+                  aria-label="Calibrate compass"
+                  title="Calibrate compass"
+                  className={`inline-flex h-10 w-10 items-center justify-center rounded-full border shadow-sm transition ${
+                    isLowAccuracy
+                      ? 'border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100'
+                      : darkMode
+                      ? 'border-[#C9A84C]/50 bg-[#111827] text-[#E8D48B] hover:bg-[#1a2438]'
+                      : 'border-sky-300 bg-white text-sky-700 hover:bg-sky-50'
+                  }`}
+                >
+                  <SparklesIcon className={`h-5 w-5 ${isCalibrating ? 'animate-pulse' : ''}`} />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setDarkMode((prev) => !prev)}
+                  aria-label={darkMode ? 'Disable dark mode' : 'Enable dark mode'}
+                  title={darkMode ? 'Disable dark mode' : 'Enable dark mode'}
+                  className={`inline-flex h-10 w-10 items-center justify-center rounded-full border shadow-sm transition ${
+                    darkMode
+                      ? 'border-[#C9A84C]/50 bg-[#111827] text-[#E8D48B] hover:bg-[#1a2438]'
+                      : 'border-sky-300 bg-white text-sky-700 hover:bg-sky-50'
+                  }`}
+                >
+                  {darkMode ? <SunIcon className="h-5 w-5" /> : <MoonIcon className="h-5 w-5" />}
+                </button>
+              </div>
             </div>
             <div className={`mt-1 space-y-1 text-sm sm:text-base ${darkMode ? 'text-[#E8D48B]' : 'text-emerald-700'}`}>
               <p>Live Qibla Compass with GPS and Save map for offline use</p>
@@ -84,9 +107,14 @@ const QiblaDirection: React.FC = () => {
               noCompassAvailable={noCompassAvailable}
               statusText={statusText}
               isAligned={isAligned}
+              isLowAccuracy={isLowAccuracy}
+              isCalibrating={isCalibrating}
+              locationAccuracyMeters={locationAccuracyMeters}
+              permissionHelpMessage={permissionHelpMessage}
               distanceKm={distanceKm}
               userLat={userLat}
               userLng={userLng}
+              onCompassCircleClick={calibrateCompass}
               darkMode={darkMode}
             />
 

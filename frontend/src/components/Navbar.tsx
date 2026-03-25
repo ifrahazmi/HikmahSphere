@@ -22,15 +22,25 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isPrayerMenuOpen, setIsPrayerMenuOpen] = useState(false);
+  const [isQuranMenuOpen, setIsQuranMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const prayerDesktopMenuRef = useRef<HTMLDivElement>(null);
   const prayerMobileMenuRef = useRef<HTMLDivElement>(null);
+  const quranDesktopMenuRef = useRef<HTMLDivElement>(null);
+  const quranMobileMenuRef = useRef<HTMLDivElement>(null);
 
   const goToPrayerPage = (path: string) => {
     navigate(path);
     setIsPrayerMenuOpen(false);
+    setIsQuranMenuOpen(false);
+    setIsOpen(false);
+  };
+
+  const goToQuranPage = (path: string) => {
+    navigate(path);
+    setIsQuranMenuOpen(false);
     setIsOpen(false);
   };
 
@@ -38,12 +48,13 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     setIsPrayerMenuOpen(false);
+    setIsQuranMenuOpen(false);
     setIsOpen(false);
   }, [location.pathname]);
 
   // Check if we're on Quran page and get theme from localStorage
   const [quranTheme, setQuranTheme] = useState<'light' | 'dark'>('light');
-  const isQuranPage = location.pathname === '/quran';
+  const isQuranPage = location.pathname.startsWith('/quran');
   const [qiblaTheme, setQiblaTheme] = useState<'light' | 'dark'>('light');
   const isQiblaPage = location.pathname === '/prayers/qibla';
 
@@ -87,7 +98,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
     { name: 'About', href: '/about', current: location.pathname === '/about' },
     { name: 'Prayer', href: '/prayers', current: location.pathname.startsWith('/prayers') },
     { name: 'Dhikr & Dua', href: '/dhikr-dua', current: location.pathname === '/dhikr-dua' },
-    { name: 'Quran', href: '/quran', current: location.pathname === '/quran' },
+    { name: 'Quran', href: '/quran', current: location.pathname.startsWith('/quran') },
     { name: 'Zakat', href: '/zakat', current: location.pathname === '/zakat' },
     { name: 'Community', href: '/community', current: location.pathname === '/community' },
     { name: 'Hajj Guide', href: '/hajj-guide', current: location.pathname === '/hajj-guide' },
@@ -110,20 +121,26 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
 
       const clickedInsideDesktopPrayer = prayerDesktopMenuRef.current?.contains(event.target as Node);
       const clickedInsideMobilePrayer = prayerMobileMenuRef.current?.contains(event.target as Node);
+      const clickedInsideDesktopQuran = quranDesktopMenuRef.current?.contains(event.target as Node);
+      const clickedInsideMobileQuran = quranMobileMenuRef.current?.contains(event.target as Node);
 
       if (!clickedInsideDesktopPrayer && !clickedInsideMobilePrayer) {
         setIsPrayerMenuOpen(false);
       }
+
+      if (!clickedInsideDesktopQuran && !clickedInsideMobileQuran) {
+        setIsQuranMenuOpen(false);
+      }
     };
 
-    if (isProfileOpen || isPrayerMenuOpen) {
+    if (isProfileOpen || isPrayerMenuOpen || isQuranMenuOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isProfileOpen, isPrayerMenuOpen]);
+  }, [isProfileOpen, isPrayerMenuOpen, isQuranMenuOpen]);
 
   // Check for Super Admin Role
   const isSuperAdmin = hasRole && hasRole(['superadmin']);
@@ -185,7 +202,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                         <button
                           type="button"
                           onClick={() => goToPrayerPage('/prayers')}
-                          className={`block px-4 py-2 text-sm ${
+                          className={`block w-full px-4 py-2 text-left text-sm ${
                             isDark
                               ? 'text-gray-200 hover:bg-gray-600'
                               : 'text-gray-700 hover:bg-gray-100'
@@ -196,13 +213,63 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                         <button
                           type="button"
                           onClick={() => goToPrayerPage('/prayers/qibla')}
-                          className={`block px-4 py-2 text-sm ${
+                          className={`block w-full px-4 py-2 text-left text-sm ${
                             isDark
                               ? 'text-gray-200 hover:bg-gray-600'
                               : 'text-gray-700 hover:bg-gray-100'
                           }`}
                         >
                           Qibla Direction
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              if (item.name === 'Quran') {
+                return (
+                  <div key={item.name} className="relative" ref={quranDesktopMenuRef}>
+                    <button
+                      type="button"
+                      onClick={() => setIsQuranMenuOpen((prev) => !prev)}
+                      className={`px-1.5 lg:px-2 xl:px-2.5 py-1.5 lg:py-2 xl:py-2.5 rounded-md text-[11px] lg:text-xs xl:text-sm 2xl:text-base font-medium whitespace-nowrap transition-colors duration-200 inline-flex items-center gap-1 ${
+                        item.current
+                          ? isDark
+                            ? 'bg-emerald-900 text-emerald-300'
+                            : 'bg-emerald-100 text-emerald-700'
+                          : isDark
+                          ? 'text-gray-300 hover:text-emerald-400 hover:bg-gray-700'
+                          : 'text-gray-700 hover:text-emerald-600 hover:bg-emerald-50'
+                      }`}
+                    >
+                      {item.name}
+                      <ChevronDownIcon className={`h-3.5 w-3.5 transition-transform ${isQuranMenuOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {isQuranMenuOpen && (
+                      <div className={`absolute left-0 mt-2 w-64 rounded-md shadow-lg py-1 z-50 ${isDark ? 'bg-gray-700' : 'bg-white'}`}>
+                        <button
+                          type="button"
+                          onClick={() => goToQuranPage('/quran')}
+                          className={`block w-full px-4 py-2 text-left text-sm ${
+                            isDark
+                              ? 'text-gray-200 hover:bg-gray-600'
+                              : 'text-gray-700 hover:bg-gray-100'
+                          }`}
+                        >
+                          Quran and Translation
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => goToQuranPage('/quran/tafsir')}
+                          className={`block w-full px-4 py-2 text-left text-sm ${
+                            isDark
+                              ? 'text-gray-200 hover:bg-gray-600'
+                              : 'text-gray-700 hover:bg-gray-100'
+                          }`}
+                        >
+                          Tafsir Bayan-ul-Quran
                         </button>
                       </div>
                     )}
@@ -377,7 +444,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                       <div className="mt-1 space-y-1">
                         <button
                           type="button"
-                          className={`block px-4 py-2 rounded-md text-sm font-medium ${
+                          className={`block w-full px-4 py-2 rounded-md text-left text-sm font-medium ${
                             isDark
                               ? 'text-gray-300 hover:bg-gray-700 hover:text-emerald-400'
                               : 'text-gray-700 hover:bg-emerald-50 hover:text-emerald-600'
@@ -388,7 +455,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                         </button>
                         <button
                           type="button"
-                          className={`block px-4 py-2 rounded-md text-sm font-medium ${
+                          className={`block w-full px-4 py-2 rounded-md text-left text-sm font-medium ${
                             isDark
                               ? 'text-gray-300 hover:bg-gray-700 hover:text-emerald-400'
                               : 'text-gray-700 hover:bg-emerald-50 hover:text-emerald-600'
@@ -396,6 +463,60 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                           onClick={() => goToPrayerPage('/prayers/qibla')}
                         >
                           Qibla Direction
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              if (item.name === 'Quran') {
+                return (
+                  <div
+                    key={item.name}
+                    className="rounded-md border border-emerald-100 bg-emerald-50/40 px-2 py-2"
+                    ref={quranMobileMenuRef}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setIsQuranMenuOpen((prev) => !prev)}
+                      className={`w-full px-3 py-2 rounded-md text-base font-medium transition-colors duration-200 inline-flex items-center justify-between ${
+                        item.current
+                          ? isDark
+                            ? 'bg-emerald-900 text-emerald-300'
+                            : 'bg-emerald-100 text-emerald-700'
+                          : isDark
+                          ? 'text-gray-300 hover:text-emerald-400 hover:bg-gray-700'
+                          : 'text-gray-700 hover:text-emerald-600 hover:bg-emerald-50'
+                      }`}
+                    >
+                      Quran
+                      <ChevronDownIcon className={`h-4 w-4 transition-transform ${isQuranMenuOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {isQuranMenuOpen && (
+                      <div className="mt-1 space-y-1">
+                        <button
+                          type="button"
+                          className={`block w-full px-4 py-2 rounded-md text-left text-sm font-medium ${
+                            isDark
+                              ? 'text-gray-300 hover:bg-gray-700 hover:text-emerald-400'
+                              : 'text-gray-700 hover:bg-emerald-50 hover:text-emerald-600'
+                          }`}
+                          onClick={() => goToQuranPage('/quran')}
+                        >
+                          Quran and Translation
+                        </button>
+                        <button
+                          type="button"
+                          className={`block w-full px-4 py-2 rounded-md text-left text-sm font-medium ${
+                            isDark
+                              ? 'text-gray-300 hover:bg-gray-700 hover:text-emerald-400'
+                              : 'text-gray-700 hover:bg-emerald-50 hover:text-emerald-600'
+                          }`}
+                          onClick={() => goToQuranPage('/quran/tafsir')}
+                        >
+                          Tafsir Bayan-ul-Quran
                         </button>
                       </div>
                     )}

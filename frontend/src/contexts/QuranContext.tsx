@@ -268,7 +268,6 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     localStorage.setItem(userSettingsStorageKey, serialized);
     // Keep legacy key in sync for components that still read the global settings key.
     localStorage.setItem(LEGACY_QURAN_SETTINGS_KEY, serialized);
-    window.dispatchEvent(new Event('quranSettingsChanged'));
   }, [userSettingsStorageKey]);
 
   const saveBookmarksToLocal = useCallback((nextBookmarks: Bookmark[]) => {
@@ -627,11 +626,14 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
   // Update settings and reload if necessary
   const updateSettings = useCallback((newSettings: Partial<QuranSettings>) => {
     setSettings(prev => {
-      const updated = normalizeSettings({ ...prev, ...newSettings });
-      saveSettingsToLocal(updated);
-      return updated;
+      return normalizeSettings({ ...prev, ...newSettings });
     });
-  }, [normalizeSettings, saveSettingsToLocal]);
+  }, [normalizeSettings]);
+
+  useEffect(() => {
+    saveSettingsToLocal(settings);
+    window.dispatchEvent(new Event('quranSettingsChanged'));
+  }, [settings, saveSettingsToLocal]);
 
   // Navigation
   const goToSurah = useCallback((surahNumber: number) => {

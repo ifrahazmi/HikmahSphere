@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   BookOpenIcon,
   MagnifyingGlassIcon,
@@ -200,7 +200,7 @@ const QuranReader: React.FC = () => {
   const [showHeader, setShowHeader] = useState(true);
 
   // Scroll to specific ayah
-  const scrollToAyahNumber = (ayahNumber: number) => {
+  const scrollToAyahNumber = useCallback((ayahNumber: number) => {
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     const isIndoPak = settings.arabicFont === 'indopak-nastaleeq-v3';
 
@@ -280,7 +280,7 @@ const QuranReader: React.FC = () => {
     
     // Start the scroll attempt
     attemptScroll();
-  };
+  }, [settings.arabicFont]);
 
   // Sync temp settings when settings change
   useEffect(() => {
@@ -429,6 +429,7 @@ const QuranReader: React.FC = () => {
     settings.arabicFont,
     indopakV3Loading,
     indopakV3Surah,
+    scrollToAyahNumber,
   ]);
 
   // Add to recent searches

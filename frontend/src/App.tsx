@@ -22,6 +22,7 @@ import Dashboard from './pages/Dashboard';
 import PrayerTimes from './pages/PrayerTimes';
 import QiblaDirection from './pages/QiblaDirection';
 import QuranReader from './pages/QuranReader';
+import QuranTafsirBayan from './pages/QuranTafsirBayan';
 import ZakatCalculator from './pages/ZakatCalculator';
 import Community from './pages/Community';
 import DhikrDua from './pages/DhikrDua';
@@ -233,6 +234,11 @@ const AppContent: React.FC = () => {
           <Route path="/quran" element={
             <QuranProvider>
               <QuranReader />
+            </QuranProvider>
+          } />
+          <Route path="/quran/tafsir" element={
+            <QuranProvider>
+              <QuranTafsirBayan />
             </QuranProvider>
           } />
           <Route path="/dhikr-dua" element={<DhikrDua />} />
