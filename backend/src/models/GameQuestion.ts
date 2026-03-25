@@ -1,6 +1,6 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
-export type QuizCategory = 'quran' | 'hadith' | 'fiqh' | 'seerah' | 'general' | 'arabic' | 'history';
+export type QuizCategory = 'quran' | 'hadith' | 'fiqh' | 'seerah' | 'general' | 'arabic' | 'history' | 'hajj_umrah';
 export type QuizDifficulty = 'easy' | 'medium' | 'hard';
 
 export interface IGameQuestion extends Document {
@@ -19,7 +19,7 @@ const GameQuestionSchema = new Schema<IGameQuestion>(
   {
     category: {
       type: String,
-      enum: ['quran', 'hadith', 'fiqh', 'seerah', 'general', 'arabic', 'history'],
+      enum: ['quran', 'hadith', 'fiqh', 'seerah', 'general', 'arabic', 'history', 'hajj_umrah'],
       required: true,
       index: true,
     },

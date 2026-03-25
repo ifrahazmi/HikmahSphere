@@ -2154,9 +2154,13 @@ const DhikrDua: React.FC = () => {
                     <div className="text-center">
                       <p className="text-sm font-semibold text-emerald-700">Current Dhikr</p>
                       <p className={`mt-1 font-semibold ${selectedPreset.compact ? 'text-sm' : 'text-lg'} ${headingText}`}>{selectedPreset.label}</p>
-                      <p className={`mt-1 font-indopak-nastaleeq ${selectedPreset.compact ? 'text-xl leading-relaxed' : 'text-3xl'} ${
+                      <p
+                        className={`mt-1 tasbih-arabic-text ${selectedPreset.compact ? 'text-xl leading-relaxed' : 'text-3xl'} ${
                         isDarkMode ? 'text-emerald-100' : 'text-emerald-900'
-                      }`}>
+                        }`}
+                        dir="rtl"
+                        lang="ar"
+                      >
                         {selectedPreset.arabic}
                       </p>
                       {selectedPreset.transliteration && (

@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from "framer-motion";
 
 const EID_DATE = new Date("2026-03-21T00:00:00");
 const RAMADAN_POPUP_SESSION_KEY = "ramadanEliteShown";
-const EID_POPUP_SESSION_KEY = "eidMubarakShown";
 
 interface TimeLeft {
   days: number;
@@ -156,9 +155,16 @@ export default function RamadanElitePopup() {
   useEffect(() => {
     const syncOccasionPopup = () => {
       const reachedEid = Date.now() >= EID_DATE.getTime();
-      setIsEidDay(reachedEid);
+      // Do not auto-show Eid popup on website open.
+      if (reachedEid) {
+        setIsEidDay(false);
+        setVisible(false);
+        return;
+      }
 
-      const storageKey = reachedEid ? EID_POPUP_SESSION_KEY : RAMADAN_POPUP_SESSION_KEY;
+      setIsEidDay(false);
+
+      const storageKey = RAMADAN_POPUP_SESSION_KEY;
       if (!sessionStorage.getItem(storageKey)) {
         setVisible(true);
         sessionStorage.setItem(storageKey, "true");

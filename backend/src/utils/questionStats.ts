@@ -39,6 +39,7 @@ const CATEGORY_INFO: Record<QuizCategory, { name: string; icon: string }> = {
   general: { name: 'General Islamic', icon: '🌙' },
   arabic: { name: 'Arabic Language', icon: '🔤' },
   history: { name: 'Islamic History', icon: '📚' },
+  hajj_umrah: { name: 'Hajj & Umrah', icon: '🕋' },
 };
 
 /**
@@ -158,7 +159,7 @@ export function validateAllQuestions(): { valid: number; invalid: any[] } {
   SEED_QUESTIONS.forEach((q, index) => {
     const issues: string[] = [];
     
-    if (!q.category || !['quran', 'hadith', 'fiqh', 'seerah', 'general', 'arabic', 'history'].includes(q.category)) {
+    if (!q.category || !['quran', 'hadith', 'fiqh', 'seerah', 'general', 'arabic', 'history', 'hajj_umrah'].includes(q.category)) {
       issues.push('Invalid category');
     }
     

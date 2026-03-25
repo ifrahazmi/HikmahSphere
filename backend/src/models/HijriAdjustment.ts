@@ -36,8 +36,6 @@ const HijriAdjustmentSchema = new Schema<IHijriAdjustment>(
   }
 );
 
-HijriAdjustmentSchema.index({ key: 1 }, { unique: true });
-
 const HijriAdjustmentModel: Model<IHijriAdjustment> = mongoose.models.HijriAdjustment
   ? (mongoose.models.HijriAdjustment as Model<IHijriAdjustment>)
   : mongoose.model<IHijriAdjustment>('HijriAdjustment', HijriAdjustmentSchema);

@@ -1,3 +1,5 @@
+import { HAJJ_UMRAH_SEED_QUESTIONS } from './hajjUmrahQuestionsSeed';
+
 // ─── Islamic Quiz Questions Seed Data ─────────────────────────────────────────
 // 50 questions per category per difficulty level = 1,050 total questions
 // Categories: quran, hadith, fiqh, seerah, general, arabic, history
@@ -1097,4 +1099,5 @@ export const SEED_QUESTIONS = [
 { category: 'history', difficulty: 'hard', points: 10, timeLimitSeconds: 30, question: 'What year did the Portuguese capture Ceuta, marking the start of European colonialism in Muslim lands?', options: ['1415 CE', '1492 CE', '1453 CE', '1517 CE'], correctIndex: 0, explanation: 'The capture of Ceuta in 1415 CE began the Portuguese expansion.' },
 { category: 'history', difficulty: 'hard', points: 10, timeLimitSeconds: 30, question: 'Who was the last Fatimid Caliph?', options: ['Al-Adid', 'Al-Mustansir', 'Al-Hafiz', 'Al-Zafir'], correctIndex: 0, explanation: 'Al-Adid was deposed by Saladin in 1171 CE.' },
 { category: 'history', difficulty: 'hard', points: 10, timeLimitSeconds: 30, question: 'What was the name of the Mongol ruler who converted to Islam and founded the Ilkhanate?', options: ['Ghazan Khan', 'Hulagu Khan', 'Kublai Khan', 'Berke Khan'], correctIndex: 0, explanation: 'Ghazan Khan converted in 1295 CE and ruled the Ilkhanate.' },
+...HAJJ_UMRAH_SEED_QUESTIONS,
 ];

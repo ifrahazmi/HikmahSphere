@@ -8,14 +8,21 @@ const router = express.Router();
 // Using environment variables for secure credential management
 // Nodemailer Transporter Configuration
 const smtpPort = parseInt(process.env.SMTP_PORT || '587');
+const smtpSecure = process.env.SMTP_SECURE
+    ? process.env.SMTP_SECURE.toLowerCase() === 'true'
+    : smtpPort === 465;
+const smtpFrom = process.env.SMTP_FROM || `"HikmahSphere" <${process.env.SMTP_USER || 'no-reply@hikmahsphere.com'}>`;
+const smtpTo = process.env.SMTP_TO || process.env.SMTP_USER || 'admin@hikmahsphere.com';
 const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST || 'localhost',
     port: smtpPort,
-    secure: smtpPort === 465, // True for 465, false for other ports
-    auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-    },
+    secure: smtpSecure,
+    auth: process.env.SMTP_USER && process.env.SMTP_PASS
+        ? {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS,
+        }
+        : undefined,
     tls: {
         rejectUnauthorized: false // Keep this for compatibility
     }
@@ -52,9 +59,9 @@ router.post('/contact', [
     const { name, email, type, message } = req.body;
 
     const mailOptions = {
-        from: `"${name}" <${process.env.SMTP_USER || 'no-reply@hikmahsphere.com'}>`, // Sender address
-        replyTo: email, // Reply to the user's email
-        to: process.env.SMTP_USER || 'admin@hikmahsphere.com', // Send to admin
+        from: smtpFrom,
+        replyTo: `"${name}" <${email}>`,
+        to: smtpTo,
         subject: `[HikmahSphere ${type}] New Message from ${name}`,
         html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
@@ -122,8 +129,8 @@ router.post('/subscribe', [
     const { email } = req.body;
 
     const mailOptions = {
-        from: `"HikmahSphere System" <${process.env.SMTP_USER || 'no-reply@hikmahsphere.com'}>`,
-        to: process.env.SMTP_USER || 'admin@hikmahsphere.com', // Notify admin
+        from: smtpFrom,
+        to: smtpTo,
         subject: `[HikmahSphere Newsletter] New Subscriber`,
         html: `
             <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">

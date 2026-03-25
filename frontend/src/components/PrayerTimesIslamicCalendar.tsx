@@ -167,9 +167,13 @@ const PrayerTimesIslamicCalendar: React.FC<IslamicCalendarProps> = ({ whiteDays,
     : primaryHijriMonthLabel;
   const showHijriRange = displayedHijriMonthLabel !== currentHijriMonthLabel && orderedHijriMonthLabels.length > 1;
 
+  const getHijriMonthKey = (hijri: HijriInfo): string => (
+    `${normalizeHijriMonthName(hijri.monthEn)}-${hijri.year}`
+  );
+
   const whiteDayMap = new Map<string, WhiteDayEntry>();
   displayedDays.forEach(({ date, iso, hijri }) => {
-    const hijriMonthKey = `${hijri.monthEn}-${hijri.year}`;
+    const hijriMonthKey = getHijriMonthKey(hijri);
     if (hijriMonthKey !== primaryHijriMonthKey || ![13, 14, 15].includes(hijri.day)) return;
 
     whiteDayMap.set(iso, {
@@ -192,7 +196,7 @@ const PrayerTimesIslamicCalendar: React.FC<IslamicCalendarProps> = ({ whiteDays,
       }
 
       const hijri = getHijriInfo(date);
-      const hijriMonthKey = `${hijri.monthEn}-${hijri.year}`;
+  const hijriMonthKey = getHijriMonthKey(hijri);
       if (hijriMonthKey !== primaryHijriMonthKey) return;
 
       whiteDayMap.set(iso, { iso, date, label });

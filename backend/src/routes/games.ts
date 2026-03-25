@@ -8,7 +8,7 @@ import { SEED_QUESTIONS } from '../data/gameQuestionsSeed';
 import { getAllCategoryStats, getCompleteStats } from '../utils/questionStats';
 
 const router = express.Router();
-const QUIZ_CATEGORIES: QuizCategory[] = ['quran', 'hadith', 'fiqh', 'seerah', 'general', 'arabic', 'history'];
+const QUIZ_CATEGORIES: QuizCategory[] = ['quran', 'hadith', 'fiqh', 'seerah', 'general', 'arabic', 'history', 'hajj_umrah'];
 type QuizRequestCategory = QuizCategory | 'mixed';
 
 // ─── Seeding Helper ────────────────────────────────────────────────────────────
@@ -21,6 +21,21 @@ async function seedQuestionsIfNeeded() {
   if (count === 0) {
     await GameQuestion.insertMany(SEED_QUESTIONS);
     console.log(`✅ Seeded ${SEED_QUESTIONS.length} Islamic quiz questions`);
+  } else {
+    const existingQuestions = await GameQuestion.find({}, { category: 1, difficulty: 1, question: 1, _id: 0 }).lean();
+    const existingKeys = new Set(
+      existingQuestions.map((q) => `${q.category}|${q.difficulty}|${q.question.trim().toLowerCase()}`)
+    );
+
+    const missingQuestions = SEED_QUESTIONS.filter((q) => {
+      const key = `${q.category}|${q.difficulty}|${q.question.trim().toLowerCase()}`;
+      return !existingKeys.has(key);
+    });
+
+    if (missingQuestions.length > 0) {
+      await GameQuestion.insertMany(missingQuestions);
+      console.log(`✅ Seeded ${missingQuestions.length} new Islamic quiz questions`);
+    }
   }
   seeded = true;
 }
@@ -370,7 +385,9 @@ router.post(
             questionId: answer.questionId,
             question: q.question,
             selectedIndex: answer.selectedIndex,
+            selectedOptionText: q.options?.[answer.selectedIndex] ?? null,
             correctIndex: q.correctIndex,
+            correctOptionText: q.options?.[q.correctIndex] ?? null,
             isCorrect: true,
             pointsEarned: pts,
             explanation: q.explanation,
@@ -384,7 +401,9 @@ router.post(
             questionId: answer.questionId,
             question: q.question,
             selectedIndex: answer.selectedIndex,
+            selectedOptionText: q.options?.[answer.selectedIndex] ?? null,
             correctIndex: q.correctIndex,
+            correctOptionText: q.options?.[q.correctIndex] ?? null,
             isCorrect: false,
             pointsEarned: pts,
             explanation: q.explanation,
@@ -484,7 +503,7 @@ router.get('/daily-challenge', authMiddleware, async (req: any, res: any) => {
     const seed = getDailySeed();
     const shuffled = seededShuffle(allQuestions, seed);
     // Pick one from each category if possible, else just first 5
-    const categories = ['quran', 'hadith', 'fiqh', 'seerah', 'general', 'arabic', 'history'];
+    const categories = ['quran', 'hadith', 'fiqh', 'seerah', 'general', 'arabic', 'history', 'hajj_umrah'];
     const dailyQuestions: any[] = [];
     for (const cat of categories) {
       const q = shuffled.find((q) => q.category === cat);
@@ -579,11 +598,11 @@ router.post(
           correctCount++;
           const pts = calcPoints(q.points * 2, q.difficulty as QuizDifficulty, answer.timeSpentSeconds, q.timeLimitSeconds); // 2x multiplier
           totalPointsEarned += pts;
-          breakdown.push({ questionId: answer.questionId, question: q.question, selectedIndex: answer.selectedIndex, correctIndex: q.correctIndex, isCorrect: true, pointsEarned: pts, explanation: q.explanation });
+          breakdown.push({ questionId: answer.questionId, question: q.question, selectedIndex: answer.selectedIndex, selectedOptionText: q.options?.[answer.selectedIndex] ?? null, correctIndex: q.correctIndex, correctOptionText: q.options?.[q.correctIndex] ?? null, isCorrect: true, pointsEarned: pts, explanation: q.explanation });
         } else {
           const pts = calcWrongAnswerPenalty(q.points * 2);
           totalPointsEarned += pts;
-          breakdown.push({ questionId: answer.questionId, question: q.question, selectedIndex: answer.selectedIndex, correctIndex: q.correctIndex, isCorrect: false, pointsEarned: pts, explanation: q.explanation });
+          breakdown.push({ questionId: answer.questionId, question: q.question, selectedIndex: answer.selectedIndex, selectedOptionText: q.options?.[answer.selectedIndex] ?? null, correctIndex: q.correctIndex, correctOptionText: q.options?.[q.correctIndex] ?? null, isCorrect: false, pointsEarned: pts, explanation: q.explanation });
         }
       }
 

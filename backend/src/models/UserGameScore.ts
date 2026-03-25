@@ -27,6 +27,7 @@ export interface IUserGameScore extends Document {
     general: ICategoryStats;
     arabic: ICategoryStats;
     history: ICategoryStats;
+    hajj_umrah: ICategoryStats;
   };
   streak: {
     current: number;
@@ -51,6 +52,7 @@ export interface IUserGameScore extends Document {
     general: string[];
     arabic: string[];
     history: string[];
+    hajj_umrah: string[];
   };
   updatedAt: Date;
 }
@@ -85,6 +87,7 @@ const UserGameScoreSchema = new Schema<IUserGameScore>(
       general: { type: CategoryStatsSchema, default: () => ({ points: 0, correct: 0, total: 0 }) },
       arabic: { type: CategoryStatsSchema, default: () => ({ points: 0, correct: 0, total: 0 }) },
       history: { type: CategoryStatsSchema, default: () => ({ points: 0, correct: 0, total: 0 }) },
+      hajj_umrah: { type: CategoryStatsSchema, default: () => ({ points: 0, correct: 0, total: 0 }) },
     },
     streak: {
       current: { type: Number, default: 0 },
@@ -118,6 +121,7 @@ const UserGameScoreSchema = new Schema<IUserGameScore>(
       general: { type: [String], default: [] },
       arabic: { type: [String], default: [] },
       history: { type: [String], default: [] },
+      hajj_umrah: { type: [String], default: [] },
     },
   },
   { timestamps: true }

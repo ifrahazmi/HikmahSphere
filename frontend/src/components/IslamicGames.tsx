@@ -6,7 +6,7 @@ import { useAuth } from '../hooks/useAuth';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Category = 'quran' | 'hadith' | 'fiqh' | 'seerah' | 'general' | 'arabic' | 'history';
+type Category = 'quran' | 'hadith' | 'fiqh' | 'seerah' | 'general' | 'arabic' | 'history' | 'hajj_umrah';
 type Difficulty = 'easy' | 'medium' | 'hard';
 type QuizRequestCategory = Category | 'mixed';
 type LeaderboardPeriod = 'weekly' | 'monthly' | 'alltime';
@@ -33,7 +33,9 @@ interface BreakdownItem {
   questionId: string;
   question: string;
   selectedIndex: number;
+  selectedOptionText?: string;
   correctIndex: number;
+  correctOptionText?: string;
   isCorrect: boolean;
   pointsEarned: number;
   explanation: string;
@@ -122,6 +124,7 @@ const CATEGORY_META: Record<Category, { label: string; icon: string; color: stri
   general: { label: 'General Islamic',        icon: '🌙', color: 'text-amber-700',   bgColor: 'bg-amber-50',    borderColor: 'border-amber-300' },
   arabic:  { label: 'Arabic Language',        icon: '🔤', color: 'text-rose-700',    bgColor: 'bg-rose-50',     borderColor: 'border-rose-300' },
   history: { label: 'Islamic History',        icon: '📚', color: 'text-indigo-700',  bgColor: 'bg-indigo-50',   borderColor: 'border-indigo-300' },
+  hajj_umrah: { label: 'Hajj & Umrah',        icon: '🕋', color: 'text-orange-700',  bgColor: 'bg-orange-50',   borderColor: 'border-orange-300' },
 };
 
 const DIFFICULTY_META: Record<Difficulty, { label: string; color: string; bgColor: string; points: number }> = {
@@ -229,6 +232,16 @@ const IslamicGames: React.FC = () => {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const answersRef = useRef<AnswerRecord[]>([]);
+
+  const scrollPageTop = useCallback(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    });
+    window.setTimeout(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    }, 0);
+  }, []);
 
   const clearQuizTimer = () => {
     if (timerRef.current) {
@@ -413,6 +426,7 @@ const IslamicGames: React.FC = () => {
     setRequestedQuestionCount(defaultCount);
     setCustomQuestionCount('');
     setView('questionCount');
+    scrollPageTop();
   };
 
   const startQuiz = async (
@@ -575,6 +589,7 @@ const IslamicGames: React.FC = () => {
       setQuizRequestCategory(null);
       setSelectedDifficulty(null);
       setView('home');
+      scrollPageTop();
       return;
     }
 
@@ -922,9 +937,22 @@ const IslamicGames: React.FC = () => {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-800 mb-1">{item.question}</p>
                       {!item.isCorrect && (
-                        <p className="text-xs text-gray-600 mb-1">
-                          Correct: <span className="font-semibold text-green-700">Option {String.fromCharCode(65 + item.correctIndex)}</span>
-                        </p>
+                        <div className="mb-2 space-y-1">
+                          <p className="text-xs text-gray-600">
+                            Your answer:{' '}
+                            <span className="font-semibold text-red-700">
+                              Option {String.fromCharCode(65 + item.selectedIndex)}
+                              {item.selectedOptionText ? ` - ${item.selectedOptionText}` : ''}
+                            </span>
+                          </p>
+                          <p className="text-xs text-gray-600">
+                            Correct answer:{' '}
+                            <span className="font-semibold text-green-700">
+                              Option {String.fromCharCode(65 + item.correctIndex)}
+                              {item.correctOptionText ? ` - ${item.correctOptionText}` : ''}
+                            </span>
+                          </p>
+                        </div>
                       )}
                       <p className="text-xs text-gray-500 italic">{item.explanation}</p>
 	                      {item.pointsEarned !== 0 && (
@@ -1223,6 +1251,7 @@ const IslamicGames: React.FC = () => {
         <h3 className="font-bold text-lg mb-1">⚡ Quick Play</h3>
         <p className="text-sm text-emerald-100 mb-3">Mixed categories, medium difficulty, choose your own question count</p>
         <button
+          type="button"
           onClick={() => openQuestionCountStep('mixed', 'medium', 'quickPlay')}
           disabled={loading}
           className="bg-white text-emerald-700 px-6 py-2 rounded-xl font-bold hover:bg-emerald-50 transition-all"
