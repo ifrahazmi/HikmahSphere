@@ -5,7 +5,7 @@
 importScripts('https://www.gstatic.com/firebasejs/10.7.2/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.2/firebase-messaging-compat.js');
 
-const CACHE_NAME = 'hikmahsphere-app-v3';
+const CACHE_NAME = 'hikmahsphere-app-v4';
 const TILE_CACHE = 'hikmahsphere-tiles-v1';
 const APP_SHELL = ['/', '/index.html', '/manifest.json', '/logo.png', '/favicon.ico'];
 
