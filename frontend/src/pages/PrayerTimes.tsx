@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import html2canvas from 'html2canvas';
+import { useNavigate } from 'react-router-dom';
 import {
   ClockIcon,
   MapPinIcon,
@@ -459,6 +460,7 @@ const incrementHijriByOneDay = (hijri?: HijriDate | null): HijriDate | null => {
 
 const PrayerTimes: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [location, setLocation] = useState<{lat: number, lon: number, city?: string, country?: string} | null>(null);
@@ -3536,13 +3538,16 @@ const PrayerTimes: React.FC = () => {
                     Qibla Direction
                 </h2>
                 <div className="flex flex-col items-center justify-center py-3 sm:py-4">
-                    <div className="text-3xl sm:text-4xl font-bold text-teal-600 mb-1">
-                        {Math.round(prayerData?.qibla?.direction?.degrees || 0)}°
-                    </div>
-                    <p className="text-gray-500 text-xs sm:text-sm">From North</p>
-                    <p className="text-gray-600 mt-2 font-medium text-xs sm:text-sm">
-                        Distance: {Math.round(prayerData?.qibla?.distance?.value || 0).toLocaleString()} km
+                    <p className="mt-3 text-center text-xs sm:text-sm text-gray-600">
+                      Need more accurate direction? Use the live compass view.
                     </p>
+                    <button
+                      type="button"
+                      onClick={() => navigate('/prayers/qibla')}
+                      className="mt-3 inline-flex items-center justify-center rounded-full bg-teal-600 px-4 py-2 text-xs sm:text-sm font-semibold text-white transition hover:bg-teal-700"
+                    >
+                      Click Here for Qibla Compass
+                    </button>
                 </div>
             </div>
 
