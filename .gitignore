@@ -38,3 +38,5 @@ docker-compose.override.yml
 backend/config/firebase-credentials/service-account.json
 db_data/
 .dump/
+tmp/
+temp/
