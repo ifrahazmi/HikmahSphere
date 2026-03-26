@@ -105,6 +105,8 @@ const QuranTafsirBayan: React.FC = () => {
   const [bookmarkModalViewport, setBookmarkModalViewport] = useState<{ height: number; offsetTop: number } | null>(null);
   const readerContentRef = useRef<HTMLDivElement | null>(null);
   const bookmarkViewportRafRef = useRef<number | null>(null);
+  const mobileSettingsSwipeStartYRef = useRef<number | null>(null);
+  const mobileSettingsSwipeCurrentYRef = useRef<number | null>(null);
   const tapTrackerRef = useRef<{ ayahNum: number | null; count: number; lastAt: number }>({
     ayahNum: null,
     count: 0,
@@ -127,6 +129,34 @@ const QuranTafsirBayan: React.FC = () => {
   const getScrollBehavior = useCallback((): ScrollBehavior => {
     if (typeof window === 'undefined') return 'auto';
     return window.matchMedia('(max-width: 1023px)').matches ? 'auto' : 'smooth';
+  }, []);
+
+  const onMobileSettingsTouchStart = useCallback((event: React.TouchEvent) => {
+    const touch = event.touches[0];
+    mobileSettingsSwipeStartYRef.current = touch?.clientY ?? null;
+    mobileSettingsSwipeCurrentYRef.current = touch?.clientY ?? null;
+  }, []);
+
+  const onMobileSettingsTouchMove = useCallback((event: React.TouchEvent) => {
+    const touch = event.touches[0];
+    if (mobileSettingsSwipeStartYRef.current === null || !touch) return;
+    mobileSettingsSwipeCurrentYRef.current = touch.clientY;
+  }, []);
+
+  const onMobileSettingsTouchEnd = useCallback(() => {
+    if (mobileSettingsSwipeStartYRef.current === null || mobileSettingsSwipeCurrentYRef.current === null) {
+      mobileSettingsSwipeStartYRef.current = null;
+      mobileSettingsSwipeCurrentYRef.current = null;
+      return;
+    }
+
+    const deltaY = mobileSettingsSwipeCurrentYRef.current - mobileSettingsSwipeStartYRef.current;
+    mobileSettingsSwipeStartYRef.current = null;
+    mobileSettingsSwipeCurrentYRef.current = null;
+
+    if (deltaY > 90) {
+      setShowMobileSettings(false);
+    }
   }, []);
 
   const activeSurahMeta = useMemo(
@@ -1560,47 +1590,63 @@ const QuranTafsirBayan: React.FC = () => {
 
       {showMobileSettings && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setShowMobileSettings(false)} />
-          <div className={`absolute bottom-0 left-0 right-0 rounded-t-2xl p-4 max-h-[50vh] overflow-y-auto ${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
-            <div className="flex items-center justify-between mb-3">
-              <h2 className={`text-base font-semibold ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Settings</h2>
-              <button onClick={() => setShowMobileSettings(false)}>
-                <XMarkIcon className={`h-5 w-5 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`} />
-              </button>
+          <div className="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm" onClick={() => setShowMobileSettings(false)} />
+          <div
+            className={`absolute bottom-0 left-0 right-0 ${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'} rounded-t-2xl max-h-[85vh] overflow-hidden flex flex-col animate-slide-up`}
+            onTouchStart={onMobileSettingsTouchStart}
+            onTouchMove={onMobileSettingsTouchMove}
+            onTouchEnd={onMobileSettingsTouchEnd}
+          >
+            <div className="flex items-center justify-center pt-3 pb-2">
+              <div className={`w-12 h-1.5 ${settings.theme === 'dark' ? 'bg-gray-600' : 'bg-gray-300'} rounded-full`} />
             </div>
 
-            <div className="grid grid-cols-2 gap-2 mb-3">
-              <button
-                onClick={() => setSettingsTab('display')}
-                className={`rounded-lg px-3 py-2 text-sm font-medium ${
-                  settingsTab === 'display'
-                    ? 'bg-emerald-500 text-white'
-                    : settings.theme === 'dark'
-                    ? 'bg-gray-700 text-gray-200'
-                    : 'bg-gray-100 text-gray-700'
-                }`}
-              >
-                <span className="inline-flex items-center gap-1.5">
-                  <Squares2X2Icon className="h-4 w-4" />
-                  Display
-                </span>
-              </button>
-              <button
-                onClick={() => setSettingsTab('bookmarks')}
-                className={`rounded-lg px-3 py-2 text-sm font-medium ${
-                  settingsTab === 'bookmarks'
-                    ? 'bg-amber-500 text-white'
-                    : settings.theme === 'dark'
-                    ? 'bg-gray-700 text-gray-200'
-                    : 'bg-gray-100 text-gray-700'
-                }`}
-              >
-                <span className="inline-flex items-center gap-1.5">
-                  <BookmarkIcon className="h-4 w-4" />
-                  Bookmarks
-                </span>
-              </button>
+            <div className={`px-4 py-3 border-b ${settings.theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className={`text-lg font-bold ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Settings</h2>
+                <button
+                  onClick={() => setShowMobileSettings(false)}
+                  className={`p-2 rounded-lg ${settings.theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
+                >
+                  <XMarkIcon className={`h-5 w-5 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`} />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setSettingsTab('display')}
+                  className={`rounded-lg px-3 py-2 text-sm font-medium ${
+                    settingsTab === 'display'
+                      ? 'bg-emerald-500 text-white'
+                      : settings.theme === 'dark'
+                      ? 'bg-gray-700 text-gray-200'
+                      : 'bg-gray-100 text-gray-700'
+                  }`}
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    <Squares2X2Icon className="h-4 w-4" />
+                    Display
+                  </span>
+                </button>
+                <button
+                  onClick={() => setSettingsTab('bookmarks')}
+                  className={`rounded-lg px-3 py-2 text-sm font-medium ${
+                    settingsTab === 'bookmarks'
+                      ? 'bg-amber-500 text-white'
+                      : settings.theme === 'dark'
+                      ? 'bg-gray-700 text-gray-200'
+                      : 'bg-gray-100 text-gray-700'
+                  }`}
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    <BookmarkIcon className="h-4 w-4" />
+                    Bookmarks
+                  </span>
+                </button>
+              </div>
             </div>
+
+            <div className="flex-1 overflow-y-auto p-4">
 
             {settingsTab === 'display' && (
             <div className="space-y-3">
@@ -1839,6 +1885,7 @@ const QuranTafsirBayan: React.FC = () => {
                 </button>
               </div>
             )}
+            </div>
           </div>
         </div>
       )}

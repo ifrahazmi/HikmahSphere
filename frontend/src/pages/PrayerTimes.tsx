@@ -63,6 +63,76 @@ interface DailyPrayerCacheData {
   ramadanData: any;
 }
 
+type RakatType = 'Fard' | 'Sunnah Muakkadah' | 'Sunnah Ghair Muakkadah' | 'Nafl' | 'Witr (Wajib)';
+
+interface RakatEntry {
+  type: RakatType;
+  rakat: number | string;
+}
+
+const PRAYER_RAKAT_BREAKDOWN: Record<'Fajr' | 'Dhuhr' | 'Asr' | 'Maghrib' | 'Isha', RakatEntry[]> = {
+  Fajr: [
+    { type: 'Sunnah Muakkadah', rakat: 2 },
+    { type: 'Fard', rakat: 2 },
+  ],
+  Dhuhr: [
+    { type: 'Sunnah Muakkadah', rakat: 4 },
+    { type: 'Fard', rakat: 4 },
+    { type: 'Sunnah Muakkadah', rakat: 2 },
+    { type: 'Nafl', rakat: 2 },
+  ],
+  Asr: [
+    { type: 'Sunnah Ghair Muakkadah', rakat: 4 },
+    { type: 'Fard', rakat: 4 },
+  ],
+  Maghrib: [
+    { type: 'Fard', rakat: 3 },
+    { type: 'Sunnah Muakkadah', rakat: 2 },
+    { type: 'Nafl', rakat: 2 },
+  ],
+  Isha: [
+    { type: 'Sunnah Ghair Muakkadah', rakat: 4 },
+    { type: 'Fard', rakat: 4 },
+    { type: 'Sunnah Muakkadah', rakat: 2 },
+    { type: 'Nafl', rakat: 2 },
+    { type: 'Witr (Wajib)', rakat: 3 },
+    { type: 'Nafl', rakat: 2 },
+  ],
+};
+
+const SUNRISE_RAKAT_BREAKDOWN: RakatEntry[] = [
+  { type: 'Nafl', rakat: 2 },
+  { type: 'Nafl', rakat: '2-8' },
+];
+
+const RAKAT_TYPE_META: Record<RakatType, { icon: string; colorClassName: string; meaning: string }> = {
+  Fard: {
+    icon: '🔴',
+    colorClassName: 'text-red-600',
+    meaning: 'Obligatory',
+  },
+  'Sunnah Muakkadah': {
+    icon: '🟢',
+    colorClassName: 'text-green-600',
+    meaning: 'Strongly emphasized Sunnah',
+  },
+  'Sunnah Ghair Muakkadah': {
+    icon: '🟡',
+    colorClassName: 'text-yellow-600',
+    meaning: 'Less emphasized Sunnah',
+  },
+  Nafl: {
+    icon: '⚪',
+    colorClassName: 'text-gray-600',
+    meaning: 'Optional',
+  },
+  'Witr (Wajib)': {
+    icon: '🟣',
+    colorClassName: 'text-purple-600',
+    meaning: 'Wajib after Isha',
+  },
+};
+
 const HIJRI_MONTH_NAMES: Record<number, string> = {
   1: 'Muharram',
   2: 'Safar',
@@ -469,6 +539,8 @@ const PrayerTimes: React.FC = () => {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [showSearch, setShowSearch] = useState(false);
   const [showExtraPrayerInfo, setShowExtraPrayerInfo] = useState(false);
+  const [flippedCards, setFlippedCards] = useState<Record<string, boolean>>({});
+  const [openGuideCard, setOpenGuideCard] = useState<string | null>(null);
 
   // View mode and settings
   const [viewMode, setViewMode] = useState<'daily' | 'monthly' | 'ramadan'>('daily');
@@ -1893,6 +1965,14 @@ const PrayerTimes: React.FC = () => {
     { name: 'Isha', time: activePrayerData.times?.Isha, arabic: 'العشاء', description: 'Night Prayer', icon: MoonIcon },
   ] : [];
 
+  const handlePrayerCardFlip = (prayerName: string) => {
+    setOpenGuideCard(null);
+    setFlippedCards((prev) => ({
+      ...prev,
+      [prayerName]: !prev[prayerName],
+    }));
+  };
+
   // Show full screen spinner while loading initial data
   if (loading || !prayerData) {
     return (
@@ -2589,12 +2669,40 @@ const PrayerTimes: React.FC = () => {
                 // Calculate total seconds for countdown display
                 const totalSeconds = countdown.hours * 3600 + countdown.minutes * 60 + countdown.seconds;
                 const countdownDisplay = formatCountdown(totalSeconds);
+                const isFlipped = Boolean(flippedCards[prayer.name]);
+                const backRows = prayer.name === 'Sunrise'
+                  ? SUNRISE_RAKAT_BREAKDOWN.map((item, rowIndex) => ({
+                    ...item,
+                    key: `${prayer.name}-${rowIndex}`,
+                    label: rowIndex === 0 ? 'Ishraq (Nafl)' : 'Duha (Nafl)',
+                  }))
+                  : (PRAYER_RAKAT_BREAKDOWN[prayer.name as keyof typeof PRAYER_RAKAT_BREAKDOWN] || []).map((item, rowIndex) => ({
+                    ...item,
+                    key: `${prayer.name}-${item.type}-${rowIndex}`,
+                    label: item.type,
+                  }));
+                const usedRakatTypes = Array.from(new Set(backRows.map((item) => item.type as RakatType)));
+                const isGuideOpen = openGuideCard === prayer.name;
 
                 return (
                     <div 
                       ref={(el) => { prayerCardRefs.current[index] = el; }}
                       key={prayer.name} 
-                      className={`relative rounded-xl shadow-md p-4 sm:p-6 transition-all duration-300 flex flex-col justify-between
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`${prayer.name} prayer card. Tap to flip for rakat breakdown.`}
+                      aria-pressed={isFlipped}
+                      onClick={() => handlePrayerCardFlip(prayer.name)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          handlePrayerCardFlip(prayer.name);
+                        }
+                      }}
+                      className="prayer-flip-container relative h-full cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2"
+                    >
+                    <div className={`prayer-flip-inner h-full ${isFlipped ? 'is-flipped' : ''}`}>
+                    <div className={`prayer-flip-face prayer-flip-front relative rounded-xl shadow-md p-4 sm:p-6 transition-all duration-300 flex flex-col justify-between
                         ${isCurrentPrayer 
                           ? 'bg-gradient-to-br from-emerald-50 to-teal-50 border-2 border-emerald-500 shadow-lg scale-[1.02]' 
                           : isPastPrayer
@@ -2605,8 +2713,7 @@ const PrayerTimes: React.FC = () => {
                         ${!isCurrentPrayer && prayer.isSecondary ? 'border-orange-200' : ''}
                         ${isNextPrayer && !isNextDay ? 'ring-2 ring-emerald-400 ring-offset-2' : ''}
                         ${hasTopBadge ? 'pt-7 sm:pt-8' : ''}
-                      `}
-                    >
+                      `}>
                     {/* Current Prayer Badge */}
                     {isCurrentPrayer && (
                       <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
@@ -2662,10 +2769,11 @@ const PrayerTimes: React.FC = () => {
                             <p className="text-lg sm:text-xl font-bold font-arabic text-gray-600">{prayer.arabic}</p>
                             </div>
                         </div>
+                          <p className="text-[11px] font-medium text-gray-400">Tap to flip</p>
                     </div>
 
                     {prayer.name === 'Dhuhr' && isFriday && (
-                      <div className="mb-3 flex justify-center">
+                      <div className="mb-3 flex justify-center translate-y-[16px]">
                         <span className="inline-flex min-w-[160px] items-center justify-center rounded-full border border-emerald-300 bg-emerald-100 px-6 py-2 text-sm font-extrabold text-emerald-700 shadow-sm animate-pulse">
                           Friday
                         </span>
@@ -2842,6 +2950,75 @@ const PrayerTimes: React.FC = () => {
                                 </div>
                             </div>
                         )}
+                    </div>
+                    </div>
+                    <div className={`prayer-flip-face prayer-flip-back rounded-xl p-4 sm:p-6 flex flex-col
+                      ${isCurrentPrayer
+                        ? 'bg-gradient-to-br from-emerald-50 to-teal-50 border-2 border-emerald-500 shadow-lg'
+                        : isPastPrayer
+                          ? 'bg-gray-50 border-l-4 border-gray-300'
+                          : 'bg-white border-l-4 shadow-md'
+                      }
+                      ${!isCurrentPrayer && !prayer.isSecondary ? 'border-emerald-500' : ''}
+                      ${!isCurrentPrayer && prayer.isSecondary ? 'border-orange-200' : ''}
+                      ${isNextPrayer && !isNextDay ? 'ring-2 ring-emerald-400 ring-offset-2' : ''}
+                    `}>
+                      <div className="mb-3 flex items-start justify-between gap-2 border-b border-emerald-100 pb-2">
+                        <div>
+                          <p className="text-base sm:text-lg font-semibold text-gray-900">{prayer.name} Rakats</p>
+                          <p className="text-xs text-gray-500">{prayer.description}</p>
+                        </div>
+                        <div className="relative">
+                          <button
+                            type="button"
+                            aria-label={`${prayer.name} rakat guide`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setOpenGuideCard((prev) => (prev === prayer.name ? null : prayer.name));
+                            }}
+                            className="rounded-full p-1 text-emerald-700 hover:bg-emerald-100"
+                          >
+                            <InformationCircleIcon className="h-4 w-4" />
+                          </button>
+                          {isGuideOpen && (
+                            <div
+                              className="absolute right-0 top-8 z-20 w-64 rounded-lg border border-emerald-100 bg-white p-3 text-xs shadow-xl"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <p className="text-gray-700"><span className="font-semibold text-emerald-700">Sunnah Muakkadah:</span> strongly emphasized Sunnah.</p>
+                              <p className="mt-2 text-gray-700"><span className="font-semibold text-amber-700">Sunnah Ghair Muakkadah:</span> less emphasized Sunnah.</p>
+                              <div className="mt-3 border-t border-gray-100 pt-2">
+                                <p className="mb-1 font-semibold text-gray-600">Color key</p>
+                                <div className="space-y-1">
+                                  {usedRakatTypes.map((type) => {
+                                    const meta = RAKAT_TYPE_META[type];
+                                    return (
+                                      <p key={`${prayer.name}-${type}`} className={`${meta.colorClassName} font-medium`}>
+                                        {meta.icon} {type}
+                                      </p>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex-1 space-y-1.5">
+                        {backRows.map((item) => {
+                          const meta = RAKAT_TYPE_META[item.type as RakatType] || RAKAT_TYPE_META.Nafl;
+                          return (
+                            <div key={item.key} className="flex items-center justify-between gap-2 rounded-md border border-gray-100 bg-white/80 px-2 py-1.5">
+                              <p className={`text-[11px] sm:text-xs font-semibold ${meta.colorClassName}`}>
+                                {meta.icon} {item.label} - {item.rakat}
+                              </p>
+                              <span className="text-[10px] text-gray-500">{meta.meaning}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                     </div>
                     </div>
                 );

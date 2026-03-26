@@ -188,6 +188,8 @@ const QuranReader: React.FC = () => {
   const [selectedAyahForPlay, setSelectedAyahForPlay] = useState<{surah: number, ayah: number} | null>(null);
   const [pendingBookmarkTarget, setPendingBookmarkTarget] = useState<{ surahNumber: number; ayahNumber: number } | null>(null);
   const lockedScrollYRef = useRef<number | null>(null);
+  const mobileSettingsSwipeStartYRef = useRef<number | null>(null);
+  const mobileSettingsSwipeCurrentYRef = useRef<number | null>(null);
   
   // Enhanced mobile search state
   const [searchFilter, setSearchFilter] = useState<'all' | 'surah' | 'juz' | 'page'>('all');
@@ -398,6 +400,34 @@ const QuranReader: React.FC = () => {
   // Cancel mobile settings
   const cancelMobileSettings = () => {
     setShowMobileSettings(false);
+  };
+
+  const onMobileSettingsTouchStart = (event: React.TouchEvent) => {
+    const touch = event.touches[0];
+    mobileSettingsSwipeStartYRef.current = touch?.clientY ?? null;
+    mobileSettingsSwipeCurrentYRef.current = touch?.clientY ?? null;
+  };
+
+  const onMobileSettingsTouchMove = (event: React.TouchEvent) => {
+    const touch = event.touches[0];
+    if (mobileSettingsSwipeStartYRef.current === null || !touch) return;
+    mobileSettingsSwipeCurrentYRef.current = touch.clientY;
+  };
+
+  const onMobileSettingsTouchEnd = () => {
+    if (mobileSettingsSwipeStartYRef.current === null || mobileSettingsSwipeCurrentYRef.current === null) {
+      mobileSettingsSwipeStartYRef.current = null;
+      mobileSettingsSwipeCurrentYRef.current = null;
+      return;
+    }
+
+    const deltaY = mobileSettingsSwipeCurrentYRef.current - mobileSettingsSwipeStartYRef.current;
+    mobileSettingsSwipeStartYRef.current = null;
+    mobileSettingsSwipeCurrentYRef.current = null;
+
+    if (deltaY > 90) {
+      cancelMobileSettings();
+    }
   };
 
   const navigateToBookmark = (surahNumber: number, ayahNumber: number, closeMobile = false) => {
@@ -2478,7 +2508,12 @@ const QuranReader: React.FC = () => {
           ></div>
 
           {/* Modal Content - Slide up from bottom */}
-          <div className={`absolute bottom-0 left-0 right-0 ${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'} rounded-t-2xl max-h-[85vh] overflow-hidden flex flex-col animate-slide-up`}>
+          <div
+            className={`absolute bottom-0 left-0 right-0 ${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'} rounded-t-2xl max-h-[85vh] overflow-hidden flex flex-col animate-slide-up`}
+            onTouchStart={onMobileSettingsTouchStart}
+            onTouchMove={onMobileSettingsTouchMove}
+            onTouchEnd={onMobileSettingsTouchEnd}
+          >
             {/* Handle Bar */}
             <div className="flex items-center justify-center pt-3 pb-2">
               <div className={`w-12 h-1.5 ${settings.theme === 'dark' ? 'bg-gray-600' : 'bg-gray-300'} rounded-full`}></div>
