@@ -1,7 +1,7 @@
 :root {
   --qibla-gold: #C9A84C;
   --qibla-gold-light: #E8D48B;
-  --qibla-bg-deep: #0A0E17;
+  --qibla-bg-deep: #1f2937;
   --qibla-text-primary: #F0EDE6;
   --qibla-text-muted: #8896AB;
   --qibla-emerald: #2DD4A8;
@@ -60,8 +60,8 @@
 }
 
 .qibla-status-dot.warning {
-  background: #ef4444;
-  box-shadow: 0 0 10px rgba(239, 68, 68, 0.75);
+  background: #f59e0b;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.55);
 }
 
 .qibla-status-dot.blocked {
@@ -100,13 +100,13 @@
 }
 
 .qibla-compass-ring.low-accuracy {
-  border-color: #ef4444;
-  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.4), 0 0 24px rgba(239, 68, 68, 0.35), 0 0 48px rgba(239, 68, 68, 0.18);
+  border-color: rgba(201, 168, 76, 0.25);
+  box-shadow: none;
 }
 
 .qibla-compass-card.light .qibla-compass-ring.low-accuracy {
-  border-color: #dc2626;
-  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.35), 0 0 22px rgba(220, 38, 38, 0.25), 0 0 40px rgba(220, 38, 38, 0.14);
+  border-color: rgba(56, 189, 248, 0.7);
+  box-shadow: none;
 }
 
 .qibla-top-pointer {

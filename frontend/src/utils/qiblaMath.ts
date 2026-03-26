@@ -9,20 +9,46 @@ export interface LatLngPoint {
 const toRad = (deg: number): number => (deg * Math.PI) / 180;
 const toDeg = (rad: number): number => (rad * 180) / Math.PI;
 
+export const normalizeAngle = (angle: number): number => {
+  const normalized = angle % 360;
+  return normalized < 0 ? normalized + 360 : normalized;
+};
+
+export const smallestAngleDiff = (a: number, b: number): number => {
+  const diff = Math.abs(normalizeAngle(a) - normalizeAngle(b));
+  return diff > 180 ? 360 - diff : diff;
+};
+
+export const applyLowPassAngle = (previous: number, next: number, factor = 0.2): number => {
+  const prev = normalizeAngle(previous);
+  const target = normalizeAngle(next);
+  const delta = ((target - prev + 540) % 360) - 180;
+  return normalizeAngle(prev + delta * factor);
+};
+
+export const correctedHeadingFromEuler = (
+  alpha: number,
+  beta: number,
+  gamma: number,
+  screenOrientationAngle = 0
+): number => {
+  // Fallback correction for relative Android sensor streams.
+  const corrected = -(alpha + (beta * gamma) / 90);
+  return normalizeAngle(corrected + screenOrientationAngle);
+};
+
 export const calculateQiblaBearing = (lat: number, lng: number): number => {
   const phi1 = toRad(lat);
   const phi2 = toRad(KAABA_LAT);
   const deltaLambda = toRad(KAABA_LNG - lng);
 
-  return (
-    (toDeg(
+  return normalizeAngle(
+    toDeg(
       Math.atan2(
         Math.sin(deltaLambda),
         Math.cos(phi1) * Math.tan(phi2) - Math.sin(phi1) * Math.cos(deltaLambda)
       )
-    ) +
-      360) %
-    360
+    )
   );
 };
 

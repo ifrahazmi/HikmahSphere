@@ -40,7 +40,7 @@ const QiblaDirection: React.FC = () => {
         keywords={['qibla direction', 'qibla compass', 'kaaba direction', 'muslim compass']}
       />
 
-      <div className={`min-h-screen pb-8 ${darkMode ? 'bg-[#0A0E17]' : 'bg-gradient-to-br from-emerald-50 via-white to-teal-50'}`}>
+      <div className={`min-h-screen pb-8 ${darkMode ? 'bg-gray-900' : 'bg-gradient-to-br from-emerald-50 via-white to-teal-50'}`}>
         <div className="mx-auto max-w-7xl px-3 py-4 sm:px-4 sm:py-6 md:px-6 lg:px-8">
           <div className="mx-auto mb-6 max-w-5xl text-center">
             <div className="mx-auto mb-2 flex w-full max-w-3xl items-center justify-between gap-3">
@@ -51,7 +51,7 @@ const QiblaDirection: React.FC = () => {
                   onClick={calibrateCompass}
                   aria-label="Calibrate compass"
                   title="Calibrate compass"
-                  className={`inline-flex h-10 w-10 items-center justify-center rounded-full border shadow-sm transition ${
+                  className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-full border px-3 text-xs font-semibold shadow-sm transition ${
                     isLowAccuracy
                       ? 'border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100'
                       : darkMode
@@ -59,7 +59,8 @@ const QiblaDirection: React.FC = () => {
                       : 'border-sky-300 bg-white text-sky-700 hover:bg-sky-50'
                   }`}
                 >
-                  <SparklesIcon className={`h-5 w-5 ${isCalibrating ? 'animate-pulse' : ''}`} />
+                  <SparklesIcon className={`h-4 w-4 ${isCalibrating ? 'animate-pulse' : ''}`} />
+                  <span>Calibrate</span>
                 </button>
 
                 <button
@@ -83,7 +84,7 @@ const QiblaDirection: React.FC = () => {
           </div>
 
           {!isStarted && (
-            <div className={`mx-auto mb-6 max-w-md rounded-2xl border p-6 text-center shadow-sm ${darkMode ? 'border-[#C9A84C]/30 bg-[#111827]' : 'border-emerald-100 bg-white'}`}>
+            <div className={`mx-auto mb-6 max-w-md rounded-2xl border p-6 text-center shadow-sm ${darkMode ? 'border-[#C9A84C]/30 bg-gray-800/95' : 'border-emerald-100 bg-white'}`}>
               <button
                 type="button"
                 onClick={start}

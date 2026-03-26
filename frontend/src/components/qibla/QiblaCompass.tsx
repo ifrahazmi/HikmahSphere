@@ -70,7 +70,7 @@ const QiblaCompass: React.FC<QiblaCompassProps> = ({
   const tone = darkMode ? 'dark' : 'light';
   const valuesAligned = isAligned && !noCompassAvailable;
   const statusLevelClass = permissionHelpMessage ? 'blocked' : isLowAccuracy ? 'warning' : isAligned ? 'active' : '';
-  const ringClass = isLowAccuracy && !noCompassAvailable ? 'low-accuracy' : isAligned && !noCompassAvailable ? 'aligned' : '';
+  const ringClass = isAligned && !noCompassAvailable ? 'aligned' : '';
 
   return (
     <div className={`qibla-compass-card ${tone}`}>
@@ -134,8 +134,6 @@ const QiblaCompass: React.FC<QiblaCompassProps> = ({
       {locationAccuracyMeters !== null && (
         <p className="qibla-accuracy-readout">GPS accuracy: {Math.round(locationAccuracyMeters)}m</p>
       )}
-
-      {permissionHelpMessage && <p className="qibla-permission-help">{permissionHelpMessage}</p>}
 
       <div className="qibla-degree-pair">
         <div className={`qibla-degree-chip ${tone} ${valuesAligned ? 'glow' : ''}`}>

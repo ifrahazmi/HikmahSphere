@@ -183,11 +183,11 @@ const QiblaMap: React.FC<QiblaMapProps> = ({ userLat, userLng, currentHeading, n
 
   return (
     <div className="w-full space-y-4">
-      <div className={`rounded-2xl border p-2 shadow-sm ${darkMode ? 'border-[#C9A84C]/30 bg-[#111827]' : 'border-emerald-100 bg-white'}`}>
+      <div className={`rounded-2xl border p-2 shadow-sm ${darkMode ? 'border-[#C9A84C]/30 bg-gray-800/95' : 'border-emerald-100 bg-white'}`}>
         <div id="qibla-map" className="h-[290px] w-full rounded-xl" style={darkMode ? { filter: 'brightness(0.65) contrast(1.15) saturate(0.25) hue-rotate(180deg) invert(1)' } : undefined} />
       </div>
 
-      <div className={`rounded-2xl border p-4 shadow-sm ${darkMode ? 'border-[#C9A84C]/30 bg-[#111827]' : 'border-emerald-100 bg-white'}`}>
+      <div className={`rounded-2xl border p-4 shadow-sm ${darkMode ? 'border-[#C9A84C]/30 bg-gray-800/95' : 'border-emerald-100 bg-white'}`}>
         <div className="flex items-center justify-between">
           <h3 className={`text-base font-semibold ${darkMode ? 'text-[#C9A84C]' : 'text-gray-900'}`}>Offline Map</h3>
           <p className={`text-xs ${darkMode ? 'text-[#8896AB]' : 'text-gray-500'}`}>
