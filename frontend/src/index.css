@@ -744,7 +744,7 @@ code {
 /* Jameel Noori Nastaleeq - Urdu Translation Font */
 @font-face {
   font-family: 'Jameel Noori Nastaleeq';
-  src: url('../public/Jameel Noori Nastaleeq Regular.ttf') format('truetype');
+  src: local('Jameel Noori Nastaleeq'), url('../public/Jameel Noori Nastaleeq Regular.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
   font-display: swap;

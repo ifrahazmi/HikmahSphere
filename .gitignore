@@ -40,3 +40,4 @@ db_data/
 .dump/
 tmp/
 temp/
+backup/

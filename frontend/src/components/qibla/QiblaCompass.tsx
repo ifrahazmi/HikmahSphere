@@ -9,6 +9,7 @@ interface QiblaCompassProps {
   isAligned: boolean;
   isLowAccuracy: boolean;
   isCalibrating: boolean;
+  desktopMode: boolean;
   locationAccuracyMeters: number | null;
   permissionHelpMessage: string | null;
   distanceKm: number | null;
@@ -31,6 +32,7 @@ const QiblaCompass: React.FC<QiblaCompassProps> = ({
   isAligned,
   isLowAccuracy,
   isCalibrating,
+  desktopMode,
   locationAccuracyMeters,
   permissionHelpMessage,
   distanceKm,
@@ -123,7 +125,7 @@ const QiblaCompass: React.FC<QiblaCompassProps> = ({
         </div>
       </div>
 
-      {isLowAccuracy && !noCompassAvailable && (
+      {!desktopMode && isLowAccuracy && !noCompassAvailable && (
         <p className="qibla-calibration-hint">
           {isCalibrating
             ? 'Calibrating compass...'

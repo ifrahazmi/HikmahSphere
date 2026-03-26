@@ -27,6 +27,10 @@ const FIGURE_8_GUIDANCE = 'Move your phone in a figure-8 motion to calibrate com
 const INTERFERENCE_WARNING = 'Keep away from metal objects and use outdoors for best accuracy.';
 const COMPASS_WEAK_MESSAGE = 'Compass signal is weak. Hold phone level and calibrate for better accuracy.';
 const COMPASS_ACTIVE_LOW_ACCURACY = 'Compass active (accuracy low)';
+const DESKTOP_NO_COMPASS_MESSAGE = 'Desktop mode: compass not detected. Map mode is activated below for Qibla direction.';
+const DESKTOP_NO_COMPASS_HELP = 'Desktop browsers usually do not provide motion sensors. Pan and zoom the map to align direction.';
+const COMPASS_DETECTION_TIMEOUT_MS = 5000;
+const DESKTOP_COMPASS_DETECTION_TIMEOUT_MS = 3000;
 
 const isSecureOrLocalhost = (): boolean => {
   if (typeof window === 'undefined') return false;
@@ -54,6 +58,11 @@ const getCurrentPositionAsync = (): Promise<GeolocationPosition> =>
     });
   });
 
+const isDesktopMode = (): boolean => {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+  return window.matchMedia('(min-width: 1024px) and (hover: hover) and (pointer: fine)').matches;
+};
+
 const fetchDeclination = async (lat: number, lng: number): Promise<number | null> => {
   try {
     const response = await fetch(
@@ -71,6 +80,7 @@ const fetchDeclination = async (lat: number, lng: number): Promise<number | null
 };
 
 export const useQiblaCompass = () => {
+  const [desktopMode, setDesktopMode] = useState<boolean>(() => isDesktopMode());
   const [isStarted, setIsStarted] = useState(false);
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLng, setUserLng] = useState<number | null>(null);
@@ -262,6 +272,17 @@ export const useQiblaCompass = () => {
     return true;
   }, []);
 
+  const markDesktopNoCompassAvailable = useCallback(() => {
+    noCompassAvailableRef.current = true;
+    compassSupportedRef.current = false;
+
+    setNoCompassAvailable(true);
+    setCompassSupported(false);
+    setIsLowAccuracy(false);
+    setStatusText(DESKTOP_NO_COMPASS_MESSAGE);
+    setPermissionHelpMessage(DESKTOP_NO_COMPASS_HELP);
+  }, []);
+
   const start = useCallback(async () => {
     cleanupSensors();
 
@@ -307,7 +328,6 @@ export const useQiblaCompass = () => {
     }
 
     const handleOrientation = (event: DeviceOrientationEvent) => {
-      compassEventSeenRef.current = true;
       const iosEvent = event as DeviceOrientationEvent & { webkitCompassHeading?: number };
       let heading: number | null = null;
       let usesRelativeSensor = false;
@@ -326,6 +346,8 @@ export const useQiblaCompass = () => {
         setPermissionHelpMessage(`${FIGURE_8_GUIDANCE}. ${INTERFERENCE_WARNING}`);
         return;
       }
+
+      compassEventSeenRef.current = true;
 
       // Convert magnetic heading to true-north heading using declination correction.
       heading = normalizeAngle(heading + declinationRef.current);
@@ -459,19 +481,27 @@ export const useQiblaCompass = () => {
 
       window.addEventListener('deviceorientationabsolute', handleOrientation, true);
       window.addEventListener('deviceorientation', handleOrientation, true);
+      const detectionTimeoutMs = isDesktopMode()
+        ? DESKTOP_COMPASS_DETECTION_TIMEOUT_MS
+        : COMPASS_DETECTION_TIMEOUT_MS;
       compassTimeoutRef.current = window.setTimeout(() => {
         if (!compassEventSeenRef.current) {
+          if (isDesktopMode()) {
+            markDesktopNoCompassAvailable();
+            return;
+          }
+
           setIsLowAccuracy(true);
           setStatusText(COMPASS_WEAK_MESSAGE);
           setPermissionHelpMessage(`${FIGURE_8_GUIDANCE}. ${INTERFERENCE_WARNING}`);
         }
-      }, 5000);
+      }, detectionTimeoutMs);
     } else {
       setIsLowAccuracy(true);
       setStatusText(COMPASS_WEAK_MESSAGE);
       setPermissionHelpMessage('Compass sensors are not available in this browser.');
     }
-  }, [cleanupSensors, isUnstableHeading, onLocationError, onLocationSuccess, requestCompassPermission]);
+  }, [cleanupSensors, isUnstableHeading, markDesktopNoCompassAvailable, onLocationError, onLocationSuccess, requestCompassPermission]);
 
   const calibrateCompass = useCallback(async () => {
     setIsCalibrating(true);
@@ -509,6 +539,17 @@ export const useQiblaCompass = () => {
 
   useEffect(() => () => cleanupSensors(), [cleanupSensors]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+
+    const mediaQuery = window.matchMedia('(min-width: 1024px) and (hover: hover) and (pointer: fine)');
+    const onChange = (event: MediaQueryListEvent) => setDesktopMode(event.matches);
+
+    setDesktopMode(mediaQuery.matches);
+    mediaQuery.addEventListener('change', onChange);
+    return () => mediaQuery.removeEventListener('change', onChange);
+  }, []);
+
   const heading = currentHeading;
   const isCalibrated = !isLowAccuracy && !noCompassAvailable;
 
@@ -530,6 +571,7 @@ export const useQiblaCompass = () => {
     locationAccuracyMeters,
     isLowAccuracy,
     isCalibrating,
+    desktopMode,
     permissionHelpMessage,
     isCalibrated,
     isAligned,

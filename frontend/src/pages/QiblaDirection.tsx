@@ -21,6 +21,7 @@ const QiblaDirection: React.FC = () => {
     locationAccuracyMeters,
     isLowAccuracy,
     isCalibrating,
+    desktopMode,
     permissionHelpMessage,
     isAligned,
     calibrateCompass,
@@ -110,6 +111,7 @@ const QiblaDirection: React.FC = () => {
               isAligned={isAligned}
               isLowAccuracy={isLowAccuracy}
               isCalibrating={isCalibrating}
+              desktopMode={desktopMode}
               locationAccuracyMeters={locationAccuracyMeters}
               permissionHelpMessage={permissionHelpMessage}
               distanceKm={distanceKm}

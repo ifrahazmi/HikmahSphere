@@ -90,6 +90,7 @@
   </script>
 
   <link rel="manifest" href="/manifest.json"/>
+  <link rel="preload" href="/Jameel Noori Nastaleeq Regular.ttf" as="font" type="font/ttf" crossorigin/>
 
   <!-- Google Fonts: preconnect for early DNS+TLS, then load all Arabic fonts in one request -->
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
@@ -191,10 +192,16 @@
 
         var timer = setTimeout(hide, MAX_WAIT);
 
+        if (document.fonts && document.fonts.load) {
+          document.fonts.load('400 16px "Jameel Noori Nastaleeq"').catch(function () {
+            // Best-effort warmup only.
+          });
+        }
+
         if (document.fonts && document.fonts.ready) {
           document.fonts.ready.then(function () {
-            // Only hide early if at least one Arabic font actually loaded
-            var ok = ['Amiri', 'Noto Naskh Arabic'].some(function (f) {
+            // Hide early only if a primary script font loaded.
+            var ok = ['Amiri', 'Noto Naskh Arabic', 'Jameel Noori Nastaleeq'].some(function (f) {
               return document.fonts.check('400 16px "' + f + '"');
             });
             if (ok) { clearTimeout(timer); hideWithMinDelay(); }
