@@ -3,6 +3,7 @@ import {
   AdjustmentsHorizontalIcon,
   BookOpenIcon,
   BookmarkIcon,
+  ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   Cog6ToothIcon,
@@ -34,10 +35,15 @@ interface DisplayAyah {
 type ReaderMode = 'ayah' | 'surah';
 
 const DEFAULT_TEXT_AREA_BG = '#f8fffb';
+const DEFAULT_TEXT_AREA_BG_DARK = '#111827';
 const DEFAULT_ARABIC_AREA_BG = '#dcfce7';
+const DEFAULT_ARABIC_AREA_BG_DARK = '#1f2937';
 const DEFAULT_TRANSLATION_AREA_BG = '#ecfdf3';
+const DEFAULT_TRANSLATION_AREA_BG_DARK = '#0f172a';
 const DEFAULT_TAFSIR_AREA_BG = '#f0fdf4';
+const DEFAULT_TAFSIR_AREA_BG_DARK = '#111827';
 const DEFAULT_TAFSIR_TEXT_COLOR = '#1f2937';
+const DEFAULT_TAFSIR_TEXT_COLOR_DARK = '#f3f4f6';
 
 const AREA_BACKGROUND_OPTIONS = [
   { label: 'Default Gradient', value: '#ecfdf5', swatchClass: 'bg-gradient-to-br from-emerald-50 to-teal-50' },
@@ -56,6 +62,17 @@ const TAFSIR_TEXT_COLOR_OPTIONS = [
 ];
 
 const QuranTafsirBayan: React.FC = () => {
+  const configuredInitialLoadingMs = Number(process.env.REACT_APP_TAFSIR_INITIAL_LOADING_MS || '5000');
+  const initialLoadingMs = Number.isFinite(configuredInitialLoadingMs) ? configuredInitialLoadingMs : 5000;
+  const configuredBookmarkTapCount = Number(process.env.REACT_APP_TAFSIR_BOOKMARK_TAP_COUNT || '2');
+  const bookmarkTapCount = Number.isFinite(configuredBookmarkTapCount)
+    ? Math.max(1, Math.floor(configuredBookmarkTapCount))
+    : 2;
+  const configuredBookmarkTapIntervalMs = Number(process.env.REACT_APP_TAFSIR_BOOKMARK_TAP_INTERVAL_MS || '2000');
+  const bookmarkTapIntervalMs = Number.isFinite(configuredBookmarkTapIntervalMs)
+    ? Math.max(250, Math.floor(configuredBookmarkTapIntervalMs))
+    : 2000;
+
   const { surahs, settings, updateSettings, bookmarks, addBookmark, removeBookmark } = useQuran();
   const [readerMode, setReaderMode] = useState<ReaderMode>('ayah');
   const [selectedSurah, setSelectedSurah] = useState<number>(1);
@@ -63,6 +80,7 @@ const QuranTafsirBayan: React.FC = () => {
   const [selectedTranslation, setSelectedTranslation] = useState<string>(DEFAULT_URDU_TRANSLATION.identifier);
   const [tafsirEdition, setTafsirEdition] = useState<string>('bayan-ul-quran-dr-israr-ahmed');
   const [tafsirFontSize, setTafsirFontSize] = useState<number>(28);
+  const [initialScreenLoading, setInitialScreenLoading] = useState(true);
   const [textAreaBackgroundColor, setTextAreaBackgroundColor] = useState<string>(DEFAULT_TEXT_AREA_BG);
   const [tafsirAreaBackgroundColor, setTafsirAreaBackgroundColor] = useState<string>(DEFAULT_TAFSIR_AREA_BG);
   const [tafsirTextColor, setTafsirTextColor] = useState<string>(DEFAULT_TAFSIR_TEXT_COLOR);
@@ -72,6 +90,8 @@ const QuranTafsirBayan: React.FC = () => {
   const [ayahList, setAyahList] = useState<DisplayAyah[]>([]);
   const [showMobileSettings, setShowMobileSettings] = useState(false);
   const [showMobileSurahSearch, setShowMobileSurahSearch] = useState(false);
+  const [showMobileSurahPicker, setShowMobileSurahPicker] = useState(false);
+  const [showMobileAyahPicker, setShowMobileAyahPicker] = useState(false);
   const [settingsTab, setSettingsTab] = useState<'display' | 'bookmarks'>('display');
   const [pendingBookmarkTarget, setPendingBookmarkTarget] = useState<{ surahNumber: number; ayahNumber: number } | null>(null);
   const [bookmarkConfirm, setBookmarkConfirm] = useState<{
@@ -83,8 +103,31 @@ const QuranTafsirBayan: React.FC = () => {
     color?: BookmarkColor;
   } | null>(null);
   const [bookmarkModalViewport, setBookmarkModalViewport] = useState<{ height: number; offsetTop: number } | null>(null);
-  const longPressTimerRef = useRef<number | null>(null);
   const readerContentRef = useRef<HTMLDivElement | null>(null);
+  const bookmarkViewportRafRef = useRef<number | null>(null);
+  const tapTrackerRef = useRef<{ ayahNum: number | null; count: number; lastAt: number }>({
+    ayahNum: null,
+    count: 0,
+    lastAt: 0,
+  });
+  const touchGestureRef = useRef<{
+    ayahNum: number | null;
+    startX: number;
+    startY: number;
+    moved: boolean;
+    startAt: number;
+  }>({
+    ayahNum: null,
+    startX: 0,
+    startY: 0,
+    moved: false,
+    startAt: 0,
+  });
+
+  const getScrollBehavior = useCallback((): ScrollBehavior => {
+    if (typeof window === 'undefined') return 'auto';
+    return window.matchMedia('(max-width: 1023px)').matches ? 'auto' : 'smooth';
+  }, []);
 
   const activeSurahMeta = useMemo(
     () => surahs.find((surah) => surah.number === selectedSurah),
@@ -130,12 +173,27 @@ const QuranTafsirBayan: React.FC = () => {
   }, [surahs, surahSearch]);
 
   const isAyahMode = readerMode === 'ayah';
+  const resolvedTextAreaBackground =
+    settings.theme === 'dark' && textAreaBackgroundColor === DEFAULT_TEXT_AREA_BG
+      ? DEFAULT_TEXT_AREA_BG_DARK
+      : textAreaBackgroundColor;
+  const resolvedTafsirAreaBackground =
+    settings.theme === 'dark' && tafsirAreaBackgroundColor === DEFAULT_TAFSIR_AREA_BG
+      ? DEFAULT_TAFSIR_AREA_BG_DARK
+      : tafsirAreaBackgroundColor;
+  const resolvedTafsirTextColor =
+    settings.theme === 'dark' && tafsirTextColor === DEFAULT_TAFSIR_TEXT_COLOR
+      ? DEFAULT_TAFSIR_TEXT_COLOR_DARK
+      : tafsirTextColor;
   const mobilePrevDisabled = isAyahMode ? selectedAyah <= 1 : selectedSurah <= 1;
   const mobileNextDisabled = isAyahMode
     ? selectedAyah >= ayahOptions.length
     : selectedSurah >= surahOptions.length;
 
   const handleMobilePrev = useCallback(() => {
+    setShowMobileSurahPicker(false);
+    setShowMobileAyahPicker(false);
+
     if (isAyahMode) {
       setSelectedAyah((prev) => Math.max(1, prev - 1));
       return;
@@ -146,6 +204,9 @@ const QuranTafsirBayan: React.FC = () => {
   }, [isAyahMode]);
 
   const handleMobileNext = useCallback(() => {
+    setShowMobileSurahPicker(false);
+    setShowMobileAyahPicker(false);
+
     if (isAyahMode) {
       setSelectedAyah((prev) => Math.min(ayahOptions.length, prev + 1));
       return;
@@ -217,7 +278,8 @@ const QuranTafsirBayan: React.FC = () => {
   const getRenderBlockStyle = useCallback(
     (
       bookmarkColor: BookmarkColor | undefined,
-      defaultBackgroundColor: string,
+      defaultBackgroundColorLight: string,
+      defaultBackgroundColorDark: string,
       bookmarkOpacityLight: number,
       bookmarkOpacityDark: number
     ): React.CSSProperties => {
@@ -227,7 +289,7 @@ const QuranTafsirBayan: React.FC = () => {
       }
 
       return {
-        backgroundColor: defaultBackgroundColor,
+        backgroundColor: settings.theme === 'dark' ? defaultBackgroundColorDark : defaultBackgroundColorLight,
         borderColor: settings.theme === 'dark' ? 'rgba(75, 85, 99, 0.7)' : 'rgba(16, 185, 129, 0.24)',
       };
     },
@@ -242,6 +304,8 @@ const QuranTafsirBayan: React.FC = () => {
       setError(null);
       setAyahList([]);
       setPendingBookmarkTarget(null);
+      setShowMobileSurahPicker(false);
+      setShowMobileAyahPicker(false);
 
       if (mode === 'ayah') {
         setSelectedAyah(1);
@@ -249,44 +313,106 @@ const QuranTafsirBayan: React.FC = () => {
 
       setReaderMode(mode);
 
+      const behavior = getScrollBehavior();
+
       if (readerContentRef.current) {
-        readerContentRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        readerContentRef.current.scrollIntoView({ behavior, block: 'start' });
       } else {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        window.scrollTo({ top: 0, behavior });
       }
     },
-    [readerMode]
+    [getScrollBehavior, readerMode]
   );
 
-  const clearLongPressTimer = useCallback(() => {
-    if (longPressTimerRef.current !== null) {
-      window.clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-  }, []);
-
-  const startLongPress = useCallback(
+  const registerBookmarkTap = useCallback(
     (event: React.TouchEvent, ayahNum: number) => {
-      const touch = event.touches[0];
-      const x = touch?.clientX ?? window.innerWidth / 2;
-      const y = touch?.clientY ?? window.innerHeight / 2;
+      const now = Date.now();
+      const tracker = tapTrackerRef.current;
 
-      clearLongPressTimer();
-      longPressTimerRef.current = window.setTimeout(() => {
+      if (tracker.ayahNum === ayahNum && now - tracker.lastAt <= bookmarkTapIntervalMs) {
+        tracker.count += 1;
+      } else {
+        tracker.ayahNum = ayahNum;
+        tracker.count = 1;
+      }
+
+      tracker.lastAt = now;
+
+      if (tracker.count >= bookmarkTapCount) {
+        const touch = event.changedTouches[0] || event.touches[0];
+        const x = touch?.clientX ?? window.innerWidth / 2;
+        const y = touch?.clientY ?? window.innerHeight / 2;
+
         setBookmarkConfirm({
           surahNum: selectedSurah,
           ayahNum,
           x,
           y,
         });
-      }, 500);
+
+        tracker.count = 0;
+        tracker.ayahNum = null;
+      }
     },
-    [clearLongPressTimer, selectedSurah]
+    [bookmarkTapCount, bookmarkTapIntervalMs, selectedSurah]
   );
 
-  const endLongPress = useCallback(() => {
-    clearLongPressTimer();
-  }, [clearLongPressTimer]);
+  const beginBookmarkGesture = useCallback((event: React.TouchEvent, ayahNum: number) => {
+    const touch = event.touches[0];
+    touchGestureRef.current = {
+      ayahNum,
+      startX: touch?.clientX ?? 0,
+      startY: touch?.clientY ?? 0,
+      moved: false,
+      startAt: Date.now(),
+    };
+  }, []);
+
+  const trackBookmarkGestureMove = useCallback((event: React.TouchEvent, ayahNum: number) => {
+    const gesture = touchGestureRef.current;
+    if (gesture.ayahNum !== ayahNum) return;
+
+    const touch = event.touches[0];
+    if (!touch) return;
+
+    const deltaX = Math.abs(touch.clientX - gesture.startX);
+    const deltaY = Math.abs(touch.clientY - gesture.startY);
+    if (deltaX > 12 || deltaY > 12) {
+      gesture.moved = true;
+    }
+  }, []);
+
+  const finishBookmarkGesture = useCallback(
+    (event: React.TouchEvent, ayahNum: number) => {
+      const gesture = touchGestureRef.current;
+      if (gesture.ayahNum !== ayahNum) return;
+
+      const durationMs = Date.now() - gesture.startAt;
+      const isStaticTap = !gesture.moved && durationMs <= 450;
+
+      touchGestureRef.current = {
+        ayahNum: null,
+        startX: 0,
+        startY: 0,
+        moved: false,
+        startAt: 0,
+      };
+
+      if (!isStaticTap) return;
+      registerBookmarkTap(event, ayahNum);
+    },
+    [registerBookmarkTap]
+  );
+
+  const cancelBookmarkGesture = useCallback(() => {
+    touchGestureRef.current = {
+      ayahNum: null,
+      startX: 0,
+      startY: 0,
+      moved: false,
+      startAt: 0,
+    };
+  }, []);
 
   const confirmBookmark = useCallback(() => {
     if (!bookmarkConfirm) return;
@@ -470,6 +596,22 @@ const QuranTafsirBayan: React.FC = () => {
   }, [handleFetch]);
 
   useEffect(() => {
+    if (!initialScreenLoading) return;
+    // Keep fetching/updating in the background while splash is visible.
+    void handleFetch();
+  }, [handleFetch, initialScreenLoading]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setInitialScreenLoading(false);
+    }, initialLoadingMs);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [initialLoadingMs]);
+
+  useEffect(() => {
     const isMobileViewport =
       typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches;
     const defaultArabicSize = isMobileViewport ? 28 : 30;
@@ -493,10 +635,9 @@ const QuranTafsirBayan: React.FC = () => {
   }, [activeSurahMeta?.numberOfAyahs, selectedAyah]);
 
   useEffect(() => {
-    return () => {
-      clearLongPressTimer();
-    };
-  }, [clearLongPressTimer]);
+    setShowMobileSurahPicker(false);
+    setShowMobileAyahPicker(false);
+  }, [isAyahMode]);
 
   useEffect(() => {
     if (!bookmarkConfirm) {
@@ -513,15 +654,27 @@ const QuranTafsirBayan: React.FC = () => {
       }
     };
 
+    const requestViewportUpdate = () => {
+      if (bookmarkViewportRafRef.current !== null) return;
+      bookmarkViewportRafRef.current = window.requestAnimationFrame(() => {
+        updateViewport();
+        bookmarkViewportRafRef.current = null;
+      });
+    };
+
     updateViewport();
-    vv?.addEventListener('resize', updateViewport);
-    vv?.addEventListener('scroll', updateViewport);
-    window.addEventListener('resize', updateViewport);
+    vv?.addEventListener('resize', requestViewportUpdate);
+    vv?.addEventListener('scroll', requestViewportUpdate);
+    window.addEventListener('resize', requestViewportUpdate);
 
     return () => {
-      vv?.removeEventListener('resize', updateViewport);
-      vv?.removeEventListener('scroll', updateViewport);
-      window.removeEventListener('resize', updateViewport);
+      vv?.removeEventListener('resize', requestViewportUpdate);
+      vv?.removeEventListener('scroll', requestViewportUpdate);
+      window.removeEventListener('resize', requestViewportUpdate);
+      if (bookmarkViewportRafRef.current !== null) {
+        window.cancelAnimationFrame(bookmarkViewportRafRef.current);
+        bookmarkViewportRafRef.current = null;
+      }
     };
   }, [bookmarkConfirm]);
 
@@ -544,13 +697,181 @@ const QuranTafsirBayan: React.FC = () => {
     const timeoutId = window.setTimeout(() => {
       const targetElement = document.getElementById(`bayan-ayah-${pendingBookmarkTarget.ayahNumber}`);
       if (targetElement) {
-        targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        targetElement.scrollIntoView({ behavior: getScrollBehavior(), block: 'center' });
         setPendingBookmarkTarget(null);
       }
     }, 180);
 
     return () => window.clearTimeout(timeoutId);
-  }, [ayahList, loading, pendingBookmarkTarget, readerMode, selectedSurah]);
+  }, [ayahList, getScrollBehavior, loading, pendingBookmarkTarget, readerMode, selectedSurah]);
+
+  const renderedAyahCards = useMemo(
+    () =>
+      ayahList.map((ayah) => (
+        <article
+          key={ayah.ayahNumber}
+          id={`bayan-ayah-${ayah.ayahNumber}`}
+          className={`rounded-lg shadow-md border p-4 sm:p-5 ${settings.theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}
+          style={{
+            backgroundColor: resolvedTextAreaBackground,
+            borderColor: settings.theme === 'dark' ? '#374151' : '#d1d5db',
+          }}
+        >
+          {(() => {
+            const bookmark = getBookmarkByAyah(ayah.ayahNumber);
+            return (
+              <>
+                <div className="mb-2 flex items-center justify-between">
+                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${settings.theme === 'dark' ? 'bg-emerald-900 text-emerald-200' : 'bg-emerald-100 text-emerald-700'}`}>
+                    Ayah {ayah.ayahNumber}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      setBookmarkConfirm({
+                        surahNum: selectedSurah,
+                        ayahNum: ayah.ayahNumber,
+                        x: rect.left + rect.width / 2,
+                        y: rect.top,
+                      });
+                    }}
+                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors ${
+                      isBookmarked(selectedSurah, ayah.ayahNumber)
+                        ? settings.theme === 'dark'
+                          ? 'bg-amber-900/70 text-amber-200'
+                          : 'bg-amber-100 text-amber-700'
+                        : settings.theme === 'dark'
+                        ? 'bg-gray-700 text-gray-200 hover:bg-gray-600'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                    aria-label={isBookmarked(selectedSurah, ayah.ayahNumber) ? 'Edit or remove bookmark' : 'Save bookmark'}
+                    title={isBookmarked(selectedSurah, ayah.ayahNumber) ? 'Edit or remove bookmark' : 'Save bookmark'}
+                  >
+                    <BookmarkIcon className="h-3.5 w-3.5" />
+                    {isBookmarked(selectedSurah, ayah.ayahNumber) ? 'Bookmarked' : 'Save'}
+                  </button>
+                </div>
+
+                <div
+                  className="mb-3 rounded-xl p-4 border"
+                  style={getRenderBlockStyle(
+                    bookmark?.color,
+                    DEFAULT_ARABIC_AREA_BG,
+                    DEFAULT_ARABIC_AREA_BG_DARK,
+                    0.18,
+                    0.28
+                  )}
+                >
+                  <p
+                    dir="rtl"
+                    lang="ar"
+                    style={{
+                      fontSize: `${settings.fontSize}px`,
+                      textRendering: 'optimizeLegibility',
+                      fontVariantLigatures: 'common-ligatures contextual',
+                      fontFeatureSettings: '"liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1',
+                      WebkitTextSizeAdjust: '100%'
+                    }}
+                    className={`font-indopak-nastaleeq-v3 leading-[2.8] text-right tracking-normal whitespace-pre-wrap ${settings.theme === 'dark' ? 'text-gray-100' : 'text-black'}`}
+                    onTouchStart={(event) => beginBookmarkGesture(event, ayah.ayahNumber)}
+                    onTouchMove={(event) => trackBookmarkGestureMove(event, ayah.ayahNumber)}
+                    onTouchEnd={(event) => finishBookmarkGesture(event, ayah.ayahNumber)}
+                    onTouchCancel={cancelBookmarkGesture}
+                  >
+                    {ayah.arabicText || 'Ayah text unavailable in IndoPak source.'}
+                  </p>
+                </div>
+
+                <div
+                  className="mb-3 rounded-xl p-4 border"
+                  style={getRenderBlockStyle(
+                    bookmark?.color,
+                    DEFAULT_TRANSLATION_AREA_BG,
+                    DEFAULT_TRANSLATION_AREA_BG_DARK,
+                    0.1,
+                    0.2
+                  )}
+                >
+                  <h3 className={`mb-2 text-sm font-semibold ${settings.theme === 'dark' ? 'text-emerald-300' : 'text-emerald-700'}`}>
+                    Urdu Translation
+                  </h3>
+                  <p
+                    dir={isTranslationUrdu ? 'rtl' : 'ltr'}
+                    style={{ fontSize: `${settings.translationFontSize}px` }}
+                    className={`${isTranslationUrdu ? 'quran-urdu-translation text-right' : 'text-left leading-8'} ${settings.theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}
+                    onTouchStart={(event) => beginBookmarkGesture(event, ayah.ayahNumber)}
+                    onTouchMove={(event) => trackBookmarkGestureMove(event, ayah.ayahNumber)}
+                    onTouchEnd={(event) => finishBookmarkGesture(event, ayah.ayahNumber)}
+                    onTouchCancel={cancelBookmarkGesture}
+                  >
+                    {ayah.translationText || 'Translation unavailable for selected edition.'}
+                  </p>
+                </div>
+
+                <div
+                  className="rounded-xl p-4 border"
+                  style={getRenderBlockStyle(
+                    bookmark?.color,
+                    tafsirAreaBackgroundColor,
+                    resolvedTafsirAreaBackground,
+                    0.14,
+                    0.24
+                  )}
+                >
+                  <h3 className={`mb-2 text-sm font-semibold ${settings.theme === 'dark' ? 'text-emerald-300' : 'text-emerald-700'}`}>
+                    Tafsir Bayan-ul-Quran
+                  </h3>
+                  <p
+                    dir="rtl"
+                    lang="ur"
+                    style={{
+                      fontSize: `${tafsirFontSize}px`,
+                      textAlign: 'justify',
+                      textJustify: 'inter-word',
+                      lineHeight: 2.2,
+                      wordSpacing: '0.03em',
+                      overflowWrap: 'normal',
+                      wordBreak: 'normal',
+                      fontVariantLigatures: 'common-ligatures contextual',
+                      fontFeatureSettings: '"liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1',
+                      color: resolvedTafsirTextColor,
+                    }}
+                    className="quran-urdu-translation"
+                    onTouchStart={(event) => beginBookmarkGesture(event, ayah.ayahNumber)}
+                    onTouchMove={(event) => trackBookmarkGestureMove(event, ayah.ayahNumber)}
+                    onTouchEnd={(event) => finishBookmarkGesture(event, ayah.ayahNumber)}
+                    onTouchCancel={cancelBookmarkGesture}
+                  >
+                    {ayah.tafsirText}
+                  </p>
+                </div>
+              </>
+            );
+          })()}
+        </article>
+      )),
+    [
+      ayahList,
+      beginBookmarkGesture,
+      cancelBookmarkGesture,
+      getBookmarkByAyah,
+      getRenderBlockStyle,
+      finishBookmarkGesture,
+      isBookmarked,
+      isTranslationUrdu,
+      settings.fontSize,
+      settings.theme,
+      settings.translationFontSize,
+      resolvedTafsirAreaBackground,
+      resolvedTafsirTextColor,
+      resolvedTextAreaBackground,
+      selectedSurah,
+      tafsirAreaBackgroundColor,
+      tafsirFontSize,
+      trackBookmarkGestureMove,
+    ]
+  );
 
   return (
     <>
@@ -561,7 +882,27 @@ const QuranTafsirBayan: React.FC = () => {
         keywords={['tafsir bayan ul quran', 'dr israr ahmed tafsir', 'urdu tafsir', 'quran tafsir']}
       />
 
-      <div className={`min-h-screen ${settings.theme === 'dark' ? 'bg-gray-900' : 'bg-gradient-to-br from-emerald-50 via-white to-teal-50'}`}>
+      {initialScreenLoading && (
+        <div className={`fixed inset-0 z-[80] flex items-center justify-center px-5 ${settings.theme === 'dark' ? 'bg-gray-900' : 'bg-gradient-to-br from-emerald-50 via-white to-teal-50'}`}>
+          <div className={`w-full max-w-md rounded-2xl border shadow-xl p-6 text-center ${settings.theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-emerald-100'}`}>
+            <div className="mb-4">
+              <LoadingSpinner size="md" text="" />
+            </div>
+            <h2 className={`text-lg font-semibold mb-2 ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+              Preparing Tafsir Experience
+            </h2>
+            <p className={`text-sm leading-6 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+              We are loading the complete Quran with Surah details, Arabic ayat, translation, and Tafsir Bayan-ul-Quran. Please wait a moment.
+            </p>
+            <p className={`mt-2 text-xs ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+              Initial warm-up may take a few seconds depending on network speed.
+            </p>
+          </div>
+        </div>
+        )}
+
+        {!initialScreenLoading && (
+        <div className={`min-h-screen ${settings.theme === 'dark' ? 'bg-gray-900' : 'bg-gradient-to-br from-emerald-50 via-white to-teal-50'}`}>
         <div className="w-full">
           <div className="hidden lg:block text-center mb-3 pt-14">
             <div className="flex items-center justify-center gap-2 mb-1">
@@ -576,7 +917,7 @@ const QuranTafsirBayan: React.FC = () => {
           </div>
 
           <div className="lg:hidden pt-2 px-2 sticky top-16 z-40">
-            <div className={`${settings.theme === 'dark' ? 'bg-gray-800/95 border-gray-700' : 'bg-white/95 border-gray-100'} backdrop-blur-md rounded-xl shadow-lg border p-2`}>
+            <div className={`${settings.theme === 'dark' ? 'bg-gray-800/95 border-gray-700' : 'bg-white/95 border-gray-100'} backdrop-blur-none lg:backdrop-blur-md rounded-xl shadow-lg border p-2`}>
               <div className="grid grid-cols-[auto_1fr_auto] items-center gap-1 mb-2">
                 <div className="flex items-center gap-1.5">
                   <button
@@ -638,51 +979,45 @@ const QuranTafsirBayan: React.FC = () => {
                   {isAyahMode ? (
                     <div className="grid grid-cols-12 h-full">
                       <div className="col-span-7 px-2">
-                        <select
-                          value={selectedSurah}
-                          onChange={(event) => {
-                            setSelectedSurah(Number(event.target.value));
-                            setSelectedAyah(1);
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowMobileSurahPicker((prev) => !prev);
+                            setShowMobileAyahPicker(false);
                           }}
-                          className={`w-full h-full bg-transparent text-xs font-semibold border-0 focus:ring-0 ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}
+                          className={`w-full h-full bg-transparent text-xs font-semibold border-0 focus:ring-0 flex items-center justify-between ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}
                         >
-                          {surahOptions.map((surah) => (
-                            <option key={surah.number} value={surah.number}>
-                              {surah.number}. {surah.englishName}
-                            </option>
-                          ))}
-                        </select>
+                          <span className="truncate">{selectedSurah}. {activeSurahMeta?.englishName || 'Surah'}</span>
+                          <ChevronDownIcon className="h-3.5 w-3.5 flex-shrink-0" />
+                        </button>
                       </div>
                       <div className={`col-span-5 border-l px-2 ${settings.theme === 'dark' ? 'border-gray-600' : 'border-gray-300'}`}>
-                        <select
-                          value={selectedAyah}
-                          onChange={(event) => setSelectedAyah(Number(event.target.value))}
-                          className={`w-full h-full bg-transparent text-xs border-0 focus:ring-0 ${settings.theme === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowMobileAyahPicker((prev) => !prev);
+                            setShowMobileSurahPicker(false);
+                          }}
+                          className={`w-full h-full bg-transparent text-xs border-0 focus:ring-0 flex items-center justify-between ${settings.theme === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}
                         >
-                          {ayahOptions.map((ayahNumber) => (
-                            <option key={ayahNumber} value={ayahNumber}>
-                              Ayah {ayahNumber}
-                            </option>
-                          ))}
-                        </select>
+                          <span className="truncate">Ayah {selectedAyah}</span>
+                          <ChevronDownIcon className="h-3.5 w-3.5 flex-shrink-0" />
+                        </button>
                       </div>
                     </div>
                   ) : (
                     <div className="h-full px-2">
-                      <select
-                        value={selectedSurah}
-                        onChange={(event) => {
-                          setSelectedSurah(Number(event.target.value));
-                          setSelectedAyah(1);
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowMobileSurahPicker((prev) => !prev);
+                          setShowMobileAyahPicker(false);
                         }}
-                        className={`w-full h-full bg-transparent text-xs font-semibold border-0 focus:ring-0 ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}
+                        className={`w-full h-full bg-transparent text-xs font-semibold border-0 focus:ring-0 flex items-center justify-between ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}
                       >
-                        {surahOptions.map((surah) => (
-                          <option key={surah.number} value={surah.number}>
-                            {surah.number}. {surah.englishName}
-                          </option>
-                        ))}
-                      </select>
+                        <span className="truncate">{selectedSurah}. {activeSurahMeta?.englishName || 'Surah'}</span>
+                        <ChevronDownIcon className="h-3.5 w-3.5 flex-shrink-0" />
+                      </button>
                     </div>
                   )}
                 </div>
@@ -705,6 +1040,47 @@ const QuranTafsirBayan: React.FC = () => {
                   <p className={`text-[11px] text-center whitespace-nowrap ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
                     {activeSurahMeta.englishName} • {activeSurahMeta.numberOfAyahs} Ayahs
                   </p>
+                </div>
+              )}
+
+              {showMobileSurahPicker && (
+                <div className={`mt-2 rounded-lg border p-2 max-h-52 overflow-y-auto ${settings.theme === 'dark' ? 'border-gray-600 bg-gray-700' : 'border-gray-200 bg-white'}`}>
+                  <div className="space-y-1">
+                    {surahOptions.map((surah) => (
+                      <button
+                        key={`mobile-surah-${surah.number}`}
+                        type="button"
+                        onClick={() => {
+                          setSelectedSurah(surah.number);
+                          setSelectedAyah(1);
+                          setShowMobileSurahPicker(false);
+                        }}
+                        className={`w-full rounded-md px-2 py-2 text-left text-xs ${selectedSurah === surah.number ? (settings.theme === 'dark' ? 'bg-emerald-900 text-emerald-100' : 'bg-emerald-100 text-emerald-800') : settings.theme === 'dark' ? 'text-gray-200 hover:bg-gray-600' : 'text-gray-800 hover:bg-gray-50'}`}
+                      >
+                        {surah.number}. {surah.englishName}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {isAyahMode && showMobileAyahPicker && (
+                <div className={`mt-2 rounded-lg border p-2 max-h-52 overflow-y-auto ${settings.theme === 'dark' ? 'border-gray-600 bg-gray-700' : 'border-gray-200 bg-white'}`}>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {ayahOptions.map((ayahNumber) => (
+                      <button
+                        key={`mobile-ayah-${ayahNumber}`}
+                        type="button"
+                        onClick={() => {
+                          setSelectedAyah(ayahNumber);
+                          setShowMobileAyahPicker(false);
+                        }}
+                        className={`rounded-md px-2 py-2 text-xs ${selectedAyah === ayahNumber ? (settings.theme === 'dark' ? 'bg-emerald-900 text-emerald-100' : 'bg-emerald-100 text-emerald-800') : settings.theme === 'dark' ? 'text-gray-200 hover:bg-gray-600' : 'text-gray-800 hover:bg-gray-50'}`}
+                      >
+                        {ayahNumber}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -1121,106 +1497,7 @@ const QuranTafsirBayan: React.FC = () => {
 
                 {!loading && (
                 <div className="space-y-3">
-                  {ayahList.map((ayah) => (
-                    <article
-                      key={ayah.ayahNumber}
-                      id={`bayan-ayah-${ayah.ayahNumber}`}
-                      className={`rounded-lg shadow-md border p-4 sm:p-5 ${settings.theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}
-                      style={{
-                        backgroundColor: textAreaBackgroundColor,
-                        borderColor: settings.theme === 'dark' ? '#374151' : '#d1d5db',
-                      }}
-                    >
-                      {(() => {
-                        const bookmark = getBookmarkByAyah(ayah.ayahNumber);
-                        return (
-                          <>
-                      <div className="mb-2 flex items-center justify-between">
-                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${settings.theme === 'dark' ? 'bg-emerald-900 text-emerald-200' : 'bg-emerald-100 text-emerald-700'}`}>
-                          Ayah {ayah.ayahNumber}
-                        </span>
-                      </div>
-
-                      <div
-                        className="mb-3 rounded-xl p-4 border"
-                        style={getRenderBlockStyle(bookmark?.color, DEFAULT_ARABIC_AREA_BG, 0.18, 0.28)}
-                      >
-                        <p
-                          dir="rtl"
-                          lang="ar"
-                          style={{
-                            fontSize: `${settings.fontSize}px`,
-                            textRendering: 'optimizeLegibility',
-                            fontVariantLigatures: 'common-ligatures contextual',
-                            fontFeatureSettings: '"liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1',
-                            WebkitTextSizeAdjust: '100%'
-                          }}
-                          className="font-indopak-nastaleeq-v3 leading-[2.8] text-right text-black tracking-normal whitespace-pre-wrap"
-                          onTouchStart={(event) => startLongPress(event, ayah.ayahNumber)}
-                          onTouchEnd={endLongPress}
-                          onTouchCancel={endLongPress}
-                          onTouchMove={endLongPress}
-                        >
-                          {ayah.arabicText || 'Ayah text unavailable in IndoPak source.'}
-                        </p>
-                      </div>
-
-                      <div
-                        className="mb-3 rounded-xl p-4 border"
-                        style={getRenderBlockStyle(bookmark?.color, DEFAULT_TRANSLATION_AREA_BG, 0.1, 0.2)}
-                      >
-                        <h3 className={`mb-2 text-sm font-semibold ${settings.theme === 'dark' ? 'text-emerald-300' : 'text-emerald-700'}`}>
-                          Urdu Translation
-                        </h3>
-                        <p
-                          dir={isTranslationUrdu ? 'rtl' : 'ltr'}
-                          style={{ fontSize: `${settings.translationFontSize}px` }}
-                          className={`${isTranslationUrdu ? 'quran-urdu-translation text-right' : 'text-left leading-8'} ${settings.theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}
-                          onTouchStart={(event) => startLongPress(event, ayah.ayahNumber)}
-                          onTouchEnd={endLongPress}
-                          onTouchCancel={endLongPress}
-                          onTouchMove={endLongPress}
-                        >
-                          {ayah.translationText || 'Translation unavailable for selected edition.'}
-                        </p>
-                      </div>
-
-                      <div
-                        className="rounded-xl p-4 border"
-                        style={getRenderBlockStyle(bookmark?.color, tafsirAreaBackgroundColor, 0.14, 0.24)}
-                      >
-                        <h3 className={`mb-2 text-sm font-semibold ${settings.theme === 'dark' ? 'text-emerald-300' : 'text-emerald-700'}`}>
-                          Tafsir Bayan-ul-Quran
-                        </h3>
-                        <p
-                          dir="rtl"
-                          lang="ur"
-                          style={{
-                            fontSize: `${tafsirFontSize}px`,
-                            textAlign: 'justify',
-                            textJustify: 'inter-word',
-                            lineHeight: 2.2,
-                            wordSpacing: '0.03em',
-                            overflowWrap: 'normal',
-                            wordBreak: 'normal',
-                            fontVariantLigatures: 'common-ligatures contextual',
-                            fontFeatureSettings: '"liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1',
-                            color: tafsirTextColor,
-                          }}
-                          className="quran-urdu-translation"
-                          onTouchStart={(event) => startLongPress(event, ayah.ayahNumber)}
-                          onTouchEnd={endLongPress}
-                          onTouchCancel={endLongPress}
-                          onTouchMove={endLongPress}
-                        >
-                          {ayah.tafsirText}
-                        </p>
-                      </div>
-                          </>
-                        );
-                      })()}
-                    </article>
-                  ))}
+                  {renderedAyahCards}
                 </div>
                 )}
               </div>
@@ -1250,16 +1527,22 @@ const QuranTafsirBayan: React.FC = () => {
                           setSelectedSurah(surah.number);
                           setSelectedAyah(1);
                         }}
-                        className={`w-full rounded-md px-2 py-2 text-left text-sm transition-colors ${selectedSurah === surah.number ? 'bg-emerald-100' : settings.theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-emerald-50'}`}
+                        className={`w-full rounded-md px-2 py-2 text-left text-sm transition-colors ${
+                          selectedSurah === surah.number
+                            ? 'bg-emerald-100 text-black'
+                            : settings.theme === 'dark'
+                            ? 'text-gray-100 hover:bg-gray-700'
+                            : 'text-gray-900 hover:bg-emerald-50'
+                        }`}
                       >
                         <div className="space-y-1">
                           <div className="flex items-baseline gap-1.5">
-                            <span className="text-xs text-gray-600">{surah.number}.</span>
-                            <p className="font-scheherazade text-lg text-black leading-tight" dir="rtl">{surah.name}</p>
+                            <span className={`text-xs ${selectedSurah === surah.number ? 'text-black' : settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>{surah.number}.</span>
+                            <p className={`font-scheherazade text-lg leading-tight ${selectedSurah === surah.number ? 'text-black' : settings.theme === 'dark' ? 'text-white' : 'text-black'}`} dir="rtl">{surah.name}</p>
                           </div>
                           <div className="flex items-center justify-between gap-2">
-                            <p className={`text-xs truncate leading-tight ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>{surah.englishName}</p>
-                            <span className={`text-xs whitespace-nowrap ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                            <p className={`text-xs truncate leading-tight ${selectedSurah === surah.number ? 'text-black' : settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>{surah.englishName}</p>
+                            <span className={`text-xs whitespace-nowrap ${selectedSurah === surah.number ? 'text-black' : settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
                               {surah.numberOfAyahs} Ayahs
                             </span>
                           </div>
@@ -1273,11 +1556,12 @@ const QuranTafsirBayan: React.FC = () => {
           </div>
         </div>
       </div>
+      )}
 
       {showMobileSettings && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowMobileSettings(false)} />
-          <div className={`absolute bottom-0 left-0 right-0 rounded-t-2xl p-4 max-h-[85vh] overflow-y-auto ${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
+          <div className={`absolute bottom-0 left-0 right-0 rounded-t-2xl p-4 max-h-[50vh] overflow-y-auto ${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
             <div className="flex items-center justify-between mb-3">
               <h2 className={`text-base font-semibold ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Settings</h2>
               <button onClick={() => setShowMobileSettings(false)}>
@@ -1587,16 +1871,22 @@ const QuranTafsirBayan: React.FC = () => {
                     setSelectedAyah(1);
                     setShowMobileSurahSearch(false);
                   }}
-                  className={`w-full rounded-md px-2 py-2 text-left text-sm transition-colors ${selectedSurah === surah.number ? 'bg-emerald-100' : settings.theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-emerald-50'}`}
+                  className={`w-full rounded-md px-2 py-2 text-left text-sm transition-colors ${
+                    selectedSurah === surah.number
+                      ? 'bg-emerald-100 text-black'
+                      : settings.theme === 'dark'
+                      ? 'text-gray-100 hover:bg-gray-700'
+                      : 'text-gray-900 hover:bg-emerald-50'
+                  }`}
                 >
                   <div className="space-y-1">
                     <div className="flex items-baseline gap-1.5">
-                      <span className="text-xs text-gray-600">{surah.number}.</span>
-                      <p className="font-scheherazade text-lg text-black leading-tight" dir="rtl">{surah.name}</p>
+                      <span className={`text-xs ${selectedSurah === surah.number ? 'text-black' : settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>{surah.number}.</span>
+                      <p className={`font-scheherazade text-lg leading-tight ${selectedSurah === surah.number ? 'text-black' : settings.theme === 'dark' ? 'text-white' : 'text-black'}`} dir="rtl">{surah.name}</p>
                     </div>
                     <div className="flex items-center justify-between gap-2">
-                      <p className={`text-xs truncate leading-tight ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>{surah.englishName}</p>
-                      <span className={`text-xs whitespace-nowrap ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                      <p className={`text-xs truncate leading-tight ${selectedSurah === surah.number ? 'text-black' : settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>{surah.englishName}</p>
+                      <span className={`text-xs whitespace-nowrap ${selectedSurah === surah.number ? 'text-black' : settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
                         {surah.numberOfAyahs} Ayahs
                       </span>
                     </div>
@@ -1611,7 +1901,7 @@ const QuranTafsirBayan: React.FC = () => {
       {bookmarkConfirm && (
         <>
           <div
-            className="fixed inset-x-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50 backdrop-blur-sm lg:hidden"
+            className="fixed inset-x-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50 backdrop-blur-none lg:backdrop-blur-sm lg:hidden"
             style={{
               top: bookmarkModalViewport?.offsetTop ?? 0,
               height: bookmarkModalViewport ? `${bookmarkModalViewport.height}px` : '100dvh',

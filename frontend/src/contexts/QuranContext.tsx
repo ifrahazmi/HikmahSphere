@@ -74,6 +74,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
   const [isSurahMode, setIsSurahMode] = useState(false);
   const isHydratingCloudStateRef = useRef(false);
   const hasLoadedCloudStateRef = useRef(false);
+  const settingsPersistTimerRef = useRef<number | null>(null);
 
   // Refs for audio ended handler (to avoid re-registering event listener)
   const ayahAudioQueueRef = React.useRef<number[]>([]);
@@ -631,8 +632,21 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
   }, [normalizeSettings]);
 
   useEffect(() => {
-    saveSettingsToLocal(settings);
-    window.dispatchEvent(new Event('quranSettingsChanged'));
+    if (settingsPersistTimerRef.current !== null) {
+      window.clearTimeout(settingsPersistTimerRef.current);
+    }
+
+    settingsPersistTimerRef.current = window.setTimeout(() => {
+      saveSettingsToLocal(settings);
+      window.dispatchEvent(new Event('quranSettingsChanged'));
+      settingsPersistTimerRef.current = null;
+    }, 180);
+
+    return () => {
+      if (settingsPersistTimerRef.current !== null) {
+        window.clearTimeout(settingsPersistTimerRef.current);
+      }
+    };
   }, [settings, saveSettingsToLocal]);
 
   // Navigation
