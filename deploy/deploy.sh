@@ -88,6 +88,29 @@ pm2_service_exists() {
         | grep -q "^${PM2_SERVICE_NAME}\\.service"
 }
 
+wait_for_pm2_service() {
+    local attempt=1
+    local max_attempts=10
+
+    while [ "${attempt}" -le "${max_attempts}" ]; do
+        if sudo systemctl is-active --quiet "${PM2_SERVICE_NAME}"; then
+            return 0
+        fi
+
+        sleep 1
+        attempt=$((attempt + 1))
+    done
+
+    return 1
+}
+
+clean_pm2_runtime_state() {
+    rm -f \
+        "${CURRENT_HOME}/.pm2/pm2.pid" \
+        "${CURRENT_HOME}/.pm2/rpc.sock" \
+        "${CURRENT_HOME}/.pm2/pub.sock"
+}
+
 ensure_pm2_persistence() {
     local startup_output=""
     local startup_command=""
@@ -96,22 +119,24 @@ ensure_pm2_persistence() {
     sudo loginctl enable-linger "${CURRENT_USER}"
     print_success "Lingering enabled for ${CURRENT_USER}"
 
-    print_step "Configuring PM2 startup with systemd..."
-    startup_output=$(pm2 startup systemd -u "${CURRENT_USER}" --hp "${CURRENT_HOME}" 2>&1 || true)
-    startup_command=$(extract_pm2_startup_command "${startup_output}")
-
-    if [ -n "${startup_command}" ]; then
-        print_info "Running PM2 startup command returned by PM2"
-        print_info "${startup_command}"
-        eval "${startup_command}"
-        print_success "PM2 startup command applied"
-    elif pm2_service_exists; then
+    if pm2_service_exists; then
         print_info "PM2 startup already configured for ${PM2_SERVICE_NAME}"
         print_success "PM2 startup configuration already present"
     else
-        print_error "PM2 startup did not return a usable sudo command"
-        printf '%s\n' "${startup_output}"
-        exit 1
+        print_step "Configuring PM2 startup with systemd..."
+        startup_output=$(pm2 startup systemd -u "${CURRENT_USER}" --hp "${CURRENT_HOME}" 2>&1 || true)
+        startup_command=$(extract_pm2_startup_command "${startup_output}")
+
+        if [ -n "${startup_command}" ]; then
+            print_info "Running PM2 startup command returned by PM2"
+            print_info "${startup_command}"
+            eval "${startup_command}"
+            print_success "PM2 startup command applied"
+        else
+            print_error "PM2 startup did not return a usable sudo command"
+            printf '%s\n' "${startup_output}"
+            exit 1
+        fi
     fi
 }
 
@@ -145,13 +170,16 @@ save_and_enable_pm2_service() {
     if sudo systemctl is-active --quiet "${PM2_SERVICE_NAME}"; then
         print_step "Reloading ${PM2_SERVICE_NAME}..."
         sudo systemctl reload "${PM2_SERVICE_NAME}"
-        sleep 2
+        wait_for_pm2_service
         print_success "${PM2_SERVICE_NAME} reloaded"
     else
         print_warning "${PM2_SERVICE_NAME} is not active yet. Handing PM2 over to systemd..."
-        pm2 kill
+        sudo systemctl stop "${PM2_SERVICE_NAME}" >/dev/null 2>&1 || true
+        sudo systemctl reset-failed "${PM2_SERVICE_NAME}" >/dev/null 2>&1 || true
+        pm2 kill >/dev/null 2>&1 || true
+        clean_pm2_runtime_state
         sudo systemctl start "${PM2_SERVICE_NAME}"
-        sleep 2
+        wait_for_pm2_service
         print_success "${PM2_SERVICE_NAME} started under systemd"
     fi
 
