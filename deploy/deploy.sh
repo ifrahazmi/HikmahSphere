@@ -142,10 +142,24 @@ save_and_enable_pm2_service() {
     sudo systemctl enable "${PM2_SERVICE_NAME}"
     print_success "${PM2_SERVICE_NAME} enabled"
 
-    print_step "Restarting ${PM2_SERVICE_NAME}..."
-    sudo systemctl restart "${PM2_SERVICE_NAME}"
-    sleep 2
-    print_success "${PM2_SERVICE_NAME} restarted"
+    if sudo systemctl is-active --quiet "${PM2_SERVICE_NAME}"; then
+        print_step "Reloading ${PM2_SERVICE_NAME}..."
+        sudo systemctl reload "${PM2_SERVICE_NAME}"
+        sleep 2
+        print_success "${PM2_SERVICE_NAME} reloaded"
+    else
+        print_warning "${PM2_SERVICE_NAME} is not active yet. Handing PM2 over to systemd..."
+        pm2 kill
+        sudo systemctl start "${PM2_SERVICE_NAME}"
+        sleep 2
+        print_success "${PM2_SERVICE_NAME} started under systemd"
+    fi
+
+    if ! sudo systemctl is-active --quiet "${PM2_SERVICE_NAME}"; then
+        print_error "${PM2_SERVICE_NAME} failed to become active"
+        sudo systemctl status "${PM2_SERVICE_NAME}" --no-pager || true
+        exit 1
+    fi
 }
 
 # Resolve backend port from backend/.env, falling back to 5000.
@@ -452,8 +466,14 @@ fi
 
 # PM2 systemd service status
 print_step "Checking PM2 systemd service..."
-sudo systemctl status "${PM2_SERVICE_NAME}" --no-pager
-print_success "✓ PM2 systemd service: Active"
+if sudo systemctl is-active --quiet "${PM2_SERVICE_NAME}"; then
+    sudo systemctl status "${PM2_SERVICE_NAME}" --no-pager
+    print_success "✓ PM2 systemd service: Active"
+else
+    print_error "✗ PM2 systemd service: Not active"
+    sudo systemctl status "${PM2_SERVICE_NAME}" --no-pager || true
+    exit 1
+fi
 
 # PM2 status
 print_step "Checking PM2 process list..."

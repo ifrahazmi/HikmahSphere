@@ -1364,7 +1364,7 @@ router.get('/weather', [
 
           console.log(`Fetching weather from: ${apiUrl}`);
 
-          const response = await fetchWithTimeout(apiUrl, 6000);
+            const response = await fetchWithTimeout(apiUrl, 9000);
           if (!response.ok) {
               throw new Error(`Weather API error: ${response.status}`);
           }
@@ -1385,7 +1385,11 @@ router.get('/weather', [
           }
 
           return res.json(responseData);
-      } catch (error: any) {
+        } catch (error: any) {
+          if (error?.name === 'AbortError') {
+            console.warn('Weather API timeout:', error.message);
+            return res.status(504).json({ status: 'error', message: 'Weather service timeout. Please try again.' });
+          }
           console.error('Weather API error:', error.message);
           return res.status(500).json({ status: 'error', message: 'Failed to fetch weather info' });
       }

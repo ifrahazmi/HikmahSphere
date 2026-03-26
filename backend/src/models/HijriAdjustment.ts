@@ -16,7 +16,6 @@ const HijriAdjustmentSchema = new Schema<IHijriAdjustment>(
       type: String,
       enum: ['global'],
       required: true,
-      unique: true,
       default: 'global',
     },
     adjustment: {
@@ -35,6 +34,8 @@ const HijriAdjustmentSchema = new Schema<IHijriAdjustment>(
     timestamps: true,
   }
 );
+
+HijriAdjustmentSchema.index({ key: 1 }, { unique: true });
 
 const HijriAdjustmentModel: Model<IHijriAdjustment> = mongoose.models.HijriAdjustment
   ? (mongoose.models.HijriAdjustment as Model<IHijriAdjustment>)
