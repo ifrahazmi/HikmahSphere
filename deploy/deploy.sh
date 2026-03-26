@@ -21,6 +21,13 @@ NC='\033[0m' # No Color
 
 # Get current username
 CURRENT_USER=$(whoami)
+CURRENT_HOME="${HOME}"
+PROJECT_ROOT="${CURRENT_HOME}/HikmahSphere"
+BACKEND_DIR="${PROJECT_ROOT}/backend"
+FRONTEND_DIR="${PROJECT_ROOT}/frontend"
+PM2_APP_NAME="hikmah-backend"
+PM2_ECOSYSTEM_FILE="${PROJECT_ROOT}/ecosystem.config.js"
+PM2_SERVICE_NAME="pm2-${CURRENT_USER}"
 
 # Timestamp function
 timestamp() {
@@ -61,9 +68,89 @@ print_info() {
     echo -e "${MAGENTA}ℹ $1${NC}"
 }
 
+# Remove ANSI color codes so command parsing stays reliable.
+strip_ansi() {
+    sed -E 's/\x1B\[[0-9;]*[mK]//g'
+}
+
+extract_pm2_startup_command() {
+    local startup_output="$1"
+
+    printf '%s\n' "${startup_output}" \
+        | strip_ansi \
+        | grep -E '^[[:space:]]*sudo ' \
+        | tail -n 1 \
+        | sed -E 's/^[[:space:]]*//'
+}
+
+pm2_service_exists() {
+    sudo systemctl list-unit-files "${PM2_SERVICE_NAME}.service" --no-legend 2>/dev/null \
+        | grep -q "^${PM2_SERVICE_NAME}\\.service"
+}
+
+ensure_pm2_persistence() {
+    local startup_output=""
+    local startup_command=""
+
+    print_step "Enabling systemd lingering for ${CURRENT_USER}..."
+    sudo loginctl enable-linger "${CURRENT_USER}"
+    print_success "Lingering enabled for ${CURRENT_USER}"
+
+    print_step "Configuring PM2 startup with systemd..."
+    startup_output=$(pm2 startup systemd -u "${CURRENT_USER}" --hp "${CURRENT_HOME}" 2>&1 || true)
+    startup_command=$(extract_pm2_startup_command "${startup_output}")
+
+    if [ -n "${startup_command}" ]; then
+        print_info "Running PM2 startup command returned by PM2"
+        print_info "${startup_command}"
+        eval "${startup_command}"
+        print_success "PM2 startup command applied"
+    elif pm2_service_exists; then
+        print_info "PM2 startup already configured for ${PM2_SERVICE_NAME}"
+        print_success "PM2 startup configuration already present"
+    else
+        print_error "PM2 startup did not return a usable sudo command"
+        printf '%s\n' "${startup_output}"
+        exit 1
+    fi
+}
+
+start_or_restart_backend_with_pm2() {
+    export NODE_ENV=production
+    export PORT="${BACKEND_PORT}"
+
+    if pm2 describe "${PM2_APP_NAME}" >/dev/null 2>&1; then
+        print_step "Restarting backend with PM2..."
+        pm2 restart "${PM2_APP_NAME}" --update-env
+        print_success "Backend restarted"
+    else
+        print_warning "PM2 process '${PM2_APP_NAME}' not found. Starting it from ecosystem config..."
+        pm2 start "${PM2_ECOSYSTEM_FILE}" --only "${PM2_APP_NAME}" --update-env
+        print_success "Backend started"
+    fi
+
+    sleep 2
+}
+
+save_and_enable_pm2_service() {
+    print_step "Saving PM2 process list..."
+    pm2 save
+    print_success "PM2 process list saved"
+
+    print_step "Enabling ${PM2_SERVICE_NAME} on boot..."
+    sudo systemctl daemon-reload
+    sudo systemctl enable "${PM2_SERVICE_NAME}"
+    print_success "${PM2_SERVICE_NAME} enabled"
+
+    print_step "Restarting ${PM2_SERVICE_NAME}..."
+    sudo systemctl restart "${PM2_SERVICE_NAME}"
+    sleep 2
+    print_success "${PM2_SERVICE_NAME} restarted"
+}
+
 # Resolve backend port from backend/.env, falling back to 5000.
 get_backend_port() {
-    local env_file="$HOME/HikmahSphere/backend/.env"
+    local env_file="${BACKEND_DIR}/.env"
     local detected_port=""
 
     if [ -f "$env_file" ]; then
@@ -88,7 +175,7 @@ echo -e "${YELLOW}User: ${CURRENT_USER}${NC}"
 echo ""
 
 # Navigate to project directory
-cd ~/HikmahSphere || { print_error "Failed to navigate to project directory"; exit 1; }
+cd "${PROJECT_ROOT}" || { print_error "Failed to navigate to project directory"; exit 1; }
 print_success "Navigated to project directory"
 BACKEND_PORT=$(get_backend_port)
 print_info "Backend port resolved to ${CYAN}${BACKEND_PORT}${NC}"
@@ -115,7 +202,7 @@ print_success "Current commit: ${CYAN}${CURRENT_COMMIT}${NC}"
 # ============================================
 print_header "🔧 Backend Deployment"
 
-cd backend || { print_error "Failed to navigate to backend directory"; exit 1; }
+cd "${BACKEND_DIR}" || { print_error "Failed to navigate to backend directory"; exit 1; }
 
 print_step "Installing backend dependencies..."
 npm install
@@ -125,27 +212,26 @@ print_step "Building backend..."
 npm run build
 print_success "Backend built successfully"
 
-print_step "Restarting backend with PM2..."
-# Export NODE_ENV so it is inherited by the PM2 process.
-# --update-env is required to actually push the new env into the
-# already-running process (plain 'pm2 restart' keeps the old saved env).
-export NODE_ENV=production
-export PORT="${BACKEND_PORT}"
-pm2 restart hikmah-backend --update-env
-sleep 2
-print_success "Backend restarted"
+ensure_pm2_persistence
+start_or_restart_backend_with_pm2
+save_and_enable_pm2_service
 
 # Check PM2 status
 print_step "Checking PM2 status..."
-pm2 list | grep hikmah-backend
-print_success "Backend is running"
+pm2 ls
+if pm2 ls | grep "${PM2_APP_NAME}" | grep -q "online"; then
+    print_success "Backend is running"
+else
+    print_error "Backend is not online in PM2"
+    exit 1
+fi
 
 # ============================================
 # Frontend Deployment
 # ============================================
 print_header "🎨 Frontend Deployment"
 
-cd ../frontend || { print_error "Failed to navigate to frontend directory"; exit 1; }
+cd "${FRONTEND_DIR}" || { print_error "Failed to navigate to frontend directory"; exit 1; }
 
 print_step "Installing frontend dependencies..."
 npm install
@@ -288,7 +374,7 @@ print_success "Nginx main configuration restored"
 # Copy nginx config
 print_step "Copying Nginx site configuration..."
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEPLOY_DIR="${HOME}/HikmahSphere/deploy"
+DEPLOY_DIR="${PROJECT_ROOT}/deploy"
 NGINX_SOURCE=""
 
 # Try SCRIPT_DIR first, then fall back to DEPLOY_DIR
@@ -354,11 +440,29 @@ print_header "🔄 System Services Status"
 
 print_step "Checking all services..."
 
+# Linger status
+print_step "Verifying linger status..."
+loginctl show-user "${CURRENT_USER}" | grep Linger
+if loginctl show-user "${CURRENT_USER}" | grep -q '^Linger=yes$'; then
+    print_success "✓ Linger: Enabled"
+else
+    print_error "✗ Linger: Not enabled"
+    exit 1
+fi
+
+# PM2 systemd service status
+print_step "Checking PM2 systemd service..."
+sudo systemctl status "${PM2_SERVICE_NAME}" --no-pager
+print_success "✓ PM2 systemd service: Active"
+
 # PM2 status
-if pm2 list | grep "hikmah-backend" | grep -q "online"; then
+print_step "Checking PM2 process list..."
+pm2 ls
+if pm2 ls | grep "${PM2_APP_NAME}" | grep -q "online"; then
     print_success "✓ Backend (PM2): Running"
 else
     print_error "✗ Backend (PM2): Not running"
+    exit 1
 fi
 
 # Nginx status
@@ -384,6 +488,8 @@ echo ""
 echo -e "${GREEN}Services Status:${NC}"
 echo ""
 echo -e "  ${GREEN}✓${NC} Backend (PM2): Running"
+echo -e "  ${GREEN}✓${NC} PM2 Service: ${PM2_SERVICE_NAME} enabled"
+echo -e "  ${GREEN}✓${NC} Linger: Enabled for ${CURRENT_USER}"
 echo -e "  ${GREEN}✓${NC} Frontend: Deployed"
 echo -e "  ${GREEN}✓${NC} Nginx: Running"
 echo -e "  ${GREEN}✓${NC} Upload Folders: Created"
@@ -430,7 +536,8 @@ echo -e "${YELLOW}Next Steps:${NC}"
 echo "  1. Visit http://hikmahsphere.site to verify (HTTP)"
 echo "  2. Run ./verify.sh for detailed verification"
 echo "  3. Check PM2 logs: pm2 logs hikmah-backend"
-echo "  4. Check Nginx logs: sudo tail -f /var/log/nginx/error.log"
+echo "  4. Check PM2 service: sudo systemctl status ${PM2_SERVICE_NAME} --no-pager"
+echo "  5. Check Nginx logs: sudo tail -f /var/log/nginx/error.log"
 echo ""
 echo -e "${CYAN}Note: HTTPS not configured yet. To enable SSL:${NC}"
 echo "    sudo certbot --nginx -d hikmahsphere.site -d www.hikmahsphere.site"
