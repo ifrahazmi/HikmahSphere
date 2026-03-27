@@ -48,10 +48,44 @@ export interface IUser extends Document {
     language: string;
     prayerCalculationMethod: string;
     madhab: 'hanafi' | 'shafi' | 'maliki' | 'hanbali';
+    timeFormat?: '12h' | '24h';
+    theme?: 'light' | 'dark' | 'system';
     notifications: {
       prayers: boolean;
       events: boolean;
       community: boolean;
+      email?: boolean;
+      push?: boolean;
+    };
+    prayerNotifications?: {
+      fajr: boolean;
+      dhuhr: boolean;
+      asr: boolean;
+      maghrib: boolean;
+      isha: boolean;
+      jumuah: boolean;
+      advanceMinutes: number;
+      sound: string;
+      volume: number;
+    };
+    reminders?: {
+      dhikr?: {
+        enabled: boolean;
+        frequency: string;
+        customTimes?: Array<{ time: string; enabled: boolean }>;
+      };
+      quran?: {
+        enabled: boolean;
+        dailyGoal: number;
+        reminderTime: string;
+      };
+      istikhara?: boolean;
+      fasting?: {
+        enabled: boolean;
+        remindBeforeSuhoor: boolean;
+        remindBeforeIftar: boolean;
+        iftarRemindMinutes: number;
+      };
     };
   };
   profile: {
@@ -310,16 +344,78 @@ const UserSchema = new Schema<IUser>({
   preferences: {
     language: { type: String, default: 'en' },
     prayerCalculationMethod: { type: String, default: 'MWL' },
-    madhab: { 
-      type: String, 
+    madhab: {
+      type: String,
       enum: ['hanafi', 'shafi', 'maliki', 'hanbali'],
       default: 'hanafi'
+    },
+    timeFormat: {
+      type: String,
+      enum: ['12h', '24h'],
+      default: '12h'
+    },
+    theme: {
+      type: String,
+      enum: ['light', 'dark', 'system'],
+      default: 'system'
     },
     notifications: {
       prayers: { type: Boolean, default: true },
       events: { type: Boolean, default: true },
       community: { type: Boolean, default: true },
+      email: { type: Boolean, default: false },
+      push: { type: Boolean, default: true },
     },
+    prayerNotifications: {
+      fajr: { type: Boolean, default: true },
+      dhuhr: { type: Boolean, default: true },
+      asr: { type: Boolean, default: true },
+      maghrib: { type: Boolean, default: true },
+      isha: { type: Boolean, default: true },
+      jumuah: { type: Boolean, default: true }, // Zuma prayer notification
+      advanceMinutes: { 
+        type: Number, 
+        enum: [0, 5, 10, 15, 30, 45, 60], 
+        default: 10 
+      },
+      sound: {
+        type: String,
+        enum: ['default', 'adhan', 'soft', 'bird', 'mosque', 'silent'],
+        default: 'default'
+      },
+      volume: {
+        type: Number,
+        min: 0,
+        max: 100,
+        default: 80
+      }
+    },
+    reminders: {
+      dhikr: {
+        enabled: { type: Boolean, default: false },
+        frequency: {
+          type: String,
+          enum: ['morning', 'evening', 'both', 'custom'],
+          default: 'both'
+        },
+        customTimes: [{
+          time: String,
+          enabled: Boolean
+        }]
+      },
+      quran: {
+        enabled: { type: Boolean, default: false },
+        dailyGoal: { type: Number, default: 5 }, // pages per day
+        reminderTime: { type: String, default: '09:00' }
+      },
+      istikhara: { type: Boolean, default: false },
+      fasting: {
+        enabled: { type: Boolean, default: false },
+        remindBeforeSuhoor: { type: Boolean, default: true },
+        remindBeforeIftar: { type: Boolean, default: true },
+        iftarRemindMinutes: { type: Number, default: 30 }
+      }
+    }
   },
   profile: {
     avatar: { type: String },

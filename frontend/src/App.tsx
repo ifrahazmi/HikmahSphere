@@ -29,6 +29,7 @@ import DhikrDua from './pages/DhikrDua';
 import DuaDetail from './pages/DuaDetail';
 import Profile from './pages/Profile';
 import SalahTracker from './pages/SalahTracker';
+import Settings from './pages/Settings';
 import About from './pages/About';
 import Contact from './pages/Contact'; // Import Contact page
 import HajjGuide from './pages/HajjGuide';
@@ -39,6 +40,7 @@ import { useAuth, AuthProvider } from './hooks/useAuth';
 // Contexts
 import { QuranProvider } from './contexts/QuranContext';
 import { NotificationProvider } from './contexts/NotificationContext'; // Import NotificationProvider
+import { SettingsProvider } from './contexts/SettingsContext'; // Import SettingsProvider
 
 // Styles
 import './App.css';
@@ -263,13 +265,21 @@ const AppContent: React.FC = () => {
               </ProtectedRoute>
             } 
           />
-          <Route 
-            path="/salah-tracker" 
+          <Route
+            path="/salah-tracker"
             element={
               <ProtectedRoute>
                 <SalahTracker />
               </ProtectedRoute>
-            } 
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <Settings />
+              </ProtectedRoute>
+            }
           />
         </Routes>
       </main>
@@ -294,9 +304,11 @@ const App: React.FC = () => {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <NotificationProvider> {/* Wrap with NotificationProvider */}
-          <Router>
-            <AppContent />
-          </Router>
+          <SettingsProvider> {/* Wrap with SettingsProvider */}
+            <Router>
+              <AppContent />
+            </Router>
+          </SettingsProvider>
         </NotificationProvider>
       </AuthProvider>
 

@@ -24,6 +24,7 @@ import activityRoutes from './routes/activity'; // Import activity log routes
 import salahTrackerRoutes from './routes/salahTracker';
 import hajjGuideRoutes from './routes/hajjGuide';
 import gamesRoutes from './routes/games';
+import { initializePrayerNotifications } from './services/prayerNotificationService'; // Import prayer notification service
 
 // Load environment variables
 // Use __dirname to resolve paths correctly regardless of whether running from src/ or dist/
@@ -568,10 +569,16 @@ const startServer = async () => {
 
     await connectDB();
 
+    // Initialize prayer notification scheduler
+    const prayerNotificationSchedulers = initializePrayerNotifications();
+
     // Listen on 0.0.0.0 to allow access from other interfaces (required for VMs/external access)
     app.listen(PORT, '0.0.0.0', () => {
       logStartup(PORT);
     });
+
+    // Store schedulers for graceful shutdown
+    (global as any).prayerNotificationSchedulers = prayerNotificationSchedulers;
   } catch (error) {
     console.error('❌ Failed to start server:', error);
     process.exit(1);
@@ -593,6 +600,15 @@ process.on('uncaughtException', (err: Error) => {
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   console.log('👋 SIGTERM received. Shutting down gracefully...');
+  
+  // Cleanup prayer notification schedulers
+  if ((global as any).prayerNotificationSchedulers) {
+    const { dailyScheduler, jumuahScheduler } = (global as any).prayerNotificationSchedulers;
+    dailyScheduler.stop();
+    jumuahScheduler.stop();
+    console.log('🧹 Prayer notification schedulers stopped.');
+  }
+  
   await mongoose.connection.close();
   if (redisClient.isOpen) {
       await redisClient.quit();

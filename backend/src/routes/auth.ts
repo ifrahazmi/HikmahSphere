@@ -277,7 +277,10 @@ router.put('/profile', authMiddleware, [
             return res.status(400).json({ status: 'error', errors: errors.array() });
         }
 
-        const { firstName, lastName, phoneNumber, gender, madhab, street, city, country, bio, avatar } = req.body;
+        const { 
+          firstName, lastName, phoneNumber, gender, madhab, street, city, country, bio, avatar,
+          language, prayerCalculationMethod, timeFormat, theme, notifications, prayerNotifications, reminders
+        } = req.body;
         const normalizeOptional = (value: unknown): string | undefined => {
           if (typeof value !== 'string') {
             return undefined;
@@ -297,7 +300,7 @@ router.put('/profile', authMiddleware, [
         const normalizedBio = normalizeOptional(bio);
         const normalizedAvatar = normalizeOptional(avatar);
         const user = await User.findById(req.user.userId);
-        
+
         if (!user) {
             return res.status(404).json({ status: 'error', message: 'User not found' });
         }
@@ -391,6 +394,111 @@ router.put('/profile', authMiddleware, [
           });
         }
 
+        // Handle preferences updates
+        if (!user.preferences) {
+          user.preferences = {
+            language: 'en',
+            prayerCalculationMethod: 'MWL',
+            madhab: 'hanafi',
+            timeFormat: '12h',
+            theme: 'system',
+            notifications: {
+              prayers: true,
+              events: true,
+              community: true,
+              email: false,
+              push: true,
+            },
+            prayerNotifications: {
+              fajr: true,
+              dhuhr: true,
+              asr: true,
+              maghrib: true,
+              isha: true,
+              jumuah: true,
+              advanceMinutes: 10,
+              sound: 'default',
+              volume: 80,
+            },
+            reminders: {
+              dhikr: { enabled: false, frequency: 'both', customTimes: [] },
+              quran: { enabled: false, dailyGoal: 5, reminderTime: '09:00' },
+              istikhara: false,
+              fasting: { enabled: false, remindBeforeSuhoor: true, remindBeforeIftar: true, iftarRemindMinutes: 30 },
+            },
+          };
+        }
+
+        if (language !== undefined) {
+          applyChange('preferences.language', language, user.preferences.language, () => {
+            user.preferences.language = normalizeOptional(language) || 'en';
+          });
+        }
+        if (prayerCalculationMethod !== undefined) {
+          applyChange('preferences.prayerCalculationMethod', prayerCalculationMethod, user.preferences.prayerCalculationMethod, () => {
+            user.preferences.prayerCalculationMethod = normalizeOptional(prayerCalculationMethod) || 'MWL';
+          });
+        }
+        if (timeFormat !== undefined) {
+          applyChange('preferences.timeFormat', timeFormat, user.preferences.timeFormat || '12h', () => {
+            user.preferences.timeFormat = (timeFormat === '24h' ? '24h' : '12h');
+          });
+        }
+        if (theme !== undefined) {
+          applyChange('preferences.theme', theme, user.preferences.theme || 'system', () => {
+            user.preferences.theme = (['light', 'dark', 'system'].includes(theme) ? theme : 'system');
+          });
+        }
+        if (notifications !== undefined && typeof notifications === 'object') {
+          const currentNotifs = JSON.stringify(user.preferences.notifications);
+          const newNotifs = JSON.stringify({ ...user.preferences.notifications, ...notifications });
+          if (currentNotifs !== newNotifs) {
+            applyChange('preferences.notifications', newNotifs, currentNotifs, () => {
+              user.preferences.notifications = {
+                ...user.preferences.notifications,
+                ...notifications,
+              };
+            });
+          }
+        }
+        if (prayerNotifications !== undefined && typeof prayerNotifications === 'object') {
+          const currentPrayerNotifs = JSON.stringify(user.preferences.prayerNotifications || {});
+          const newPrayerNotifs = JSON.stringify({ ...(user.preferences.prayerNotifications || {}), ...prayerNotifications });
+          if (currentPrayerNotifs !== newPrayerNotifs) {
+            applyChange('preferences.prayerNotifications', newPrayerNotifs, currentPrayerNotifs, () => {
+              user.preferences.prayerNotifications = {
+                fajr: true,
+                dhuhr: true,
+                asr: true,
+                maghrib: true,
+                isha: true,
+                jumuah: true,
+                advanceMinutes: 10,
+                sound: 'default',
+                volume: 80,
+                ...(user.preferences.prayerNotifications || {}),
+                ...prayerNotifications,
+              };
+            });
+          }
+        }
+        if (reminders !== undefined && typeof reminders === 'object') {
+          const currentReminders = JSON.stringify(user.preferences.reminders || {});
+          const newReminders = JSON.stringify({ ...(user.preferences.reminders || {}), ...reminders });
+          if (currentReminders !== newReminders) {
+            applyChange('preferences.reminders', newReminders, currentReminders, () => {
+              user.preferences.reminders = {
+                dhikr: { enabled: false, frequency: 'both', customTimes: [] },
+                quran: { enabled: false, dailyGoal: 5, reminderTime: '09:00' },
+                istikhara: false,
+                fasting: { enabled: false, remindBeforeSuhoor: true, remindBeforeIftar: true, iftarRemindMinutes: 30 },
+                ...(user.preferences.reminders || {}),
+                ...reminders,
+              };
+            });
+          }
+        }
+
         if (changedFields.length > 0) {
           if (!user.profileAudit) {
             user.profileAudit = { history: [] };
@@ -420,7 +528,7 @@ router.put('/profile', authMiddleware, [
         }
 
         await user.save();
-        
+
         res.json({ status: 'success', data: { user }, message: 'Profile updated successfully' });
     } catch (error) {
         console.error('Profile update error:', error);
