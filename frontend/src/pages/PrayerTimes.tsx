@@ -96,7 +96,6 @@ const PRAYER_RAKAT_BREAKDOWN: Record<'Fajr' | 'Dhuhr' | 'Asr' | 'Maghrib' | 'Ish
     { type: 'Sunnah Muakkadah', rakat: 2 },
     { type: 'Nafl', rakat: 2 },
     { type: 'Witr (Wajib)', rakat: 3 },
-    { type: 'Nafl', rakat: 2 },
   ],
 };
 
@@ -539,8 +538,10 @@ const PrayerTimes: React.FC = () => {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [showSearch, setShowSearch] = useState(false);
   const [showExtraPrayerInfo, setShowExtraPrayerInfo] = useState(false);
-  const [flippedCards, setFlippedCards] = useState<Record<string, boolean>>({});
+  const [activeFlippedCard, setActiveFlippedCard] = useState<string | null>(null);
   const [openGuideCard, setOpenGuideCard] = useState<string | null>(null);
+  const flipResetTimerRef = useRef<number | null>(null);
+  const flipSwitchTimerRef = useRef<number | null>(null);
 
   // View mode and settings
   const [viewMode, setViewMode] = useState<'daily' | 'monthly' | 'ramadan'>('daily');
@@ -1967,11 +1968,56 @@ const PrayerTimes: React.FC = () => {
 
   const handlePrayerCardFlip = (prayerName: string) => {
     setOpenGuideCard(null);
-    setFlippedCards((prev) => ({
-      ...prev,
-      [prayerName]: !prev[prayerName],
-    }));
+    if (flipSwitchTimerRef.current !== null) {
+      window.clearTimeout(flipSwitchTimerRef.current);
+      flipSwitchTimerRef.current = null;
+    }
+
+    setActiveFlippedCard((prev) => {
+      if (prev === prayerName) {
+        return null;
+      }
+
+      if (prev) {
+        // Close current card first, then flip target card for a smoother transition.
+        flipSwitchTimerRef.current = window.setTimeout(() => {
+          setActiveFlippedCard(prayerName);
+          flipSwitchTimerRef.current = null;
+        }, 220);
+        return null;
+      }
+
+      return prayerName;
+    });
   };
+
+  useEffect(() => {
+    if (flipResetTimerRef.current !== null) {
+      window.clearTimeout(flipResetTimerRef.current);
+      flipResetTimerRef.current = null;
+    }
+
+    if (!activeFlippedCard) {
+      return;
+    }
+
+    flipResetTimerRef.current = window.setTimeout(() => {
+      setActiveFlippedCard(null);
+      setOpenGuideCard(null);
+      flipResetTimerRef.current = null;
+    }, 15000);
+
+    return () => {
+      if (flipResetTimerRef.current !== null) {
+        window.clearTimeout(flipResetTimerRef.current);
+        flipResetTimerRef.current = null;
+      }
+      if (flipSwitchTimerRef.current !== null) {
+        window.clearTimeout(flipSwitchTimerRef.current);
+        flipSwitchTimerRef.current = null;
+      }
+    };
+  }, [activeFlippedCard]);
 
   // Show full screen spinner while loading initial data
   if (loading || !prayerData) {
@@ -2669,7 +2715,7 @@ const PrayerTimes: React.FC = () => {
                 // Calculate total seconds for countdown display
                 const totalSeconds = countdown.hours * 3600 + countdown.minutes * 60 + countdown.seconds;
                 const countdownDisplay = formatCountdown(totalSeconds);
-                const isFlipped = Boolean(flippedCards[prayer.name]);
+                const isFlipped = activeFlippedCard === prayer.name;
                 const backRows = prayer.name === 'Sunrise'
                   ? SUNRISE_RAKAT_BREAKDOWN.map((item, rowIndex) => ({
                     ...item,
@@ -2692,7 +2738,10 @@ const PrayerTimes: React.FC = () => {
                       tabIndex={0}
                       aria-label={`${prayer.name} prayer card. Tap to flip for rakat breakdown.`}
                       aria-pressed={isFlipped}
-                      onClick={() => handlePrayerCardFlip(prayer.name)}
+                      onPointerUp={(event) => {
+                        event.preventDefault();
+                        handlePrayerCardFlip(prayer.name);
+                      }}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter' || event.key === ' ') {
                           event.preventDefault();
@@ -2972,6 +3021,7 @@ const PrayerTimes: React.FC = () => {
                           <button
                             type="button"
                             aria-label={`${prayer.name} rakat guide`}
+                            onPointerUp={(event) => event.stopPropagation()}
                             onClick={(event) => {
                               event.stopPropagation();
                               setOpenGuideCard((prev) => (prev === prayer.name ? null : prayer.name));
@@ -2983,6 +3033,7 @@ const PrayerTimes: React.FC = () => {
                           {isGuideOpen && (
                             <div
                               className="absolute right-0 top-8 z-20 w-64 rounded-lg border border-emerald-100 bg-white p-3 text-xs shadow-xl"
+                              onPointerUp={(event) => event.stopPropagation()}
                               onClick={(event) => event.stopPropagation()}
                             >
                               <p className="text-gray-700"><span className="font-semibold text-emerald-700">Sunnah Muakkadah:</span> strongly emphasized Sunnah.</p>
