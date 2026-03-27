@@ -762,6 +762,26 @@ code {
   letter-spacing: 0.02em;
 }
 
+@font-face {
+  font-family: 'Alvi Nastaleeq';
+  src: local('Alvi Nastaleeq'), url('../public/Alvi Nastaleeq Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+.font-alvi-nastaleeq {
+  font-family: 'Alvi Nastaleeq', 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif;
+}
+
+.quran-urdu-tafsir {
+  font-family: 'Alvi Nastaleeq', 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif;
+  direction: rtl;
+  text-align: right;
+  line-height: 2.2;
+  letter-spacing: 0.01em;
+}
+
 /* Justified Arabic Text for Better Alignment */
 .arabic-justified {
   text-align: justify;
@@ -959,6 +979,49 @@ code {
 
 .animate-shimmer {
   animation: shimmer 2s infinite;
+}
+
+/* Prayer Times: flip card behavior */
+.prayer-flip-container {
+  perspective: 1200px;
+  min-height: 320px;
+}
+
+.prayer-flip-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: inherit;
+  transform-style: preserve-3d;
+  transition: transform 0.65s cubic-bezier(0.4, 0.2, 0.2, 1);
+}
+
+.prayer-flip-inner.is-flipped {
+  transform: rotateY(180deg);
+}
+
+.prayer-flip-face {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.prayer-flip-front {
+  z-index: 2;
+  transform: rotateY(0deg);
+}
+
+.prayer-flip-back {
+  transform: rotateY(180deg);
+}
+
+@media (max-width: 640px) {
+  .prayer-flip-container {
+    min-height: 300px;
+  }
 }
 
 /* ============================================

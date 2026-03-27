@@ -554,6 +554,187 @@ router.get('/search', [
 });
 
 // ============================================================
+// Tafsir API Proxy + Tafheem Fixture Support
+// ============================================================
+const TAFSIR_PROXY_API_BASE = process.env.TAFSIR_API_URL || process.env.REACT_APP_TAFSIR_API_URL || 'http://localhost:8080/api';
+const TAFHEEM_EDITION = 'tafheem-ul-quran-syed-abu-ala-maududi';
+
+const getRequestedEdition = (value: unknown): string | null => {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().toLowerCase();
+  return normalized || null;
+};
+
+const tryLoadTafheemFixture = (): Record<string, any> | null => {
+  try {
+    const fsModule = require('fs') as typeof import('fs');
+    const pathModule = require('path') as typeof import('path');
+    const fixturePath = process.env.TAFHEEM_FIXTURE_PATH || pathModule.resolve(process.cwd(), 'tmp/Test.json');
+
+    if (!fsModule.existsSync(fixturePath)) {
+      return null;
+    }
+
+    const raw = fsModule.readFileSync(fixturePath, 'utf8');
+    const parsed = JSON.parse(raw);
+
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return null;
+    }
+
+    return parsed as Record<string, any>;
+  } catch (error) {
+    console.warn('Tafheem fixture load failed:', error);
+    return null;
+  }
+};
+
+const proxyTafsirRequest = async (
+  path: string,
+  edition: string | null
+): Promise<{ ok: boolean; status: number; payload: any }> => {
+  const query = edition ? `?edition=${encodeURIComponent(edition)}` : '';
+  const response = await fetch(`${TAFSIR_PROXY_API_BASE}${path}${query}`);
+  const payload: any = await response.json().catch(() => null);
+
+  return {
+    ok: response.ok,
+    status: response.status,
+    payload,
+  };
+};
+
+/**
+ * @route   GET /api/quran/tafsir/surah/:number
+ * @desc    Get tafsir for a full surah. Supports keyed Tafheem fixture response.
+ * @access  Public
+ */
+router.get('/tafsir/surah/:number', optionalAuthMiddleware, async (req: any, res: any) => {
+  try {
+    const surahNumber = Number(req.params.number);
+    if (!Number.isInteger(surahNumber) || surahNumber < 1 || surahNumber > 114) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid surah number. Must be between 1 and 114.',
+      });
+    }
+
+    const edition = getRequestedEdition(req.query.edition);
+
+    if (edition === TAFHEEM_EDITION) {
+      const fixture = tryLoadTafheemFixture();
+      if (fixture) {
+        const filtered = Object.fromEntries(
+          Object.entries(fixture).filter(([key]) => key.startsWith(`${surahNumber}:`))
+        );
+
+        if (Object.keys(filtered).length > 0) {
+          return res.json({
+            status: 'success',
+            data: filtered,
+            source: 'tafheem-fixture',
+          });
+        }
+      }
+    }
+
+    const proxied = await proxyTafsirRequest(`/surah/${surahNumber}`, edition);
+    if (!proxied.ok) {
+      return res.status(proxied.status).json({
+        status: 'error',
+        message: proxied.payload?.message || 'Failed to load tafsir surah data',
+      });
+    }
+
+    return res.json(
+      proxied.payload?.status
+        ? proxied.payload
+        : {
+            status: 'success',
+            data: proxied.payload?.data ?? proxied.payload,
+            source: 'tafsir-proxy',
+          }
+    );
+  } catch (error: any) {
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch tafsir surah data',
+      details: error?.message || String(error),
+    });
+  }
+});
+
+/**
+ * @route   GET /api/quran/tafsir/surah/:number/ayah/:ayahNumber
+ * @desc    Get tafsir for a single ayah. Supports keyed Tafheem fixture response.
+ * @access  Public
+ */
+router.get('/tafsir/surah/:number/ayah/:ayahNumber', optionalAuthMiddleware, async (req: any, res: any) => {
+  try {
+    const surahNumber = Number(req.params.number);
+    const ayahNumber = Number(req.params.ayahNumber);
+
+    if (!Number.isInteger(surahNumber) || surahNumber < 1 || surahNumber > 114) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid surah number. Must be between 1 and 114.',
+      });
+    }
+
+    if (!Number.isInteger(ayahNumber) || ayahNumber < 1) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid ayah number. Must be a positive integer.',
+      });
+    }
+
+    const edition = getRequestedEdition(req.query.edition);
+
+    if (edition === TAFHEEM_EDITION) {
+      const fixture = tryLoadTafheemFixture();
+      if (fixture) {
+        const key = `${surahNumber}:${ayahNumber}`;
+        const entry = fixture[key];
+
+        if (entry) {
+          return res.json({
+            status: 'success',
+            data: {
+              [key]: entry,
+            },
+            source: 'tafheem-fixture',
+          });
+        }
+      }
+    }
+
+    const proxied = await proxyTafsirRequest(`/surah/${surahNumber}/ayah/${ayahNumber}`, edition);
+    if (!proxied.ok) {
+      return res.status(proxied.status).json({
+        status: 'error',
+        message: proxied.payload?.message || 'Failed to load tafsir ayah data',
+      });
+    }
+
+    return res.json(
+      proxied.payload?.status
+        ? proxied.payload
+        : {
+            status: 'success',
+            data: proxied.payload?.data ?? proxied.payload,
+            source: 'tafsir-proxy',
+          }
+    );
+  } catch (error: any) {
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch tafsir ayah data',
+      details: error?.message || String(error),
+    });
+  }
+});
+
+// ============================================================
 // IndoPak Nastaleeq V3 API - Word by Word Quran Data
 // ============================================================
 import sqlite3 from 'sqlite3';

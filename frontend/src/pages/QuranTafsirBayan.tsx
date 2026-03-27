@@ -29,7 +29,16 @@ interface DisplayAyah {
   ayahNumber: number;
   arabicText: string;
   translationText: string;
+  translationHtml?: string;
+  translationPlain?: string;
+  footnotes: Record<string, string>;
   tafsirText: string;
+}
+
+interface TranslationSegment {
+  type: 'text' | 'footnote';
+  value: string;
+  footnoteId?: string;
 }
 
 type ReaderMode = 'ayah' | 'surah';
@@ -61,6 +70,50 @@ const TAFSIR_TEXT_COLOR_OPTIONS = [
   { label: 'Rose', value: '#e11d48', textClass: 'text-rose-600' },
 ];
 
+const FOOTNOTE_SUP_REGEX = /<sup\s+[^>]*foot_note\s*=\s*["']([^"']+)["'][^>]*>(.*?)<\/sup>/gi;
+
+const stripHtml = (value: string): string => value.replace(/<[^>]+>/g, '').trim();
+
+const parseTranslationWithFootnotes = (translationHtml: string): TranslationSegment[] => {
+  if (!translationHtml) return [];
+
+  const segments: TranslationSegment[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = FOOTNOTE_SUP_REGEX.exec(translationHtml)) !== null) {
+    const [fullMatch, footnoteIdRaw, markerRaw] = match;
+    const start = match.index;
+    const before = translationHtml.slice(lastIndex, start);
+
+    if (before) {
+      const cleanedBefore = stripHtml(before);
+      if (cleanedBefore) {
+        segments.push({ type: 'text', value: cleanedBefore });
+      }
+    }
+
+    const marker = stripHtml(markerRaw) || String(segments.filter((item) => item.type === 'footnote').length + 1);
+    segments.push({
+      type: 'footnote',
+      value: marker,
+      footnoteId: String(footnoteIdRaw || '').trim(),
+    });
+
+    lastIndex = start + fullMatch.length;
+  }
+
+  const tail = translationHtml.slice(lastIndex);
+  if (tail) {
+    const cleanedTail = stripHtml(tail);
+    if (cleanedTail) {
+      segments.push({ type: 'text', value: cleanedTail });
+    }
+  }
+
+  return segments;
+};
+
 const QuranTafsirBayan: React.FC = () => {
   const configuredInitialLoadingMs = Number(process.env.REACT_APP_TAFSIR_INITIAL_LOADING_MS || '5000');
   const initialLoadingMs = Number.isFinite(configuredInitialLoadingMs) ? configuredInitialLoadingMs : 5000;
@@ -79,7 +132,7 @@ const QuranTafsirBayan: React.FC = () => {
   const [selectedAyah, setSelectedAyah] = useState<number>(1);
   const [selectedTranslation, setSelectedTranslation] = useState<string>(DEFAULT_URDU_TRANSLATION.identifier);
   const [tafsirEdition, setTafsirEdition] = useState<string>('bayan-ul-quran-dr-israr-ahmed');
-  const [tafsirFontSize, setTafsirFontSize] = useState<number>(28);
+  const [tafsirFontSize, setTafsirFontSize] = useState<number>(26);
   const [initialScreenLoading, setInitialScreenLoading] = useState(true);
   const [textAreaBackgroundColor, setTextAreaBackgroundColor] = useState<string>(DEFAULT_TEXT_AREA_BG);
   const [tafsirAreaBackgroundColor, setTafsirAreaBackgroundColor] = useState<string>(DEFAULT_TAFSIR_AREA_BG);
@@ -186,6 +239,15 @@ const QuranTafsirBayan: React.FC = () => {
   const selectedTranslationMeta = useMemo(() => {
     return translationOptions.find((translation) => translation.identifier === selectedTranslation);
   }, [selectedTranslation, translationOptions]);
+
+  const tafsirEditionLabel = useMemo(() => {
+    if (tafsirEdition === 'tafheem-ul-quran-syed-abu-ala-maududi') {
+      return "Tafheem e Qur'an - Syed Abu Ala Maududi";
+    }
+    return 'Bayan-ul-Quran by Dr Israr Ahmed';
+  }, [tafsirEdition]);
+
+  const isTafheemEdition = tafsirEdition === 'tafheem-ul-quran-syed-abu-ala-maududi';
 
   const isTranslationUrdu = selectedTranslationMeta?.language === 'Urdu';
 
@@ -538,12 +600,13 @@ const QuranTafsirBayan: React.FC = () => {
   const buildDisplayAyahs = useCallback(async () => {
     const surahNumber = selectedSurah;
     const translationIdentifier = selectedTranslation;
+    const selectedTafsirEdition = tafsirEdition;
 
     if (readerMode === 'ayah') {
       const [arabicAyah, translationMap, tafsirAyah] = await Promise.all([
         fetchIndopakV3Ayah(surahNumber, selectedAyah),
         fetchTranslationMap(surahNumber, translationIdentifier),
-        fetchTafsirAyah(surahNumber, selectedAyah),
+        fetchTafsirAyah(surahNumber, selectedAyah, selectedTafsirEdition),
       ]);
 
       const derivedArabicText =
@@ -553,7 +616,10 @@ const QuranTafsirBayan: React.FC = () => {
         {
           ayahNumber: tafsirAyah.ayah,
           arabicText: derivedArabicText,
-          translationText: translationMap.get(tafsirAyah.ayah) || '',
+          translationText: tafsirAyah.translationPlain || stripHtml(tafsirAyah.translationHtml || '') || translationMap.get(tafsirAyah.ayah) || '',
+          translationHtml: tafsirAyah.translationHtml,
+          translationPlain: tafsirAyah.translationPlain,
+          footnotes: tafsirAyah.footnotes || {},
           tafsirText: tafsirAyah.text,
         },
       ];
@@ -562,7 +628,7 @@ const QuranTafsirBayan: React.FC = () => {
     const [arabicSurah, translationMap, tafsirSurah] = await Promise.all([
       fetchIndopakV3Surah(surahNumber),
       fetchTranslationMap(surahNumber, translationIdentifier),
-      fetchTafsirSurah(surahNumber),
+      fetchTafsirSurah(surahNumber, selectedTafsirEdition),
     ]);
 
     const arabicMap = new Map<number, string>();
@@ -581,10 +647,13 @@ const QuranTafsirBayan: React.FC = () => {
       .map((ayah) => ({
         ayahNumber: ayah.ayah,
         arabicText: arabicMap.get(ayah.ayah) || '',
-        translationText: translationMap.get(ayah.ayah) || '',
+        translationText: ayah.translationPlain || stripHtml(ayah.translationHtml || '') || translationMap.get(ayah.ayah) || '',
+        translationHtml: ayah.translationHtml,
+        translationPlain: ayah.translationPlain,
+        footnotes: ayah.footnotes || {},
         tafsirText: ayah.text,
       }));
-  }, [fetchTranslationMap, readerMode, selectedAyah, selectedSurah, selectedTranslation]);
+  }, [fetchTranslationMap, readerMode, selectedAyah, selectedSurah, selectedTranslation, tafsirEdition]);
 
   const handleFetch = useCallback(
     async () => {
@@ -626,12 +695,6 @@ const QuranTafsirBayan: React.FC = () => {
   }, [handleFetch]);
 
   useEffect(() => {
-    if (!initialScreenLoading) return;
-    // Keep fetching/updating in the background while splash is visible.
-    void handleFetch();
-  }, [handleFetch, initialScreenLoading]);
-
-  useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       setInitialScreenLoading(false);
     }, initialLoadingMs);
@@ -646,7 +709,7 @@ const QuranTafsirBayan: React.FC = () => {
       typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches;
     const defaultArabicSize = isMobileViewport ? 28 : 30;
     const defaultTranslationSize = isMobileViewport ? 24 : 28;
-    const defaultTafsirSize = isMobileViewport ? 24 : 28;
+    const defaultTafsirSize = 26;
 
     updateSettings({
       fontSize: defaultArabicSize,
@@ -749,6 +812,31 @@ const QuranTafsirBayan: React.FC = () => {
         >
           {(() => {
             const bookmark = getBookmarkByAyah(ayah.ayahNumber);
+            const translationSegments = parseTranslationWithFootnotes(ayah.translationHtml || '');
+            const hasFootnoteMarkers = translationSegments.some(
+              (segment) => segment.type === 'footnote' && segment.footnoteId
+            );
+            const fallbackFootnotes = Object.entries(ayah.footnotes || {}).map(([footnoteId, text], index) => ({
+              footnoteId,
+              marker: String(index + 1),
+              text,
+            }));
+            const markerPairs = translationSegments
+              .filter((segment): segment is TranslationSegment & { footnoteId: string } => segment.type === 'footnote' && Boolean(segment.footnoteId))
+              .map((segment) => ({
+                footnoteId: segment.footnoteId,
+                marker: segment.value,
+                text: ayah.footnotes?.[segment.footnoteId] || '',
+              }))
+              .filter((item) => item.text);
+            const visibleFootnotes = markerPairs.length ? markerPairs : fallbackFootnotes;
+            const footnoteTargetMap = new Map(
+              visibleFootnotes.map((note) => [
+                note.footnoteId,
+                `tafheem-footnote-${selectedSurah}-${ayah.ayahNumber}-${note.footnoteId}`,
+              ])
+            );
+
             return (
               <>
                 <div className="mb-2 flex items-center justify-between">
@@ -829,13 +917,49 @@ const QuranTafsirBayan: React.FC = () => {
                   <p
                     dir={isTranslationUrdu ? 'rtl' : 'ltr'}
                     style={{ fontSize: `${settings.translationFontSize}px` }}
-                    className={`${isTranslationUrdu ? 'quran-urdu-translation text-right' : 'text-left leading-8'} ${settings.theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}
+                    className={`${isTranslationUrdu ? 'quran-urdu-translation font-jameel-noori text-right' : 'text-left leading-8'} ${settings.theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}
                     onTouchStart={(event) => beginBookmarkGesture(event, ayah.ayahNumber)}
                     onTouchMove={(event) => trackBookmarkGestureMove(event, ayah.ayahNumber)}
                     onTouchEnd={(event) => finishBookmarkGesture(event, ayah.ayahNumber)}
                     onTouchCancel={cancelBookmarkGesture}
                   >
-                    {ayah.translationText || 'Translation unavailable for selected edition.'}
+                    {hasFootnoteMarkers
+                      ? translationSegments.map((segment, segmentIndex) => {
+                          if (segment.type === 'text') {
+                            return <span key={`segment-${ayah.ayahNumber}-${segmentIndex}`}>{segment.value} </span>;
+                          }
+
+                          const targetId = segment.footnoteId ? footnoteTargetMap.get(segment.footnoteId) : undefined;
+
+                          if (!targetId) {
+                            return (
+                              <span
+                                key={`segment-${ayah.ayahNumber}-${segmentIndex}`}
+                                className="mx-0.5 align-super text-xs font-bold leading-none text-emerald-700"
+                              >
+                                {segment.value}
+                              </span>
+                            );
+                          }
+
+                          return (
+                            <button
+                              type="button"
+                              key={`segment-${ayah.ayahNumber}-${segmentIndex}`}
+                              className="mx-0.5 align-super text-xs font-bold leading-none text-emerald-700 underline underline-offset-2 hover:text-emerald-500"
+                              aria-label={`Go to footnote ${segment.value} for ayah ${ayah.ayahNumber}`}
+                              onClick={() => {
+                                const target = document.getElementById(targetId);
+                                if (target) {
+                                  target.scrollIntoView({ behavior: getScrollBehavior(), block: 'center' });
+                                }
+                              }}
+                            >
+                              {segment.value}
+                            </button>
+                          );
+                        })
+                      : ayah.translationText || 'Translation unavailable for selected edition.'}
                   </p>
                 </div>
 
@@ -850,31 +974,61 @@ const QuranTafsirBayan: React.FC = () => {
                   )}
                 >
                   <h3 className={`mb-2 text-sm font-semibold ${settings.theme === 'dark' ? 'text-emerald-300' : 'text-emerald-700'}`}>
-                    Tafsir Bayan-ul-Quran
+                    {tafsirEditionLabel}
                   </h3>
-                  <p
-                    dir="rtl"
-                    lang="ur"
-                    style={{
-                      fontSize: `${tafsirFontSize}px`,
-                      textAlign: 'justify',
-                      textJustify: 'inter-word',
-                      lineHeight: 2.2,
-                      wordSpacing: '0.03em',
-                      overflowWrap: 'normal',
-                      wordBreak: 'normal',
-                      fontVariantLigatures: 'common-ligatures contextual',
-                      fontFeatureSettings: '"liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1',
-                      color: resolvedTafsirTextColor,
-                    }}
-                    className="quran-urdu-translation"
-                    onTouchStart={(event) => beginBookmarkGesture(event, ayah.ayahNumber)}
-                    onTouchMove={(event) => trackBookmarkGestureMove(event, ayah.ayahNumber)}
-                    onTouchEnd={(event) => finishBookmarkGesture(event, ayah.ayahNumber)}
-                    onTouchCancel={cancelBookmarkGesture}
-                  >
-                    {ayah.tafsirText}
-                  </p>
+                  {isTafheemEdition && visibleFootnotes.length > 0 ? (
+                    <div className="space-y-3" dir="rtl" lang="ur">
+                      {visibleFootnotes.map((note) => (
+                        <div
+                          key={`${ayah.ayahNumber}-${note.footnoteId}`}
+                          id={`tafheem-footnote-${selectedSurah}-${ayah.ayahNumber}-${note.footnoteId}`}
+                          className={`rounded-md border px-3 py-3 ${settings.theme === 'dark' ? 'border-gray-700 bg-gray-900/40' : 'border-emerald-100 bg-white/70'}`}
+                          onTouchStart={(event) => beginBookmarkGesture(event, ayah.ayahNumber)}
+                          onTouchMove={(event) => trackBookmarkGestureMove(event, ayah.ayahNumber)}
+                          onTouchEnd={(event) => finishBookmarkGesture(event, ayah.ayahNumber)}
+                          onTouchCancel={cancelBookmarkGesture}
+                        >
+                          <p
+                            style={{
+                              fontSize: `${tafsirFontSize}px`,
+                              lineHeight: 2.2,
+                              color: resolvedTafsirTextColor,
+                            }}
+                            className="font-alvi-nastaleeq text-right"
+                          >
+                            <span className={`ml-2 font-semibold ${settings.theme === 'dark' ? 'text-emerald-300' : 'text-emerald-700'}`}>
+                              [{note.marker}]
+                            </span>
+                            {note.text}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p
+                      dir="rtl"
+                      lang="ur"
+                      style={{
+                        fontSize: `${tafsirFontSize}px`,
+                        textAlign: 'justify',
+                        textJustify: 'inter-word',
+                        lineHeight: 2.2,
+                        wordSpacing: '0.03em',
+                        overflowWrap: 'normal',
+                        wordBreak: 'normal',
+                        fontVariantLigatures: 'common-ligatures contextual',
+                        fontFeatureSettings: '"liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1',
+                        color: resolvedTafsirTextColor,
+                      }}
+                      className="quran-urdu-tafsir font-alvi-nastaleeq"
+                      onTouchStart={(event) => beginBookmarkGesture(event, ayah.ayahNumber)}
+                      onTouchMove={(event) => trackBookmarkGestureMove(event, ayah.ayahNumber)}
+                      onTouchEnd={(event) => finishBookmarkGesture(event, ayah.ayahNumber)}
+                      onTouchCancel={cancelBookmarkGesture}
+                    >
+                      {ayah.tafsirText || 'Tafsir unavailable for selected edition.'}
+                    </p>
+                  )}
                 </div>
               </>
             );
@@ -888,7 +1042,9 @@ const QuranTafsirBayan: React.FC = () => {
       getBookmarkByAyah,
       getRenderBlockStyle,
       finishBookmarkGesture,
+      getScrollBehavior,
       isBookmarked,
+      isTafheemEdition,
       isTranslationUrdu,
       settings.fontSize,
       settings.theme,
@@ -898,6 +1054,7 @@ const QuranTafsirBayan: React.FC = () => {
       resolvedTextAreaBackground,
       selectedSurah,
       tafsirAreaBackgroundColor,
+      tafsirEditionLabel,
       tafsirFontSize,
       trackBookmarkGestureMove,
     ]
@@ -906,10 +1063,10 @@ const QuranTafsirBayan: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="Tafsir Bayan-ul-Quran | HikmahSphere"
-        description="Read Tafsir Bayan-ul-Quran with IndoPak Arabic ayah text and Urdu translation in a focused, responsive reader."
+        title="Urdu Tafsir Reader | HikmahSphere"
+        description="Read Quran with Urdu translation and tafsir in a focused, responsive reader with footnote support."
         path="/quran/tafsir"
-        keywords={['tafsir bayan ul quran', 'dr israr ahmed tafsir', 'urdu tafsir', 'quran tafsir']}
+        keywords={['urdu tafsir', 'tafheem ul quran', 'bayan ul quran', 'quran tafsir']}
       />
 
       {initialScreenLoading && (
@@ -922,7 +1079,7 @@ const QuranTafsirBayan: React.FC = () => {
               Preparing Tafsir Experience
             </h2>
             <p className={`text-sm leading-6 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-              We are loading the complete Quran with Surah details, Arabic ayat, translation, and Tafsir Bayan-ul-Quran. Please wait a moment.
+              We are loading the complete Quran with Surah details, Arabic ayat, translation, and tafsir. Please wait a moment.
             </p>
             <p className={`mt-2 text-xs ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
               Initial warm-up may take a few seconds depending on network speed.
@@ -938,7 +1095,7 @@ const QuranTafsirBayan: React.FC = () => {
             <div className="flex items-center justify-center gap-2 mb-1">
               <BookOpenIcon className="h-5 w-5 text-emerald-600" />
               <h1 className={`text-2xl font-bold ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                Tafsir Bayan-ul-Quran
+                {tafsirEditionLabel}
               </h1>
             </div>
             <p className={`text-xs ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
@@ -971,7 +1128,7 @@ const QuranTafsirBayan: React.FC = () => {
                 <div className="min-w-0 flex items-center justify-center gap-1.5">
                   <BookOpenIcon className="h-3.5 w-3.5 text-emerald-600 flex-shrink-0" />
                   <h1 className={`text-base font-bold leading-none truncate ${settings.theme === 'dark' ? 'text-white' : 'text-gray-800'}`} style={{ fontFamily: 'Lora, serif' }}>
-                    Bayan-ul-Quran
+                    {isTafheemEdition ? 'Tafheem e Qur\'an' : 'Bayan-ul-Quran'}
                   </h1>
                 </div>
 
@@ -1221,6 +1378,7 @@ const QuranTafsirBayan: React.FC = () => {
                         className={`w-full rounded-md border px-2 py-2 text-xs ${settings.theme === 'dark' ? 'border-gray-600 bg-gray-700 text-white' : 'border-gray-300 bg-white text-gray-900'}`}
                       >
                         <option value="bayan-ul-quran-dr-israr-ahmed">Bayan-ul-Quran by Dr Israr Ahmed</option>
+                        <option value="tafheem-ul-quran-syed-abu-ala-maududi">Tafheem e Qur'an - Syed Abu Ala Maududi</option>
                       </select>
                     </div>
 
@@ -1711,6 +1869,7 @@ const QuranTafsirBayan: React.FC = () => {
                   className={`w-full rounded-md border px-2 py-2 text-sm ${settings.theme === 'dark' ? 'border-gray-600 bg-gray-700 text-white' : 'border-gray-300 bg-white text-gray-900'}`}
                 >
                   <option value="bayan-ul-quran-dr-israr-ahmed">Bayan-ul-Quran by Dr Israr Ahmed</option>
+                  <option value="tafheem-ul-quran-syed-abu-ala-maududi">Tafheem e Qur'an - Syed Abu Ala Maududi</option>
                 </select>
               </div>
 
