@@ -99,6 +99,11 @@ export interface QuranSettings {
   audioEnabled: boolean;           // Enable audio playback feature
   audioMode: 'ayah' | 'surah';     // 'ayah' for ayat-by-ayat, 'surah' for complete surah
   translationAudioEnabled: boolean; // When enabled, translation audio follows the Arabic audio mode
+  tafsirEdition: 'bayan-ul-quran-dr-israr-ahmed' | 'tafheem-ul-quran-syed-abu-ala-maududi';
+  tafsirFontSize: number;          // 14-38px
+  tafsirTextAreaBackground: string;
+  tafsirAreaBackground: string;
+  tafsirTextColor: string;
 }
 
 export const BOOKMARK_COLORS = [
@@ -264,4 +269,9 @@ export const DEFAULT_QURAN_SETTINGS: QuranSettings = {
   audioEnabled: false,
   audioMode: 'ayah',
   translationAudioEnabled: false,
+  tafsirEdition: 'bayan-ul-quran-dr-israr-ahmed',
+  tafsirFontSize: 26,
+  tafsirTextAreaBackground: '#f8fffb',
+  tafsirAreaBackground: '#f0fdf4',
+  tafsirTextColor: '#1f2937',
 };

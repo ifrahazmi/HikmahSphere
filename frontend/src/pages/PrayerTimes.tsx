@@ -540,8 +540,6 @@ const PrayerTimes: React.FC = () => {
   const [showExtraPrayerInfo, setShowExtraPrayerInfo] = useState(false);
   const [activeFlippedCard, setActiveFlippedCard] = useState<string | null>(null);
   const [openGuideCard, setOpenGuideCard] = useState<string | null>(null);
-  const flipResetTimerRef = useRef<number | null>(null);
-  const flipSwitchTimerRef = useRef<number | null>(null);
 
   // View mode and settings
   const [viewMode, setViewMode] = useState<'daily' | 'monthly' | 'ramadan'>('daily');
@@ -1968,56 +1966,8 @@ const PrayerTimes: React.FC = () => {
 
   const handlePrayerCardFlip = (prayerName: string) => {
     setOpenGuideCard(null);
-    if (flipSwitchTimerRef.current !== null) {
-      window.clearTimeout(flipSwitchTimerRef.current);
-      flipSwitchTimerRef.current = null;
-    }
-
-    setActiveFlippedCard((prev) => {
-      if (prev === prayerName) {
-        return null;
-      }
-
-      if (prev) {
-        // Close current card first, then flip target card for a smoother transition.
-        flipSwitchTimerRef.current = window.setTimeout(() => {
-          setActiveFlippedCard(prayerName);
-          flipSwitchTimerRef.current = null;
-        }, 220);
-        return null;
-      }
-
-      return prayerName;
-    });
+    setActiveFlippedCard((prev) => (prev === prayerName ? null : prayerName));
   };
-
-  useEffect(() => {
-    if (flipResetTimerRef.current !== null) {
-      window.clearTimeout(flipResetTimerRef.current);
-      flipResetTimerRef.current = null;
-    }
-
-    if (!activeFlippedCard) {
-      return;
-    }
-
-    flipResetTimerRef.current = window.setTimeout(() => {
-      setActiveFlippedCard(null);
-      setOpenGuideCard(null);
-      flipResetTimerRef.current = null;
-    }, 15000);
-
-    return () => {
-      if (flipResetTimerRef.current !== null) {
-        window.clearTimeout(flipResetTimerRef.current);
-        flipResetTimerRef.current = null;
-      }
-      if (flipSwitchTimerRef.current !== null) {
-        window.clearTimeout(flipSwitchTimerRef.current);
-        flipSwitchTimerRef.current = null;
-      }
-    };
-  }, [activeFlippedCard]);
 
   // Show full screen spinner while loading initial data
   if (loading || !prayerData) {

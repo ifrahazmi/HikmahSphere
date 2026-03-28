@@ -19,6 +19,7 @@ import {
 import LoadingSpinner from '../components/LoadingSpinner';
 import PageSEO from '../components/PageSEO';
 import { useQuran } from '../contexts/QuranContext';
+import { useAuth } from '../hooks/useAuth';
 import { API_URL } from '../config';
 import { fetchIndopakV3Ayah, fetchIndopakV3Surah } from '../utils/indopakV3Quran';
 import { fetchTafsirAyah, fetchTafsirSurah, getTafsirRuntimeIssue } from '../utils/tafsirBayanApi';
@@ -59,8 +60,13 @@ const AREA_BACKGROUND_OPTIONS = [
   { label: 'White', value: '#ffffff', swatchClass: 'bg-white' },
   { label: 'Cream', value: '#fffbeb', swatchClass: 'bg-amber-50' },
   { label: 'Light Blue', value: '#eff6ff', swatchClass: 'bg-blue-50' },
-  { label: 'Soft Green', value: '#ecfdf5', swatchClass: 'bg-emerald-50' },
+  { label: 'Soft Peach', value: '#fff7ed', swatchClass: 'bg-orange-50' },
 ];
+
+const TAFSIR_EDITION_OPTIONS = [
+  { value: 'bayan-ul-quran-dr-israr-ahmed', label: 'Bayan-ul-Quran by Dr Israr Ahmed' },
+  { value: 'tafheem-ul-quran-syed-abu-ala-maududi', label: "Tafheem e Qur'an - Syed Abu Ala Maududi" },
+] as const;
 
 const TAFSIR_TEXT_COLOR_OPTIONS = [
   { label: 'Default', value: '#1f2937', textClass: 'text-gray-800' },
@@ -127,24 +133,22 @@ const QuranTafsirBayan: React.FC = () => {
     : 2000;
 
   const { surahs, settings, updateSettings, bookmarks, addBookmark, removeBookmark } = useQuran();
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const [readerMode, setReaderMode] = useState<ReaderMode>('ayah');
   const [selectedSurah, setSelectedSurah] = useState<number>(1);
   const [selectedAyah, setSelectedAyah] = useState<number>(1);
-  const [selectedTranslation, setSelectedTranslation] = useState<string>(DEFAULT_URDU_TRANSLATION.identifier);
-  const [tafsirEdition, setTafsirEdition] = useState<string>('bayan-ul-quran-dr-israr-ahmed');
-  const [tafsirFontSize, setTafsirFontSize] = useState<number>(26);
   const [initialScreenLoading, setInitialScreenLoading] = useState(true);
-  const [textAreaBackgroundColor, setTextAreaBackgroundColor] = useState<string>(DEFAULT_TEXT_AREA_BG);
-  const [tafsirAreaBackgroundColor, setTafsirAreaBackgroundColor] = useState<string>(DEFAULT_TAFSIR_AREA_BG);
-  const [tafsirTextColor, setTafsirTextColor] = useState<string>(DEFAULT_TAFSIR_TEXT_COLOR);
   const [surahSearch, setSurahSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ayahList, setAyahList] = useState<DisplayAyah[]>([]);
   const [showMobileSettings, setShowMobileSettings] = useState(false);
   const [showMobileSurahSearch, setShowMobileSurahSearch] = useState(false);
+  const [allowMobileSurahSearchFocus, setAllowMobileSurahSearchFocus] = useState(false);
   const [showMobileSurahPicker, setShowMobileSurahPicker] = useState(false);
   const [showMobileAyahPicker, setShowMobileAyahPicker] = useState(false);
+  const [showMobileTranslationPicker, setShowMobileTranslationPicker] = useState(false);
+  const [showMobileTafsirPicker, setShowMobileTafsirPicker] = useState(false);
   const [settingsTab, setSettingsTab] = useState<'display' | 'bookmarks'>('display');
   const [pendingBookmarkTarget, setPendingBookmarkTarget] = useState<{ surahNumber: number; ayahNumber: number } | null>(null);
   const [bookmarkConfirm, setBookmarkConfirm] = useState<{
@@ -236,9 +240,46 @@ const QuranTafsirBayan: React.FC = () => {
     );
   }, []);
 
+  const selectedTranslation = settings.selectedTranslations[0] || DEFAULT_URDU_TRANSLATION.identifier;
+  const tafsirEdition = settings.tafsirEdition || 'bayan-ul-quran-dr-israr-ahmed';
+  const tafsirFontSize = settings.tafsirFontSize ?? 26;
+  const textAreaBackgroundColor = settings.tafsirTextAreaBackground || DEFAULT_TEXT_AREA_BG;
+  const tafsirAreaBackgroundColor = settings.tafsirAreaBackground || DEFAULT_TAFSIR_AREA_BG;
+  const tafsirTextColor = settings.tafsirTextColor || DEFAULT_TAFSIR_TEXT_COLOR;
+
   const selectedTranslationMeta = useMemo(() => {
     return translationOptions.find((translation) => translation.identifier === selectedTranslation);
   }, [selectedTranslation, translationOptions]);
+
+  const setSelectedTranslation = useCallback((value: string) => {
+    updateSettings({
+      selectedTranslations: [value],
+      arabicOnlyMode: false,
+    });
+  }, [updateSettings]);
+
+  const setTafsirEdition = useCallback((value: string) => {
+    const matchedOption = TAFSIR_EDITION_OPTIONS.find((option) => option.value === value);
+    if (!matchedOption) return;
+    updateSettings({ tafsirEdition: matchedOption.value });
+  }, [updateSettings]);
+
+  const setTafsirFontSize = useCallback((value: React.SetStateAction<number>) => {
+    const resolved = typeof value === 'function' ? value(tafsirFontSize) : value;
+    updateSettings({ tafsirFontSize: Math.max(14, Math.min(38, resolved)) });
+  }, [tafsirFontSize, updateSettings]);
+
+  const setTextAreaBackgroundColor = useCallback((value: string) => {
+    updateSettings({ tafsirTextAreaBackground: value });
+  }, [updateSettings]);
+
+  const setTafsirAreaBackgroundColor = useCallback((value: string) => {
+    updateSettings({ tafsirAreaBackground: value });
+  }, [updateSettings]);
+
+  const setTafsirTextColor = useCallback((value: string) => {
+    updateSettings({ tafsirTextColor: value });
+  }, [updateSettings]);
 
   const tafsirEditionLabel = useMemo(() => {
     if (tafsirEdition === 'tafheem-ul-quran-syed-abu-ala-maududi') {
@@ -705,23 +746,6 @@ const QuranTafsirBayan: React.FC = () => {
   }, [initialLoadingMs]);
 
   useEffect(() => {
-    const isMobileViewport =
-      typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches;
-    const defaultArabicSize = isMobileViewport ? 28 : 30;
-    const defaultTranslationSize = isMobileViewport ? 24 : 28;
-    const defaultTafsirSize = 26;
-
-    updateSettings({
-      fontSize: defaultArabicSize,
-      translationFontSize: defaultTranslationSize,
-      selectedTranslations: [DEFAULT_URDU_TRANSLATION.identifier],
-      arabicOnlyMode: false,
-    });
-    setSelectedTranslation(DEFAULT_URDU_TRANSLATION.identifier);
-    setTafsirFontSize(defaultTafsirSize);
-  }, [updateSettings]);
-
-  useEffect(() => {
     if (selectedAyah > (activeSurahMeta?.numberOfAyahs || 1)) {
       setSelectedAyah(1);
     }
@@ -772,11 +796,24 @@ const QuranTafsirBayan: React.FC = () => {
   }, [bookmarkConfirm]);
 
   useEffect(() => {
-    updateSettings({
-      selectedTranslations: [selectedTranslation],
-      arabicOnlyMode: false,
-    });
-  }, [selectedTranslation, updateSettings]);
+    if (!showMobileSettings || settingsTab !== 'display') {
+      setShowMobileTranslationPicker(false);
+      setShowMobileTafsirPicker(false);
+    }
+  }, [settingsTab, showMobileSettings]);
+
+  useEffect(() => {
+    if (authLoading || isAuthenticated) return;
+    if (typeof window === 'undefined') return;
+
+    // Set Urdu default only for first-time guest users; keep any saved guest preference untouched.
+    const hasGuestSettings = Boolean(localStorage.getItem('quranSettings:guest'));
+    if (hasGuestSettings) return;
+
+    if (selectedTranslation !== DEFAULT_URDU_TRANSLATION.identifier) {
+      setSelectedTranslation(DEFAULT_URDU_TRANSLATION.identifier);
+    }
+  }, [authLoading, isAuthenticated, selectedTranslation, setSelectedTranslation]);
 
   useEffect(() => {
     if (!pendingBookmarkTarget) return;
@@ -1142,7 +1179,10 @@ const QuranTafsirBayan: React.FC = () => {
                     <BookOpenIcon className="h-4 w-4" />
                   </button>
                   <button
-                    onClick={() => setShowMobileSurahSearch(true)}
+                    onClick={() => {
+                      setAllowMobileSurahSearchFocus(false);
+                      setShowMobileSurahSearch(true);
+                    }}
                     className={`h-8 w-8 rounded-lg flex items-center justify-center ${settings.theme === 'dark' ? 'bg-gray-700 text-gray-200' : 'bg-gray-100 text-emerald-700'}`}
                     aria-label="Open surah search"
                     title="Search Surah"
@@ -1846,31 +1886,94 @@ const QuranTafsirBayan: React.FC = () => {
                 <label className={`block text-sm font-medium mb-1 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
                   Translation
                 </label>
-                <select
-                  value={selectedTranslation}
-                  onChange={(event) => setSelectedTranslation(event.target.value)}
-                  className={`w-full rounded-md border px-2 py-2 text-sm ${settings.theme === 'dark' ? 'border-gray-600 bg-gray-700 text-white' : 'border-gray-300 bg-white text-gray-900'}`}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMobileTranslationPicker((prev) => !prev);
+                    setShowMobileTafsirPicker(false);
+                  }}
+                  className={`w-full flex items-center justify-between rounded-md border px-3 py-2 text-sm ${settings.theme === 'dark' ? 'border-gray-600 bg-gray-700 text-white' : 'border-gray-300 bg-white text-gray-900'}`}
                 >
-                  {translationOptions.map((translation) => (
-                    <option key={translation.identifier} value={translation.identifier}>
-                      {translation.language} - {translation.name}
-                    </option>
-                  ))}
-                </select>
+                  <span className="truncate text-left">
+                    {selectedTranslationMeta
+                      ? `${selectedTranslationMeta.language} - ${selectedTranslationMeta.name}`
+                      : selectedTranslation}
+                  </span>
+                  <ChevronDownIcon className={`h-4 w-4 transition-transform ${showMobileTranslationPicker ? 'rotate-180' : ''}`} />
+                </button>
+                {showMobileTranslationPicker && (
+                  <div className={`mt-2 max-h-56 overflow-y-auto rounded-md border p-1.5 space-y-1 ${settings.theme === 'dark' ? 'border-gray-600 bg-gray-800' : 'border-gray-200 bg-white'}`}>
+                    {translationOptions.map((translation) => {
+                      const isSelected = selectedTranslation === translation.identifier;
+                      return (
+                        <button
+                          key={`mobile-translation-${translation.identifier}`}
+                          type="button"
+                          onClick={() => {
+                            setSelectedTranslation(translation.identifier);
+                            setShowMobileTranslationPicker(false);
+                          }}
+                          className={`w-full rounded-md px-2.5 py-2 text-left text-sm ${
+                            isSelected
+                              ? settings.theme === 'dark'
+                                ? 'bg-emerald-900 text-emerald-100'
+                                : 'bg-emerald-100 text-emerald-800'
+                              : settings.theme === 'dark'
+                              ? 'text-gray-100 hover:bg-gray-700'
+                              : 'text-gray-800 hover:bg-gray-100'
+                          }`}
+                        >
+                          {translation.language} - {translation.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               <div>
                 <label className={`block text-sm font-medium mb-1 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
                   Tafsir
                 </label>
-                <select
-                  value={tafsirEdition}
-                  onChange={(event) => setTafsirEdition(event.target.value)}
-                  className={`w-full rounded-md border px-2 py-2 text-sm ${settings.theme === 'dark' ? 'border-gray-600 bg-gray-700 text-white' : 'border-gray-300 bg-white text-gray-900'}`}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMobileTafsirPicker((prev) => !prev);
+                    setShowMobileTranslationPicker(false);
+                  }}
+                  className={`w-full flex items-center justify-between rounded-md border px-3 py-2 text-sm ${settings.theme === 'dark' ? 'border-gray-600 bg-gray-700 text-white' : 'border-gray-300 bg-white text-gray-900'}`}
                 >
-                  <option value="bayan-ul-quran-dr-israr-ahmed">Bayan-ul-Quran by Dr Israr Ahmed</option>
-                  <option value="tafheem-ul-quran-syed-abu-ala-maududi">Tafheem e Qur'an - Syed Abu Ala Maududi</option>
-                </select>
+                  <span className="truncate text-left">{tafsirEditionLabel}</span>
+                  <ChevronDownIcon className={`h-4 w-4 transition-transform ${showMobileTafsirPicker ? 'rotate-180' : ''}`} />
+                </button>
+                {showMobileTafsirPicker && (
+                  <div className={`mt-2 max-h-56 overflow-y-auto rounded-md border p-1.5 space-y-1 ${settings.theme === 'dark' ? 'border-gray-600 bg-gray-800' : 'border-gray-200 bg-white'}`}>
+                    {TAFSIR_EDITION_OPTIONS.map((option) => {
+                      const isSelected = tafsirEdition === option.value;
+                      return (
+                        <button
+                          key={`mobile-tafsir-${option.value}`}
+                          type="button"
+                          onClick={() => {
+                            setTafsirEdition(option.value);
+                            setShowMobileTafsirPicker(false);
+                          }}
+                          className={`w-full rounded-md px-2.5 py-2 text-left text-sm ${
+                            isSelected
+                              ? settings.theme === 'dark'
+                                ? 'bg-emerald-900 text-emerald-100'
+                                : 'bg-emerald-100 text-emerald-800'
+                              : settings.theme === 'dark'
+                              ? 'text-gray-100 hover:bg-gray-700'
+                              : 'text-gray-800 hover:bg-gray-100'
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               <button
@@ -2051,11 +2154,22 @@ const QuranTafsirBayan: React.FC = () => {
 
       {showMobileSurahSearch && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setShowMobileSurahSearch(false)} />
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => {
+              setAllowMobileSurahSearchFocus(false);
+              setShowMobileSurahSearch(false);
+            }}
+          />
           <div className={`absolute bottom-0 left-0 right-0 rounded-t-2xl p-4 max-h-[85vh] overflow-y-auto ${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
             <div className="flex items-center justify-between mb-3">
               <h2 className={`text-base font-semibold ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Surah Finder</h2>
-              <button onClick={() => setShowMobileSurahSearch(false)}>
+              <button
+                onClick={() => {
+                  setAllowMobileSurahSearchFocus(false);
+                  setShowMobileSurahSearch(false);
+                }}
+              >
                 <XMarkIcon className={`h-5 w-5 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`} />
               </button>
             </div>
@@ -2064,8 +2178,16 @@ const QuranTafsirBayan: React.FC = () => {
               type="text"
               value={surahSearch}
               onChange={(event) => setSurahSearch(event.target.value)}
+              onTouchStart={() => setAllowMobileSurahSearchFocus(true)}
+              onMouseDown={() => setAllowMobileSurahSearchFocus(true)}
+              onFocus={(event) => {
+                if (!allowMobileSurahSearchFocus) {
+                  event.target.blur();
+                }
+              }}
               placeholder="Search surah..."
-              className={`mb-3 w-full rounded-md border px-3 py-2 text-sm ${settings.theme === 'dark' ? 'border-gray-600 bg-gray-700 text-white placeholder-gray-400' : 'border-gray-300 bg-white text-gray-900 placeholder-gray-500'}`}
+              style={{ fontSize: '16px' }}
+              className={`mb-3 w-full rounded-md border px-3 py-2 text-base ${settings.theme === 'dark' ? 'border-gray-600 bg-gray-700 text-white placeholder-gray-400' : 'border-gray-300 bg-white text-gray-900 placeholder-gray-500'}`}
             />
 
             <div className="space-y-1 max-h-[60vh] overflow-y-auto">
@@ -2075,6 +2197,7 @@ const QuranTafsirBayan: React.FC = () => {
                   onClick={() => {
                     setSelectedSurah(surah.number);
                     setSelectedAyah(1);
+                    setAllowMobileSurahSearchFocus(false);
                     setShowMobileSurahSearch(false);
                   }}
                   className={`w-full rounded-md px-2 py-2 text-left text-sm transition-colors ${

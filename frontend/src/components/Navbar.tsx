@@ -269,7 +269,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                               : 'text-gray-700 hover:bg-gray-100'
                           }`}
                         >
-                          Tafsir Bayan-ul-Quran
+                          Tafsir e Quran
                         </button>
                       </div>
                     )}
@@ -516,7 +516,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                           }`}
                           onClick={() => goToQuranPage('/quran/tafsir')}
                         >
-                          Tafsir Bayan-ul-Quran
+                          Tafsir e Quran
                         </button>
                       </div>
                     )}
