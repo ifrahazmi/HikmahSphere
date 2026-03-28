@@ -6,8 +6,6 @@
 # Allow all search engines to crawl
 User-agent: *
 Allow: /
-Allow: /dhikr-dua
-Allow: /dua/
 
 Disallow: /admin/
 Disallow: /api/

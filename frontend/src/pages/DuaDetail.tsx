@@ -371,7 +371,7 @@ const DuaDetail: React.FC = () => {
     <>
       <PageSEO
         title={`${dua.title} Dua`}
-        description={dua.translation}
+        description={`Learn ${dua.title} dua with Arabic text, transliteration, translation, and authentic reference.`}
         path={`/dua/${dua.slug}`}
         keywords={[dua.title, 'dua', 'dhikr', dua.reference.source, dua.reference.book]}
         type="article"

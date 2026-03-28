@@ -70,10 +70,28 @@ const Home: React.FC = () => {
       icon: '/Quran-Reader.png',
       title: 'Quran Reader',
       path: '/quran',
-      description: 'Complete 114 Surahs with 10+ translations, semantic AI search, audio recitations, bookmarks, Indopak script, customizable fonts, and seamless navigation between ayahs',
+      description: 'Read the complete Quran with Arabic text, translations, bookmarks, recitations, and seamless ayah navigation designed for daily study',
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
       gradient: 'from-blue-500 to-cyan-500',
+    },
+    {
+      icon: '/Qibla-Compass.png',
+      title: 'Qibla Compass',
+      path: '/prayers/qibla',
+      description: 'Find Qibla direction with a live compass and map-assisted fallback, so your prayer setup stays accurate wherever you are',
+      color: 'text-cyan-600',
+      bgColor: 'bg-cyan-50',
+      gradient: 'from-cyan-500 to-sky-500',
+    },
+    {
+      icon: '/Tafsir.png',
+      title: 'Tafsir e Quran',
+      path: '/quran/tafsir',
+      description: 'Go deeper with ayah-by-ayah tafsir and translations to understand meaning, context, and practical lessons from the Quran',
+      color: 'text-indigo-600',
+      bgColor: 'bg-indigo-50',
+      gradient: 'from-indigo-500 to-blue-500',
     },
     {
       icon: '/Zakat.png',
@@ -90,7 +108,7 @@ const Home: React.FC = () => {
       icon: '/Global-Community.png',
       title: 'Global Community',
       path: '/community',
-      description: 'Connect with Muslims worldwide through community forums, local event discovery, group discussions, and reputation systems fostering meaningful Islamic brotherhood',
+      description: 'Connect in forums, discover events, and grow through Islamic quiz games that make knowledge-building engaging for all ages',
       color: 'text-purple-600',
       bgColor: 'bg-purple-50',
       gradient: 'from-purple-500 to-pink-500',
@@ -103,6 +121,15 @@ const Home: React.FC = () => {
       color: 'text-teal-600',
       bgColor: 'bg-teal-50',
       gradient: 'from-teal-500 to-emerald-500',
+    },
+    {
+      icon: '/Hajj-guide.png',
+      title: 'Hajj Guide',
+      path: '/hajj-guide',
+      description: 'Prepare for pilgrimage with practical step-by-step Hajj guidance and essential ritual references in one guided experience',
+      color: 'text-orange-600',
+      bgColor: 'bg-orange-50',
+      gradient: 'from-orange-500 to-amber-500',
     },
     {
       icon: '/AI-Scholar-Assistant.png',
@@ -130,15 +157,15 @@ const Home: React.FC = () => {
 
   const stats = [
     {
-      label: 'Precise Prayer Times',
-      description: 'Geolocation-based, multiple verified authentic source methods, Ramadan schedules',
+      label: 'Prayer Times & Qibla Compass',
+      description: 'Accurate Salah schedules with Qibla compass guidance and Ramadan timing support',
       icon: ClockIcon,
       color: 'text-emerald-600',
       bgColor: 'bg-emerald-100',
     },
     {
-      label: 'Complete Quran',
-      description: '114 Surahs · 10+ translations · Audio recitations · IndoPak font',
+      label: 'Quran, Tafsir & Translations',
+      description: 'Quran text, Tafsir, and translations with recitation and bookmarking tools',
       icon: BookOpenIcon,
       color: 'text-blue-600',
       bgColor: 'bg-blue-100',
@@ -206,7 +233,7 @@ const Home: React.FC = () => {
     <>
       <PageSEO
         title="HikmahSphere: A Unified Islamic Platform"
-        description="Complete Islamic platform featuring: Prayer Times (accurate daily schedules with multiple calculation methods), Quran Reader (114 Surahs with 10+ translations, audio recitations, bookmarks), Dhikr & Dua (authentic adhkar with tasbih counter), Zakat Calculator (live nisab rates, crypto support), Muslim Community (forums, events), and AI Islamic Assistant. Free, privacy-first, and built for the global Ummah."
+        description="Complete Islamic platform featuring Prayer Times with Qibla Compass, Quran text with Tafsir and translations, Dhikr & Dua, Zakat tools, Global Community with Islamic quiz games, and a guided Hajj journey. Free, privacy-first, and built for the global Ummah."
         path="/"
         keywords={[
           'islamic app',
@@ -220,8 +247,12 @@ const Home: React.FC = () => {
           'quran reader',
           'quran with audio',
           'quran with translation',
+          'quran tafsir',
+          'tafsir e quran',
           'urdu quran',
           'indo pak quran',
+          'qibla compass',
+          'qibla direction',
           'dhikr and dua',
           'morning evening adhkar',
           'online tasbih counter',
@@ -229,15 +260,21 @@ const Home: React.FC = () => {
           'zakat calculator india',
           'nisab value today',
           'muslim community app',
+          'islamic quiz games',
+          'hajj guide',
+          'hajj preparation app',
           'ramadan fasting times',
           'hikmahsphere',
         ]}
         siteLinks={[
           { name: 'Prayer Times', url: 'https://hikmahsphere.site/prayers' },
+          { name: 'Qibla Compass', url: 'https://hikmahsphere.site/prayers/qibla' },
           { name: 'Quran Reader', url: 'https://hikmahsphere.site/quran' },
+          { name: 'Tafsir e Quran', url: 'https://hikmahsphere.site/quran/tafsir' },
           { name: 'Dhikr & Dua', url: 'https://hikmahsphere.site/dhikr-dua' },
           { name: 'Zakat Calculator', url: 'https://hikmahsphere.site/zakat' },
           { name: 'Community', url: 'https://hikmahsphere.site/community' },
+          { name: 'Hajj Guide', url: 'https://hikmahsphere.site/hajj-guide' },
           { name: 'Salah Tracker', url: 'https://hikmahsphere.site/salah-tracker' }
         ]}
       />
@@ -347,7 +384,7 @@ const Home: React.FC = () => {
             {/* Badge */}
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full border border-white/20 mb-8">
               <SparklesIcon className="w-4 h-4 text-emerald-300" />
-            <span className="text-sm font-medium text-emerald-100">Prayer Times · Quran · Dhikr &amp; Dua · Zakat · Community</span>
+            <span className="text-sm font-medium text-emerald-100">Prayer Times · Qibla Compass · Quran &amp; Tafsir · Dhikr &amp; Dua · Zakat · Community · Hajj</span>
             </div>
 
             <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold mb-8 leading-tight">
@@ -358,7 +395,7 @@ const Home: React.FC = () => {
             </h1>
 
             <p className="text-xl sm:text-2xl mb-10 text-emerald-100 max-w-3xl mx-auto leading-relaxed">
-              Accurate prayer times, the complete Quran, authentic Dhikr &amp; Dua, smart Zakat calculation, and a global Muslim community — one platform, built with sincerity for every believer
+              Accurate prayer times with Qibla compass, Quran text with Tafsir and translations, authentic Dhikr &amp; Dua, smart Zakat, a global community with Islamic games, and Hajj guidance in one sincere platform for every believer
             </p>
 
             {/* CTA Buttons */}
@@ -468,17 +505,17 @@ const Home: React.FC = () => {
               <span className="text-emerald-700">Muslim App</span>
             </h2>
             <p className="text-gray-700 mb-6 leading-relaxed">
-              Why juggle five different applications for your daily Islamic needs? HikmahSphere is the definitive{' '}
-              <strong className="text-emerald-700 font-semibold">muslim app</strong> — meticulously designed for the global Ummah, bringing every essential feature into a single, beautiful interface.
+              Stop switching between disconnected tools. HikmahSphere is a complete{' '}
+              <strong className="text-emerald-700 font-semibold">muslim app</strong> experience that brings guidance, worship tools, learning, and community together in one clean interface built for daily life.
             </p>
             <ul className="space-y-4 text-gray-700">
               <li className="flex items-start gap-3">
                 <CheckCircleIcon className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
-                <span><strong className="font-semibold text-gray-900">Accurate Prayer Times:</strong> GPS-powered Salah timings with multiple verified authentic source calculation methods (MWL, ISNA, Karachi, Umm al-Qura), Hanafi and Shafi Asr support, high-latitude corrections, and Ramadan fasting schedules — so you never miss a prayer, anywhere in the world.</span>
+                <span><strong className="font-semibold text-gray-900">Prayer Times + Qibla Compass:</strong> Get precise daily Salah timings, Ramadan fasting schedules, and a live Qibla compass view so both your prayer time and direction are correct.</span>
               </li>
               <li className="flex items-start gap-3">
                 <CheckCircleIcon className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
-                <span><strong className="font-semibold text-gray-900">Complete Quran Reader:</strong> All 114 Surahs with 10+ translations in English, Urdu, Hindi and more, transliteration, authentic Indo-Pak Nastaleeq font, audio recitations from world-renowned reciters, semantic verse search, and personal bookmarks.</span>
+                <span><strong className="font-semibold text-gray-900">Complete Quran Study:</strong> Read Quran text with translations and Tafsir, listen to recitation, and save ayahs for focused understanding and revision.</span>
               </li>
               <li className="flex items-start gap-3">
                 <CheckCircleIcon className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
@@ -486,11 +523,15 @@ const Home: React.FC = () => {
               </li>
               <li className="flex items-start gap-3">
                 <CheckCircleIcon className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
-                <span><strong className="font-semibold text-gray-900">Intelligent Zakat Calculator:</strong> Live nisab thresholds updated with real-time gold and silver prices, support for all asset types including cash, investments, business stock and cryptocurrency — fulfil your obligation with total confidence.</span>
+                <span><strong className="font-semibold text-gray-900">Intelligent Zakat Tools:</strong> Calculate with live nisab and complete asset coverage, while management users can handle collection, records, and transparent reporting.</span>
               </li>
               <li className="flex items-start gap-3">
                 <CheckCircleIcon className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
-                <span><strong className="font-semibold text-gray-900">Global Muslim Community:</strong> Join thousands of believers in moderated Islamic forums, discover local events, share knowledge, and experience the warmth of the Ummah — from Bengaluru to Birmingham.</span>
+                <span><strong className="font-semibold text-gray-900">Global Muslim Community + Islamic Games:</strong> Join moderated discussions, discover events, and build Islamic knowledge through engaging quiz games with the Ummah.</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <CheckCircleIcon className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
+                <span><strong className="font-semibold text-gray-900">Hajj Guide:</strong> Prepare for one of life&apos;s most important journeys with structured Hajj guidance and practical references you can revisit anytime.</span>
               </li>
             </ul>
           </div>
@@ -501,29 +542,27 @@ const Home: React.FC = () => {
               Essential Tools for Daily Islamic Practice
             </h2>
             <p className="text-center text-gray-700 mb-10 max-w-3xl mx-auto leading-relaxed">
-              Every feature in HikmahSphere is designed as a spiritual tool — built to support your worship, deepen your understanding, and strengthen your connection with Allah.
+              These tools are designed for real daily rhythm: pray on time, face the right direction, understand what you recite, remember Allah consistently, and prepare for major acts of worship.
             </p>
 
             {/* Prayer Times */}
             <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-8 mb-6 border border-emerald-200">
               <h3 className="text-2xl font-bold text-gray-900 mb-3">
-                Precise Daily <span className="text-emerald-700">Prayer Times</span>
+                Precise Daily <span className="text-emerald-700">Prayer Times &amp; Qibla</span>
               </h3>
               <p className="text-gray-700 leading-relaxed">
-                As a trusted <strong className="font-semibold text-emerald-700">prayer times app</strong>, HikmahSphere ensures you never miss Fajr, Dhuhr, Asr, Maghrib, or Isha. Our engine delivers ultra-precise{' '}
-                <strong className="font-semibold text-emerald-700">daily prayer times</strong> and full Ramadan fasting schedules (Sehri and Iftar) with beautiful, shareable prayer cards. The most reliable{' '}
-                <strong className="font-semibold text-emerald-700">muslim prayer app</strong> for accuracy and peace of mind.
+                Stay aligned in both time and direction. HikmahSphere delivers reliable{' '}
+                <strong className="font-semibold text-emerald-700">daily prayer times</strong> with multi-method calculation support, then helps you face the Qibla confidently through a live compass and map-assisted view.
               </p>
             </div>
 
             {/* Quran */}
             <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-8 mb-6 border border-blue-200">
               <h3 className="text-2xl font-bold text-gray-900 mb-3">
-                The Definitive <span className="text-blue-700">Online Quran Reader</span>
+                Quran Text, <span className="text-blue-700">Tafsir &amp; Translations</span>
               </h3>
               <p className="text-gray-700 leading-relaxed">
-                Our comprehensive <strong className="font-semibold text-blue-700">quran app</strong> transforms how you engage with the Book of Allah. Enjoy a world-class{' '}
-                <strong className="font-semibold text-blue-700">quran reader online</strong> with semantic AI-powered verse search, side-by-side translations, authentic audio recitations, personalised bookmarks, and customisable fonts — including the revered Indo-Pak Nastaleeq script loved across South Asia.
+                Move from recitation to understanding in one flow. Read the Quran with Arabic text, compare translations, open Tafsir for context, and listen to recitations while bookmarking verses for reflection.
               </p>
             </div>
 
@@ -578,8 +617,17 @@ const Home: React.FC = () => {
                 A Thriving <span className="text-purple-700">Global Muslim Community</span>
               </h3>
               <p className="text-gray-700 leading-relaxed">
-                Islam thrives in community. HikmahSphere connects you with a growing{' '}
-                <strong className="font-semibold text-purple-700">muslim community app</strong> experience — moderated Islamic forums, local event discovery, knowledge sharing, and meaningful brother-and-sisterhood. Because believers, from Bengaluru to Kolkata or Bihar to Hyderabad all across every continent, are one Ummah.
+                Grow together through moderated forums, beneficial discussions, local events, and interactive Islamic quiz games that keep learning active inside your community routine.
+              </p>
+            </div>
+
+            {/* Hajj Guide */}
+            <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl p-8 mt-6 border border-orange-200">
+              <h3 className="text-2xl font-bold text-gray-900 mb-3">
+                Step-by-Step <span className="text-orange-700">Hajj Guide</span>
+              </h3>
+              <p className="text-gray-700 leading-relaxed">
+                Prepare with confidence for pilgrimage using a structured Hajj guide that helps you review key steps, sequence, and essential acts before and during your journey.
               </p>
             </div>
           </div>
@@ -608,7 +656,7 @@ const Home: React.FC = () => {
               Everything You Need in One Place
             </h2>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              Experience Islam in the digital age with cutting-edge technology for prayer, Quran, Dhikr &amp; Dua, Zakat, and community
+              Explore prayer, compass, Quran, Tafsir, Dhikr, Zakat, community learning games, and Hajj preparation from one connected dashboard
             </p>
           </div>
 

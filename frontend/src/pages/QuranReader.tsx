@@ -1084,8 +1084,8 @@ const QuranReader: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="Quran Reader 2026: Read Quran with Audio, Translations & Indopak Font"
-        description="Read complete 114 Surahs of the Holy Quran online with 10+ translations (English, Urdu, Hindi), audio recitations by famous Qaris, transliteration, IndoPak Nastaleeq font, bookmarks, and customizable reading settings. Free Islamic app."
+        title="Quran Reader"
+        description="Read the Holy Quran with Arabic text, translations, recitation audio, bookmarks, and easy navigation tools."
         path="/quran"
         keywords={[
           'quran',

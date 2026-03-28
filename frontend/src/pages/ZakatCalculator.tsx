@@ -256,8 +256,8 @@ const ZakatCalculator: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="Zakat Calculator with Live Nisab Threshold Today"
-        description="Calculate Zakat easily with live nisab thresholds for gold and silver, multi-currency support, and coverage for cash, savings, business assets, investments, and cryptocurrency."
+        title="Zakat Calculator"
+        description="Calculate your Zakat with live nisab thresholds across cash, gold, silver, investments, and crypto assets."
         path="/zakat"
         keywords={[
           'zakat calculator',

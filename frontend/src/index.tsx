@@ -26,11 +26,15 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker
       .register('/firebase-messaging-sw.js')
       .then(async () => {
-        // Clean up legacy app-shell worker to avoid SW scope conflicts/refresh loops.
+        // Clean up legacy app-shell workers to avoid stale cached bundles.
+        // Keep only the Firebase messaging service worker.
         const registrations = await navigator.serviceWorker.getRegistrations();
         await Promise.all(
           registrations
-            .filter((registration) => registration.active?.scriptURL.includes('/sw.js'))
+            .filter((registration) => {
+              const scriptUrl = registration.active?.scriptURL || registration.installing?.scriptURL || registration.waiting?.scriptURL || '';
+              return !scriptUrl.includes('/firebase-messaging-sw.js');
+            })
             .map((registration) => registration.unregister())
         );
       })

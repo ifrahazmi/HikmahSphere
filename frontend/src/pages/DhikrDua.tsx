@@ -1424,8 +1424,8 @@ const DhikrDua: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="Dhikr & Dua: Authentic Islamic Supplications with Tasbih Counter"
-        description="Complete collection of authentic daily duas and adhkar from Quran and Sunnah. Features Arabic text, transliteration, English/Urdu translations, hadith references, bookmarks, and free online tasbih counter. Morning/evening adhkar, duas for anxiety, travel, and more."
+        title="Dhikr and Dua"
+        description="Explore authentic daily duas and adhkar with Arabic text, transliteration, translation, references, and tasbih counter."
         path="/dhikr-dua"
         keywords={[
           'dhikr and dua',

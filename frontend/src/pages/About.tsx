@@ -145,14 +145,18 @@ const About: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="About HikmahSphere and Our Mission"
-        description="Learn how HikmahSphere combines authentic Islamic knowledge with modern technology to support prayer, Quran study, Dhikr & Dua, Zakat, and a connected global Muslim community. Founded and developed by Ifrahuddin Azmi."
+        title="About Us"
+        description="Learn how HikmahSphere helps Muslims with prayer times, Quran study, Dhikr and Dua, Zakat, Hajj guidance, and community learning."
         path="/about"
         keywords={[
           'about hikmahsphere',
           'islamic digital platform mission',
           'authentic islamic knowledge',
           'muslim technology platform',
+          'qibla compass app',
+          'quran tafsir and translation',
+          'hajj guide app',
+          'islamic quiz games',
           'dhikr and dua platform',
           'ifrahuddin azmi',
           'ifrah azmi developer',
@@ -757,7 +761,7 @@ const About: React.FC = () => {
                   <div className="w-1/2 pl-4">
                     <div className="text-teal-300 font-semibold text-xs sm:text-sm">Phase 2</div>
                     <div className="text-white font-bold text-xs sm:text-base">Features</div>
-                    <div className="text-teal-200/60 text-xs hidden sm:block">Prayer times, Quran, Zakat, Dikr and Dua</div>
+                    <div className="text-teal-200/60 text-xs hidden sm:block">Prayer times, Qibla compass, Quran with Tafsir, Dhikr &amp; Dua, Zakat</div>
                   </div>
                 </div>
 
@@ -766,7 +770,7 @@ const About: React.FC = () => {
                   <div className="w-1/2 text-right pr-4">
                     <div className="text-cyan-300 font-semibold text-xs sm:text-sm">Phase 3</div>
                     <div className="text-white font-bold text-xs sm:text-base">Expansion</div>
-                    <div className="text-cyan-200/60 text-xs hidden sm:block">Community features</div>
+                    <div className="text-cyan-200/60 text-xs hidden sm:block">Community games and Hajj guidance experience</div>
                   </div>
                   <div className="w-3 h-3 sm:w-4 sm:h-4 bg-cyan-500 rounded-full border-2 sm:border-4 border-cyan-300 z-10"></div>
                   <div className="w-1/2 pl-4"></div>
@@ -800,8 +804,8 @@ const About: React.FC = () => {
                         </svg>
                       </div>
                       <div className="flex-1">
-                        <div className="text-purple-200 font-semibold">Complete Zakat Management System</div>
-                        <div className="text-purple-300/60 text-sm">Full collection, distribution, and recipient management</div>
+                        <div className="text-purple-200 font-semibold">AI Islamic Assistant</div>
+                        <div className="text-purple-300/60 text-sm">Context-aware Islamic guidance with verified references</div>
                       </div>
                       <div className="px-3 py-1 bg-purple-500/20 text-purple-200 text-xs font-semibold rounded-full">
                         In Development

@@ -98,10 +98,12 @@ export const timeline: TimelineItem[] = [
     period: "Q1 2026",
     features: [
       "Accurate Prayer Times with Notifications",
-      "Complete Quran Reader & Audio",
+      "Qibla Compass for Accurate Direction",
+      "Quran Text with Tafsir and Translations",
       "Dhikr & Dua Library with Tasbih Counter",
+      "Step-by-Step Hajj Guide",
       "Zakat Calculator & Management",
-      "Community Connection Hub"
+      "Community Connection Hub with Islamic Quiz Games"
     ]
   },
   {
@@ -174,13 +176,25 @@ export const spiritualFeatures: SpiritualFeature[] = [
     icon: "/Smart-Prayer-Times.png",
     title: "Smart Prayer Times",
     path: "/prayers",
-    description: "Never miss the connection with your Lord. Ultra-precise calculations with real-time geolocation, multiple verified authentic source methods (MWL, ISNA, Umm al-Qura), high latitude corrections, and beautiful shareable prayer cards."
+    description: "Never miss the connection with your Lord. Ultra-precise daily calculations with real-time geolocation, multiple verified methods, high-latitude adjustments, and Ramadan schedule support."
+  },
+  {
+    icon: "/Qibla-Compass.png",
+    title: "Qibla Compass",
+    path: "/prayers/qibla",
+    description: "Confirm Qibla direction with a live compass and map-supported fallback guidance for better confidence while traveling or praying in new locations."
   },
   {
     icon: "/Quran-Reader.png",
     title: "Quran Reader",
     path: "/quran",
-    description: "Understand His words in your language. Complete 114 Surahs with 10+ translations, semantic AI search, audio recitations, bookmarks, Indopak script, and seamless navigation that transforms your reading experience."
+    description: "Read all 114 Surahs with Arabic text, audio recitation, bookmarks, and smooth navigation designed for focused daily recitation and revision."
+  },
+  {
+    icon: "/Tafsir.png",
+    title: "Tafsir e Quran",
+    path: "/quran/tafsir",
+    description: "Study Quran text with Tafsir and translations in one place so recitation, understanding, and reflection remain connected."
   },
   {
     icon: "/Zakat.png",
@@ -192,13 +206,19 @@ export const spiritualFeatures: SpiritualFeature[] = [
     icon: "/Global-Community.png",
     title: "Global Community",
     path: "/community",
-    description: "Find your brothers and sisters across continents. Connect through forums, discover local events, join meaningful discussions, and strengthen the bonds of Islamic brotherhood worldwide."
+    description: "Find your brothers and sisters across continents through forums, events, beneficial discussions, and Islamic quiz games that make learning interactive."
   },
   {
     icon: "/Tasbih.png",
     title: "Dhikr & Dua",
     path: "/dhikr-dua",
     description: "Keep your heart connected to Allah throughout the day. Access authentic daily duas and adhkar with Arabic text, transliteration, English/Urdu translation, full hadith references, bookmarks, and a focused online tasbih counter."
+  },
+  {
+    icon: "/Hajj-guide.png",
+    title: "Hajj Guide",
+    path: "/hajj-guide",
+    description: "Prepare for pilgrimage with practical, step-by-step Hajj guidance to help you review essential rituals and sequence with confidence."
   },
   {
     icon: "/AI-Scholar-Assistant.png",

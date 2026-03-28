@@ -182,8 +182,8 @@ const Profile: React.FC = () => {
       return (
           <>
             <PageSEO
-              title="Your HikmahSphere Profile"
-              description="Manage your HikmahSphere profile and personalized settings."
+              title="My Profile"
+              description="Manage your profile details, preferences, and account settings."
               path="/profile"
               noIndex
               noFollow
@@ -220,8 +220,8 @@ const Profile: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="Your HikmahSphere Profile"
-        description="Manage your HikmahSphere profile and personalized settings."
+        title="My Profile"
+        description="Manage your profile details, preferences, and account settings."
         path="/profile"
         noIndex
         noFollow

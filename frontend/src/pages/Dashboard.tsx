@@ -268,8 +268,8 @@ const Dashboard: React.FC = () => {
       return (
           <>
             <PageSEO
-              title="HikmahSphere Dashboard"
-              description="Secure dashboard area for authorized HikmahSphere users."
+                            title="Dashboard"
+                            description="Secure dashboard for authorized users to manage HikmahSphere data and activity."
               path="/dashboard"
               noIndex
               noFollow
@@ -291,8 +291,8 @@ const Dashboard: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="HikmahSphere Dashboard"
-        description="Secure dashboard area for authorized HikmahSphere users."
+                title="Dashboard"
+                description="Secure dashboard for authorized users to manage HikmahSphere data and activity."
         path="/dashboard"
         noIndex
         noFollow

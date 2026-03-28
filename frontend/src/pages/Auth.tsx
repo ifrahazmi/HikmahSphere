@@ -219,8 +219,8 @@ const Auth: React.FC = () => {
     return (
       <>
         <PageSEO
-          title="Sign In to HikmahSphere"
-          description="Sign in or create your HikmahSphere account to access personalized Islamic tools and services."
+          title="Sign In"
+          description="Sign in or create your account to access prayer tools, Quran features, and personalized Islamic resources."
           path="/auth"
           noIndex
           noFollow
@@ -233,8 +233,8 @@ const Auth: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="Sign In to HikmahSphere"
-        description="Sign in or create your HikmahSphere account to access personalized Islamic tools and services."
+        title="Sign In"
+        description="Sign in or create your account to access prayer tools, Quran features, and personalized Islamic resources."
         path="/auth"
         noIndex
         noFollow

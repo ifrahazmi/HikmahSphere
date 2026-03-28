@@ -90,8 +90,8 @@ const Community: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="Muslim Community Forums and Events"
-        description="Join the HikmahSphere Muslim community for Islamic discussions, Quran study circles, worship insights, and local events that strengthen brotherhood and learning."
+        title="Muslim Community"
+        description="Join Islamic forums, community discussions, events, and learning games with Muslims worldwide."
         path="/community"
         keywords={[
           'muslim community app',

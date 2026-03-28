@@ -1100,8 +1100,8 @@ const QuranTafsirBayan: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="Urdu Tafsir Reader | HikmahSphere"
-        description="Read Quran with Urdu translation and tafsir in a focused, responsive reader with footnote support."
+        title="Quran Tafsir"
+        description="Read Quran with Tafsir and Urdu translation in a focused reader with bookmarks and footnotes."
         path="/quran/tafsir"
         keywords={['urdu tafsir', 'tafheem ul quran', 'bayan ul quran', 'quran tafsir']}
       />

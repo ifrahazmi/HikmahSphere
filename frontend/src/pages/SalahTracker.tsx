@@ -940,7 +940,7 @@ const SalahTracker: React.FC = () => {
       <>
         <PageSEO
           title="Salah Tracker"
-          description="Track your daily salah consistency and worship streaks."
+          description="Track daily Salah consistency, worship streaks, and prayer progress in one place."
           path="/salah-tracker"
           noIndex
           noFollow
@@ -970,7 +970,7 @@ const SalahTracker: React.FC = () => {
     <>
       <PageSEO
         title="Salah Tracker"
-        description="Track every daily prayer with streaks, weekly consistency, and progress insights."
+        description="Track daily Salah consistency, worship streaks, and prayer progress in one place."
         path="/salah-tracker"
         noIndex
         noFollow

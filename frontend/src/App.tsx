@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { Toaster } from 'react-hot-toast';
@@ -225,7 +225,9 @@ const AppContent: React.FC = () => {
       <main className="pt-16"> {/* Account for fixed navbar */}
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/home" element={<Navigate to="/" replace />} />
           <Route path="/about" element={<About />} />
+          <Route path="/about-us" element={<Navigate to="/about" replace />} />
           <Route path="/contact" element={<Contact />} /> {/* Add Contact Route */}
           <Route path="/hajj-guide" element={<HajjGuide />} />
           <Route path="/auth" element={<Auth />} />

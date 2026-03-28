@@ -1974,8 +1974,8 @@ const PrayerTimes: React.FC = () => {
     return (
       <>
         <PageSEO
-          title="Prayer Times 2026: Accurate Salah Times Worldwide with Fasting Schedule"
-          description="Get accurate daily prayer times for any city worldwide. Features Fajr, Dhuhr, Asr, Maghrib, Isha times with multiple calculation methods (MWL, ISNA, Umm al-Qura), madhab settings, high-latitude adjustments, Ramadan fasting schedule (Sehri/Iftar), and Hijri calendar."
+          title="Prayer Times"
+          description="Get accurate daily Salah times with Ramadan schedule support, multiple calculation methods, and Hijri date tools."
           path="/prayers"
           keywords={[
             'prayer times',
@@ -2011,8 +2011,8 @@ const PrayerTimes: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="Prayer Times 2026: Accurate Salah Times Worldwide with Fasting Schedule"
-        description="Get accurate daily prayer times for any city worldwide. Features Fajr, Dhuhr, Asr, Maghrib, Isha times with multiple calculation methods (MWL, ISNA, Umm al-Qura), madhab settings, high-latitude adjustments, Ramadan fasting schedule (Sehri/Iftar), and Hijri calendar."
+        title="Prayer Times"
+        description="Get accurate daily Salah times with Ramadan schedule support, multiple calculation methods, and Hijri date tools."
         path="/prayers"
         keywords={[
           'prayer times',
