@@ -2,6 +2,11 @@ import express, { Request, Response } from 'express';
 import { body, query, validationResult } from 'express-validator';
 import { adminMiddleware, authMiddleware, optionalAuthMiddleware } from '../middleware/auth';
 import redisClient from '../config/redis';
+import PrayerTimeTuningModel, {
+  DEFAULT_PRAYER_TIME_OFFSETS,
+  type PrayerTimeOffsetKey,
+  type PrayerTimeOffsets,
+} from '../models/PrayerTimeTuning';
 import {
   getCorrectedHijriDate,
   getGlobalHijriAdjustment,
@@ -198,6 +203,169 @@ function addDaysToDDMMYYYY(value: string, days: number): string {
   date.setDate(date.getDate() + days);
   return formatDDMMYYYY(date);
 }
+
+type PrayerTuningConfig = {
+  offsets: PrayerTimeOffsets;
+  imsakMode: 'tied-to-fajr';
+  applyToFasting: boolean;
+  updatedAt: string | null;
+};
+
+const PRAYER_TIME_KEYS: PrayerTimeOffsetKey[] = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha', 'imsak'];
+
+const getDefaultPrayerTuningConfig = (): PrayerTuningConfig => ({
+  offsets: { ...DEFAULT_PRAYER_TIME_OFFSETS },
+  imsakMode: 'tied-to-fajr',
+  applyToFasting: true,
+  updatedAt: null,
+});
+
+const normalizeOffset = (value: unknown): number => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(-5, Math.min(5, Math.trunc(parsed)));
+};
+
+const sanitizePrayerTimeOffsets = (value: unknown): PrayerTimeOffsets => {
+  const source = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  return {
+    fajr: normalizeOffset(source.fajr),
+    dhuhr: normalizeOffset(source.dhuhr),
+    asr: normalizeOffset(source.asr),
+    maghrib: normalizeOffset(source.maghrib),
+    isha: normalizeOffset(source.isha),
+    imsak: normalizeOffset(source.imsak),
+  };
+};
+
+const toMinutesFromHHMM = (value: string): number | null => {
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const hours = parseInt(match[1] || '0', 10);
+  const minutes = parseInt(match[2] || '0', 10);
+  if (Number.isNaN(hours) || Number.isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+    return null;
+  }
+  return hours * 60 + minutes;
+};
+
+const toHHMMFromMinutes = (totalMinutes: number): string => {
+  const minutesPerDay = 24 * 60;
+  const normalized = ((Math.round(totalMinutes) % minutesPerDay) + minutesPerDay) % minutesPerDay;
+  const hours = Math.floor(normalized / 60);
+  const minutes = normalized % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+};
+
+const applyOffsetToHHMM = (time: string, offsetMinutes: number): string => {
+  const baseMinutes = toMinutesFromHHMM(time);
+  if (baseMinutes === null) return time;
+  return toHHMMFromMinutes(baseMinutes + offsetMinutes);
+};
+
+const normalizeRawTime = (value: unknown): string => {
+  const raw = String(value || '').split(' ')[0] || '';
+  return raw.trim();
+};
+
+const calculateDurationBetween = (startHHMM: string, endHHMM: string): string => {
+  const startMinutes = toMinutesFromHHMM(startHHMM);
+  const endMinutes = toMinutesFromHHMM(endHHMM);
+  if (startMinutes === null || endMinutes === null) return '0h 0m';
+  const adjustedEnd = endMinutes < startMinutes ? endMinutes + 24 * 60 : endMinutes;
+  const diff = Math.max(0, adjustedEnd - startMinutes);
+  return `${Math.floor(diff / 60)}h ${diff % 60}m`;
+};
+
+const applyPrayerTuningToTimes = (
+  rawTimes: {
+    Fajr: string;
+    Sunrise: string;
+    Dhuhr: string;
+    Asr: string;
+    Maghrib: string;
+    Isha: string;
+    Midnight: string;
+    Imsak?: string;
+  },
+  tuning: PrayerTuningConfig
+) => {
+  const tunedFajr = applyOffsetToHHMM(normalizeRawTime(rawTimes.Fajr), tuning.offsets.fajr);
+
+  return {
+    Fajr: tunedFajr,
+    Sunrise: normalizeRawTime(rawTimes.Sunrise),
+    Dhuhr: applyOffsetToHHMM(normalizeRawTime(rawTimes.Dhuhr), tuning.offsets.dhuhr),
+    Asr: applyOffsetToHHMM(normalizeRawTime(rawTimes.Asr), tuning.offsets.asr),
+    Maghrib: applyOffsetToHHMM(normalizeRawTime(rawTimes.Maghrib), tuning.offsets.maghrib),
+    Isha: applyOffsetToHHMM(normalizeRawTime(rawTimes.Isha), tuning.offsets.isha),
+    Midnight: normalizeRawTime(rawTimes.Midnight),
+    Imsak: applyOffsetToHHMM(tunedFajr, tuning.offsets.imsak),
+  };
+};
+
+const applyPrayerTuningToFastingEntry = (
+  entry: {
+    time?: { sahur?: string; iftar?: string; duration?: string };
+    fajr?: string | null;
+    maghrib?: string | null;
+    imsak?: string | null;
+  },
+  tuning: PrayerTuningConfig
+) => {
+  const baseFajr = normalizeRawTime(entry.fajr || entry.time?.sahur || '00:00');
+  const baseMaghrib = normalizeRawTime(entry.maghrib || entry.time?.iftar || '00:00');
+  const tunedFajr = applyOffsetToHHMM(baseFajr, tuning.offsets.fajr);
+  const tunedMaghrib = applyOffsetToHHMM(baseMaghrib, tuning.offsets.maghrib);
+  const tunedImsak = applyOffsetToHHMM(tunedFajr, tuning.offsets.imsak);
+  const tunedSahur = tuning.applyToFasting ? tunedImsak : normalizeRawTime(entry.time?.sahur || tunedImsak);
+  const tunedIftar = tuning.applyToFasting ? tunedMaghrib : normalizeRawTime(entry.time?.iftar || tunedMaghrib);
+
+  return {
+    fajr: tunedFajr,
+    maghrib: tunedMaghrib,
+    imsak: tunedImsak,
+    time: {
+      sahur: tunedSahur,
+      iftar: tunedIftar,
+      duration: calculateDurationBetween(tunedFajr, tunedMaghrib),
+    },
+  };
+};
+
+const getPrayerTuningSignature = (tuning: PrayerTuningConfig): string => {
+  return `${PRAYER_TIME_KEYS.map((key) => tuning.offsets[key]).join(',')}|${tuning.imsakMode}|${tuning.applyToFasting ? '1' : '0'}`;
+};
+
+const getGlobalPrayerTuning = async (): Promise<PrayerTuningConfig> => {
+  const existing = await PrayerTimeTuningModel.findOne({ key: 'global' });
+  if (!existing) {
+    const created = await PrayerTimeTuningModel.create({
+      key: 'global',
+      offsets: { ...DEFAULT_PRAYER_TIME_OFFSETS },
+      imsakMode: 'tied-to-fajr',
+      applyToFasting: true,
+    });
+    return {
+      offsets: sanitizePrayerTimeOffsets(created.offsets),
+      imsakMode: 'tied-to-fajr',
+      applyToFasting: Boolean(created.applyToFasting),
+      updatedAt: created.updatedAt ? created.updatedAt.toISOString() : null,
+    };
+  }
+
+  return {
+    offsets: sanitizePrayerTimeOffsets(existing.offsets),
+    imsakMode: 'tied-to-fajr',
+    applyToFasting: Boolean(existing.applyToFasting),
+    updatedAt: existing.updatedAt ? existing.updatedAt.toISOString() : null,
+  };
+};
+
+const canManagePrayerTuning = (user: any): boolean => {
+  if (!user) return false;
+  return user.role === 'superadmin' || user.role === 'manager';
+};
 
 const convertCorrectedHijriForPayload = (corrected: {
   day: string;
@@ -425,6 +593,102 @@ router.put('/hijri-adjustment', [
   }
 });
 
+router.get('/tuning', async (_req: Request, res: Response) => {
+  try {
+    const tuning = await getGlobalPrayerTuning();
+    return res.json({
+      status: 'success',
+      data: tuning,
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch prayer tuning settings',
+      details: error.message,
+    });
+  }
+});
+
+router.put('/tuning', [
+  authMiddleware,
+  body('offsets.fajr').optional().isInt({ min: -5, max: 5 }).withMessage('Fajr offset must be between -5 and 5'),
+  body('offsets.dhuhr').optional().isInt({ min: -5, max: 5 }).withMessage('Dhuhr offset must be between -5 and 5'),
+  body('offsets.asr').optional().isInt({ min: -5, max: 5 }).withMessage('Asr offset must be between -5 and 5'),
+  body('offsets.maghrib').optional().isInt({ min: -5, max: 5 }).withMessage('Maghrib offset must be between -5 and 5'),
+  body('offsets.isha').optional().isInt({ min: -5, max: 5 }).withMessage('Isha offset must be between -5 and 5'),
+  body('offsets.imsak').optional().isInt({ min: -5, max: 5 }).withMessage('Imsak offset must be between -5 and 5'),
+  body('applyToFasting').optional().isBoolean().withMessage('applyToFasting must be boolean'),
+], async (req: any, res: Response) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Validation failed',
+      errors: errors.array(),
+    });
+  }
+
+  if (!canManagePrayerTuning(req.user)) {
+    return res.status(403).json({
+      status: 'error',
+      message: 'Access denied. Superadmin or manager only.',
+    });
+  }
+
+  try {
+    const existing = await PrayerTimeTuningModel.findOne({ key: 'global' });
+    const current = existing
+      ? sanitizePrayerTimeOffsets(existing.offsets)
+      : { ...DEFAULT_PRAYER_TIME_OFFSETS };
+
+    const incomingOffsets = req.body?.offsets && typeof req.body.offsets === 'object'
+      ? sanitizePrayerTimeOffsets(req.body.offsets)
+      : null;
+
+    const nextOffsets: PrayerTimeOffsets = {
+      fajr: incomingOffsets ? incomingOffsets.fajr : current.fajr,
+      dhuhr: incomingOffsets ? incomingOffsets.dhuhr : current.dhuhr,
+      asr: incomingOffsets ? incomingOffsets.asr : current.asr,
+      maghrib: incomingOffsets ? incomingOffsets.maghrib : current.maghrib,
+      isha: incomingOffsets ? incomingOffsets.isha : current.isha,
+      imsak: incomingOffsets ? incomingOffsets.imsak : current.imsak,
+    };
+
+    const updated = await PrayerTimeTuningModel.findOneAndUpdate(
+      { key: 'global' },
+      {
+        $set: {
+          offsets: nextOffsets,
+          imsakMode: 'tied-to-fajr',
+          applyToFasting:
+            typeof req.body?.applyToFasting === 'boolean'
+              ? req.body.applyToFasting
+              : existing?.applyToFasting ?? true,
+          updatedBy: req.user?.userId,
+        },
+      },
+      { upsert: true, new: true }
+    );
+
+    return res.json({
+      status: 'success',
+      data: {
+        offsets: sanitizePrayerTimeOffsets(updated.offsets),
+        imsakMode: 'tied-to-fajr',
+        applyToFasting: Boolean(updated.applyToFasting),
+        updatedAt: updated.updatedAt ? updated.updatedAt.toISOString() : null,
+      },
+      message: 'Prayer tuning settings updated successfully',
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to update prayer tuning settings',
+      details: error.message,
+    });
+  }
+});
+
 /**
  * @route   GET /api/prayers/times
  * @desc    Get prayer times using external Islamic API
@@ -474,9 +738,12 @@ router.get('/times', [
       date?: string;
     };
 
+    const prayerTuning = await getGlobalPrayerTuning();
+    const tuningSignature = getPrayerTuningSignature(prayerTuning);
+
     const requestDate = date || `${String(new Date().getDate()).padStart(2, '0')}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${new Date().getFullYear()}`;
     // Generate cache key based on parameters
-    const cacheKey = `prayer_times:${latitude}:${longitude}:${method}:${school}:${requestDate}`;
+    const cacheKey = `prayer_times:${latitude}:${longitude}:${method}:${school}:${requestDate}:tuning:${tuningSignature}`;
 
     try {
       // Try to get from cache first (1 hour cache)
@@ -533,7 +800,7 @@ router.get('/times', [
           responseData = {
             status: 'success',
             data: {
-              times: {
+              times: applyPrayerTuningToTimes({
                 Fajr:     d.times.Fajr,
                 Sunrise:  d.times.Sunrise,
                 Dhuhr:    d.times.Dhuhr,
@@ -542,7 +809,7 @@ router.get('/times', [
                 Isha:     d.times.Isha,
                 Midnight: d.times.Midnight,
                 Imsak:    d.times.Imsak,
-              },
+              }, prayerTuning),
               date: {
                 readable:  d.date.readable,
                 timestamp: d.date.timestamp,
@@ -568,6 +835,7 @@ router.get('/times', [
               },
               settings: { method, school },
               source: 'islamicapi.com',
+              tuning: prayerTuning,
               // Metadata about date calculation
               date_calculation: {
                 islamic_date_changes_at: 'maghrib',
@@ -622,7 +890,7 @@ router.get('/times', [
         responseData = {
           status: 'success',
           data: {
-            times: {
+            times: applyPrayerTuningToTimes({
               Fajr:     data.timings.Fajr,
               Sunrise:  data.timings.Sunrise,
               Dhuhr:    data.timings.Dhuhr,
@@ -631,7 +899,7 @@ router.get('/times', [
               Isha:     data.timings.Isha,
               Midnight: data.timings.Midnight,
               Imsak:    data.timings.Imsak,
-            },
+            }, prayerTuning),
             date: {
               readable:  data.date.readable,
               timestamp: data.date.timestamp,
@@ -649,6 +917,7 @@ router.get('/times', [
             },
             settings: { method, school },
             source: 'aladhan.com',
+            tuning: prayerTuning,
             // Metadata about date calculation
             date_calculation: {
               islamic_date_changes_at: 'maghrib',
@@ -733,9 +1002,12 @@ router.get('/timesByCity', [
       date?: string;
     };
 
+    const prayerTuning = await getGlobalPrayerTuning();
+    const tuningSignature = getPrayerTuningSignature(prayerTuning);
+
     const requestDate = date || `${String(new Date().getDate()).padStart(2, '0')}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${new Date().getFullYear()}`;
     // Generate cache key
-    const cacheKey = `prayer_times_city:${city}:${country}:${method}:${school}:${requestDate}`;
+    const cacheKey = `prayer_times_city:${city}:${country}:${method}:${school}:${requestDate}:tuning:${tuningSignature}`;
 
     try {
       const cachedData = await redisClient.get(cacheKey);
@@ -805,7 +1077,7 @@ router.get('/timesByCity', [
 	      const responseData = {
 	        status: 'success',
 	        data: {
-          times: {
+          times: applyPrayerTuningToTimes({
             Fajr: data.timings.Fajr,
             Sunrise: data.timings.Sunrise,
             Dhuhr: data.timings.Dhuhr,
@@ -814,13 +1086,14 @@ router.get('/timesByCity', [
             Isha: data.timings.Isha,
             Midnight: data.timings.Midnight,
             Imsak: data.timings.Imsak || data.timings.Fajr
-          },
+          }, prayerTuning),
 	          date: {
 	            ...data.date,
 	            hijri: adjustedHijriDate,
 	          },
 	          meta: data.meta,
 	          source: 'aladhan.com',
+	          tuning: prayerTuning,
 	          date_calculation: {
 	            islamic_date_changes_at: 'maghrib',
 	            prayer_times_change_at: 'midnight',
@@ -886,6 +1159,9 @@ router.get('/fasting', [
       date?: string;
     };
 
+    const prayerTuning = await getGlobalPrayerTuning();
+    const tuningSignature = getPrayerTuningSignature(prayerTuning);
+
     // Frontend school: 1=Shafi, 2=Hanafi | Aladhan school: 0=Shafi, 1=Hanafi
     const schoolParam = school === '2' ? '1' : '0';
     const today = new Date();
@@ -893,7 +1169,7 @@ router.get('/fasting', [
     // dateStr is in DD-MM-YYYY (Aladhan format, as sent by frontend)
     const dateStr = date || todayDDMMYYYY;
 
-    const cacheKey = `fasting_times:${latitude}:${longitude}:${method}:${schoolParam}:${dateStr}`;
+    const cacheKey = `fasting_times:${latitude}:${longitude}:${method}:${schoolParam}:${dateStr}:tuning:${tuningSignature}`;
 
     try {
       const cachedData = await redisClient.get(cacheKey);
@@ -980,18 +1256,28 @@ router.get('/fasting', [
             ? `${hijriParts[2]}-${hijriParts[1]}-${hijriParts[0]}`
             : hijriRaw;
 
+          const tunedFasting = applyPrayerTuningToFastingEntry({
+            fajr: fajrFromPrayerApi || sahur,
+            maghrib: iftar,
+            imsak: sahur,
+            time: { sahur, iftar, duration },
+          }, prayerTuning);
+
           responseData = {
             status: 'success',
             data: {
               source: 'islamicapi.com',
               fasting: [{
-                time: { sahur, iftar, duration },
-                fajr: fajrFromPrayerApi || null, // Fajr from prayer API for reference
+                time: tunedFasting.time,
+                fajr: tunedFasting.fajr,
+                imsak: tunedFasting.imsak,
+                maghrib: tunedFasting.maghrib,
                 date:          entry.date,           // YYYY-MM-DD
                 hijri:         hijriISO,
                 hijri_readable: entry.hijri_readable, // e.g. "29 Muharram 1447 AH"
               }],
               white_days: islamicData.data.white_days ?? [],
+              tuning: prayerTuning,
             },
           };
         } else {
@@ -1048,21 +1334,29 @@ router.get('/fasting', [
 
       console.log(`✅ Aladhan fasting OK — Sahur: ${sahur}, Iftar: ${iftar}`);
 
+      const tunedFasting = applyPrayerTuningToFastingEntry({
+        fajr,
+        maghrib,
+        imsak,
+        time: { sahur, iftar, duration },
+      }, prayerTuning);
+
       responseData = {
         status: 'success',
         data: {
           source: 'aladhan.com',
           fasting: [{
-            time: { sahur, iftar, duration },
-            fajr,
-            imsak,
-            maghrib,
+            time: tunedFasting.time,
+            fajr: tunedFasting.fajr,
+            imsak: tunedFasting.imsak,
+            maghrib: tunedFasting.maghrib,
             date:          d.date?.gregorian?.date,
             day:           d.date?.gregorian?.weekday?.en,
             hijri:         hjYear && hjDay ? `${hjYear}-${hjMonth}-${hjDay}` : '',
             hijri_readable: `${d.date?.hijri?.day} ${d.date?.hijri?.month?.en} ${hjYear}`,
           }],
           white_days: [],
+          tuning: prayerTuning,
         },
       };
     }
@@ -1120,10 +1414,13 @@ router.get('/ramadan', [
       year?: string;
     };
 
+    const prayerTuning = await getGlobalPrayerTuning();
+    const tuningSignature = getPrayerTuningSignature(prayerTuning);
+
     const schoolParam = school === '2' ? '1' : '0';
     const targetYear = year ? parseInt(year, 10) : new Date().getFullYear();
 
-    const cacheKey = `ramadan_times:${latitude}:${longitude}:${method}:${schoolParam}:${targetYear}`;
+    const cacheKey = `ramadan_times:${latitude}:${longitude}:${method}:${schoolParam}:${targetYear}:tuning:${tuningSignature}`;
 
     // Try cache first
     try {
@@ -1161,10 +1458,29 @@ router.get('/ramadan', [
 
           if (islamicData.status === 'success' && Array.isArray(islamicData.data?.fasting) && islamicData.data.fasting.length > 0) {
             const fastingTimes = islamicData.data.fasting;
+            const tunedFastingTimes = fastingTimes.map((entry: any) => {
+              const tuned = applyPrayerTuningToFastingEntry({
+                fajr: entry?.fajr || entry?.time?.fajr || entry?.time?.sahur,
+                maghrib: entry?.maghrib || entry?.time?.iftar,
+                imsak: entry?.imsak || entry?.time?.sahur,
+                time: entry?.time,
+              }, prayerTuning);
+
+              return {
+                ...entry,
+                time: {
+                  ...(entry?.time || {}),
+                  ...tuned.time,
+                },
+                fajr: tuned.fajr,
+                imsak: tuned.imsak,
+                maghrib: tuned.maghrib,
+              };
+            });
 
             // Use dua & hadith directly from islamicapi.com response.
             // If for any reason the API doesn't include them, fall back to hardcoded pool.
-            const todayRamadanIdx = getRamadanDayIndexFromFasting(fastingTimes);
+            const todayRamadanIdx = getRamadanDayIndexFromFasting(tunedFastingTimes);
             const duaOfTheDay = islamicData.resource?.dua ?? RAMADAN_DUAS[todayRamadanIdx % RAMADAN_DUAS.length]!;
             const hadithOfTheDay = islamicData.resource?.hadith ?? RAMADAN_HADITHS[todayRamadanIdx % RAMADAN_HADITHS.length];
 
@@ -1172,13 +1488,14 @@ router.get('/ramadan', [
               status: 'success',
               data: {
                 ramadan_year: islamicData.ramadan_year ?? islamicData.data?.ramadan_year,
-                fasting: fastingTimes,
+                fasting: tunedFastingTimes,
                 white_days: islamicData.data?.white_days ?? [],
                 resource: {
                   dua: duaOfTheDay,
                   hadith: hadithOfTheDay,
                   source: 'islamicapi.com',
                 },
+                tuning: prayerTuning,
                 note: 'Fetched from islamicapi.com',
               },
             };
@@ -1279,10 +1596,18 @@ router.get('/ramadan', [
       const hijriDay = String(day.date?.hijri?.day || '').padStart(2, '0');
       const hijri = hijriYear && hijriDay ? `${hijriYear}-${hijriMonth}-${hijriDay}` : '';
 
-      return {
-        time: { sahur, iftar, duration },
+      const tuned = applyPrayerTuningToFastingEntry({
         fajr,
         maghrib,
+        imsak: sahur,
+        time: { sahur, iftar, duration },
+      }, prayerTuning);
+
+      return {
+        time: tuned.time,
+        fajr: tuned.fajr,
+        imsak: tuned.imsak,
+        maghrib: tuned.maghrib,
         date: isoDate || day.date?.readable,
         day: day.date?.gregorian?.weekday?.en,
         hijri,
@@ -1301,6 +1626,7 @@ router.get('/ramadan', [
         ramadan_year: ramadanYearHijri,
         fasting: fastingTimes,
         white_days: [],
+        tuning: prayerTuning,
         resource: {
           dua: duaOfTheDay,
           hadith: hadithOfTheDay,

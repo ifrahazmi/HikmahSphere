@@ -24,7 +24,13 @@ import { API_URL } from '../config';
 import { fetchIndopakV3Ayah, fetchIndopakV3Surah } from '../utils/indopakV3Quran';
 import { fetchTafsirAyah, fetchTafsirSurah, getTafsirRuntimeIssue } from '../utils/tafsirBayanApi';
 import type { TafsirAyah } from '../types/tafsir';
-import { BOOKMARK_COLOR_OPTIONS, DEFAULT_TRANSLATIONS, DEFAULT_URDU_TRANSLATION, type BookmarkColor } from '../types/quran';
+import {
+  BOOKMARK_COLOR_OPTIONS,
+  DEFAULT_ENGLISH_TRANSLATION,
+  DEFAULT_TRANSLATIONS,
+  DEFAULT_URDU_TRANSLATION,
+  type BookmarkColor,
+} from '../types/quran';
 
 interface DisplayAyah {
   ayahNumber: number;
@@ -133,7 +139,7 @@ const QuranTafsirBayan: React.FC = () => {
     : 2000;
 
   const { surahs, settings, updateSettings, bookmarks, addBookmark, removeBookmark } = useQuran();
-  const { isAuthenticated, loading: authLoading } = useAuth();
+  const { loading: authLoading } = useAuth();
   const [readerMode, setReaderMode] = useState<ReaderMode>('ayah');
   const [selectedSurah, setSelectedSurah] = useState<number>(1);
   const [selectedAyah, setSelectedAyah] = useState<number>(1);
@@ -657,9 +663,13 @@ const QuranTafsirBayan: React.FC = () => {
         {
           ayahNumber: tafsirAyah.ayah,
           arabicText: derivedArabicText,
-          translationText: tafsirAyah.translationPlain || stripHtml(tafsirAyah.translationHtml || '') || translationMap.get(tafsirAyah.ayah) || '',
-          translationHtml: tafsirAyah.translationHtml,
-          translationPlain: tafsirAyah.translationPlain,
+          translationText:
+            translationMap.get(tafsirAyah.ayah) ||
+            tafsirAyah.translationPlain ||
+            stripHtml(tafsirAyah.translationHtml || '') ||
+            '',
+          translationHtml: translationMap.get(tafsirAyah.ayah) ? undefined : tafsirAyah.translationHtml,
+          translationPlain: translationMap.get(tafsirAyah.ayah) || tafsirAyah.translationPlain,
           footnotes: tafsirAyah.footnotes || {},
           tafsirText: tafsirAyah.text,
         },
@@ -685,15 +695,22 @@ const QuranTafsirBayan: React.FC = () => {
 
     return tafsirAyahs
       .sort((first, second) => first.ayah - second.ayah)
-      .map((ayah) => ({
-        ayahNumber: ayah.ayah,
-        arabicText: arabicMap.get(ayah.ayah) || '',
-        translationText: ayah.translationPlain || stripHtml(ayah.translationHtml || '') || translationMap.get(ayah.ayah) || '',
-        translationHtml: ayah.translationHtml,
-        translationPlain: ayah.translationPlain,
-        footnotes: ayah.footnotes || {},
-        tafsirText: ayah.text,
-      }));
+      .map((ayah) => {
+        const selectedTranslationText = translationMap.get(ayah.ayah);
+        return {
+          ayahNumber: ayah.ayah,
+          arabicText: arabicMap.get(ayah.ayah) || '',
+          translationText:
+            selectedTranslationText ||
+            ayah.translationPlain ||
+            stripHtml(ayah.translationHtml || '') ||
+            '',
+          translationHtml: selectedTranslationText ? undefined : ayah.translationHtml,
+          translationPlain: selectedTranslationText || ayah.translationPlain,
+          footnotes: ayah.footnotes || {},
+          tafsirText: ayah.text,
+        };
+      });
   }, [fetchTranslationMap, readerMode, selectedAyah, selectedSurah, selectedTranslation, tafsirEdition]);
 
   const handleFetch = useCallback(
@@ -803,17 +820,15 @@ const QuranTafsirBayan: React.FC = () => {
   }, [settingsTab, showMobileSettings]);
 
   useEffect(() => {
-    if (authLoading || isAuthenticated) return;
-    if (typeof window === 'undefined') return;
+    if (authLoading) return;
 
-    // Set Urdu default only for first-time guest users; keep any saved guest preference untouched.
-    const hasGuestSettings = Boolean(localStorage.getItem('quranSettings:guest'));
-    if (hasGuestSettings) return;
+    const isMissingSelection = !selectedTranslation;
+    const isDefaultEnglishSelection = selectedTranslation === DEFAULT_ENGLISH_TRANSLATION.identifier;
 
-    if (selectedTranslation !== DEFAULT_URDU_TRANSLATION.identifier) {
+    if ((isMissingSelection || isDefaultEnglishSelection) && selectedTranslation !== DEFAULT_URDU_TRANSLATION.identifier) {
       setSelectedTranslation(DEFAULT_URDU_TRANSLATION.identifier);
     }
-  }, [authLoading, isAuthenticated, selectedTranslation, setSelectedTranslation]);
+  }, [authLoading, selectedTranslation, setSelectedTranslation]);
 
   useEffect(() => {
     if (!pendingBookmarkTarget) return;
