@@ -63,24 +63,6 @@ interface DailyPrayerCacheData {
   ramadanData: any;
 }
 
-type TunablePrayerKey = 'fajr' | 'dhuhr' | 'asr' | 'maghrib' | 'isha' | 'imsak';
-
-interface PrayerTuningOffsets {
-  fajr: number;
-  dhuhr: number;
-  asr: number;
-  maghrib: number;
-  isha: number;
-  imsak: number;
-}
-
-interface PrayerTuningConfig {
-  offsets: PrayerTuningOffsets;
-  imsakMode: 'tied-to-fajr';
-  applyToFasting: boolean;
-  updatedAt: string | null;
-}
-
 type RakatType = 'Fard' | 'Sunnah Muakkadah' | 'Sunnah Ghair Muakkadah' | 'Nafl' | 'Witr (Wajib)';
 
 interface RakatEntry {
@@ -193,92 +175,6 @@ const HIJRI_MONTH_NUMBERS: Record<string, number> = {
 
 const PRAYER_PAGE_CACHE_PREFIX = 'hikmah-sphere:prayer-times:v3';
 const PRAYER_PAGE_CACHE_TTL_MS = 30 * 60 * 1000;
-
-const DEFAULT_PRAYER_TUNING_CONFIG: PrayerTuningConfig = {
-  offsets: {
-    fajr: 0,
-    dhuhr: 0,
-    asr: 0,
-    maghrib: 0,
-    isha: 0,
-    imsak: 0,
-  },
-  imsakMode: 'tied-to-fajr',
-  applyToFasting: true,
-  updatedAt: null,
-};
-
-const sanitizeOffset = (value: unknown): number => {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return 0;
-  return Math.max(-5, Math.min(5, Math.trunc(parsed)));
-};
-
-const sanitizePrayerTuningConfig = (value: unknown): PrayerTuningConfig => {
-  const source = value && typeof value === 'object' ? (value as Record<string, any>) : {};
-  const offsets = source.offsets && typeof source.offsets === 'object' ? source.offsets : {};
-
-  return {
-    offsets: {
-      fajr: sanitizeOffset(offsets.fajr),
-      dhuhr: sanitizeOffset(offsets.dhuhr),
-      asr: sanitizeOffset(offsets.asr),
-      maghrib: sanitizeOffset(offsets.maghrib),
-      isha: sanitizeOffset(offsets.isha),
-      imsak: sanitizeOffset(offsets.imsak),
-    },
-    imsakMode: 'tied-to-fajr',
-    applyToFasting: typeof source.applyToFasting === 'boolean' ? source.applyToFasting : true,
-    updatedAt: typeof source.updatedAt === 'string' ? source.updatedAt : null,
-  };
-};
-
-const extractHHMM = (value?: string): string | null => {
-  if (!value) return null;
-  const match = value.trim().match(/^(\d{1,2}:\d{2})/);
-  return match?.[1] ?? null;
-};
-
-const offsetHHMM = (value: string, offsetMinutes: number): string => {
-  const [hoursRaw = '0', minutesRaw = '0'] = value.split(':');
-  const hours = parseInt(hoursRaw, 10);
-  const minutes = parseInt(minutesRaw, 10);
-  if (Number.isNaN(hours) || Number.isNaN(minutes)) return value;
-  const total = ((hours * 60 + minutes + offsetMinutes) % (24 * 60) + (24 * 60)) % (24 * 60);
-  const hh = Math.floor(total / 60);
-  const mm = total % 60;
-  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
-};
-
-const applyOffsetToTimingWithSuffix = (value: string | undefined, offsetMinutes: number): string | undefined => {
-  if (!value) return value;
-  const base = extractHHMM(value);
-  if (!base) return value;
-  const suffix = value.slice(base.length);
-  return `${offsetHHMM(base, offsetMinutes)}${suffix}`;
-};
-
-const applyTuningToMonthlyCalendar = (days: any[], tuning: PrayerTuningConfig): any[] => {
-  if (!Array.isArray(days)) return [];
-
-  return days.map((day) => {
-    const timings = day?.timings || {};
-    const tunedFajr = applyOffsetToTimingWithSuffix(timings.Fajr, tuning.offsets.fajr);
-
-    return {
-      ...day,
-      timings: {
-        ...timings,
-        Fajr: tunedFajr,
-        Dhuhr: applyOffsetToTimingWithSuffix(timings.Dhuhr, tuning.offsets.dhuhr),
-        Asr: applyOffsetToTimingWithSuffix(timings.Asr, tuning.offsets.asr),
-        Maghrib: applyOffsetToTimingWithSuffix(timings.Maghrib, tuning.offsets.maghrib),
-        Isha: applyOffsetToTimingWithSuffix(timings.Isha, tuning.offsets.isha),
-        Imsak: tunedFajr ? applyOffsetToTimingWithSuffix(tunedFajr, tuning.offsets.imsak) : timings.Imsak,
-      },
-    };
-  });
-};
 
 const HIJRI_INTL_LONG_FORMATTER = new Intl.DateTimeFormat('en-SA-u-ca-islamic-umalqura', {
   day: 'numeric',
@@ -648,16 +544,10 @@ const PrayerTimes: React.FC = () => {
   // View mode and settings
   const [viewMode, setViewMode] = useState<'daily' | 'monthly' | 'ramadan'>('daily');
   const [showSettings, setShowSettings] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<'general' | 'admin-tuning'>('general');
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [ramadanData, setRamadanData] = useState<any>(null);
   const [, setIsRamadanMonth] = useState(false);
-  const [publicPrayerTuning, setPublicPrayerTuning] = useState<PrayerTuningConfig>(DEFAULT_PRAYER_TUNING_CONFIG);
-  const [adminPrayerTuning, setAdminPrayerTuning] = useState<PrayerTuningConfig>(DEFAULT_PRAYER_TUNING_CONFIG);
-  const [adminTuningLoading, setAdminTuningLoading] = useState(false);
-  const [adminTuningSaving, setAdminTuningSaving] = useState(false);
-  const [adminTuningMessage, setAdminTuningMessage] = useState<string | null>(null);
 
   // Calculation method settings
   const [selectedMadhab, setSelectedMadhab] = useState<string>(user?.madhab || 'shafi');
@@ -799,56 +689,6 @@ const PrayerTimes: React.FC = () => {
 
   const activeCountry = location?.country || detectedCountry || '';
   const isOutsideIndia = !!activeCountry && !activeCountry.toLowerCase().includes('india');
-  const canManagePrayerTuning = user?.role === 'superadmin' || user?.role === 'manager';
-
-  const fetchPrayerTuning = useCallback(async () => {
-    try {
-      const response = await fetch(`${API_URL}/prayers/tuning`);
-      const payload = await response.json();
-      if (payload?.status === 'success' && payload?.data) {
-        const normalized = sanitizePrayerTuningConfig(payload.data);
-        setPublicPrayerTuning(normalized);
-        setAdminPrayerTuning(normalized);
-      }
-    } catch (fetchError) {
-      console.warn('Failed to fetch prayer tuning settings:', fetchError);
-    }
-  }, []);
-
-  useEffect(() => {
-    void fetchPrayerTuning();
-  }, [fetchPrayerTuning]);
-
-  useEffect(() => {
-    if (!showSettings) return;
-    if (settingsTab !== 'admin-tuning') return;
-    if (!canManagePrayerTuning) {
-      setSettingsTab('general');
-    }
-  }, [canManagePrayerTuning, settingsTab, showSettings]);
-
-  useEffect(() => {
-    if (!showSettings || settingsTab !== 'admin-tuning' || !canManagePrayerTuning) return;
-
-    const hydrateAdminTuning = async () => {
-      setAdminTuningLoading(true);
-      try {
-        const response = await fetch(`${API_URL}/prayers/tuning`);
-        const payload = await response.json();
-        if (payload?.status === 'success' && payload?.data) {
-          const normalized = sanitizePrayerTuningConfig(payload.data);
-          setPublicPrayerTuning(normalized);
-          setAdminPrayerTuning(normalized);
-        }
-      } catch (fetchError) {
-        console.warn('Failed to refresh admin prayer tuning settings:', fetchError);
-      } finally {
-        setAdminTuningLoading(false);
-      }
-    };
-
-    void hydrateAdminTuning();
-  }, [canManagePrayerTuning, settingsTab, showSettings]);
 
   useEffect(() => {
     // Default behavior by location:
@@ -868,7 +708,7 @@ const PrayerTimes: React.FC = () => {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location, selectedMadhab, calculationMethod, highLatitudeRule, viewMode, selectedMonth, selectedYear, publicPrayerTuning]);
+  }, [location, selectedMadhab, calculationMethod, highLatitudeRule, viewMode, selectedMonth, selectedYear]);
 
   const fetchData = useCallback(async (lat: number, lon: number, city?: string, country?: string) => {
     setLoading(true);
@@ -893,7 +733,7 @@ const PrayerTimes: React.FC = () => {
       method: calculationMethod,
       school,
       highLatitudeRule,
-    }) + `:tuning:${Object.values(publicPrayerTuning.offsets).join(',')}`;
+    });
 
     const cachedDailyData = readPrayerCache<DailyPrayerCacheData>(dailyCacheKey);
     if (cachedDailyData) {
@@ -1158,7 +998,7 @@ const PrayerTimes: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedMadhab, calculationMethod, highLatitudeRule, publicPrayerTuning]);
+  }, [selectedMadhab, calculationMethod, highLatitudeRule]);
 
   const fetchMonthlyData = useCallback(async (lat: number, lon: number, month: number, year: number) => {
     setLoading(true);
@@ -1173,7 +1013,7 @@ const PrayerTimes: React.FC = () => {
       highLatitudeRule,
       month,
       year,
-    }) + `:tuning:${Object.values(publicPrayerTuning.offsets).join(',')}`;
+    });
     const cachedMonthlyData = readPrayerCache<any[]>(monthlyCacheKey);
 
     if (cachedMonthlyData) {
@@ -1190,9 +1030,8 @@ const PrayerTimes: React.FC = () => {
       const data = await response.json();
       
       if (data.code === 200 && data.data) {
-        const tunedMonthlyData = applyTuningToMonthlyCalendar(data.data, publicPrayerTuning);
-        setMonthlyData(tunedMonthlyData);
-        writePrayerCache(monthlyCacheKey, tunedMonthlyData);
+        setMonthlyData(data.data);
+        writePrayerCache(monthlyCacheKey, data.data);
       } else {
         setError('Unable to fetch monthly data.');
       }
@@ -1202,7 +1041,7 @@ const PrayerTimes: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedMadhab, calculationMethod, highLatitudeRule, publicPrayerTuning]);
+  }, [selectedMadhab, calculationMethod, highLatitudeRule]);
 
   const fetchRamadanData = useCallback(async (lat: number, lon: number) => {
     setLoading(true);
@@ -1214,7 +1053,7 @@ const PrayerTimes: React.FC = () => {
       lon,
       method: calculationMethod,
       school,
-    }) + `:tuning:${Object.values(publicPrayerTuning.offsets).join(',')}`;
+    });
     const cachedRamadanData = readPrayerCache<any>(ramadanCacheKey);
 
     if (cachedRamadanData) {
@@ -1248,94 +1087,7 @@ const PrayerTimes: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedMadhab, calculationMethod, publicPrayerTuning]);
-
-  const updateAdminTuningOffset = useCallback((key: TunablePrayerKey, nextValue: number) => {
-    setAdminPrayerTuning((prev) => ({
-      ...prev,
-      offsets: {
-        ...prev.offsets,
-        [key]: Math.max(-5, Math.min(5, Math.trunc(nextValue))),
-      },
-    }));
-    setAdminTuningMessage(null);
-  }, []);
-
-  const resetAdminTuningOffsets = useCallback(() => {
-    setAdminPrayerTuning((prev) => ({
-      ...prev,
-      offsets: { ...DEFAULT_PRAYER_TUNING_CONFIG.offsets },
-      applyToFasting: true,
-    }));
-    setAdminTuningMessage(null);
-  }, []);
-
-  const saveAdminPrayerTuning = useCallback(async () => {
-    if (!canManagePrayerTuning) return;
-    const token = localStorage.getItem('token');
-    if (!token) {
-      setAdminTuningMessage('Authentication required to update tuning settings.');
-      return;
-    }
-
-    setAdminTuningSaving(true);
-    setAdminTuningMessage(null);
-    try {
-      const response = await fetch(`${API_URL}/prayers/tuning`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          offsets: adminPrayerTuning.offsets,
-          applyToFasting: adminPrayerTuning.applyToFasting,
-        }),
-      });
-
-      const payload = await response.json();
-      if (!response.ok || payload?.status !== 'success') {
-        throw new Error(payload?.message || 'Failed to save prayer tuning settings.');
-      }
-
-      const normalized = sanitizePrayerTuningConfig(payload.data);
-      setPublicPrayerTuning(normalized);
-      setAdminPrayerTuning(normalized);
-      setAdminTuningMessage('Prayer tuning saved successfully.');
-
-      // Clear local prayer cache so updated offsets reflect immediately.
-      if (typeof window !== 'undefined') {
-        Object.keys(window.localStorage)
-          .filter((key) => key.startsWith(PRAYER_PAGE_CACHE_PREFIX))
-          .forEach((key) => window.localStorage.removeItem(key));
-      }
-
-      if (location) {
-        if (viewMode === 'daily') {
-          await fetchData(location.lat, location.lon, location.city, location.country);
-        } else if (viewMode === 'monthly') {
-          await fetchMonthlyData(location.lat, location.lon, selectedMonth, selectedYear);
-        } else if (viewMode === 'ramadan') {
-          await fetchRamadanData(location.lat, location.lon);
-        }
-      }
-    } catch (saveError: any) {
-      setAdminTuningMessage(saveError?.message || 'Failed to save prayer tuning settings.');
-    } finally {
-      setAdminTuningSaving(false);
-    }
-  }, [
-    adminPrayerTuning.applyToFasting,
-    adminPrayerTuning.offsets,
-    canManagePrayerTuning,
-    fetchData,
-    fetchMonthlyData,
-    fetchRamadanData,
-    location,
-    selectedMonth,
-    selectedYear,
-    viewMode,
-  ]);
+  }, [selectedMadhab, calculationMethod]);
 
   // Update reminder based on prayer times, Islamic events, and current time
   useEffect(() => {
@@ -2454,34 +2206,6 @@ const PrayerTimes: React.FC = () => {
                   <XMarkIcon className="h-5 w-5" />
                 </button>
               </div>
-              <div className="mb-4 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => setSettingsTab('general')}
-                  className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                    settingsTab === 'general'
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                  }`}
-                >
-                  General
-                </button>
-                {canManagePrayerTuning && (
-                  <button
-                    type="button"
-                    onClick={() => setSettingsTab('admin-tuning')}
-                    className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                      settingsTab === 'admin-tuning'
-                        ? 'bg-amber-600 text-white'
-                        : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
-                    }`}
-                  >
-                    Admin Tuning
-                  </button>
-                )}
-              </div>
-
-              {settingsTab === 'general' && (
               <div className="grid grid-cols-1 gap-4">
                 {/* Calculation Method */}
                 <div>
@@ -2600,100 +2324,6 @@ const PrayerTimes: React.FC = () => {
                   </>
                 )}
               </div>
-              )}
-
-              {settingsTab === 'admin-tuning' && canManagePrayerTuning && (
-                <div className="space-y-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
-                  <div>
-                    <p className="text-sm font-semibold text-amber-900">Global Prayer Time Tuning</p>
-                    <p className="mt-1 text-xs text-amber-800">
-                      These offsets apply globally for all users. Imsak/Sehri is always tied to tuned Fajr.
-                    </p>
-                  </div>
-
-                  {adminTuningLoading ? (
-                    <div className="py-3">
-                      <LoadingSpinner size="sm" text="Loading tuning settings..." />
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      {([
-                        ['fajr', 'Fajr'],
-                        ['dhuhr', 'Dhuhr'],
-                        ['asr', 'Asr'],
-                        ['maghrib', 'Maghrib'],
-                        ['isha', 'Isha'],
-                        ['imsak', 'Imsak/Sehri'],
-                      ] as Array<[TunablePrayerKey, string]>).map(([key, label]) => (
-                        <div key={key} className="rounded-lg border border-amber-200 bg-white p-3">
-                          <label className="mb-2 block text-sm font-medium text-gray-800">{label} Offset (minutes)</label>
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => updateAdminTuningOffset(key, adminPrayerTuning.offsets[key] - 1)}
-                              className="rounded-md border border-gray-300 px-2 py-1 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-                            >
-                              -1
-                            </button>
-                            <input
-                              type="number"
-                              min={-5}
-                              max={5}
-                              value={adminPrayerTuning.offsets[key]}
-                              onChange={(event) => updateAdminTuningOffset(key, Number(event.target.value))}
-                              className="w-20 rounded-md border border-gray-300 px-2 py-1.5 text-center text-sm"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => updateAdminTuningOffset(key, adminPrayerTuning.offsets[key] + 1)}
-                              className="rounded-md border border-gray-300 px-2 py-1 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-                            >
-                              +1
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="rounded-lg border border-amber-200 bg-white p-3">
-                    <label className="flex items-center gap-2 text-sm text-gray-800">
-                      <input
-                        type="checkbox"
-                        checked={adminPrayerTuning.applyToFasting}
-                        onChange={(event) => {
-                          setAdminPrayerTuning((prev) => ({ ...prev, applyToFasting: event.target.checked }));
-                          setAdminTuningMessage(null);
-                        }}
-                      />
-                      Apply tuning to fasting cards (Sehri/Iftar)
-                    </label>
-                  </div>
-
-                  {adminTuningMessage && (
-                    <p className="text-sm font-medium text-amber-900">{adminTuningMessage}</p>
-                  )}
-
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={saveAdminPrayerTuning}
-                      disabled={adminTuningSaving}
-                      className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {adminTuningSaving ? 'Saving...' : 'Save Tuning'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={resetAdminTuningOffsets}
-                      disabled={adminTuningSaving}
-                      className="rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      Reset to 0
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
