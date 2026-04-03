@@ -251,7 +251,7 @@ export const AVAILABLE_RECITERS = [
 
 // Default settings
 export const DEFAULT_QURAN_SETTINGS: QuranSettings = {
-  selectedTranslations: [DEFAULT_ENGLISH_TRANSLATION.identifier],
+  selectedTranslations: [DEFAULT_URDU_TRANSLATION.identifier],
   showTransliteration: false,
   arabicOnlyMode: false,
   fontSize: 20,

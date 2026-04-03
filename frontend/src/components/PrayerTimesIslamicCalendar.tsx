@@ -50,16 +50,6 @@ const toLocalISO = (date: Date) => (
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 );
 
-const formatOrdinal = (value: number): string => {
-  const mod10 = value % 10;
-  const mod100 = value % 100;
-
-  if (mod10 === 1 && mod100 !== 11) return `${value}st`;
-  if (mod10 === 2 && mod100 !== 12) return `${value}nd`;
-  if (mod10 === 3 && mod100 !== 13) return `${value}rd`;
-  return `${value}th`;
-};
-
 const normalizeHijriMonthName = (value: string): string => (
   value
     .normalize('NFD')
@@ -69,6 +59,16 @@ const normalizeHijriMonthName = (value: string): string => (
     .trim()
     .toLowerCase()
 );
+
+const formatOrdinal = (value: number): string => {
+  const mod10 = value % 10;
+  const mod100 = value % 100;
+
+  if (mod10 === 1 && mod100 !== 11) return `${value}st`;
+  if (mod10 === 2 && mod100 !== 12) return `${value}nd`;
+  if (mod10 === 3 && mod100 !== 13) return `${value}rd`;
+  return `${value}th`;
+};
 
 const getDaysInMonth = (date: Date) => {
   const year = date.getFullYear();
@@ -99,22 +99,12 @@ const PrayerTimesIslamicCalendar: React.FC<IslamicCalendarProps> = ({ whiteDays,
   const todayIso = toLocalISO(today);
   const displayedMonth = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
   
-  // Use todayHijri from props (which already has Maghrib-based calculation) for today's date
-  // For other days, use the Intl formatter
+  // Using Intl directly for all days to maintain calendar grid continuity.
+  // We no longer override 'today' with the Maghrib-adjusted todayHijri, 
+  // preventing sequence breaks (like double 14ths) in the calendar layout.
   const displayedDays = getDaysInMonth(displayedMonth).map((date) => {
     const iso = toLocalISO(date);
-    const isToday = iso === todayIso;
-    
-    // For today, use the hijri date from props (already calculated with Maghrib rule)
-    // For other days, calculate using Intl
-    const hijri = isToday && todayHijri 
-      ? {
-          day: parseInt(String(todayHijri.day), 10) || 0,
-          monthEn: todayHijri.month?.en || '',
-          monthShort: (todayHijri.month?.en || '').slice(0, 3),
-          year: parseInt(String(todayHijri.year), 10) || 0,
-        }
-      : getHijriInfo(date);
+    const hijri = getHijriInfo(date);
     
     return { date, iso, hijri };
   });
@@ -157,7 +147,6 @@ const PrayerTimesIslamicCalendar: React.FC<IslamicCalendarProps> = ({ whiteDays,
     },
     null,
   );
-  const primaryHijriMonthKey = primaryHijriMonthEntry?.[0] ?? '';
   const primaryHijriMonthLabel = primaryHijriMonthEntry?.[1].label ?? fallbackHijriLabel;
   const currentHijriMonthLabel = isCurrentMonthView && todayHijri?.month?.en && todayHijri?.year
     ? `${todayHijri.month.en} ${todayHijri.year} AH`
@@ -167,47 +156,33 @@ const PrayerTimesIslamicCalendar: React.FC<IslamicCalendarProps> = ({ whiteDays,
     : primaryHijriMonthLabel;
   const showHijriRange = displayedHijriMonthLabel !== currentHijriMonthLabel && orderedHijriMonthLabels.length > 1;
 
-  const getHijriMonthKey = (hijri: HijriInfo): string => (
-    `${normalizeHijriMonthName(hijri.monthEn)}-${hijri.year}`
-  );
-
+  // Build white days mapping strictly from the continuous calendar grid
   const whiteDayMap = new Map<string, WhiteDayEntry>();
-  displayedDays.forEach(({ date, iso, hijri }) => {
-    const hijriMonthKey = getHijriMonthKey(hijri);
-    if (hijriMonthKey !== primaryHijriMonthKey || ![13, 14, 15].includes(hijri.day)) return;
 
-    whiteDayMap.set(iso, {
-      iso,
-      date,
-      label: formatOrdinal(hijri.day),
-    });
+  displayedDays.forEach(({ date, iso, hijri }) => {
+    // Only include white days in the displayed month
+    if (date.getFullYear() !== displayedMonth.getFullYear()
+      || date.getMonth() !== displayedMonth.getMonth()
+    ) {
+      return;
+    }
+
+    // Check if this is a white day (13th, 14th, or 15th of any Hijri month)
+    if ([13, 14, 15].includes(hijri.day)) {
+      whiteDayMap.set(iso, {
+        iso,
+        date,
+        label: formatOrdinal(hijri.day),
+      });
+    }
   });
 
-  if (isCurrentMonthView && whiteDays?.days) {
-    Object.entries(whiteDays.days).forEach(([label, iso]) => {
-      if (!iso || whiteDayMap.has(iso)) return;
+  // Collect all white day dates for calendar highlighting
+  const allWhiteDayDates = new Set<string>(whiteDayMap.keys());
 
-      const date = new Date(`${iso}T00:00:00`);
-      if (
-        date.getFullYear() !== displayedMonth.getFullYear()
-        || date.getMonth() !== displayedMonth.getMonth()
-      ) {
-        return;
-      }
-
-      const hijri = getHijriInfo(date);
-  const hijriMonthKey = getHijriMonthKey(hijri);
-      if (hijriMonthKey !== primaryHijriMonthKey) return;
-
-      whiteDayMap.set(iso, { iso, date, label });
-    });
-  }
-
+  // Build white day entries list for display below calendar
   const whiteDayEntries = Array.from(whiteDayMap.values())
-    .sort((left, right) => left.date.getTime() - right.date.getTime())
-    .slice(0, 3);
-  const whiteDayDates = new Set(whiteDayEntries.map((entry) => entry.iso));
-  const whiteDayLabels = new Map(whiteDayEntries.map((entry) => [entry.iso, entry.label]));
+    .sort((left, right) => left.date.getTime() - right.date.getTime());
 
   const goToPreviousMonth = () => {
     setMonthOffset((currentOffset) => Math.max(0, currentOffset - 1));
@@ -315,9 +290,13 @@ const PrayerTimesIslamicCalendar: React.FC<IslamicCalendarProps> = ({ whiteDays,
           ))}
 
           {displayedDays.map(({ date, iso, hijri }) => {
-            const isToday = iso === todayIso;
-            const isWhiteDay = whiteDayDates.has(iso);
-            const whiteDayLabel = whiteDayLabels.get(iso);
+            const isToday = iso === toLocalISO(today);
+            const isWhiteDay = allWhiteDayDates.has(iso);
+            const whiteDayEntry = whiteDayMap.get(iso);
+            const whiteDayLabel = whiteDayEntry?.label;
+            const displayDay = isWhiteDay && whiteDayEntry
+              ? whiteDayEntry.label.replace(/\D/g, '') // Extract number from "13th", "14th", etc.
+              : (hijri.day > 0 ? String(hijri.day) : '');
             const showMonth = hijri.day === 1;
 
             return (
@@ -337,7 +316,7 @@ const PrayerTimesIslamicCalendar: React.FC<IslamicCalendarProps> = ({ whiteDays,
                 }`}>{date.getDate()}</span>
                 <span className={`text-[10px] leading-tight ${
                   isToday ? 'text-emerald-100' : isWhiteDay ? 'text-amber-600' : 'text-emerald-600'
-                }`}>{hijri.day > 0 ? String(hijri.day) : ''}</span>
+                }`}>{displayDay}</span>
                 {showMonth && (
                   <span className={`text-[8px] leading-tight ${
                     isToday ? 'text-emerald-100' : 'text-gray-400'
@@ -359,8 +338,8 @@ const PrayerTimesIslamicCalendar: React.FC<IslamicCalendarProps> = ({ whiteDays,
           </span>
           <span className="font-medium text-amber-800">White Days (Al-Ayyam Al-Beed)</span>
           {whiteDayEntries.length > 0 ? (
-            whiteDayEntries.map((entry) => (
-              <span key={entry.iso} className="inline-flex items-center gap-1 text-[10px] text-amber-700 sm:text-[11px]">
+            whiteDayEntries.map((entry, index) => (
+              <span key={`${entry.iso}-${index}`} className="inline-flex items-center gap-1 text-[10px] text-amber-700 sm:text-[11px]">
                 <span className="font-medium">{entry.label}:</span>
                 <span>{entry.date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
               </span>

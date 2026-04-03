@@ -68,6 +68,8 @@ services:
       - ./db_data:/data/db
       - mongodb_config:/data/configdb
       - ./scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    tmpfs:
+      - /tmp
     networks:
       - hikmahsphere-network
     restart: unless-stopped

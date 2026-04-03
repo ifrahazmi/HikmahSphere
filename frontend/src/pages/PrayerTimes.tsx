@@ -454,17 +454,6 @@ const formatHijriReadable = (hijri?: HijriDate | null): string => {
   return parts.join(' ');
 };
 
-const getHijriAbsoluteDayEstimate = (hijri?: HijriDate | null): number | null => {
-  if (!hijri) return null;
-
-  const day = parseInt(String(hijri.day || ''), 10);
-  const month = Number(hijri.month?.number) || 0;
-  const year = parseInt(String(hijri.year || ''), 10);
-
-  if (!day || !month || !year) return null;
-  return (year * 360) + ((month - 1) * 30) + day;
-};
-
 const resolvePreferredHijriDate = (
   primary?: HijriDate | null,
   fallback?: HijriDate | null,
@@ -472,21 +461,32 @@ const resolvePreferredHijriDate = (
   if (!primary) return fallback || null;
   if (!fallback) return primary;
 
-  const primaryEstimate = getHijriAbsoluteDayEstimate(primary);
-  const fallbackEstimate = getHijriAbsoluteDayEstimate(fallback);
-  if (primaryEstimate !== null && fallbackEstimate !== null) {
-    return Math.abs(primaryEstimate - fallbackEstimate) <= 1 ? primary : fallback;
-  }
-
   const primaryMonth = Number(primary.month?.number) || 0;
   const fallbackMonth = Number(fallback.month?.number) || 0;
   const primaryYear = parseInt(String(primary.year || ''), 10);
   const fallbackYear = parseInt(String(fallback.year || ''), 10);
+  const primaryDay = parseInt(String(primary.day || ''), 10) || 0;
+  const fallbackDay = parseInt(String(fallback.day || ''), 10) || 0;
 
-  if (primaryMonth && fallbackMonth && primaryYear && fallbackYear) {
-    return primaryMonth === fallbackMonth && primaryYear === fallbackYear ? primary : fallback;
+  // If year and month match, prefer the one that's closer (within 1 day)
+  if (primaryMonth === fallbackMonth && primaryYear === fallbackYear) {
+    return Math.abs(primaryDay - fallbackDay) <= 1 ? primary : fallback;
   }
 
+  // If months differ by exactly 1 (month boundary), check if dates are consecutive
+  const monthDiff = (primaryYear - fallbackYear) * 12 + (primaryMonth - fallbackMonth);
+  if (Math.abs(monthDiff) === 1) {
+    // Primary is next month, fallback is current month - check if primary day 1 and fallback day 29/30
+    if (monthDiff === 1 && primaryDay === 1 && (fallbackDay === 29 || fallbackDay === 30)) {
+      return primary; // Consecutive days across month boundary
+    }
+    // Fallback is next month, primary is current month
+    if (monthDiff === -1 && fallbackDay === 1 && (primaryDay === 29 || primaryDay === 30)) {
+      return primary; // Primary is the current day
+    }
+  }
+
+  // For all other cases, prefer the API data (primary) as it's the authoritative source
   return primary;
 };
 
@@ -532,7 +532,7 @@ const PrayerTimes: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [location, setLocation] = useState<{lat: number, lon: number, city?: string, country?: string} | null>(null);
+  const [location, setLocation] = useState<{lat: number; lon: number; city?: string; country?: string} | null>(null);
   const [detectedCountry, setDetectedCountry] = useState<string>('');
   const [cityQuery, setCityQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -699,6 +699,13 @@ const PrayerTimes: React.FC = () => {
 
   useEffect(() => {
     if (location) {
+      console.log('🔄 Location changed, fetching data:', { 
+        lat: location.lat, 
+        lon: location.lon, 
+        city: location.city, 
+        country: location.country,
+        viewMode 
+      });
       if (viewMode === 'daily') {
         fetchData(location.lat, location.lon, location.city, location.country);
       } else if (viewMode === 'monthly') {
@@ -1344,24 +1351,44 @@ const PrayerTimes: React.FC = () => {
   };
 
   const selectLocation = (result: any) => {
-    // Extract city and country from result
-    const displayNameParts = (result.display_name || '').split(',').map((s: string) => s.trim());
-    const city = displayNameParts[0] || 'Unknown';
-    const country = displayNameParts[displayNameParts.length - 1] || 'Unknown';
-    
-    setLocation({
+    // Extract city and country from Nominatim result using the structured address field
+    const address = result.address || {};
+    const city = (
+      address.city ||
+      address.town ||
+      address.village ||
+      address.municipality ||
+      address.state ||
+      result.display_name.split(',')[0].trim() ||
+      'Unknown'
+    ).trim();
+    const country = (address.country || 'Unknown').trim();
+
+    console.log('📍 Selecting location:', { city, country, lat: result.lat, lon: result.lon });
+
+    // Create a new location object to ensure React detects the change
+    const newLocation = {
       lat: parseFloat(result.lat),
       lon: parseFloat(result.lon),
       city: city,
-      country: country
-    });
+      country: country,
+    };
+
+    setLocation(newLocation);
     setDetectedCountry(country);
     setCityQuery(city);
     setSearchResults([]);
     setShowSearch(false);
+    setError(null);
   };
 
-  const handleUseCurrentLocation = () => {
+  const handleUseCurrentLocation = (e?: React.MouseEvent) => {
+    // Prevent any default form submission behavior
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
     if (!navigator.geolocation) {
       setError('Geolocation is not supported by your browser.');
       return;
@@ -1369,6 +1396,8 @@ const PrayerTimes: React.FC = () => {
 
     setError(null);
     setLoading(true);
+    // Clear cityQuery so resolveLocationDetails can set the correct current location name
+    setCityQuery('');
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const lat = position.coords.latitude;
@@ -1376,6 +1405,7 @@ const PrayerTimes: React.FC = () => {
 
         setLocation({ lat, lon });
         await resolveLocationDetails(lat, lon);
+        setLoading(false);
         setShowSearch(false);
         setSearchResults([]);
       },
@@ -2373,6 +2403,7 @@ const PrayerTimes: React.FC = () => {
                   </span>
               </button>
               <button
+                type="button"
                 onClick={handleUseCurrentLocation}
                 className="text-[11px] sm:text-xs px-2.5 py-1 rounded-full border border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors"
                 title="Use current location"
@@ -2408,7 +2439,7 @@ const PrayerTimes: React.FC = () => {
                 <input
                     type="text"
                     placeholder="Enter city name..."
-                    className="w-full px-4 py-2.5 pl-10 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none shadow-sm text-sm"
+                    className="w-full px-4 py-2.5 pl-10 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none shadow-sm text-base"
                     value={cityQuery}
                     onChange={(e) => setCityQuery(e.target.value)}
                 />
@@ -2480,14 +2511,11 @@ const PrayerTimes: React.FC = () => {
 	                      const isToday = rowGregorianDate.toDateString() === activeIslamicGregorianDate.toDateString();
 	                      const rowPrayerHijriDate = buildHijriDateFromPrayerSource(day.date?.hijri);
 	                      const fallbackRowHijriDate = buildLocationAwareHijriDateFromGregorianDate(rowGregorianDate, activeCountry);
-	                      // For India and similar regions, prefer local calculation with moon sighting offset
-                      // For other regions, prefer API data
-                      const shouldUseLocalObservation = getHijriObservationOffsetDays(activeCountry) !== 0;
-	                      const resolvedRowHijriDate = shouldUseLocalObservation
-                        ? (fallbackRowHijriDate || rowPrayerHijriDate)
-                        : (resolvePreferredHijriDate(rowPrayerHijriDate, fallbackRowHijriDate)
-	                        || rowPrayerHijriDate
-	                        || fallbackRowHijriDate);
+                      // Always prefer API data (rowPrayerHijriDate) as the authoritative source.
+                      // resolvePreferredHijriDate handles month boundaries correctly.
+                      const resolvedRowHijriDate = resolvePreferredHijriDate(rowPrayerHijriDate, fallbackRowHijriDate)
+                        || rowPrayerHijriDate
+                        || fallbackRowHijriDate;
 	                      const rowHijriDate = isToday
 	                        ? (resolvePreferredHijriDate(displayHijriDate, resolvedRowHijriDate) || displayHijriDate || resolvedRowHijriDate)
 	                        : resolvedRowHijriDate;

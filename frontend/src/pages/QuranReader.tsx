@@ -431,6 +431,8 @@ const QuranReader: React.FC = () => {
   };
 
   const navigateToBookmark = (surahNumber: number, ayahNumber: number, closeMobile = false) => {
+    // Scroll to top immediately to prevent jumping to footer
+    window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
     goToSurah(surahNumber);
     if (closeMobile) {
       cancelMobileSettings();
@@ -1115,6 +1117,12 @@ const QuranReader: React.FC = () => {
         ]}
       />
       <div className={`min-h-screen ${settings.theme === 'dark' ? 'bg-gray-900' : 'bg-gradient-to-br from-emerald-50 via-white to-teal-50'}`}>
+      {/* Full-screen loading spinner overlay */}
+      {loading && (
+        <div className="fixed inset-0 bg-white bg-opacity-90 dark:bg-gray-900 dark:bg-opacity-90 flex items-center justify-center z-50">
+          <LoadingSpinner size="xl" text="Loading Surah..." />
+        </div>
+      )}
       <div className="w-full">
         {/* Header - Desktop */}
         <div className="hidden lg:block text-center mb-3 pt-14">
@@ -1234,6 +1242,8 @@ const QuranReader: React.FC = () => {
                   onChange={(e) => {
                     const value = parseInt(e.target.value);
                     if (value) {
+                      // Scroll to top immediately to prevent jumping to footer
+                      window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
                       goToSurah(value);
                     }
                   }}

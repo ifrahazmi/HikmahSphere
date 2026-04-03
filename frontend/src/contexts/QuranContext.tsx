@@ -14,6 +14,7 @@ import {
   LastRead,
   SearchResult,
   DEFAULT_QURAN_SETTINGS,
+  DEFAULT_URDU_TRANSLATION,
   DEFAULT_TRANSLATIONS,
 } from '../types/quran';
 
@@ -33,6 +34,7 @@ const TRANSLATION_AUDIO_SOURCES: Record<string, { baseUrl: string; label: string
 const LEGACY_QURAN_SETTINGS_KEY = 'quranSettings';
 const LEGACY_QURAN_BOOKMARKS_KEY = 'quranBookmarks';
 const LEGACY_QURAN_LAST_READ_KEY = 'quranLastRead';
+const QURAN_SETTINGS_MIGRATION_VERSION = 2; // Incremented to reset default translation to Urdu
 
 export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
   const { isAuthenticated, loading: authLoading, user } = useAuth();
@@ -413,7 +415,24 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     const userSettingsRaw = localStorage.getItem(userSettingsStorageKey);
     const fallbackSettingsRaw = isGuestScope ? localStorage.getItem(LEGACY_QURAN_SETTINGS_KEY) : null;
     const settingsPayload = parseJson(userSettingsRaw) ?? parseJson(fallbackSettingsRaw);
-    const hydratedSettings = normalizeSettings(settingsPayload);
+    
+    // Migration: Force Urdu as default translation for existing users
+    let migratedPayload = settingsPayload;
+    if (migratedPayload && typeof migratedPayload === 'object') {
+      const storedVersion = (migratedPayload as any)._migrationVersion ?? 1;
+      if (storedVersion < QURAN_SETTINGS_MIGRATION_VERSION) {
+        // Reset to Urdu for users who haven't been migrated yet
+        migratedPayload = {
+          ...migratedPayload,
+          selectedTranslations: [DEFAULT_URDU_TRANSLATION.identifier],
+          _migrationVersion: QURAN_SETTINGS_MIGRATION_VERSION,
+        };
+      } else {
+        migratedPayload = { ...migratedPayload, _migrationVersion: QURAN_SETTINGS_MIGRATION_VERSION };
+      }
+    }
+    
+    const hydratedSettings = normalizeSettings(migratedPayload);
     setSettings(hydratedSettings);
 
     const userBookmarksRaw = localStorage.getItem(userBookmarksStorageKey);
