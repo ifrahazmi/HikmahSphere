@@ -63,6 +63,19 @@ interface DailyPrayerCacheData {
   ramadanData: any;
 }
 
+interface PrayerTuningState {
+  offsets: {
+    fajr: number;
+    dhuhr: number;
+    asr: number;
+    maghrib: number;
+    isha: number;
+    imsak: number;
+  };
+  applyToFasting: boolean;
+  updatedAt: string | null;
+}
+
 type RakatType = 'Fard' | 'Sunnah Muakkadah' | 'Sunnah Ghair Muakkadah' | 'Nafl' | 'Witr (Wajib)';
 
 interface RakatEntry {
@@ -176,6 +189,19 @@ const HIJRI_MONTH_NUMBERS: Record<string, number> = {
 const PRAYER_PAGE_CACHE_PREFIX = 'hikmah-sphere:prayer-times:v3';
 const PRAYER_PAGE_CACHE_TTL_MS = 30 * 60 * 1000;
 
+const DEFAULT_PRAYER_TUNING: PrayerTuningState = {
+  offsets: {
+    fajr: 0,
+    dhuhr: 0,
+    asr: 0,
+    maghrib: 0,
+    isha: 0,
+    imsak: 0,
+  },
+  applyToFasting: true,
+  updatedAt: null,
+};
+
 const HIJRI_INTL_LONG_FORMATTER = new Intl.DateTimeFormat('en-SA-u-ca-islamic-umalqura', {
   day: 'numeric',
   month: 'long',
@@ -237,6 +263,7 @@ const buildPrayerCacheKey = (
     highLatitudeRule?: number;
     month?: number;
     year?: number;
+    tuningMarker?: string;
   },
 ): string => {
   const baseKey = [
@@ -249,6 +276,7 @@ const buildPrayerCacheKey = (
     `m${options.method}`,
     `s${options.school}`,
     `hlr${options.highLatitudeRule ?? 0}`,
+    `tm${normalizeCacheValue(options.tuningMarker)}`,
   ];
 
   if (typeof options.month === 'number') {
@@ -555,6 +583,15 @@ const PrayerTimes: React.FC = () => {
   const [highLatitudeRule, setHighLatitudeRule] = useState(1); // Default: Middle of Night
   const [timeFormat, setTimeFormat] = useState<'12h' | '24h'>('12h');
 
+  // Prayer tuning (admin only)
+  const [prayerTuning, setPrayerTuning] = useState<PrayerTuningState>(DEFAULT_PRAYER_TUNING);
+  const [isPrayerTuningLoading, setIsPrayerTuningLoading] = useState(false);
+  const [isPrayerTuningSaving, setIsPrayerTuningSaving] = useState(false);
+  const [hasPrayerTuningLoaded, setHasPrayerTuningLoaded] = useState(false);
+  const [prayerTuningError, setPrayerTuningError] = useState<string | null>(null);
+  const [prayerTuningMessage, setPrayerTuningMessage] = useState<string | null>(null);
+  const [globalTuningMarker, setGlobalTuningMarker] = useState<string>('unknown');
+
   // Data states
   const [prayerData, setPrayerData] = useState<any>(null);
   const [fastingData, setFastingData] = useState<any>(null);
@@ -588,6 +625,41 @@ const PrayerTimes: React.FC = () => {
   const hijriFetchRequestIdRef = useRef(0);
   const hasRefreshedAtMaghribRef = useRef(false);
   const currentGregorianDateRef = useRef(formatGregorianDDMMYYYY(new Date()));
+  const normalizedRole = String(user?.role || '').toLowerCase();
+  const canManagePrayerTuning = Boolean(
+    user && (user.isAdmin === true || normalizedRole === 'superadmin' || normalizedRole === 'admin')
+  );
+
+  const refreshGlobalTuningMarker = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_URL}/prayers/tuning`);
+      const payload = await response.json();
+
+      if (payload?.status !== 'success' || !payload?.data) {
+        return;
+      }
+
+      const offsets = payload.data.offsets || {};
+      const marker = [
+        payload.data.updatedAt || 'na',
+        Number(offsets.fajr) || 0,
+        Number(offsets.dhuhr) || 0,
+        Number(offsets.asr) || 0,
+        Number(offsets.maghrib) || 0,
+        Number(offsets.isha) || 0,
+        Number(offsets.imsak) || 0,
+        payload.data.applyToFasting ? 1 : 0,
+      ].join('|');
+
+      setGlobalTuningMarker(marker);
+    } catch (markerError) {
+      console.warn('Unable to refresh global tuning marker:', markerError);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshGlobalTuningMarker();
+  }, [refreshGlobalTuningMarker]);
 
   useEffect(() => {
     if (!showExtraPrayerInfo) return;
@@ -740,6 +812,7 @@ const PrayerTimes: React.FC = () => {
       method: calculationMethod,
       school,
       highLatitudeRule,
+      tuningMarker: globalTuningMarker,
     });
 
     const cachedDailyData = readPrayerCache<DailyPrayerCacheData>(dailyCacheKey);
@@ -1005,7 +1078,7 @@ const PrayerTimes: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedMadhab, calculationMethod, highLatitudeRule]);
+  }, [selectedMadhab, calculationMethod, highLatitudeRule, globalTuningMarker]);
 
   const fetchMonthlyData = useCallback(async (lat: number, lon: number, month: number, year: number) => {
     setLoading(true);
@@ -1020,6 +1093,7 @@ const PrayerTimes: React.FC = () => {
       highLatitudeRule,
       month,
       year,
+      tuningMarker: globalTuningMarker,
     });
     const cachedMonthlyData = readPrayerCache<any[]>(monthlyCacheKey);
 
@@ -1048,7 +1122,7 @@ const PrayerTimes: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedMadhab, calculationMethod, highLatitudeRule]);
+  }, [selectedMadhab, calculationMethod, highLatitudeRule, globalTuningMarker]);
 
   const fetchRamadanData = useCallback(async (lat: number, lon: number) => {
     setLoading(true);
@@ -1060,6 +1134,7 @@ const PrayerTimes: React.FC = () => {
       lon,
       method: calculationMethod,
       school,
+      tuningMarker: globalTuningMarker,
     });
     const cachedRamadanData = readPrayerCache<any>(ramadanCacheKey);
 
@@ -1094,7 +1169,153 @@ const PrayerTimes: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedMadhab, calculationMethod]);
+  }, [selectedMadhab, calculationMethod, globalTuningMarker]);
+
+  const fetchPrayerTuning = useCallback(async () => {
+    if (!canManagePrayerTuning) return;
+
+    setIsPrayerTuningLoading(true);
+    setPrayerTuningError(null);
+
+    try {
+      const response = await fetch(`${API_URL}/prayers/tuning`);
+      const payload = await response.json();
+
+      if (payload?.status !== 'success' || !payload?.data) {
+        throw new Error(payload?.message || 'Unable to load prayer tuning');
+      }
+
+      const offsets = payload.data.offsets || {};
+      setPrayerTuning({
+        offsets: {
+          fajr: Number(offsets.fajr) || 0,
+          dhuhr: Number(offsets.dhuhr) || 0,
+          asr: Number(offsets.asr) || 0,
+          maghrib: Number(offsets.maghrib) || 0,
+          isha: Number(offsets.isha) || 0,
+          imsak: Number(offsets.imsak) || 0,
+        },
+        applyToFasting: Boolean(payload.data.applyToFasting),
+        updatedAt: payload.data.updatedAt || null,
+      });
+      setHasPrayerTuningLoaded(true);
+    } catch (fetchError: any) {
+      setPrayerTuningError(fetchError?.message || 'Failed to load prayer tuning settings');
+    } finally {
+      setIsPrayerTuningLoading(false);
+    }
+  }, [canManagePrayerTuning]);
+
+  const updatePrayerTuningOffset = useCallback((key: keyof PrayerTuningState['offsets'], value: string) => {
+    const parsed = Number.parseInt(value, 10);
+    const safeValue = Number.isNaN(parsed) ? 0 : Math.max(-5, Math.min(5, parsed));
+
+    setPrayerTuning((prev) => ({
+      ...prev,
+      offsets: {
+        ...prev.offsets,
+        [key]: safeValue,
+      },
+    }));
+  }, []);
+
+  const savePrayerTuning = useCallback(async () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setPrayerTuningError('Please log in again to update prayer tuning.');
+      return;
+    }
+
+    setIsPrayerTuningSaving(true);
+    setPrayerTuningError(null);
+    setPrayerTuningMessage(null);
+
+    try {
+      const response = await fetch(`${API_URL}/prayers/tuning`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          offsets: prayerTuning.offsets,
+          applyToFasting: prayerTuning.applyToFasting,
+        }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok || payload?.status !== 'success' || !payload?.data) {
+        throw new Error(payload?.message || 'Unable to update prayer tuning');
+      }
+
+      const offsets = payload.data.offsets || {};
+      setPrayerTuning({
+        offsets: {
+          fajr: Number(offsets.fajr) || 0,
+          dhuhr: Number(offsets.dhuhr) || 0,
+          asr: Number(offsets.asr) || 0,
+          maghrib: Number(offsets.maghrib) || 0,
+          isha: Number(offsets.isha) || 0,
+          imsak: Number(offsets.imsak) || 0,
+        },
+        applyToFasting: Boolean(payload.data.applyToFasting),
+        updatedAt: payload.data.updatedAt || null,
+      });
+      const marker = [
+        payload.data.updatedAt || 'na',
+        Number(offsets.fajr) || 0,
+        Number(offsets.dhuhr) || 0,
+        Number(offsets.asr) || 0,
+        Number(offsets.maghrib) || 0,
+        Number(offsets.isha) || 0,
+        Number(offsets.imsak) || 0,
+        payload.data.applyToFasting ? 1 : 0,
+      ].join('|');
+      setGlobalTuningMarker(marker);
+      setPrayerTuningMessage(payload?.message || 'Prayer tuning saved successfully.');
+
+      // Immediately refresh visible prayer data so users see tuned times right after save.
+      if (location) {
+        if (viewMode === 'daily') {
+          await fetchData(location.lat, location.lon, location.city, location.country);
+        } else if (viewMode === 'monthly') {
+          await fetchMonthlyData(location.lat, location.lon, selectedMonth, selectedYear);
+        } else if (viewMode === 'ramadan') {
+          await fetchRamadanData(location.lat, location.lon);
+        }
+      }
+
+      setShowSettings(false);
+    } catch (saveError: any) {
+      setPrayerTuningError(saveError?.message || 'Failed to save prayer tuning settings');
+    } finally {
+      setIsPrayerTuningSaving(false);
+    }
+  }, [
+    prayerTuning,
+    location,
+    viewMode,
+    selectedMonth,
+    selectedYear,
+    fetchData,
+    fetchMonthlyData,
+    fetchRamadanData,
+  ]);
+
+  useEffect(() => {
+    if (!showSettings || !canManagePrayerTuning || hasPrayerTuningLoaded || isPrayerTuningLoading) {
+      return;
+    }
+
+    fetchPrayerTuning();
+  }, [
+    showSettings,
+    canManagePrayerTuning,
+    hasPrayerTuningLoaded,
+    isPrayerTuningLoading,
+    fetchPrayerTuning,
+  ]);
 
   // Update reminder based on prayer times, Islamic events, and current time
   useEffect(() => {
@@ -2219,9 +2440,17 @@ const PrayerTimes: React.FC = () => {
             )}
           </div>
           
-          {/* Settings Panel - Mobile Optimized */}
+          {/* Settings Panel Modal */}
           {showSettings && (
-            <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 mb-4 sm:mb-6 text-left animate-fade-in-down">
+            <div
+              className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
+              onClick={() => setShowSettings(false)}
+            >
+              <div className="flex min-h-full items-center justify-center p-3 sm:p-4">
+                <div
+                  className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl sm:rounded-3xl bg-white shadow-2xl p-4 sm:p-6 text-left animate-fade-in-down"
+                  onClick={(event) => event.stopPropagation()}
+                >
               <div className="mb-4 flex items-center justify-between gap-3">
                 <h3 className="font-semibold text-base sm:text-lg flex items-center">
                   <Cog6ToothIcon className="h-5 w-5 mr-2" />
@@ -2313,6 +2542,89 @@ const PrayerTimes: React.FC = () => {
                   </p>
                 </div>
 
+                {canManagePrayerTuning && (
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 sm:p-4">
+                    <div className="mb-2">
+                      <h4 className="text-sm sm:text-base font-semibold text-emerald-800">Prayer Tuning (Admin)</h4>
+                      <p className="text-xs text-emerald-700 mt-1">
+                        Fine tune each prayer by -5 to +5 minutes.
+                      </p>
+                    </div>
+
+                    {isPrayerTuningLoading ? (
+                      <p className="text-xs text-gray-600">Loading tuning settings...</p>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
+                          {([
+                            ['fajr', 'Fajr'],
+                            ['dhuhr', 'Dhuhr'],
+                            ['asr', 'Asr'],
+                            ['maghrib', 'Maghrib'],
+                            ['isha', 'Isha'],
+                            ['imsak', 'Imsak'],
+                          ] as Array<[keyof PrayerTuningState['offsets'], string]>).map(([key, label]) => (
+                            <label key={key} className="text-xs sm:text-sm text-gray-700">
+                              <span className="mb-1 block font-medium">{label} (min)</span>
+                              <input
+                                type="number"
+                                min={-5}
+                                max={5}
+                                value={prayerTuning.offsets[key]}
+                                onChange={(event) => updatePrayerTuningOffset(key, event.target.value)}
+                                className="w-full rounded-lg border border-gray-300 px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                              />
+                            </label>
+                          ))}
+                        </div>
+
+                        <label className="mt-3 inline-flex items-center gap-2 text-xs sm:text-sm text-gray-700">
+                          <input
+                            type="checkbox"
+                            checked={prayerTuning.applyToFasting}
+                            onChange={(event) => {
+                              setPrayerTuning((prev) => ({
+                                ...prev,
+                                applyToFasting: event.target.checked,
+                              }));
+                            }}
+                            className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                          />
+                          Apply tuning to fasting times (Sahur/Iftar)
+                        </label>
+
+                        {prayerTuning.updatedAt && (
+                          <p className="mt-2 text-[11px] text-gray-500">
+                            Last updated: {new Date(prayerTuning.updatedAt).toLocaleString()}
+                          </p>
+                        )}
+
+                        {prayerTuningError && (
+                          <p className="mt-2 text-xs text-red-600">{prayerTuningError}</p>
+                        )}
+                        {prayerTuningMessage && (
+                          <p className="mt-2 text-xs text-emerald-700">{prayerTuningMessage}</p>
+                        )}
+
+                        <div className="mt-3">
+                          <button
+                            type="button"
+                            onClick={savePrayerTuning}
+                            disabled={isPrayerTuningSaving}
+                            className={`rounded-lg px-3 py-2 text-sm font-semibold text-white transition-colors ${
+                              isPrayerTuningSaving
+                                ? 'cursor-not-allowed bg-emerald-300'
+                                : 'bg-emerald-600 hover:bg-emerald-700'
+                            }`}
+                          >
+                            {isPrayerTuningSaving ? 'Saving...' : 'Save Prayer Tuning'}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
                 {/* Month/Year Selection for Monthly View */}
                 {viewMode === 'monthly' && (
                   <>
@@ -2353,6 +2665,8 @@ const PrayerTimes: React.FC = () => {
                     </div>
                   </>
                 )}
+              </div>
+                </div>
               </div>
             </div>
           )}

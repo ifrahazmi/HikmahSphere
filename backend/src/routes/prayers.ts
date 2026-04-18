@@ -364,7 +364,7 @@ const getGlobalPrayerTuning = async (): Promise<PrayerTuningConfig> => {
 
 const canManagePrayerTuning = (user: any): boolean => {
   if (!user) return false;
-  return user.role === 'superadmin' || user.role === 'manager';
+  return user.role === 'superadmin' || user.role === 'admin' || user.isAdmin === true;
 };
 
 const convertCorrectedHijriForPayload = (corrected: {
@@ -631,7 +631,7 @@ router.put('/tuning', [
   if (!canManagePrayerTuning(req.user)) {
     return res.status(403).json({
       status: 'error',
-      message: 'Access denied. Superadmin or manager only.',
+      message: 'Access denied. Admin only.',
     });
   }
 

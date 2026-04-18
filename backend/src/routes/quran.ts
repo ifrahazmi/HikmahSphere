@@ -17,7 +17,15 @@ type EditionsCacheEntry = {
 const editionsCache = new Map<string, EditionsCacheEntry>();
 const editionsInFlight = new Map<string, Promise<any>>();
 
-type BookmarkColor = 'emerald' | 'blue' | 'purple' | 'amber' | 'rose';
+type BookmarkColor =
+  | 'emerald'
+  | 'red'
+  | 'teal'
+  | 'indigo'
+  | 'blue'
+  | 'purple'
+  | 'amber'
+  | 'rose';
 
 interface UserStateBookmark {
   id: string;
@@ -37,7 +45,8 @@ interface UserStateLastRead {
 }
 
 const isBookmarkColor = (value: unknown): value is BookmarkColor => {
-  return typeof value === 'string' && ['emerald', 'blue', 'purple', 'amber', 'rose'].includes(value);
+  return typeof value === 'string'
+    && ['emerald', 'red', 'teal', 'indigo', 'blue', 'purple', 'amber', 'rose'].includes(value);
 };
 
 const sanitizeBookmarks = (value: unknown): UserStateBookmark[] | null => {

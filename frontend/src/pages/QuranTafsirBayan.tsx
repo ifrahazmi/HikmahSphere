@@ -68,6 +68,11 @@ const TAFSIR_EDITION_OPTIONS = [
   { value: 'tafheem-ul-quran-syed-abu-ala-maududi', label: "Tafheem e Qur'an - Syed Abu Ala Maududi" },
 ] as const;
 
+const TAFSIR_TRANSLATION_MAPPING: Record<string, string> = {
+  'bayan-ul-quran-dr-israr-ahmed': DEFAULT_URDU_TRANSLATION.identifier,
+  'tafheem-ul-quran-syed-abu-ala-maududi': 'ur.maududi',
+};
+
 const TAFSIR_TEXT_COLOR_OPTIONS = [
   { label: 'Default', value: '#1f2937', textClass: 'text-gray-800' },
   { label: 'Emerald', value: '#059669', textClass: 'text-emerald-600' },
@@ -261,7 +266,13 @@ const QuranTafsirBayan: React.FC = () => {
   const setTafsirEdition = useCallback((value: string) => {
     const matchedOption = TAFSIR_EDITION_OPTIONS.find((option) => option.value === value);
     if (!matchedOption) return;
-    updateSettings({ tafsirEdition: matchedOption.value });
+    updateSettings({
+      tafsirEdition: matchedOption.value,
+      selectedTranslations: [
+        TAFSIR_TRANSLATION_MAPPING[matchedOption.value] || DEFAULT_URDU_TRANSLATION.identifier,
+      ],
+      arabicOnlyMode: false,
+    });
   }, [updateSettings]);
 
   const setTafsirFontSize = useCallback((value: React.SetStateAction<number>) => {
@@ -642,6 +653,9 @@ const QuranTafsirBayan: React.FC = () => {
     const surahNumber = selectedSurah;
     const translationIdentifier = selectedTranslation;
     const selectedTafsirEdition = tafsirEdition;
+    const useTafheemApiTranslation =
+      selectedTafsirEdition === 'tafheem-ul-quran-syed-abu-ala-maududi'
+      && translationIdentifier === 'ur.maududi';
 
     if (readerMode === 'ayah') {
       const [arabicAyah, translationMap, tafsirAyah] = await Promise.all([
@@ -657,9 +671,11 @@ const QuranTafsirBayan: React.FC = () => {
         {
           ayahNumber: tafsirAyah.ayah,
           arabicText: derivedArabicText,
-          translationText: tafsirAyah.translationPlain || stripHtml(tafsirAyah.translationHtml || '') || translationMap.get(tafsirAyah.ayah) || '',
-          translationHtml: tafsirAyah.translationHtml,
-          translationPlain: tafsirAyah.translationPlain,
+          translationText: useTafheemApiTranslation
+            ? (tafsirAyah.translationPlain || stripHtml(tafsirAyah.translationHtml || '') || '')
+            : (translationMap.get(tafsirAyah.ayah) || tafsirAyah.translationPlain || stripHtml(tafsirAyah.translationHtml || '') || ''),
+          translationHtml: useTafheemApiTranslation ? tafsirAyah.translationHtml : undefined,
+          translationPlain: useTafheemApiTranslation ? tafsirAyah.translationPlain : undefined,
           footnotes: tafsirAyah.footnotes || {},
           tafsirText: tafsirAyah.text,
         },
@@ -688,9 +704,11 @@ const QuranTafsirBayan: React.FC = () => {
       .map((ayah) => ({
         ayahNumber: ayah.ayah,
         arabicText: arabicMap.get(ayah.ayah) || '',
-        translationText: ayah.translationPlain || stripHtml(ayah.translationHtml || '') || translationMap.get(ayah.ayah) || '',
-        translationHtml: ayah.translationHtml,
-        translationPlain: ayah.translationPlain,
+        translationText: useTafheemApiTranslation
+          ? (ayah.translationPlain || stripHtml(ayah.translationHtml || '') || '')
+          : (translationMap.get(ayah.ayah) || ayah.translationPlain || stripHtml(ayah.translationHtml || '') || ''),
+        translationHtml: useTafheemApiTranslation ? ayah.translationHtml : undefined,
+        translationPlain: useTafheemApiTranslation ? ayah.translationPlain : undefined,
         footnotes: ayah.footnotes || {},
         tafsirText: ayah.text,
       }));
@@ -949,7 +967,9 @@ const QuranTafsirBayan: React.FC = () => {
                   )}
                 >
                   <h3 className={`mb-2 text-sm font-semibold ${settings.theme === 'dark' ? 'text-emerald-300' : 'text-emerald-700'}`}>
-                    Urdu Translation
+                    {selectedTranslationMeta
+                      ? `${selectedTranslationMeta.language} - ${selectedTranslationMeta.name}`
+                      : 'Translation'}
                   </h3>
                   <p
                     dir={isTranslationUrdu ? 'rtl' : 'ltr'}
@@ -1090,6 +1110,7 @@ const QuranTafsirBayan: React.FC = () => {
       resolvedTafsirTextColor,
       resolvedTextAreaBackground,
       selectedSurah,
+      selectedTranslationMeta,
       tafsirAreaBackgroundColor,
       tafsirEditionLabel,
       tafsirFontSize,

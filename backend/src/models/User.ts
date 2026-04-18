@@ -362,7 +362,7 @@ const UserSchema = new Schema<IUser>({
         surahName: { type: String, required: true, trim: true },
         timestamp: { type: Date, default: Date.now },
         note: { type: String, trim: true, maxlength: 500 },
-        color: { type: String, enum: ['emerald', 'blue', 'purple', 'amber', 'rose'] },
+        color: { type: String, enum: ['emerald', 'red', 'teal', 'indigo', 'blue', 'purple', 'amber', 'rose'] },
       }],
       settings: { type: Schema.Types.Mixed },
       completedSurahs: [{ type: Number, min: 1, max: 114 }],
