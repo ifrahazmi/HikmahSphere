@@ -21,6 +21,26 @@ root.render(
 // or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
 reportWebVitals();
 
+if (typeof window !== 'undefined') {
+  window.addEventListener('error', (event) => {
+    const message = event?.message || '';
+    if (message.includes('Loading chunk') || message.includes('ChunkLoadError')) {
+      window.location.reload();
+    }
+  });
+}
+
+if ('serviceWorker' in navigator && window.location.hostname === 'localhost') {
+  window.addEventListener('load', async () => {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(registrations.map((registration) => registration.unregister()));
+    if ('caches' in window) {
+      const cacheNames = await caches.keys();
+      await Promise.all(cacheNames.map((name) => caches.delete(name)));
+    }
+  });
+}
+
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker

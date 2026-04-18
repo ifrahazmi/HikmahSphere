@@ -6,6 +6,7 @@ import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import path from 'path';
+import fs from 'fs';
 import User from './models/User';
 import { authMiddleware, superAdminMiddleware } from './middleware/auth';
 import { requestLogger, errorLogger, logStartup, logDatabaseConnection } from './middleware/logger';
@@ -194,9 +195,10 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Serve static files for uploaded proofs - Works in both dev and production
-// Using path.resolve for absolute path resolution
-const uploadsPath = path.resolve(process.cwd(), 'src', 'uploads');
+// Serve static files for uploads from one shared base path.
+const uploadsPath = (process.env.NODE_ENV === 'production' || fs.existsSync('/var/www/hikmah/uploads'))
+  ? '/var/www/hikmah/uploads'
+  : path.resolve(process.cwd(), 'src', 'uploads');
 app.use('/uploads', express.static(uploadsPath));
 
 // Also serve from src/uploads for backwards compatibility

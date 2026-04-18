@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { Toaster } from 'react-hot-toast';
 import { requestForToken, getPushSupportInfo, getPushDeviceId, storePushToken } from './firebase';
 import axios from 'axios'; // Import axios
@@ -12,7 +11,6 @@ import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import LoadingSpinner from './components/LoadingSpinner';
 import ProtectedRoute from './components/ProtectedRoute'; // Import ProtectedRoute
-import RamadanElitePopup from './components/RamadanElitePopup'; // Ramadan Popup
 import InstallAppPrompt from './components/InstallAppPrompt';
 
 // Pages
@@ -25,6 +23,8 @@ import QuranReader from './pages/QuranReader';
 import QuranTafsirBayan from './pages/QuranTafsirBayan';
 import ZakatCalculator from './pages/ZakatCalculator';
 import Community from './pages/Community';
+import ForumDetail from './pages/ForumDetail';
+import PostDetail from './pages/PostDetail';
 import DhikrDua from './pages/DhikrDua';
 import DuaDetail from './pages/DuaDetail';
 import Profile from './pages/Profile';
@@ -247,6 +247,8 @@ const AppContent: React.FC = () => {
           <Route path="/dua/:slug" element={<DuaDetail />} />
           <Route path="/zakat" element={<ZakatCalculator />} />
           <Route path="/community" element={<Community />} />
+          <Route path="/community/forums/:forumId" element={<ForumDetail />} />
+          <Route path="/community/forums/:forumId/posts/:postId" element={<PostDetail />} />
           
           {/* Protected Routes */}
           <Route 
@@ -279,9 +281,6 @@ const AppContent: React.FC = () => {
       {/* Footer */}
       <Footer />
 
-      {/* Ramadan Elite Popup */}
-      <RamadanElitePopup />
-
       {/* PWA Install Prompt */}
       <InstallAppPrompt />
 
@@ -302,8 +301,6 @@ const App: React.FC = () => {
         </NotificationProvider>
       </AuthProvider>
 
-      {/* React Query Devtools (development only) */}
-      {process.env.NODE_ENV === 'development' && <ReactQueryDevtools />}
     </QueryClientProvider>
   );
 };

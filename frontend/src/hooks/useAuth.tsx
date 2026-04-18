@@ -26,12 +26,33 @@ interface User {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<{ passwordChangeRequired: boolean }>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
   hasRole: (roles: string[]) => boolean; // Add role check helper definition
 }
+
+const AUTH_FETCH_TIMEOUT_MS = 15000;
+
+const fetchWithTimeout = async (input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = AUTH_FETCH_TIMEOUT_MS): Promise<Response> => {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('Request timed out. Please try again.');
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+};
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -89,7 +110,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       if (token) {
         try {
-            const response = await fetch(`${API_URL}/auth/profile`, {
+            const response = await fetchWithTimeout(`${API_URL}/auth/profile`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -130,11 +151,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string): Promise<{ passwordChangeRequired: boolean }> => {
     try {
       setLoading(true);
       const normalizedEmail = email.trim().toLowerCase();
-      const response = await fetch(`${API_URL}/auth/login`, {
+      const response = await fetchWithTimeout(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -145,11 +166,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const data = await response.json();
 
       if (response.ok) {
+        if (data.passwordChangeRequired) {
+          if (data.token) {
+            localStorage.setItem('token', data.token);
+          }
+          return { passwordChangeRequired: true };
+        }
+
         localStorage.setItem('token', data.token);
         if (data.user) {
           localStorage.setItem('user', JSON.stringify(data.user));
+          setUser(mapUser(data.user));
+        } else {
+          await checkAuthStatus();
         }
-        await checkAuthStatus();
+        return { passwordChangeRequired: false };
       } else {
         throw new Error(data.message || 'Login failed');
       }
@@ -168,7 +199,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const [firstName, ...lastNameParts] = name.split(' ');
       const lastName = lastNameParts.join(' ') || 'User';
 
-      const response = await fetch(`${API_URL}/auth/register`, {
+      const response = await fetchWithTimeout(`${API_URL}/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -36,6 +36,9 @@ docker-compose.override.yml
 
 # Project specific
 backend/config/firebase-credentials/service-account.json
+backend/src/uploads/**
+!backend/src/uploads/**/README.txt
+!backend/src/uploads/**/.gitkeep
 db_data/
 .dump/
 tmp/
