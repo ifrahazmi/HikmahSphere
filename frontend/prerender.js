@@ -4,7 +4,6 @@
  * Uses Puppeteer directly to render pages and capture Helmet meta tags
  */
 
-const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
@@ -31,6 +30,15 @@ const ROUTES = [
 
 const PORT = 4567;
 const BUILD_DIR = path.join(__dirname, 'build');
+
+function loadPuppeteer() {
+  try {
+    return require('puppeteer');
+  } catch (_error) {
+    console.warn('⚠ Puppeteer is not installed. Skipping prerender step.');
+    return null;
+  }
+}
 
 // Start static server
 function startServer() {
@@ -127,6 +135,11 @@ async function prerenderPage(browser, route) {
 // Main prerender function
 async function prerender() {
   console.log('🚀 Starting prerendering...\n');
+
+  const puppeteer = loadPuppeteer();
+  if (!puppeteer) {
+    return;
+  }
   
   const server = startServer();
   
