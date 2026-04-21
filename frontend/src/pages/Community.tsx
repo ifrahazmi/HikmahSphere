@@ -9,6 +9,12 @@ import {
   CalendarDaysIcon,
   ClockIcon,
   MapPinIcon,
+  VideoCameraIcon,
+  ShareIcon,
+  BellAlertIcon,
+  TrashIcon,
+  ClipboardDocumentIcon,
+  ArrowTopRightOnSquareIcon,
   PlusIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
@@ -72,6 +78,65 @@ type Event = {
   tags?: string[];
 };
 
+type Meeting = {
+  id: string;
+  title: string;
+  description: string;
+  topic: string;
+  speakerName: string;
+  platform: 'google_meet' | 'zoom' | 'teams' | 'jitsi' | 'other';
+  meetingUrl?: string | null;
+  meetingId?: string | null;
+  passcode?: string | null;
+  scheduledAt: string;
+  durationMinutes: number;
+  timezone: string;
+  recurrence: 'none' | 'weekly' | 'biweekly';
+  status: 'scheduled' | 'completed' | 'canceled';
+  organizer: {
+    id: string;
+    name: string;
+    verified: boolean;
+  };
+  attendees: number;
+  isJoined: boolean;
+  maxCapacity: number | null;
+  tags?: string[];
+  notesLinks?: string[];
+  attachment?: {
+    url: string;
+    name: string;
+    mimeType: string;
+    size: number;
+  } | null;
+  notificationConfig?: {
+    enabled: boolean;
+    channels: Array<'push' | 'email'>;
+    reminderMinutes: number[];
+    mode: 'once' | 'multiple';
+    audience: 'all_registered' | 'rsvped_only';
+    allowManualSendToAll: boolean;
+  };
+};
+
+type MeetingNotificationSettings = {
+  defaults: {
+    enabled: boolean;
+    channels: Array<'push' | 'email'>;
+    reminderMinutes: number[];
+    mode: 'once' | 'multiple';
+    audience: 'all_registered' | 'rsvped_only';
+  };
+  emailTemplate: {
+    subjectPrefix: string;
+    logoUrl: string;
+    headerTitle: string;
+    footerText: string;
+    includeAdvertisement: boolean;
+    advertisementText?: string;
+  };
+};
+
 type CommentItem = {
   id: string;
   parentCommentId: string | null;
@@ -119,6 +184,30 @@ type AdminEventForm = {
   tags: string;
 };
 
+type AdminMeetingForm = {
+  title: string;
+  description: string;
+  topic: string;
+  speakerName: string;
+  platform: 'google_meet' | 'zoom' | 'teams' | 'jitsi' | 'other';
+  meetingUrl: string;
+  meetingId: string;
+  passcode: string;
+  scheduledAt: string;
+  durationMinutes: string;
+  timezone: string;
+  recurrence: 'none' | 'weekly' | 'biweekly';
+  maxCapacity: string;
+  tags: string;
+  notesLinks: string;
+  attachment: File | null;
+};
+
+type MeetingFieldErrors = Partial<Record<
+  'title' | 'description' | 'topic' | 'speakerName' | 'meetingUrl' | 'meetingId' | 'scheduledAt' | 'durationMinutes' | 'timezone' | 'recurrence' | 'maxCapacity' | 'attachment',
+  string
+>>;
+
 const formatRelativeTime = (input: string): string => {
   const date = new Date(input);
   if (Number.isNaN(date.getTime())) {
@@ -150,30 +239,80 @@ const truncate = (text: string, max = 180): string => {
   return `${text.slice(0, max).trim()}...`;
 };
 
+const formatMeetingCountdown = (scheduledAt: string): string => {
+  const meetingTime = new Date(scheduledAt).getTime();
+  if (Number.isNaN(meetingTime)) {
+    return 'Schedule unavailable';
+  }
+
+  const diffMs = meetingTime - Date.now();
+  if (diffMs <= 0) {
+    return 'Live now';
+  }
+
+  const totalMinutes = Math.floor(diffMs / (60 * 1000));
+  const days = Math.floor(totalMinutes / (24 * 60));
+  const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+  const minutes = totalMinutes % 60;
+
+  if (days > 0) {
+    return `${days}d ${hours}h ${minutes}m`;
+  }
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  return `${Math.max(1, minutes)}m`;
+};
+
+const formatPlatformName = (platform: Meeting['platform']): string => {
+  switch (platform) {
+    case 'google_meet':
+      return 'Google Meet';
+    case 'zoom':
+      return 'Zoom';
+    case 'teams':
+      return 'Microsoft Teams';
+    case 'jitsi':
+      return 'Jitsi';
+    default:
+      return 'Online Meeting';
+  }
+};
+
+const ALLOWED_COMMUNITY_TABS = ['forums', 'posts', 'events', 'meetings', 'games'];
+
 const Community: React.FC = () => {
   const navigate = useNavigate();
   const { hasRole } = useAuth();
   const [searchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
-  const isFromLogin = tabParam === 'games';
-  const [activeTab, setActiveTab] = useState(isFromLogin ? 'games' : 'forums');
+  const initialTab = ALLOWED_COMMUNITY_TABS.includes(tabParam || '') ? (tabParam as string) : 'forums';
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [forums, setForums] = useState<Forum[]>([]);
   const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [loadingForums, setLoadingForums] = useState(false);
   const [loadingPosts, setLoadingPosts] = useState(false);
   const [loadingEvents, setLoadingEvents] = useState(false);
+  const [loadingMeetings, setLoadingMeetings] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showCreateForumModal, setShowCreateForumModal] = useState(false);
   const [showCreatePostModal, setShowCreatePostModal] = useState(false);
   const [showCreateEventModal, setShowCreateEventModal] = useState(false);
+  const [showCreateMeetingModal, setShowCreateMeetingModal] = useState(false);
   const [creatingForum, setCreatingForum] = useState(false);
   const [creatingPost, setCreatingPost] = useState(false);
   const [creatingEvent, setCreatingEvent] = useState(false);
+  const [creatingMeeting, setCreatingMeeting] = useState(false);
   const [editingForumId, setEditingForumId] = useState<string | null>(null);
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
+  const [editingMeetingId, setEditingMeetingId] = useState<string | null>(null);
   const [deletingForumId, setDeletingForumId] = useState<string | null>(null);
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
+  const [cancelingMeetingId, setCancelingMeetingId] = useState<string | null>(null);
+  const [deletingMeetingId, setDeletingMeetingId] = useState<string | null>(null);
+  const [highlightMeetingId, setHighlightMeetingId] = useState<string | null>(null);
   const [expandedPostId, setExpandedPostId] = useState<string | null>(null);
   const [commentsByPost, setCommentsByPost] = useState<Record<string, CommentItem[]>>({});
   const [loadingCommentsByPost, setLoadingCommentsByPost] = useState<Record<string, boolean>>({});
@@ -181,6 +320,13 @@ const Community: React.FC = () => {
   const [replyDraftByComment, setReplyDraftByComment] = useState<Record<string, string>>({});
   const [submittingCommentForPost, setSubmittingCommentForPost] = useState<string | null>(null);
   const [submittingReplyForComment, setSubmittingReplyForComment] = useState<string | null>(null);
+  const [rsvpLoadingMeetingId, setRsvpLoadingMeetingId] = useState<string | null>(null);
+  const [meetingFieldErrors, setMeetingFieldErrors] = useState<MeetingFieldErrors>({});
+  const [meetingFormErrorSummary, setMeetingFormErrorSummary] = useState<string[]>([]);
+  const [showMeetingNotificationModal, setShowMeetingNotificationModal] = useState(false);
+  const [meetingNotificationSettings, setMeetingNotificationSettings] = useState<MeetingNotificationSettings | null>(null);
+  const [savingMeetingNotificationSettings, setSavingMeetingNotificationSettings] = useState(false);
+  const [sendingMeetingNotification, setSendingMeetingNotification] = useState<string | null>(null);
 
   const [adminForumForm, setAdminForumForm] = useState<AdminForumForm>({
     title: '',
@@ -218,15 +364,62 @@ const Community: React.FC = () => {
     tags: '',
   });
 
+  const [adminMeetingForm, setAdminMeetingForm] = useState<AdminMeetingForm>({
+    title: '',
+    description: '',
+    topic: '',
+    speakerName: '',
+    platform: 'google_meet',
+    meetingUrl: '',
+    meetingId: '',
+    passcode: '',
+    scheduledAt: '',
+    durationMinutes: '60',
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    recurrence: 'weekly',
+    maxCapacity: '',
+    tags: '',
+    notesLinks: '',
+    attachment: null,
+  });
+
   // Set active tab based on URL query parameter
   useEffect(() => {
     const tab = searchParams.get('tab');
-    if (tab === 'games') {
-      setActiveTab('games');
-    } else {
-      setActiveTab('forums');
+    if (tab && ALLOWED_COMMUNITY_TABS.includes(tab)) {
+      setActiveTab(tab);
+      return;
     }
+    setActiveTab('forums');
   }, [searchParams]);
+
+  useEffect(() => {
+    const meetingIdParam = searchParams.get('meetingId');
+    if (!meetingIdParam) {
+      return;
+    }
+    setActiveTab('meetings');
+    setHighlightMeetingId(meetingIdParam);
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!highlightMeetingId || activeTab !== 'meetings') {
+      return;
+    }
+    const element = document.getElementById(`meeting-card-${highlightMeetingId}`);
+    if (!element) {
+      return;
+    }
+
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const timeout = window.setTimeout(() => {
+      setHighlightMeetingId(null);
+    }, 2500);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [highlightMeetingId, activeTab, meetings]);
 
   useEffect(() => {
     const fetchForums = async () => {
@@ -265,12 +458,38 @@ const Community: React.FC = () => {
       }
     };
 
+    const fetchMeetings = async () => {
+      const headers = getAuthHeaders();
+      if (!headers) {
+        setMeetings([]);
+        return;
+      }
+
+      setLoadingMeetings(true);
+      try {
+        const response = await axios.get(`${API_URL}/community/meetings`, { headers });
+        setMeetings(response.data?.data?.meetings || []);
+      } catch {
+        setError('Unable to load meetings right now.');
+      } finally {
+        setLoadingMeetings(false);
+      }
+    };
+
     void fetchForums();
     void fetchPosts();
     void fetchEvents();
+    void fetchMeetings();
   }, []);
 
   const isAdminOrManager = hasRole(['superadmin', 'manager']);
+
+  useEffect(() => {
+    if (isAdminOrManager) {
+      void fetchMeetingNotificationSettings();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdminOrManager]);
 
   const getAuthHeaders = () => {
     const token = localStorage.getItem('token');
@@ -316,7 +535,39 @@ const Community: React.FC = () => {
     }
   };
 
-  const openAuthForCommunityAction = (tab: 'forums' | 'posts' | 'events') => {
+  const refreshMeetings = async () => {
+    const headers = getAuthHeaders();
+    if (!headers) {
+      setMeetings([]);
+      return;
+    }
+
+    setLoadingMeetings(true);
+    try {
+      const response = await axios.get(`${API_URL}/community/meetings`, { headers });
+      setMeetings(response.data?.data?.meetings || []);
+    } catch {
+      setError('Unable to refresh meetings.');
+    } finally {
+      setLoadingMeetings(false);
+    }
+  };
+
+  const fetchMeetingNotificationSettings = async () => {
+    const headers = getAuthHeaders();
+    if (!headers || !isAdminOrManager) {
+      return;
+    }
+
+    try {
+      const response = await axios.get(`${API_URL}/community/meeting-notification-settings`, { headers });
+      setMeetingNotificationSettings(response.data?.data?.settings || null);
+    } catch {
+      toast.error('Unable to load meeting notification settings');
+    }
+  };
+
+  const openAuthForCommunityAction = (tab: 'forums' | 'posts' | 'events' | 'meetings') => {
     navigate(`/auth?redirect=/community?tab=${tab}`);
   };
 
@@ -499,6 +750,135 @@ const Community: React.FC = () => {
     }
   };
 
+  const handleCreateMeeting = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setMeetingFieldErrors({});
+    setMeetingFormErrorSummary([]);
+
+    const headers = getAuthHeaders();
+    if (!headers) {
+      toast.error('Please login as admin to publish meeting');
+      openAuthForCommunityAction('meetings');
+      return;
+    }
+
+    const normalizedDate = adminMeetingForm.scheduledAt.trim();
+    if (!normalizedDate) {
+      toast.error('Please select meeting date and time');
+      return;
+    }
+
+    const parsedDuration = Number(adminMeetingForm.durationMinutes.trim());
+    if (!Number.isInteger(parsedDuration) || parsedDuration < 10) {
+      toast.error('Duration must be at least 10 minutes');
+      return;
+    }
+
+    const parsedMaxCapacity = adminMeetingForm.maxCapacity.trim().length > 0
+      ? Number(adminMeetingForm.maxCapacity.trim())
+      : undefined;
+
+    if (parsedMaxCapacity !== undefined && (!Number.isInteger(parsedMaxCapacity) || parsedMaxCapacity < 1)) {
+      toast.error('Max capacity must be a whole number greater than 0');
+      return;
+    }
+
+    if (!adminMeetingForm.meetingUrl.trim() && !adminMeetingForm.meetingId.trim()) {
+      setMeetingFieldErrors({ meetingUrl: 'Provide meeting URL or meeting ID' });
+      setMeetingFormErrorSummary(['Provide meeting URL or meeting ID']);
+      toast.error('Please fix highlighted fields');
+      return;
+    }
+
+    setCreatingMeeting(true);
+    try {
+      const payload = new FormData();
+      payload.append('title', adminMeetingForm.title);
+      payload.append('description', adminMeetingForm.description);
+      payload.append('topic', adminMeetingForm.topic);
+      payload.append('speakerName', adminMeetingForm.speakerName);
+      payload.append('platform', adminMeetingForm.platform);
+      payload.append('meetingUrl', adminMeetingForm.meetingUrl.trim());
+      payload.append('meetingId', adminMeetingForm.meetingId.trim());
+      payload.append('passcode', adminMeetingForm.passcode.trim());
+      payload.append('scheduledAt', new Date(normalizedDate).toISOString());
+      payload.append('durationMinutes', String(parsedDuration));
+      payload.append('timezone', adminMeetingForm.timezone);
+      payload.append('recurrence', adminMeetingForm.recurrence);
+      payload.append('tags', adminMeetingForm.tags);
+      payload.append('notesLinks', adminMeetingForm.notesLinks);
+
+      if (parsedMaxCapacity !== undefined) {
+        payload.append('maxCapacity', String(parsedMaxCapacity));
+      }
+      if (adminMeetingForm.attachment) {
+        payload.append('attachment', adminMeetingForm.attachment);
+      }
+
+      const response = editingMeetingId
+        ? await axios.put(`${API_URL}/community/meetings/${editingMeetingId}`, payload, { headers })
+        : await axios.post(`${API_URL}/community/meetings`, payload, { headers });
+
+      toast.success(response.data?.message || (editingMeetingId ? 'Meeting updated successfully' : 'Meeting published successfully'));
+      setShowCreateMeetingModal(false);
+      setEditingMeetingId(null);
+      setAdminMeetingForm({
+        title: '',
+        description: '',
+        topic: '',
+        speakerName: '',
+        platform: 'google_meet',
+        meetingUrl: '',
+        meetingId: '',
+        passcode: '',
+        scheduledAt: '',
+        durationMinutes: '60',
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+        recurrence: 'weekly',
+        maxCapacity: '',
+        tags: '',
+        notesLinks: '',
+        attachment: null,
+      });
+      await refreshMeetings();
+    } catch (err: any) {
+      const responseErrors = Array.isArray(err?.response?.data?.errors) ? err.response.data.errors : [];
+      const nextFieldErrors: MeetingFieldErrors = {};
+      const nextSummary: string[] = [];
+
+      responseErrors.forEach((item: any) => {
+        const field = String(item?.field || '').trim();
+        const message = String(item?.message || '').trim();
+        if (!message) {
+          return;
+        }
+        nextSummary.push(message);
+        if (field === 'title') nextFieldErrors.title = message;
+        if (field === 'description') nextFieldErrors.description = message;
+        if (field === 'topic') nextFieldErrors.topic = message;
+        if (field === 'speakerName') nextFieldErrors.speakerName = message;
+        if (field === 'meetingUrl') nextFieldErrors.meetingUrl = message;
+        if (field === 'meetingId') nextFieldErrors.meetingId = message;
+        if (field === 'scheduledAt') nextFieldErrors.scheduledAt = message;
+        if (field === 'durationMinutes') nextFieldErrors.durationMinutes = message;
+        if (field === 'timezone') nextFieldErrors.timezone = message;
+        if (field === 'recurrence') nextFieldErrors.recurrence = message;
+        if (field === 'maxCapacity') nextFieldErrors.maxCapacity = message;
+        if (field === 'attachment') nextFieldErrors.attachment = message;
+      });
+
+      if (nextSummary.length > 0) {
+        setMeetingFieldErrors(nextFieldErrors);
+        setMeetingFormErrorSummary(Array.from(new Set(nextSummary)));
+        toast.error('Please fix highlighted fields');
+      } else {
+        toast.error(err?.response?.data?.message || 'Failed to publish meeting');
+      }
+    } finally {
+      setCreatingMeeting(false);
+    }
+  };
+
   const openEditForumModal = (forum: Forum) => {
     setEditingForumId(forum.id);
     setAdminForumForm({
@@ -527,6 +907,29 @@ const Community: React.FC = () => {
       attachment: null,
     });
     setShowCreatePostModal(true);
+  };
+
+  const openEditMeetingModal = (meeting: Meeting) => {
+    setEditingMeetingId(meeting.id);
+    setAdminMeetingForm({
+      title: meeting.title || '',
+      description: meeting.description || '',
+      topic: meeting.topic || '',
+      speakerName: meeting.speakerName || '',
+      platform: meeting.platform || 'google_meet',
+      meetingUrl: meeting.meetingUrl || '',
+      meetingId: meeting.meetingId || '',
+      passcode: meeting.passcode || '',
+      scheduledAt: new Date(meeting.scheduledAt).toISOString().slice(0, 16),
+      durationMinutes: String(meeting.durationMinutes || 60),
+      timezone: meeting.timezone || (Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'),
+      recurrence: meeting.recurrence || 'none',
+      maxCapacity: meeting.maxCapacity ? String(meeting.maxCapacity) : '',
+      tags: Array.isArray(meeting.tags) ? meeting.tags.join(', ') : '',
+      notesLinks: Array.isArray(meeting.notesLinks) ? meeting.notesLinks.join(', ') : '',
+      attachment: null,
+    });
+    setShowCreateMeetingModal(true);
   };
 
   const handleDeleteForum = async (forum: Forum) => {
@@ -576,6 +979,180 @@ const Community: React.FC = () => {
       toast.error(err?.response?.data?.message || 'Failed to delete post');
     } finally {
       setDeletingPostId(null);
+    }
+  };
+
+  const handleCancelMeeting = async (meeting: Meeting) => {
+    const headers = getAuthHeaders();
+    if (!headers) {
+      toast.error('Please login as admin to cancel meeting');
+      openAuthForCommunityAction('meetings');
+      return;
+    }
+
+    const confirmed = window.confirm(`Cancel meeting "${meeting.title}"?`);
+    if (!confirmed) {
+      return;
+    }
+
+    setCancelingMeetingId(meeting.id);
+    try {
+      const response = await axios.delete(`${API_URL}/community/meetings/${meeting.id}`, { headers });
+      toast.success(response.data?.message || 'Meeting canceled successfully');
+      await refreshMeetings();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to cancel meeting');
+    } finally {
+      setCancelingMeetingId(null);
+    }
+  };
+
+  const handleDeleteCanceledMeeting = async (meeting: Meeting) => {
+    const headers = getAuthHeaders();
+    if (!headers) {
+      toast.error('Please login as admin to delete meeting');
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete canceled meeting "${meeting.title}" permanently?`);
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingMeetingId(meeting.id);
+    try {
+      const response = await axios.delete(`${API_URL}/community/meetings/${meeting.id}/permanent`, { headers });
+      toast.success(response.data?.message || 'Meeting removed from list');
+      setMeetings((prev) => prev.filter((item) => item.id !== meeting.id));
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to delete meeting');
+    } finally {
+      setDeletingMeetingId(null);
+    }
+  };
+
+  const handleMeetingRsvp = async (meeting: Meeting, action: 'join' | 'leave') => {
+    const headers = getAuthHeaders();
+    if (!headers) {
+      toast.error('Please login to RSVP');
+      openAuthForCommunityAction('meetings');
+      return;
+    }
+
+    setRsvpLoadingMeetingId(meeting.id);
+    try {
+      const endpoint = action === 'join' ? 'rsvp' : 'leave';
+      const response = await axios.post(`${API_URL}/community/meetings/${meeting.id}/${endpoint}`, {}, { headers });
+      setMeetings((prev) => prev.map((item) => (item.id === meeting.id ? response.data?.data?.meeting : item)));
+      toast.success(action === 'join' ? 'RSVP confirmed' : 'RSVP removed');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Unable to update RSVP');
+    } finally {
+      setRsvpLoadingMeetingId(null);
+    }
+  };
+
+  const copyMeetingDetails = async (meeting: Meeting) => {
+    const lines = [
+      `Topic: ${meeting.topic}`,
+      `Speaker: ${meeting.speakerName}`,
+      `When: ${new Date(meeting.scheduledAt).toLocaleString()} (${meeting.timezone})`,
+      `Platform: ${formatPlatformName(meeting.platform)}`,
+      meeting.meetingUrl ? `Join link: ${meeting.meetingUrl}` : '',
+      meeting.meetingId ? `Meeting ID: ${meeting.meetingId}` : '',
+      meeting.passcode ? `Passcode: ${meeting.passcode}` : '',
+    ].filter(Boolean);
+
+    const text = lines.join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success('Meeting details copied');
+    } catch {
+      toast.error('Unable to copy details on this browser');
+    }
+  };
+
+  const getMeetingPageShareUrl = (meetingId: string): string => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    return `${origin}/community?tab=meetings&meetingId=${meetingId}`;
+  };
+
+  const handleShareMeeting = async (meeting: Meeting) => {
+    const shareUrl = getMeetingPageShareUrl(meeting.id);
+    const shareTitle = `${meeting.title} - HikmahSphere Community Meeting`;
+    const shareText = `${meeting.topic} by ${meeting.speakerName}. Join from HikmahSphere.`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: shareTitle, text: shareText, url: shareUrl });
+        return;
+      } catch {
+        // Ignore and fallback to clipboard below.
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      toast.success('Meeting page link copied');
+    } catch {
+      toast.error('Unable to share link on this browser');
+    }
+  };
+
+  const handleShareMeetingWhatsApp = (meeting: Meeting) => {
+    const shareUrl = getMeetingPageShareUrl(meeting.id);
+    const text = encodeURIComponent(`Join this HikmahSphere meeting: ${meeting.title}\n${shareUrl}`);
+    window.open(`https://wa.me/?text=${text}`, '_blank', 'noopener,noreferrer');
+  };
+
+  const saveMeetingNotificationSettings = async () => {
+    const headers = getAuthHeaders();
+    if (!headers || !meetingNotificationSettings) {
+      return;
+    }
+
+    setSavingMeetingNotificationSettings(true);
+    try {
+      const response = await axios.put(
+        `${API_URL}/community/meeting-notification-settings`,
+        meetingNotificationSettings,
+        { headers }
+      );
+      setMeetingNotificationSettings(response.data?.data?.settings || meetingNotificationSettings);
+      toast.success('Meeting notification settings saved');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to save notification settings');
+    } finally {
+      setSavingMeetingNotificationSettings(false);
+    }
+  };
+
+  const sendMeetingNotificationNow = async (meeting: Meeting, audience: 'all_registered' | 'rsvped_only') => {
+    const headers = getAuthHeaders();
+    if (!headers) {
+      toast.error('Please login as admin/manager');
+      return;
+    }
+
+    setSendingMeetingNotification(meeting.id);
+    try {
+      const response = await axios.post(
+        `${API_URL}/community/meetings/${meeting.id}/send-notification`,
+        {
+          audience,
+          channels: meeting.notificationConfig?.channels || meetingNotificationSettings?.defaults.channels || ['push', 'email'],
+          note: 'Manual invite from HikmahSphere',
+        },
+        { headers }
+      );
+
+      const summary = response.data?.data?.summary;
+      toast.success(`Sent now: push ${summary?.pushSent || 0}, email ${summary?.emailSent || 0}`);
+      await refreshMeetings();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to send notifications now');
+    } finally {
+      setSendingMeetingNotification(null);
     }
   };
 
@@ -656,10 +1233,25 @@ const Community: React.FC = () => {
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [events]);
 
+  const upcomingMeetings = useMemo(() => {
+    return [...meetings]
+      .filter((meeting) => meeting.status === 'scheduled' && new Date(meeting.scheduledAt).getTime() >= Date.now())
+      .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
+  }, [meetings]);
+
+  const pastMeetings = useMemo(() => {
+    return [...meetings]
+      .filter((meeting) => meeting.status !== 'scheduled' || new Date(meeting.scheduledAt).getTime() < Date.now())
+      .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime());
+  }, [meetings]);
+
+  const nextMeeting = upcomingMeetings[0] || null;
+
   const tabs = [
     { id: 'forums', name: 'Forums', icon: ChatBubbleLeftIcon },
     { id: 'posts', name: 'Recent Posts', icon: UserGroupIcon },
     { id: 'events', name: 'Events', icon: CalendarDaysIcon },
+    { id: 'meetings', name: 'Meetings', icon: VideoCameraIcon },
     { id: 'games', name: 'Games', icon: TrophyIcon },
   ];
 
@@ -793,6 +1385,48 @@ const Community: React.FC = () => {
               >
                 <PlusIcon className="h-4 w-4" />
                 Create Event
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingMeetingId(null);
+                  setMeetingFieldErrors({});
+                  setMeetingFormErrorSummary([]);
+                  setAdminMeetingForm({
+                    title: '',
+                    description: '',
+                    topic: '',
+                    speakerName: '',
+                    platform: 'google_meet',
+                    meetingUrl: '',
+                    meetingId: '',
+                    passcode: '',
+                    scheduledAt: '',
+                    durationMinutes: '60',
+                    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+                    recurrence: 'weekly',
+                    maxCapacity: '',
+                    tags: '',
+                    notesLinks: '',
+                    attachment: null,
+                  });
+                  setShowCreateMeetingModal(true);
+                }}
+                className="inline-flex items-center gap-1 bg-sky-600 text-white px-4 py-2 rounded-md hover:bg-sky-700 transition-colors"
+              >
+                <PlusIcon className="h-4 w-4" />
+                Publish Meeting
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMeetingNotificationModal(true);
+                  void fetchMeetingNotificationSettings();
+                }}
+                className="inline-flex items-center gap-1 bg-violet-600 text-white px-4 py-2 rounded-md hover:bg-violet-700 transition-colors"
+              >
+                <BellAlertIcon className="h-4 w-4" />
+                Meeting Alerts Settings
               </button>
             </div>
           </div>
@@ -1075,6 +1709,269 @@ const Community: React.FC = () => {
           </div>
         )}
 
+        {/* Meetings Tab */}
+        {activeTab === 'meetings' && (
+          <div className="space-y-5">
+            {!getAuthHeaders() && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-amber-800">Login required for meetings</p>
+                  <p className="text-sm text-amber-700">Sign in to view join links, RSVP, and receive session updates.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => openAuthForCommunityAction('meetings')}
+                  className="rounded-md bg-amber-600 text-white px-4 py-2 hover:bg-amber-700 w-full sm:w-auto"
+                >
+                  Login to Continue
+                </button>
+              </div>
+            )}
+
+            {getAuthHeaders() && loadingMeetings && renderLoadingCards(3)}
+
+            {getAuthHeaders() && !loadingMeetings && nextMeeting && (
+              <div className="rounded-2xl bg-gradient-to-r from-sky-700 via-cyan-700 to-teal-700 text-white p-6 shadow-lg">
+                <p className="text-xs uppercase tracking-[0.18em] text-cyan-100 mb-2">Next Quran Session</p>
+                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                  <div>
+                    <h3 className="text-2xl font-bold mb-2">{nextMeeting.title}</h3>
+                    <p className="text-cyan-50 mb-3">{truncate(nextMeeting.description, 240)}</p>
+                    <div className="flex flex-wrap gap-3 text-sm text-cyan-100">
+                      <span className="inline-flex items-center gap-1">
+                        <ClockIcon className="h-4 w-4" />
+                        {new Date(nextMeeting.scheduledAt).toLocaleString()} ({nextMeeting.timezone})
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <UserGroupIcon className="h-4 w-4" />
+                        {nextMeeting.attendees}{nextMeeting.maxCapacity ? ` / ${nextMeeting.maxCapacity}` : ''} RSVP
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <VideoCameraIcon className="h-4 w-4" />
+                        {formatPlatformName(nextMeeting.platform)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="rounded-xl bg-white/15 border border-white/25 px-4 py-3 text-center min-w-[160px]">
+                    <p className="text-xs uppercase tracking-wide text-cyan-100 mb-1">Starts in</p>
+                    <p className="text-xl font-bold">{formatMeetingCountdown(nextMeeting.scheduledAt)}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {getAuthHeaders() && !loadingMeetings && upcomingMeetings.length === 0 && renderEmptyState('No upcoming meetings yet. Admin and manager can publish the next weekly dars here.')}
+
+            {getAuthHeaders() && !loadingMeetings && upcomingMeetings.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold text-gray-900">Upcoming Meetings</h3>
+                {upcomingMeetings.map((meeting) => (
+                  <div
+                    id={`meeting-card-${meeting.id}`}
+                    key={meeting.id}
+                    className={`bg-white rounded-xl border shadow-sm p-5 transition-all ${highlightMeetingId === meeting.id ? 'border-emerald-400 ring-2 ring-emerald-200' : 'border-sky-100'}`}
+                  >
+                    <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          <h4 className="text-lg font-semibold text-gray-900">{meeting.title}</h4>
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full border text-xs font-semibold bg-sky-100 text-sky-700 border-sky-200">
+                            {formatPlatformName(meeting.platform)}
+                          </span>
+                          {meeting.recurrence === 'weekly' && (
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-full border text-xs font-semibold bg-emerald-100 text-emerald-700 border-emerald-200">
+                              Weekly
+                            </span>
+                          )}
+                          {meeting.recurrence === 'biweekly' && (
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-full border text-xs font-semibold bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200">
+                              Once in 2 weeks
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="text-sm text-gray-700 mb-3">{truncate(meeting.description, 220)}</p>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-gray-600">
+                          <p><span className="font-semibold">Topic:</span> {meeting.topic}</p>
+                          <p><span className="font-semibold">Speaker:</span> {meeting.speakerName}</p>
+                          <p><span className="font-semibold">When:</span> {new Date(meeting.scheduledAt).toLocaleString()}</p>
+                          <p><span className="font-semibold">Duration:</span> {meeting.durationMinutes} min</p>
+                          <p><span className="font-semibold">RSVP:</span> {meeting.attendees}{meeting.maxCapacity ? ` / ${meeting.maxCapacity}` : ''}</p>
+                        </div>
+
+                        {Array.isArray(meeting.notesLinks) && meeting.notesLinks.length > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {meeting.notesLinks.slice(0, 3).map((link) => (
+                              <a
+                                key={link}
+                                href={link}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-xs font-semibold text-cyan-700 bg-cyan-50 border border-cyan-100 rounded-full px-3 py-1 hover:bg-cyan-100"
+                              >
+                                Notes
+                                <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" />
+                              </a>
+                            ))}
+                          </div>
+                        )}
+
+                        {meeting.attachment?.url && (
+                          <div className="mt-3">
+                            <a
+                              href={meeting.attachment.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-100 rounded-full px-3 py-1 hover:bg-blue-100"
+                            >
+                              Download Material
+                              <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" />
+                            </a>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex flex-col gap-2 w-full md:w-44">
+                        {meeting.meetingUrl ? (
+                          <a
+                            href={meeting.meetingUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center justify-center gap-1.5 rounded-md bg-sky-600 text-white px-3 py-2 hover:bg-sky-700"
+                          >
+                            <VideoCameraIcon className="h-4 w-4" />
+                            Join Meeting
+                          </a>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled
+                            className="rounded-md bg-gray-200 text-gray-500 px-3 py-2"
+                          >
+                            Link not added
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => copyMeetingDetails(meeting)}
+                          className="inline-flex items-center justify-center gap-1.5 rounded-md bg-white text-slate-700 border border-slate-200 px-3 py-2 hover:bg-slate-50"
+                        >
+                          <ClipboardDocumentIcon className="h-4 w-4" />
+                          Copy Details
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleShareMeeting(meeting)}
+                          className="inline-flex items-center justify-center gap-1.5 rounded-md bg-white text-violet-700 border border-violet-200 px-3 py-2 hover:bg-violet-50"
+                        >
+                          <ShareIcon className="h-4 w-4" />
+                          Share Link
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleShareMeetingWhatsApp(meeting)}
+                          className="inline-flex items-center justify-center gap-1.5 rounded-md bg-green-600 text-white px-3 py-2 hover:bg-green-700"
+                        >
+                          WhatsApp
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={rsvpLoadingMeetingId === meeting.id}
+                          onClick={() => handleMeetingRsvp(meeting, meeting.isJoined ? 'leave' : 'join')}
+                          className={`rounded-md px-3 py-2 text-white ${meeting.isJoined ? 'bg-slate-600 hover:bg-slate-700' : 'bg-emerald-600 hover:bg-emerald-700'} disabled:opacity-60`}
+                        >
+                          {rsvpLoadingMeetingId === meeting.id ? 'Updating...' : (meeting.isJoined ? 'Leave RSVP' : 'RSVP Join')}
+                        </button>
+
+                        {isAdminOrManager && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => openEditMeetingModal(meeting)}
+                              className="rounded-md bg-amber-500 text-white px-3 py-2 hover:bg-amber-600"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              disabled={cancelingMeetingId === meeting.id}
+                              onClick={() => handleCancelMeeting(meeting)}
+                              className="rounded-md bg-rose-600 text-white px-3 py-2 hover:bg-rose-700 disabled:opacity-60"
+                            >
+                              {cancelingMeetingId === meeting.id ? 'Canceling...' : 'Cancel'}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={sendingMeetingNotification === meeting.id}
+                              onClick={() => sendMeetingNotificationNow(meeting, 'all_registered')}
+                              className="rounded-md bg-violet-600 text-white px-3 py-2 hover:bg-violet-700 disabled:opacity-60"
+                            >
+                              {sendingMeetingNotification === meeting.id ? 'Sending...' : 'Send Now All'}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={sendingMeetingNotification === meeting.id}
+                              onClick={() => sendMeetingNotificationNow(meeting, 'rsvped_only')}
+                              className="rounded-md bg-indigo-600 text-white px-3 py-2 hover:bg-indigo-700 disabled:opacity-60"
+                            >
+                              RSVP Only
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {getAuthHeaders() && !loadingMeetings && pastMeetings.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold text-gray-900">Past and Closed Meetings</h3>
+                {pastMeetings.slice(0, 8).map((meeting) => (
+                  <div id={`meeting-card-${meeting.id}`} key={meeting.id} className="bg-white rounded-xl border border-gray-100 p-4">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                      <div>
+                        <p className="font-semibold text-gray-900">{meeting.title}</p>
+                        <p className="text-sm text-gray-600">{meeting.topic} • {new Date(meeting.scheduledAt).toLocaleString()}</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleShareMeeting(meeting)}
+                            className="inline-flex items-center gap-1 text-xs text-violet-700 border border-violet-200 rounded-full px-2.5 py-1 hover:bg-violet-50"
+                          >
+                            <ShareIcon className="h-3.5 w-3.5" />
+                            Share
+                          </button>
+                          {meeting.status === 'canceled' && isAdminOrManager && (
+                            <button
+                              type="button"
+                              disabled={deletingMeetingId === meeting.id}
+                              onClick={() => handleDeleteCanceledMeeting(meeting)}
+                              className="inline-flex items-center gap-1 text-xs text-rose-700 border border-rose-200 rounded-full px-2.5 py-1 hover:bg-rose-50 disabled:opacity-60"
+                            >
+                              <TrashIcon className="h-3.5 w-3.5" />
+                              {deletingMeetingId === meeting.id ? 'Deleting...' : 'Delete Permanently'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full border text-xs font-semibold ${meeting.status === 'canceled' ? 'bg-rose-100 text-rose-700 border-rose-200' : 'bg-slate-100 text-slate-700 border-slate-200'}`}>
+                        {meeting.status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Games Tab */}
         {activeTab === 'games' && (
           <IslamicGames />
@@ -1320,6 +2217,383 @@ const Community: React.FC = () => {
                 {creatingEvent ? 'Creating Event...' : 'Publish Event'}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showCreateMeetingModal && (
+        <div
+          className="fixed inset-0 bg-gray-900/50 z-50 flex items-center justify-center p-4"
+          onClick={() => {
+            setShowCreateMeetingModal(false);
+            setEditingMeetingId(null);
+            setMeetingFieldErrors({});
+            setMeetingFormErrorSummary([]);
+          }}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 sticky top-0 bg-white">
+              <h3 className="text-lg font-bold text-gray-900">{editingMeetingId ? 'Edit Meeting' : 'Publish Meeting'}</h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCreateMeetingModal(false);
+                  setEditingMeetingId(null);
+                  setMeetingFieldErrors({});
+                  setMeetingFormErrorSummary([]);
+                }}
+                className="p-1 rounded hover:bg-gray-100"
+              >
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateMeeting} className="p-4 space-y-4">
+              {meetingFormErrorSummary.length > 0 && (
+                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  <p className="font-semibold mb-1">Please fix these fields:</p>
+                  <ul className="list-disc ml-5">
+                    {meetingFormErrorSummary.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <input
+                required
+                value={adminMeetingForm.title}
+                onChange={(event) => setAdminMeetingForm((prev) => ({ ...prev, title: event.target.value }))}
+                placeholder="Meeting title"
+                className={`w-full rounded-md px-3 py-2 ${meetingFieldErrors.title ? 'border border-red-400' : 'border border-gray-300'}`}
+              />
+              {meetingFieldErrors.title && <p className="text-xs text-red-600">{meetingFieldErrors.title}</p>}
+
+              <textarea
+                required
+                value={adminMeetingForm.description}
+                onChange={(event) => setAdminMeetingForm((prev) => ({ ...prev, description: event.target.value }))}
+                placeholder="Meeting description"
+                rows={4}
+                className={`w-full rounded-md px-3 py-2 ${meetingFieldErrors.description ? 'border border-red-400' : 'border border-gray-300'}`}
+              />
+              {meetingFieldErrors.description && <p className="text-xs text-red-600">{meetingFieldErrors.description}</p>}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <input
+                  required
+                  value={adminMeetingForm.topic}
+                  onChange={(event) => setAdminMeetingForm((prev) => ({ ...prev, topic: event.target.value }))}
+                  placeholder="Topic (e.g., Surah Yasin Tafsir)"
+                  className={`w-full rounded-md px-3 py-2 ${meetingFieldErrors.topic ? 'border border-red-400' : 'border border-gray-300'}`}
+                />
+                <input
+                  required
+                  value={adminMeetingForm.speakerName}
+                  onChange={(event) => setAdminMeetingForm((prev) => ({ ...prev, speakerName: event.target.value }))}
+                  placeholder="Speaker name"
+                  className={`w-full rounded-md px-3 py-2 ${meetingFieldErrors.speakerName ? 'border border-red-400' : 'border border-gray-300'}`}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <select
+                  required
+                  value={adminMeetingForm.platform}
+                  onChange={(event) => setAdminMeetingForm((prev) => ({
+                    ...prev,
+                    platform: event.target.value as AdminMeetingForm['platform'],
+                  }))}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2"
+                >
+                  <option value="google_meet">Google Meet</option>
+                  <option value="zoom">Zoom</option>
+                  <option value="teams">Microsoft Teams</option>
+                  <option value="jitsi">Jitsi</option>
+                  <option value="other">Other</option>
+                </select>
+
+                <input
+                  required
+                  type="datetime-local"
+                  value={adminMeetingForm.scheduledAt}
+                  onChange={(event) => setAdminMeetingForm((prev) => ({ ...prev, scheduledAt: event.target.value }))}
+                  className={`w-full rounded-md px-3 py-2 ${meetingFieldErrors.scheduledAt ? 'border border-red-400' : 'border border-gray-300'}`}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <input
+                  required
+                  value={adminMeetingForm.durationMinutes}
+                  onChange={(event) => setAdminMeetingForm((prev) => ({ ...prev, durationMinutes: event.target.value }))}
+                  placeholder="Duration (min)"
+                  className="w-full rounded-md border border-gray-300 px-3 py-2"
+                />
+                <input
+                  required
+                  value={adminMeetingForm.timezone}
+                  onChange={(event) => setAdminMeetingForm((prev) => ({ ...prev, timezone: event.target.value }))}
+                  placeholder="Timezone"
+                  className="w-full rounded-md border border-gray-300 px-3 py-2"
+                />
+                <select
+                  value={adminMeetingForm.recurrence}
+                  onChange={(event) => setAdminMeetingForm((prev) => ({
+                    ...prev,
+                    recurrence: event.target.value as AdminMeetingForm['recurrence'],
+                  }))}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2"
+                >
+                  <option value="none">One-time</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="biweekly">Once in 2 weeks</option>
+                </select>
+              </div>
+
+              <input
+                value={adminMeetingForm.meetingUrl}
+                onChange={(event) => setAdminMeetingForm((prev) => ({ ...prev, meetingUrl: event.target.value }))}
+                placeholder="Meeting URL (recommended)"
+                className={`w-full rounded-md px-3 py-2 ${meetingFieldErrors.meetingUrl ? 'border border-red-400' : 'border border-gray-300'}`}
+              />
+              {meetingFieldErrors.meetingUrl && <p className="text-xs text-red-600">{meetingFieldErrors.meetingUrl}</p>}
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <input
+                  value={adminMeetingForm.meetingId}
+                  onChange={(event) => setAdminMeetingForm((prev) => ({ ...prev, meetingId: event.target.value }))}
+                  placeholder="Meeting ID (optional)"
+                  className="w-full rounded-md border border-gray-300 px-3 py-2"
+                />
+                <input
+                  value={adminMeetingForm.passcode}
+                  onChange={(event) => setAdminMeetingForm((prev) => ({ ...prev, passcode: event.target.value }))}
+                  placeholder="Passcode (optional)"
+                  className="w-full rounded-md border border-gray-300 px-3 py-2"
+                />
+                <input
+                  value={adminMeetingForm.maxCapacity}
+                  onChange={(event) => setAdminMeetingForm((prev) => ({ ...prev, maxCapacity: event.target.value }))}
+                  placeholder="Max capacity (optional)"
+                  className="w-full rounded-md border border-gray-300 px-3 py-2"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <input
+                  value={adminMeetingForm.tags}
+                  onChange={(event) => setAdminMeetingForm((prev) => ({ ...prev, tags: event.target.value }))}
+                  placeholder="Tags comma-separated (optional)"
+                  className="w-full rounded-md border border-gray-300 px-3 py-2"
+                />
+                <input
+                  value={adminMeetingForm.notesLinks}
+                  onChange={(event) => setAdminMeetingForm((prev) => ({ ...prev, notesLinks: event.target.value }))}
+                  placeholder="Notes/material links comma-separated"
+                  className="w-full rounded-md border border-gray-300 px-3 py-2"
+                />
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-700 mb-1">Attach Meeting Material (optional)</p>
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx,.ppt,.pptx,.jpg,.jpeg,.png,.webp"
+                  onChange={(event) => setAdminMeetingForm((prev) => ({ ...prev, attachment: event.target.files?.[0] || null }))}
+                  className={`w-full rounded-md px-3 py-2 text-sm ${meetingFieldErrors.attachment ? 'border border-red-400' : 'border border-gray-300'}`}
+                />
+                <p className="text-xs text-gray-500 mt-1">Allowed: PDF, DOC, DOCX, PPT, PPTX, JPG, PNG, WEBP. Max 10 MB.</p>
+                {meetingFieldErrors.attachment && <p className="text-xs text-red-600">{meetingFieldErrors.attachment}</p>}
+              </div>
+
+              <button type="submit" disabled={creatingMeeting} className="w-full bg-sky-600 text-white py-2.5 rounded-md hover:bg-sky-700 disabled:opacity-60">
+                {creatingMeeting ? (editingMeetingId ? 'Updating Meeting...' : 'Publishing Meeting...') : (editingMeetingId ? 'Update Meeting' : 'Publish Meeting')}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showMeetingNotificationModal && (
+        <div
+          className="fixed inset-0 bg-gray-900/50 z-50 flex items-center justify-center p-4"
+          onClick={() => setShowMeetingNotificationModal(false)}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 sticky top-0 bg-white">
+              <h3 className="text-lg font-bold text-gray-900">Meeting Notification Settings</h3>
+              <button
+                type="button"
+                onClick={() => setShowMeetingNotificationModal(false)}
+                className="p-1 rounded hover:bg-gray-100"
+              >
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+            </div>
+
+            {!meetingNotificationSettings && (
+              <div className="p-6 text-sm text-gray-600">Loading settings...</div>
+            )}
+
+            {meetingNotificationSettings && (
+              <div className="p-4 space-y-4">
+                <div className="rounded-xl border border-violet-100 bg-violet-50 px-4 py-3">
+                  <p className="text-sm font-semibold text-violet-800">Advanced Reminder Engine</p>
+                  <p className="text-xs text-violet-700">Configure default channels, lead times, one-time vs multiple sends, and branded email template for all registered users.</p>
+                </div>
+
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={meetingNotificationSettings.defaults.enabled}
+                    onChange={(event) => setMeetingNotificationSettings((prev) => prev ? {
+                      ...prev,
+                      defaults: { ...prev.defaults, enabled: event.target.checked },
+                    } : prev)}
+                    className="rounded border-gray-300"
+                  />
+                  Enable meeting reminders globally
+                </label>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <select
+                    value={meetingNotificationSettings.defaults.mode}
+                    onChange={(event) => setMeetingNotificationSettings((prev) => prev ? {
+                      ...prev,
+                      defaults: { ...prev.defaults, mode: event.target.value as 'once' | 'multiple' },
+                    } : prev)}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2"
+                  >
+                    <option value="multiple">Send multiple reminders</option>
+                    <option value="once">Send only once</option>
+                  </select>
+
+                  <select
+                    value={meetingNotificationSettings.defaults.audience}
+                    onChange={(event) => setMeetingNotificationSettings((prev) => prev ? {
+                      ...prev,
+                      defaults: { ...prev.defaults, audience: event.target.value as 'all_registered' | 'rsvped_only' },
+                    } : prev)}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2"
+                  >
+                    <option value="all_registered">Audience: all registered users</option>
+                    <option value="rsvped_only">Audience: RSVP users only</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <input
+                    value={meetingNotificationSettings.defaults.reminderMinutes.join(', ')}
+                    onChange={(event) => {
+                      const minutes = event.target.value
+                        .split(',')
+                        .map((item) => Number(item.trim()))
+                        .filter((item) => Number.isFinite(item) && item > 0)
+                        .sort((a, b) => b - a);
+                      setMeetingNotificationSettings((prev) => prev ? {
+                        ...prev,
+                        defaults: { ...prev.defaults, reminderMinutes: minutes },
+                      } : prev);
+                    }}
+                    placeholder="Reminder minutes e.g. 1440,60,15"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2"
+                  />
+                  <input
+                    value={meetingNotificationSettings.defaults.channels.join(', ')}
+                    onChange={(event) => {
+                      const channels = event.target.value
+                        .split(',')
+                        .map((item) => item.trim().toLowerCase())
+                        .filter((item) => item === 'push' || item === 'email') as Array<'push' | 'email'>;
+                      setMeetingNotificationSettings((prev) => prev ? {
+                        ...prev,
+                        defaults: { ...prev.defaults, channels },
+                      } : prev);
+                    }}
+                    placeholder="Channels: push,email"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <input
+                    value={meetingNotificationSettings.emailTemplate.subjectPrefix}
+                    onChange={(event) => setMeetingNotificationSettings((prev) => prev ? {
+                      ...prev,
+                      emailTemplate: { ...prev.emailTemplate, subjectPrefix: event.target.value },
+                    } : prev)}
+                    placeholder="Email subject prefix"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2"
+                  />
+                  <input
+                    value={meetingNotificationSettings.emailTemplate.logoUrl}
+                    onChange={(event) => setMeetingNotificationSettings((prev) => prev ? {
+                      ...prev,
+                      emailTemplate: { ...prev.emailTemplate, logoUrl: event.target.value },
+                    } : prev)}
+                    placeholder="Logo URL"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2"
+                  />
+                </div>
+
+                <input
+                  value={meetingNotificationSettings.emailTemplate.headerTitle}
+                  onChange={(event) => setMeetingNotificationSettings((prev) => prev ? {
+                    ...prev,
+                    emailTemplate: { ...prev.emailTemplate, headerTitle: event.target.value },
+                  } : prev)}
+                  placeholder="Email header title"
+                  className="w-full rounded-md border border-gray-300 px-3 py-2"
+                />
+
+                <textarea
+                  value={meetingNotificationSettings.emailTemplate.footerText}
+                  onChange={(event) => setMeetingNotificationSettings((prev) => prev ? {
+                    ...prev,
+                    emailTemplate: { ...prev.emailTemplate, footerText: event.target.value },
+                  } : prev)}
+                  placeholder="Footer text"
+                  rows={3}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2"
+                />
+
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={meetingNotificationSettings.emailTemplate.includeAdvertisement}
+                    onChange={(event) => setMeetingNotificationSettings((prev) => prev ? {
+                      ...prev,
+                      emailTemplate: { ...prev.emailTemplate, includeAdvertisement: event.target.checked },
+                    } : prev)}
+                    className="rounded border-gray-300"
+                  />
+                  Include advertisement text in invites
+                </label>
+
+                {meetingNotificationSettings.emailTemplate.includeAdvertisement && (
+                  <textarea
+                    value={meetingNotificationSettings.emailTemplate.advertisementText || ''}
+                    onChange={(event) => setMeetingNotificationSettings((prev) => prev ? {
+                      ...prev,
+                      emailTemplate: { ...prev.emailTemplate, advertisementText: event.target.value },
+                    } : prev)}
+                    placeholder="Advertisement message (optional)"
+                    rows={3}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2"
+                  />
+                )}
+
+                <button
+                  type="button"
+                  onClick={saveMeetingNotificationSettings}
+                  disabled={savingMeetingNotificationSettings}
+                  className="w-full bg-violet-600 text-white py-2.5 rounded-md hover:bg-violet-700 disabled:opacity-60"
+                >
+                  {savingMeetingNotificationSettings ? 'Saving...' : 'Save Notification Settings'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

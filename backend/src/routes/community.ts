@@ -6,11 +6,17 @@ import multer from 'multer';
 import { body, query, validationResult } from 'express-validator';
 import { authMiddleware, adminMiddleware, optionalAuthMiddleware } from '../middleware/auth';
 import { logUserActivity } from '../middleware/activityLogger';
+import { sendMulticastNotification } from '../config/firebaseAdmin';
 import CommunityForum from '../models/CommunityForum';
 import CommunityPost from '../models/CommunityPost';
 import CommunityEvent from '../models/CommunityEvent';
+import CommunityMeeting from '../models/CommunityMeeting';
+import MeetingNotificationSettings from '../models/MeetingNotificationSettings';
 import CommunityForumMember from '../models/CommunityForumMember';
 import CommunityComment from '../models/CommunityComment';
+import User from '../models/User';
+import UserNotification from '../models/UserNotification';
+import { sendMeetingEmails } from '../services/meetingEmailService';
 
 const router = express.Router();
 
@@ -24,7 +30,20 @@ type AuthenticatedRequest = Request & {
 };
 
 const EVENT_TYPES = ['prayer', 'iftar', 'lecture', 'study', 'charity', 'social'] as const;
-const MAX_COMMUNITY_UPLOAD_BYTES = 6 * 1024 * 1024;
+const MEETING_PLATFORMS = ['google_meet', 'zoom', 'teams', 'jitsi', 'other'] as const;
+const MEETING_RECURRENCE_TYPES = ['none', 'weekly', 'biweekly'] as const;
+const MEETING_STATUSES = ['scheduled', 'completed', 'canceled'] as const;
+const MAX_COMMUNITY_UPLOAD_BYTES = 10 * 1024 * 1024;
+const MEETING_ATTACHMENT_MIME_ALLOWLIST = new Set([
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+]);
 
 const isProduction = process.env.NODE_ENV === 'production' || fs.existsSync('/var/www/hikmah/uploads');
 const communityUploadsDir = isProduction
@@ -53,11 +72,12 @@ const communityUpload = multer({
     const mime = file.mimetype;
     const isImage = ['.jpg', '.jpeg', '.png', '.webp'].includes(ext) && /^image\//.test(mime);
     const isPdf = ext === '.pdf' && mime === 'application/pdf';
-    if (isImage || isPdf) {
+    const isDocument = ['.doc', '.docx', '.ppt', '.pptx'].includes(ext) && MEETING_ATTACHMENT_MIME_ALLOWLIST.has(mime);
+    if (isImage || isPdf || isDocument) {
       cb(null, true);
       return;
     }
-    cb(new Error('Only jpg, jpeg, png, webp, and pdf files are allowed'));
+    cb(new Error('Only jpg, jpeg, png, webp, pdf, doc, docx, ppt, and pptx files are allowed'));
   },
 });
 
@@ -107,10 +127,17 @@ const hasValidationErrors = (req: Request, res: Response): boolean => {
     return false;
   }
 
+  const formattedErrors = errors.array().map((error: any) => ({
+    field: error.path || error.param || 'unknown',
+    message: error.msg || 'Invalid value',
+    value: error.value,
+    location: error.location,
+  }));
+
   res.status(400).json({
     status: 'error',
     message: 'Validation failed',
-    errors: errors.array(),
+    errors: formattedErrors,
   });
   return true;
 };
@@ -157,6 +184,25 @@ const cleanText = (value: unknown): string => {
   return String(value || '').replace(/[<>]/g, '').trim();
 };
 
+const sanitizeLinkList = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => cleanText(item))
+      .filter(Boolean)
+      .slice(0, 10);
+  }
+
+  if (typeof value === 'string') {
+    return value
+      .split(',')
+      .map((item) => cleanText(item))
+      .filter(Boolean)
+      .slice(0, 10);
+  }
+
+  return [];
+};
+
 const mapUploadFileToUrl = (file?: Express.Multer.File): string | undefined => {
   if (!file) {
     return undefined;
@@ -194,6 +240,180 @@ const isAdminOrManager = (req: AuthenticatedRequest): boolean => {
 const isForumMember = async (forumId: string, userId: string): Promise<boolean> => {
   const membership = await CommunityForumMember.findOne({ forumId, userId }).lean();
   return Boolean(membership);
+};
+
+const getGlobalMeetingNotificationSettings = async () => {
+  let settings = await MeetingNotificationSettings.findOne({ key: 'global' });
+  if (!settings) {
+    settings = await MeetingNotificationSettings.create({ key: 'global' });
+  }
+  return settings;
+};
+
+const getMeetingRecipients = async (meeting: any, audience: 'all_registered' | 'rsvped_only') => {
+  if (audience === 'rsvped_only') {
+    const rsvpUserIds = (meeting.attendeeIds || []).map((id: mongoose.Types.ObjectId | string) => id.toString());
+    if (rsvpUserIds.length === 0) {
+      return [];
+    }
+    return User.find({
+      _id: { $in: rsvpUserIds },
+      isBlocked: { $ne: true },
+    }).select('_id email username fcmTokens notificationDevices preferences.notifications').lean();
+  }
+
+  return User.find({ isBlocked: { $ne: true } })
+    .select('_id email username fcmTokens notificationDevices preferences.notifications')
+    .lean();
+};
+
+const sendMeetingNotifications = async ({
+  meeting,
+  channels,
+  audience,
+  trigger,
+  note,
+}: {
+  meeting: any;
+  channels: Array<'push' | 'email'>;
+  audience: 'all_registered' | 'rsvped_only';
+  trigger: 'manual' | 'scheduled';
+  note: string;
+}) => {
+  const recipients = await getMeetingRecipients(meeting, audience);
+  const globalSettings = await getGlobalMeetingNotificationSettings();
+  const summary = {
+    pushSent: 0,
+    emailSent: 0,
+    attemptedRecipients: recipients.length,
+  };
+
+  const meetingPageUrl = `${process.env.FRONTEND_URL || 'https://hikmahsphere.site'}/community?tab=meetings&meetingId=${meeting._id.toString()}`;
+
+  if (channels.includes('push')) {
+    const tokens = recipients.flatMap((user: any) => {
+      const tokenSet = new Set<string>();
+      if (Array.isArray(user.fcmTokens)) {
+        user.fcmTokens.forEach((token: unknown) => {
+          if (typeof token === 'string' && token.trim()) tokenSet.add(token.trim());
+        });
+      }
+      if (Array.isArray(user.notificationDevices)) {
+        user.notificationDevices.forEach((device: any) => {
+          if (typeof device?.token === 'string' && device.token.trim()) tokenSet.add(device.token.trim());
+        });
+      }
+      return Array.from(tokenSet);
+    });
+
+    const uniqueTokens = Array.from(new Set(tokens));
+    if (uniqueTokens.length > 0) {
+      const result = await sendMulticastNotification(
+        uniqueTokens,
+        `Upcoming Meeting: ${meeting.title}`,
+        `${meeting.topic} by ${meeting.speakerName}. ${note}`,
+        {
+          type: 'meeting_reminder',
+          meetingId: meeting._id.toString(),
+          url: meetingPageUrl,
+        }
+      );
+      summary.pushSent = result.successCount;
+    }
+
+    const userNotificationRows = recipients.map((user: any) => ({
+      userId: user._id.toString(),
+      title: `Upcoming Meeting: ${meeting.title}`,
+      body: `${meeting.topic} by ${meeting.speakerName}. ${note}`,
+      data: { type: 'meeting_reminder', meetingId: meeting._id.toString(), url: meetingPageUrl },
+      source: 'admin-broadcast',
+      read: false,
+    }));
+    if (userNotificationRows.length > 0) {
+      await UserNotification.insertMany(userNotificationRows, { ordered: false });
+    }
+  }
+
+  if (channels.includes('email')) {
+    const emails = recipients
+      .map((user: any) => (typeof user.email === 'string' ? user.email.trim().toLowerCase() : ''))
+      .filter(Boolean);
+
+    const emailResult = await sendMeetingEmails({
+      recipients: emails,
+      meeting,
+      settings: globalSettings,
+      reminderLabel: note,
+    });
+    summary.emailSent = emailResult.sentCount;
+  }
+
+  meeting.notificationConfig = meeting.notificationConfig || {};
+  meeting.notificationConfig.sendHistory = Array.isArray(meeting.notificationConfig.sendHistory)
+    ? meeting.notificationConfig.sendHistory
+    : [];
+
+  channels.forEach((channel) => {
+    meeting.notificationConfig.sendHistory.push({
+      sentAt: new Date(),
+      channel,
+      audience,
+      recipientCount: summary.attemptedRecipients,
+      trigger,
+      note,
+    });
+  });
+
+  if (meeting.notificationConfig.sendHistory.length > 100) {
+    meeting.notificationConfig.sendHistory = meeting.notificationConfig.sendHistory.slice(-100);
+  }
+
+  await meeting.save();
+  return summary;
+};
+
+const normalizeMeetingResponse = (meeting: any, currentUserId?: string) => {
+  const attendeeIds = Array.isArray(meeting.attendeeIds) ? meeting.attendeeIds : [];
+  const attendees = attendeeIds.length;
+  const isJoined = Boolean(
+    currentUserId
+    && attendeeIds.some((attendeeId: mongoose.Types.ObjectId | string) => attendeeId.toString() === currentUserId)
+  );
+
+  return {
+    id: meeting._id.toString(),
+    title: meeting.title,
+    description: meeting.description,
+    topic: meeting.topic,
+    speakerName: meeting.speakerName,
+    platform: meeting.platform,
+    meetingUrl: meeting.meetingUrl || null,
+    meetingId: meeting.meetingId || null,
+    passcode: meeting.passcode || null,
+    scheduledAt: meeting.scheduledAt,
+    durationMinutes: meeting.durationMinutes,
+    timezone: meeting.timezone,
+    recurrence: meeting.recurrence,
+    status: meeting.status,
+    organizer: meeting.organizer,
+    attendees,
+    isJoined,
+    maxCapacity: meeting.maxCapacity || null,
+    tags: meeting.tags || [],
+    notesLinks: meeting.notesLinks || [],
+    attachment: meeting.attachment || null,
+    notificationConfig: meeting.notificationConfig || {
+      enabled: true,
+      channels: ['push', 'email'],
+      reminderMinutes: [1440, 60, 15],
+      mode: 'multiple',
+      audience: 'all_registered',
+      allowManualSendToAll: true,
+      sendHistory: [],
+    },
+    createdAt: meeting.createdAt,
+    updatedAt: meeting.updatedAt,
+  };
 };
 
 /**
@@ -1860,6 +2080,809 @@ router.post('/events/:eventId/join', authMiddleware, async (req: AuthenticatedRe
       status: 'error',
       message: 'Failed to join event',
     });
+  }
+});
+
+/**
+ * @route   GET /api/community/meetings
+ * @desc    Get community meetings for authenticated users
+ * @access  Private
+ */
+router.get('/meetings', [
+  authMiddleware,
+  query('status')
+    .optional()
+    .isIn(MEETING_STATUSES as unknown as string[])
+    .withMessage('Invalid meeting status'),
+], async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (hasValidationErrors(req, res)) {
+      return;
+    }
+
+    const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+    const filter: Record<string, unknown> = {};
+    if (status) {
+      filter.status = status;
+    }
+
+    const meetings = await CommunityMeeting.find(filter)
+      .sort({ scheduledAt: 1, createdAt: -1 })
+      .lean();
+
+    const normalizedMeetings = meetings.map((meeting) => normalizeMeetingResponse(meeting, req.user?.userId));
+
+    res.json({
+      status: 'success',
+      data: {
+        meetings: normalizedMeetings,
+        totalMeetings: normalizedMeetings.length,
+      },
+    });
+  } catch (error) {
+    console.error('Get meetings error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to get meetings',
+    });
+  }
+});
+
+/**
+ * @route   POST /api/community/meetings
+ * @desc    Create a community meeting
+ * @access  Private (Admin/Manager)
+ */
+router.post('/meetings', [
+  authMiddleware,
+  adminMiddleware,
+  communityUpload.fields([
+    { name: 'attachment', maxCount: 1 },
+  ]),
+  body('title')
+    .isLength({ min: 5, max: 200 })
+    .withMessage('Title must be 5-200 characters'),
+  body('description')
+    .isLength({ min: 10, max: 1200 })
+    .withMessage('Description must be 10-1200 characters'),
+  body('topic')
+    .isLength({ min: 3, max: 160 })
+    .withMessage('Topic must be 3-160 characters'),
+  body('speakerName')
+    .isLength({ min: 2, max: 120 })
+    .withMessage('Speaker name must be 2-120 characters'),
+  body('platform')
+    .isIn(MEETING_PLATFORMS as unknown as string[])
+    .withMessage('Invalid platform'),
+  body('scheduledAt')
+    .isISO8601()
+    .withMessage('Valid scheduledAt is required'),
+  body('durationMinutes')
+    .isInt({ min: 10, max: 600 })
+    .withMessage('Duration must be between 10 and 600 minutes'),
+  body('timezone')
+    .isString()
+    .isLength({ min: 2, max: 120 })
+    .withMessage('Timezone must be 2-120 characters'),
+  body('recurrence')
+    .optional()
+    .isIn(MEETING_RECURRENCE_TYPES as unknown as string[])
+    .withMessage('Invalid recurrence value'),
+  body('meetingUrl')
+    .optional({ nullable: true })
+    .isString()
+    .withMessage('meetingUrl must be a string'),
+  body('maxCapacity')
+    .optional({ nullable: true })
+    .isInt({ min: 1, max: 100000 })
+    .withMessage('maxCapacity must be between 1 and 100000'),
+], async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (hasValidationErrors(req, res)) {
+      return;
+    }
+
+    const userId = req.user?.userId;
+    const username = req.user?.username || 'community_member';
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      res.status(401).json({
+        status: 'error',
+        message: 'Invalid authentication context',
+      });
+      return;
+    }
+
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+    const attachment = files?.attachment?.[0];
+
+    const title = cleanText(req.body.title);
+    const description = cleanText(req.body.description);
+    const topic = cleanText(req.body.topic);
+    const speakerName = cleanText(req.body.speakerName);
+    const platform = cleanText(req.body.platform);
+    const meetingUrl = cleanText(req.body.meetingUrl);
+    const meetingId = cleanText(req.body.meetingId);
+    const passcode = cleanText(req.body.passcode);
+    const timezone = cleanText(req.body.timezone);
+    const recurrence = cleanText(req.body.recurrence) || 'none';
+    const scheduledAt = new Date(String(req.body.scheduledAt));
+    const durationMinutes = Number(req.body.durationMinutes);
+    const maxCapacity = req.body.maxCapacity !== undefined && req.body.maxCapacity !== null && String(req.body.maxCapacity).trim().length > 0
+      ? Number(req.body.maxCapacity)
+      : undefined;
+    const tags = sanitizeTags(Array.isArray(req.body.tags) ? req.body.tags : String(req.body.tags || '').split(','));
+    const notesLinks = sanitizeLinkList(req.body.notesLinks).filter((url) => isSafeHttpsUrl(url));
+
+    if (!isSafeHttpsUrl(meetingUrl)) {
+      res.status(400).json({ status: 'error', message: 'Invalid meeting URL' });
+      return;
+    }
+    if (!meetingUrl && !meetingId) {
+      res.status(400).json({
+        status: 'error',
+        message: 'Validation failed',
+        errors: [{ field: 'meetingUrl', message: 'Meeting URL or meeting ID is required', value: meetingUrl }],
+      });
+      return;
+    }
+    if (Number.isNaN(scheduledAt.getTime())) {
+      res.status(400).json({
+        status: 'error',
+        message: 'Validation failed',
+        errors: [{ field: 'scheduledAt', message: 'Invalid meeting date/time', value: req.body.scheduledAt }],
+      });
+      return;
+    }
+
+    if (attachment && !MEETING_ATTACHMENT_MIME_ALLOWLIST.has(attachment.mimetype)) {
+      res.status(400).json({
+        status: 'error',
+        message: 'Validation failed',
+        errors: [{ field: 'attachment', message: 'Unsupported attachment type', value: attachment.mimetype }],
+      });
+      return;
+    }
+
+    const globalSettings = await getGlobalMeetingNotificationSettings();
+
+    const newMeeting = await CommunityMeeting.create({
+      title,
+      description,
+      topic,
+      speakerName,
+      platform,
+      meetingUrl: meetingUrl || undefined,
+      meetingId: meetingId || undefined,
+      passcode: passcode || undefined,
+      scheduledAt,
+      durationMinutes,
+      timezone,
+      recurrence,
+      status: 'scheduled',
+      organizer: {
+        id: userId,
+        name: username,
+        verified: false,
+      },
+      attendeeIds: [],
+      maxCapacity,
+      tags,
+      notesLinks,
+      ...(attachment
+        ? {
+            attachment: {
+              url: mapUploadFileToUrl(attachment),
+              name: attachment.originalname,
+              mimeType: attachment.mimetype,
+              size: attachment.size,
+            },
+          }
+        : {}),
+      notificationConfig: {
+        enabled: globalSettings.defaults.enabled,
+        channels: globalSettings.defaults.channels,
+        reminderMinutes: globalSettings.defaults.reminderMinutes,
+        mode: globalSettings.defaults.mode,
+        audience: globalSettings.defaults.audience,
+        allowManualSendToAll: true,
+        sendHistory: [],
+      },
+    });
+
+    await logCommunityActivity(req, 'community_meeting_created', `Meeting created: ${title}`, {
+      meetingId: newMeeting._id.toString(),
+      role: normalizeRole(req),
+    });
+
+    res.status(201).json({
+      status: 'success',
+      message: 'Meeting published successfully',
+      data: {
+        meeting: normalizeMeetingResponse(newMeeting, userId),
+      },
+    });
+  } catch (error) {
+    console.error('Create meeting error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to create meeting',
+    });
+  }
+});
+
+/**
+ * @route   PUT /api/community/meetings/:meetingId
+ * @desc    Update a community meeting
+ * @access  Private (Admin/Manager)
+ */
+router.put('/meetings/:meetingId', [
+  authMiddleware,
+  adminMiddleware,
+  communityUpload.fields([
+    { name: 'attachment', maxCount: 1 },
+  ]),
+  body('title')
+    .optional()
+    .isLength({ min: 5, max: 200 })
+    .withMessage('Title must be 5-200 characters'),
+  body('description')
+    .optional()
+    .isLength({ min: 10, max: 1200 })
+    .withMessage('Description must be 10-1200 characters'),
+  body('topic')
+    .optional()
+    .isLength({ min: 3, max: 160 })
+    .withMessage('Topic must be 3-160 characters'),
+  body('speakerName')
+    .optional()
+    .isLength({ min: 2, max: 120 })
+    .withMessage('Speaker name must be 2-120 characters'),
+  body('platform')
+    .optional()
+    .isIn(MEETING_PLATFORMS as unknown as string[])
+    .withMessage('Invalid platform'),
+  body('scheduledAt')
+    .optional()
+    .isISO8601()
+    .withMessage('Valid scheduledAt is required'),
+  body('durationMinutes')
+    .optional()
+    .isInt({ min: 10, max: 600 })
+    .withMessage('Duration must be between 10 and 600 minutes'),
+  body('timezone')
+    .optional()
+    .isString()
+    .isLength({ min: 2, max: 120 })
+    .withMessage('Timezone must be 2-120 characters'),
+  body('recurrence')
+    .optional()
+    .isIn(MEETING_RECURRENCE_TYPES as unknown as string[])
+    .withMessage('Invalid recurrence value'),
+  body('status')
+    .optional()
+    .isIn(MEETING_STATUSES as unknown as string[])
+    .withMessage('Invalid status value'),
+], async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (hasValidationErrors(req, res)) {
+      return;
+    }
+
+    const meetingId = getSingleParam(req.params.meetingId);
+    if (!meetingId || !mongoose.Types.ObjectId.isValid(meetingId)) {
+      res.status(400).json({ status: 'error', message: 'Invalid meeting id' });
+      return;
+    }
+
+    const meeting = await CommunityMeeting.findById(meetingId);
+    if (!meeting) {
+      res.status(404).json({ status: 'error', message: 'Meeting not found' });
+      return;
+    }
+
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+    const attachment = files?.attachment?.[0];
+
+    const title = cleanText(req.body.title);
+    const description = cleanText(req.body.description);
+    const topic = cleanText(req.body.topic);
+    const speakerName = cleanText(req.body.speakerName);
+    const platform = cleanText(req.body.platform);
+    const meetingUrl = cleanText(req.body.meetingUrl);
+    const editMeetingId = cleanText(req.body.meetingId);
+    const passcode = cleanText(req.body.passcode);
+    const timezone = cleanText(req.body.timezone);
+    const recurrence = cleanText(req.body.recurrence);
+    const status = cleanText(req.body.status);
+
+    if (meetingUrl && !isSafeHttpsUrl(meetingUrl)) {
+      res.status(400).json({ status: 'error', message: 'Invalid meeting URL' });
+      return;
+    }
+
+    if (title) meeting.title = title;
+    if (description) meeting.description = description;
+    if (topic) meeting.topic = topic;
+    if (speakerName) meeting.speakerName = speakerName;
+
+    if (platform) meeting.platform = platform as (typeof MEETING_PLATFORMS)[number];
+
+    if (Object.prototype.hasOwnProperty.call(req.body, 'meetingUrl')) {
+      if (meetingUrl) {
+        meeting.meetingUrl = meetingUrl;
+      } else {
+        meeting.set('meetingUrl', undefined);
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, 'meetingId')) {
+      if (editMeetingId) {
+        meeting.meetingId = editMeetingId;
+      } else {
+        meeting.set('meetingId', undefined);
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, 'passcode')) {
+      if (passcode) {
+        meeting.passcode = passcode;
+      } else {
+        meeting.set('passcode', undefined);
+      }
+    }
+
+    if (req.body.scheduledAt) {
+      meeting.scheduledAt = new Date(String(req.body.scheduledAt));
+    }
+
+    if (req.body.durationMinutes !== undefined) {
+      meeting.durationMinutes = Number(req.body.durationMinutes);
+    }
+
+    if (timezone) meeting.timezone = timezone;
+    if (recurrence) meeting.recurrence = recurrence as (typeof MEETING_RECURRENCE_TYPES)[number];
+    if (status) meeting.status = status as (typeof MEETING_STATUSES)[number];
+
+    if (req.body.maxCapacity !== undefined) {
+      const maxCapacity = req.body.maxCapacity !== null && String(req.body.maxCapacity).trim().length > 0
+        ? Number(req.body.maxCapacity)
+        : undefined;
+      if (maxCapacity !== undefined) {
+        meeting.maxCapacity = maxCapacity;
+      } else {
+        meeting.set('maxCapacity', undefined);
+      }
+    }
+
+    if (req.body.tags !== undefined) {
+      meeting.tags = sanitizeTags(Array.isArray(req.body.tags) ? req.body.tags : String(req.body.tags || '').split(','));
+    }
+
+    if (req.body.notesLinks !== undefined) {
+      meeting.notesLinks = sanitizeLinkList(req.body.notesLinks).filter((url) => isSafeHttpsUrl(url));
+    }
+
+    if (attachment) {
+      if (!MEETING_ATTACHMENT_MIME_ALLOWLIST.has(attachment.mimetype)) {
+        res.status(400).json({
+          status: 'error',
+          message: 'Validation failed',
+          errors: [{ field: 'attachment', message: 'Unsupported attachment type', value: attachment.mimetype }],
+        });
+        return;
+      }
+      meeting.attachment = {
+        url: mapUploadFileToUrl(attachment) || '',
+        name: attachment.originalname,
+        mimeType: attachment.mimetype,
+        size: attachment.size,
+      };
+    }
+
+    if (!meeting.meetingUrl && !meeting.meetingId) {
+      res.status(400).json({ status: 'error', message: 'Meeting URL or meeting ID is required' });
+      return;
+    }
+
+    await meeting.save();
+
+    await logCommunityActivity(req, 'community_meeting_updated', `Meeting updated: ${meeting.title}`, {
+      meetingId,
+      role: normalizeRole(req),
+    });
+
+    res.json({
+      status: 'success',
+      message: 'Meeting updated successfully',
+      data: {
+        meeting: normalizeMeetingResponse(meeting, req.user?.userId),
+      },
+    });
+  } catch (error) {
+    console.error('Update meeting error:', error);
+    res.status(500).json({ status: 'error', message: 'Failed to update meeting' });
+  }
+});
+
+/**
+ * @route   DELETE /api/community/meetings/:meetingId
+ * @desc    Cancel a community meeting
+ * @access  Private (Admin/Manager)
+ */
+router.delete('/meetings/:meetingId', [
+  authMiddleware,
+  adminMiddleware,
+], async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const meetingId = getSingleParam(req.params.meetingId);
+    if (!meetingId || !mongoose.Types.ObjectId.isValid(meetingId)) {
+      res.status(400).json({ status: 'error', message: 'Invalid meeting id' });
+      return;
+    }
+
+    const meeting = await CommunityMeeting.findById(meetingId);
+    if (!meeting) {
+      res.status(404).json({ status: 'error', message: 'Meeting not found' });
+      return;
+    }
+
+    meeting.status = 'canceled';
+    await meeting.save();
+
+    await logCommunityActivity(req, 'community_meeting_canceled', `Meeting canceled: ${meeting.title}`, {
+      meetingId,
+      role: normalizeRole(req),
+    });
+
+    res.json({
+      status: 'success',
+      message: 'Meeting canceled successfully',
+      data: {
+        meeting: normalizeMeetingResponse(meeting, req.user?.userId),
+      },
+    });
+  } catch (error) {
+    console.error('Cancel meeting error:', error);
+    res.status(500).json({ status: 'error', message: 'Failed to cancel meeting' });
+  }
+});
+
+/**
+ * @route   DELETE /api/community/meetings/:meetingId/permanent
+ * @desc    Permanently delete a canceled meeting
+ * @access  Private (Admin/Manager)
+ */
+router.delete('/meetings/:meetingId/permanent', [
+  authMiddleware,
+  adminMiddleware,
+], async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const meetingId = getSingleParam(req.params.meetingId);
+    if (!meetingId || !mongoose.Types.ObjectId.isValid(meetingId)) {
+      res.status(400).json({ status: 'error', message: 'Invalid meeting id' });
+      return;
+    }
+
+    const meeting = await CommunityMeeting.findById(meetingId);
+    if (!meeting) {
+      res.status(404).json({ status: 'error', message: 'Meeting not found' });
+      return;
+    }
+
+    if (meeting.status !== 'canceled') {
+      res.status(400).json({
+        status: 'error',
+        message: 'Only canceled meetings can be permanently deleted',
+      });
+      return;
+    }
+
+    await CommunityMeeting.deleteOne({ _id: meetingId });
+
+    await logCommunityActivity(req, 'community_meeting_deleted', `Meeting deleted permanently: ${meeting.title}`, {
+      meetingId,
+      role: normalizeRole(req),
+    });
+
+    res.json({
+      status: 'success',
+      message: 'Canceled meeting deleted permanently',
+      data: { meetingId },
+    });
+  } catch (error) {
+    console.error('Permanent delete meeting error:', error);
+    res.status(500).json({ status: 'error', message: 'Failed to delete meeting permanently' });
+  }
+});
+
+/**
+ * @route   GET /api/community/meeting-notification-settings
+ * @desc    Get global meeting notification settings
+ * @access  Private (Admin/Manager)
+ */
+router.get('/meeting-notification-settings', [authMiddleware, adminMiddleware], async (_req: AuthenticatedRequest, res: Response) => {
+  try {
+    const settings = await getGlobalMeetingNotificationSettings();
+    res.json({
+      status: 'success',
+      data: {
+        settings,
+      },
+    });
+  } catch (error) {
+    console.error('Get meeting notification settings error:', error);
+    res.status(500).json({ status: 'error', message: 'Failed to load meeting notification settings' });
+  }
+});
+
+/**
+ * @route   PUT /api/community/meeting-notification-settings
+ * @desc    Update global meeting notification settings
+ * @access  Private (Admin/Manager)
+ */
+router.put('/meeting-notification-settings', [
+  authMiddleware,
+  adminMiddleware,
+  body('defaults.channels').optional().isArray().withMessage('defaults.channels must be an array'),
+  body('defaults.reminderMinutes').optional().isArray().withMessage('defaults.reminderMinutes must be an array'),
+], async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (hasValidationErrors(req, res)) {
+      return;
+    }
+
+    const settings = await getGlobalMeetingNotificationSettings();
+    const defaults = req.body?.defaults || {};
+    const emailTemplate = req.body?.emailTemplate || {};
+
+    if (typeof defaults.enabled === 'boolean') settings.defaults.enabled = defaults.enabled;
+    if (Array.isArray(defaults.channels)) {
+      const channels = defaults.channels.filter((item: string) => ['push', 'email'].includes(item));
+      settings.defaults.channels = channels.length > 0 ? channels : settings.defaults.channels;
+    }
+    if (Array.isArray(defaults.reminderMinutes)) {
+      const minutes = defaults.reminderMinutes
+        .map((item: unknown) => Number(item))
+        .filter((item: number) => Number.isFinite(item) && item > 0)
+        .sort((a: number, b: number) => b - a);
+      if (minutes.length > 0) settings.defaults.reminderMinutes = minutes;
+    }
+    if (defaults.mode === 'once' || defaults.mode === 'multiple') settings.defaults.mode = defaults.mode;
+    if (defaults.audience === 'all_registered' || defaults.audience === 'rsvped_only') settings.defaults.audience = defaults.audience;
+
+    if (typeof emailTemplate.subjectPrefix === 'string') settings.emailTemplate.subjectPrefix = cleanText(emailTemplate.subjectPrefix);
+    if (typeof emailTemplate.logoUrl === 'string') settings.emailTemplate.logoUrl = cleanText(emailTemplate.logoUrl);
+    if (typeof emailTemplate.headerTitle === 'string') settings.emailTemplate.headerTitle = cleanText(emailTemplate.headerTitle);
+    if (typeof emailTemplate.footerText === 'string') settings.emailTemplate.footerText = cleanText(emailTemplate.footerText);
+    if (typeof emailTemplate.includeAdvertisement === 'boolean') settings.emailTemplate.includeAdvertisement = emailTemplate.includeAdvertisement;
+    if (typeof emailTemplate.advertisementText === 'string') settings.emailTemplate.advertisementText = cleanText(emailTemplate.advertisementText);
+
+    await settings.save();
+
+    res.json({
+      status: 'success',
+      message: 'Meeting notification settings updated',
+      data: { settings },
+    });
+  } catch (error) {
+    console.error('Update meeting notification settings error:', error);
+    res.status(500).json({ status: 'error', message: 'Failed to update meeting notification settings' });
+  }
+});
+
+/**
+ * @route   PUT /api/community/meetings/:meetingId/notification-config
+ * @desc    Update per-meeting notification config
+ * @access  Private (Admin/Manager)
+ */
+router.put('/meetings/:meetingId/notification-config', [authMiddleware, adminMiddleware], async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const meetingId = getSingleParam(req.params.meetingId);
+    if (!meetingId || !mongoose.Types.ObjectId.isValid(meetingId)) {
+      res.status(400).json({ status: 'error', message: 'Invalid meeting id' });
+      return;
+    }
+
+    const meeting = await CommunityMeeting.findById(meetingId);
+    if (!meeting) {
+      res.status(404).json({ status: 'error', message: 'Meeting not found' });
+      return;
+    }
+
+    const config = req.body || {};
+    const nextConfig: any = {
+      enabled: typeof config.enabled === 'boolean' ? config.enabled : (meeting.notificationConfig?.enabled ?? true),
+      channels: Array.isArray(config.channels)
+        ? config.channels.filter((channel: string) => ['push', 'email'].includes(channel))
+        : (meeting.notificationConfig?.channels || ['push', 'email']),
+      reminderMinutes: Array.isArray(config.reminderMinutes)
+        ? config.reminderMinutes
+            .map((item: unknown) => Number(item))
+            .filter((item: number) => Number.isFinite(item) && item > 0)
+            .sort((a: number, b: number) => b - a)
+        : (meeting.notificationConfig?.reminderMinutes || [1440, 60, 15]),
+      mode: config.mode === 'once' ? 'once' : (config.mode === 'multiple' ? 'multiple' : (meeting.notificationConfig?.mode || 'multiple')),
+      audience: config.audience === 'rsvped_only' ? 'rsvped_only' : (config.audience === 'all_registered' ? 'all_registered' : (meeting.notificationConfig?.audience || 'all_registered')),
+      allowManualSendToAll: typeof config.allowManualSendToAll === 'boolean'
+        ? config.allowManualSendToAll
+        : (meeting.notificationConfig?.allowManualSendToAll ?? true),
+      sendHistory: meeting.notificationConfig?.sendHistory || [],
+    };
+
+    meeting.notificationConfig = nextConfig;
+    await meeting.save();
+
+    res.json({
+      status: 'success',
+      message: 'Meeting notification config updated',
+      data: { meeting: normalizeMeetingResponse(meeting, req.user?.userId) },
+    });
+  } catch (error) {
+    console.error('Update per-meeting notification config error:', error);
+    res.status(500).json({ status: 'error', message: 'Failed to update meeting notification config' });
+  }
+});
+
+/**
+ * @route   POST /api/community/meetings/:meetingId/send-notification
+ * @desc    Send meeting notification now (push/email)
+ * @access  Private (Admin/Manager)
+ */
+router.post('/meetings/:meetingId/send-notification', [authMiddleware, adminMiddleware], async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const meetingId = getSingleParam(req.params.meetingId);
+    if (!meetingId || !mongoose.Types.ObjectId.isValid(meetingId)) {
+      res.status(400).json({ status: 'error', message: 'Invalid meeting id' });
+      return;
+    }
+
+    const meeting = await CommunityMeeting.findById(meetingId);
+    if (!meeting) {
+      res.status(404).json({ status: 'error', message: 'Meeting not found' });
+      return;
+    }
+
+    const channels = Array.isArray(req.body?.channels)
+      ? req.body.channels.filter((item: string) => ['push', 'email'].includes(item))
+      : (meeting.notificationConfig?.channels || ['push', 'email']);
+
+    const audience = req.body?.audience === 'rsvped_only' ? 'rsvped_only' : (req.body?.audience === 'all_registered' ? 'all_registered' : (meeting.notificationConfig?.audience || 'all_registered'));
+    const note = cleanText(req.body?.note) || 'Join from HikmahSphere';
+
+    const summary = await sendMeetingNotifications({
+      meeting,
+      channels,
+      audience,
+      trigger: 'manual',
+      note,
+    });
+
+    await logCommunityActivity(req, 'community_meeting_notification_sent', `Meeting notification sent: ${meeting.title}`, {
+      meetingId,
+      channels,
+      audience,
+      role: normalizeRole(req),
+      summary,
+    });
+
+    res.json({
+      status: 'success',
+      message: 'Meeting notifications sent',
+      data: { summary, meeting: normalizeMeetingResponse(meeting, req.user?.userId) },
+    });
+  } catch (error) {
+    console.error('Send meeting notification error:', error);
+    res.status(500).json({ status: 'error', message: 'Failed to send meeting notifications' });
+  }
+});
+
+/**
+ * @route   POST /api/community/meetings/:meetingId/rsvp
+ * @desc    RSVP to a meeting
+ * @access  Private
+ */
+router.post('/meetings/:meetingId/rsvp', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const meetingId = getSingleParam(req.params.meetingId);
+    const userId = req.user?.userId;
+
+    if (!meetingId || !mongoose.Types.ObjectId.isValid(meetingId)) {
+      res.status(400).json({ status: 'error', message: 'Invalid meeting id' });
+      return;
+    }
+
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      res.status(401).json({ status: 'error', message: 'Invalid authentication context' });
+      return;
+    }
+
+    const meeting = await CommunityMeeting.findById(meetingId);
+    if (!meeting) {
+      res.status(404).json({ status: 'error', message: 'Meeting not found' });
+      return;
+    }
+
+    if (meeting.status !== 'scheduled') {
+      res.status(400).json({ status: 'error', message: 'Only scheduled meetings accept RSVP' });
+      return;
+    }
+
+    const alreadyJoined = meeting.attendeeIds.some((id) => id.toString() === userId);
+    if (alreadyJoined) {
+      res.status(400).json({ status: 'error', message: 'You already RSVPed this meeting' });
+      return;
+    }
+
+    if (meeting.maxCapacity && meeting.attendeeIds.length >= meeting.maxCapacity) {
+      res.status(400).json({ status: 'error', message: 'Meeting is at full capacity' });
+      return;
+    }
+
+    meeting.attendeeIds.push(new mongoose.Types.ObjectId(userId));
+    await meeting.save();
+
+    await logCommunityActivity(req, 'community_meeting_rsvp_joined', `RSVP joined meeting: ${meeting.title}`, {
+      meetingId,
+      role: normalizeRole(req),
+    });
+
+    res.json({
+      status: 'success',
+      message: 'RSVP confirmed',
+      data: {
+        meeting: normalizeMeetingResponse(meeting, userId),
+      },
+    });
+  } catch (error) {
+    console.error('RSVP meeting error:', error);
+    res.status(500).json({ status: 'error', message: 'Failed to RSVP meeting' });
+  }
+});
+
+/**
+ * @route   POST /api/community/meetings/:meetingId/leave
+ * @desc    Leave RSVP from a meeting
+ * @access  Private
+ */
+router.post('/meetings/:meetingId/leave', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const meetingId = getSingleParam(req.params.meetingId);
+    const userId = req.user?.userId;
+
+    if (!meetingId || !mongoose.Types.ObjectId.isValid(meetingId)) {
+      res.status(400).json({ status: 'error', message: 'Invalid meeting id' });
+      return;
+    }
+
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      res.status(401).json({ status: 'error', message: 'Invalid authentication context' });
+      return;
+    }
+
+    const meeting = await CommunityMeeting.findById(meetingId);
+    if (!meeting) {
+      res.status(404).json({ status: 'error', message: 'Meeting not found' });
+      return;
+    }
+
+    meeting.attendeeIds = meeting.attendeeIds.filter((id) => id.toString() !== userId);
+    await meeting.save();
+
+    await logCommunityActivity(req, 'community_meeting_rsvp_left', `RSVP left meeting: ${meeting.title}`, {
+      meetingId,
+      role: normalizeRole(req),
+    });
+
+    res.json({
+      status: 'success',
+      message: 'RSVP removed',
+      data: {
+        meeting: normalizeMeetingResponse(meeting, userId),
+      },
+    });
+  } catch (error) {
+    console.error('Leave meeting RSVP error:', error);
+    res.status(500).json({ status: 'error', message: 'Failed to leave RSVP' });
   }
 });
 

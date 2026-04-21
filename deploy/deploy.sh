@@ -122,7 +122,7 @@ EOF
 
 parse_args() {
     while [ "$#" -gt 0 ]; do
-        case "$1" in
+        case "$1" in 
             --branch)
                 if [ "$#" -lt 2 ]; then
                     print_error "Missing value for --branch"
