@@ -155,6 +155,7 @@ const QuranTafsirBayan: React.FC = () => {
   const [showMobileTranslationPicker, setShowMobileTranslationPicker] = useState(false);
   const [showMobileTafsirPicker, setShowMobileTafsirPicker] = useState(false);
   const [settingsTab, setSettingsTab] = useState<'display' | 'bookmarks'>('display');
+  const [showHeader, setShowHeader] = useState(true);
   const [pendingBookmarkTarget, setPendingBookmarkTarget] = useState<{ surahNumber: number; ayahNumber: number } | null>(null);
   const [bookmarkConfirm, setBookmarkConfirm] = useState<{
     surahNum: number;
@@ -191,6 +192,37 @@ const QuranTafsirBayan: React.FC = () => {
   const getScrollBehavior = useCallback((): ScrollBehavior => {
     if (typeof window === 'undefined') return 'auto';
     return window.matchMedia('(max-width: 1023px)').matches ? 'auto' : 'smooth';
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    let ticking = false;
+    const scrollState = { lastScrollY: window.scrollY };
+
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const scrollThreshold = 50;
+
+          if (currentScrollY > scrollState.lastScrollY && currentScrollY > scrollThreshold) {
+            setShowHeader(false);
+          } else if (currentScrollY < scrollState.lastScrollY - scrollThreshold || currentScrollY < scrollThreshold) {
+            setShowHeader(true);
+          }
+
+          scrollState.lastScrollY = currentScrollY;
+          ticking = false;
+        });
+
+        ticking = true;
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   const onMobileSettingsTouchStart = useCallback((event: React.TouchEvent) => {
@@ -1161,8 +1193,10 @@ const QuranTafsirBayan: React.FC = () => {
             </p>
           </div>
 
-          <div className="lg:hidden pt-2 px-2 sticky top-16 z-40">
-            <div className={`${settings.theme === 'dark' ? 'bg-gray-800/95 border-gray-700' : 'bg-white/95 border-gray-100'} backdrop-blur-none lg:backdrop-blur-md rounded-xl shadow-lg border p-2`}>
+          <div className={`lg:hidden px-2 sticky z-40 transition-all duration-500 ease-out ${
+            showHeader ? 'top-16 pt-2 opacity-100 scale-100' : '-top-40 pt-1 opacity-0 scale-95 pointer-events-none'
+          }`}>
+            <div className={`${settings.theme === 'dark' ? 'bg-gray-800/95 border-gray-700' : 'bg-white/95 border-gray-100'} rounded-xl border p-2 shadow-lg backdrop-blur-md`}>
               <div className="grid grid-cols-[auto_1fr_auto] items-center gap-1 mb-2">
                 <div className="flex items-center gap-1.5">
                   <button

@@ -1255,11 +1255,50 @@ const Community: React.FC = () => {
     { id: 'games', name: 'Games', icon: TrophyIcon },
   ];
 
+  const tabDescriptionById: Record<string, string> = {
+    forums: 'Study circles and focused spaces',
+    posts: 'Fresh reflections and questions',
+    events: 'Gatherings, lectures, and service',
+    meetings: 'Live Quran sessions and RSVPs',
+    games: 'Fun Islamic learning challenges',
+  };
+
+  const tabCountById: Record<string, number> = {
+    forums: forums.length,
+    posts: posts.length,
+    events: upcomingEvents.length,
+    meetings: upcomingMeetings.length,
+    games: 1,
+  };
+
+  const communityOverviewStats = [
+    {
+      label: 'Forums',
+      value: forums.length,
+      tone: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    },
+    {
+      label: 'Posts',
+      value: posts.length,
+      tone: 'border-teal-200 bg-teal-50 text-teal-700',
+    },
+    {
+      label: 'Events',
+      value: upcomingEvents.length,
+      tone: 'border-sky-200 bg-sky-50 text-sky-700',
+    },
+    {
+      label: 'Meetings',
+      value: upcomingMeetings.length,
+      tone: 'border-violet-200 bg-violet-50 text-violet-700',
+    },
+  ];
+
   const renderLoadingCards = (count: number) => {
     return (
       <div className="space-y-4">
         {Array.from({ length: count }).map((_, index) => (
-          <div key={index} className="bg-white rounded-xl shadow-sm p-6 border border-emerald-100 animate-pulse">
+          <div key={index} className="animate-pulse rounded-2xl border border-emerald-100 bg-white/95 p-4 shadow-sm sm:p-6">
             <div className="h-5 w-1/2 bg-gray-200 rounded mb-3" />
             <div className="h-4 w-full bg-gray-100 rounded mb-2" />
             <div className="h-4 w-3/4 bg-gray-100 rounded" />
@@ -1271,7 +1310,7 @@ const Community: React.FC = () => {
 
   const renderEmptyState = (message: string) => {
     return (
-      <div className="bg-white rounded-xl border border-dashed border-emerald-200 p-8 text-center">
+      <div className="rounded-2xl border border-dashed border-emerald-200 bg-white/90 p-6 text-center shadow-sm sm:p-8">
         <p className="text-gray-600">{message}</p>
       </div>
     );
@@ -1307,154 +1346,203 @@ const Community: React.FC = () => {
           'hikmahsphere community',
         ]}
       />
-      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 pt-16">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Global Muslim Community</h1>
-          <p className="text-gray-600">Join discussions, discover events, and grow together with the Ummah.</p>
+      <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-emerald-50 via-white to-cyan-50 pt-16">
+      <div className="mx-auto max-w-7xl px-4 pt-0 pb-6 sm:px-6 sm:pt-2 sm:pb-8 lg:px-8">
+        <div className="mb-6 overflow-hidden rounded-[28px] border border-emerald-100/80 bg-white/85 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur-sm">
+          <div className="grid gap-5 px-5 py-5 sm:px-8 sm:py-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)] lg:items-center">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">
+                <UserGroupIcon className="h-4 w-4" />
+                Global Muslim Community
+              </div>
+              <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+                Grow in knowledge, service, and brotherhood together
+              </h1>
+              <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
+                Join focused forums, beneficial posts, community events, and live Quran meetings in a cleaner mobile-friendly space built for the Ummah.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              {communityOverviewStats.map((stat) => (
+                <div key={stat.label} className={`rounded-2xl border px-4 py-4 shadow-sm ${stat.tone}`}>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em]">{stat.label}</p>
+                  <p className="mt-2 text-3xl font-bold text-slate-900">{stat.value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
         {isAdminOrManager && (
-          <div className="mb-6 bg-white border border-emerald-100 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-sm text-emerald-700 font-semibold">Admin Publishing Controls</p>
-              <p className="text-xs text-gray-500">Create high-quality forums, posts, and events visible to global visitors.</p>
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingForumId(null);
-                  setAdminForumForm({
-                    title: '',
-                    description: '',
-                    category: '',
-                    tags: '',
-                    externalLink: '',
-                    videoUrl: '',
-                    image: null,
-                    attachment: null,
-                  });
-                  setShowCreateForumModal(true);
-                }}
-                className="inline-flex items-center gap-1 bg-emerald-600 text-white px-4 py-2 rounded-md hover:bg-emerald-700 transition-colors"
-              >
-                <PlusIcon className="h-4 w-4" />
-                Create Forum
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingPostId(null);
-                  setAdminPostForm({
-                    title: '',
-                    content: '',
-                    forumId: '',
-                    tags: '',
-                    externalLink: '',
-                    videoUrl: '',
-                    image: null,
-                    attachment: null,
-                  });
-                  setShowCreatePostModal(true);
-                }}
-                className="inline-flex items-center gap-1 bg-teal-600 text-white px-4 py-2 rounded-md hover:bg-teal-700 transition-colors"
-              >
-                <PlusIcon className="h-4 w-4" />
-                Create Post
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setAdminEventForm({
-                    title: '',
-                    description: '',
-                    type: 'lecture',
-                    date: '',
-                    locationName: '',
-                    locationAddress: '',
-                    latitude: '',
-                    longitude: '',
-                    maxCapacity: '',
-                    isOnline: false,
-                    tags: '',
-                  });
-                  setShowCreateEventModal(true);
-                }}
-                className="inline-flex items-center gap-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
-              >
-                <PlusIcon className="h-4 w-4" />
-                Create Event
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingMeetingId(null);
-                  setMeetingFieldErrors({});
-                  setMeetingFormErrorSummary([]);
-                  setAdminMeetingForm({
-                    title: '',
-                    description: '',
-                    topic: '',
-                    speakerName: '',
-                    platform: 'google_meet',
-                    meetingUrl: '',
-                    meetingId: '',
-                    passcode: '',
-                    scheduledAt: '',
-                    durationMinutes: '60',
-                    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-                    recurrence: 'weekly',
-                    maxCapacity: '',
-                    tags: '',
-                    notesLinks: '',
-                    attachment: null,
-                  });
-                  setShowCreateMeetingModal(true);
-                }}
-                className="inline-flex items-center gap-1 bg-sky-600 text-white px-4 py-2 rounded-md hover:bg-sky-700 transition-colors"
-              >
-                <PlusIcon className="h-4 w-4" />
-                Publish Meeting
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowMeetingNotificationModal(true);
-                  void fetchMeetingNotificationSettings();
-                }}
-                className="inline-flex items-center gap-1 bg-violet-600 text-white px-4 py-2 rounded-md hover:bg-violet-700 transition-colors"
-              >
-                <BellAlertIcon className="h-4 w-4" />
-                Meeting Alerts Settings
-              </button>
+          <div className="mb-6 overflow-hidden rounded-2xl border border-emerald-200 bg-white/90 shadow-sm">
+            <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 px-5 py-5 text-white sm:px-6">
+              <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+                <div className="max-w-2xl">
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/75">Admin Publishing Controls</p>
+                  <h2 className="mt-2 text-xl font-semibold">Publish community updates from one compact control panel</h2>
+                  <p className="mt-2 text-sm leading-6 text-white/80">
+                    Create forums, posts, events, and meetings with a layout that wraps cleanly on small screens and stays polished on larger displays.
+                  </p>
+                </div>
+
+                <div className="grid w-full gap-2 sm:grid-cols-2 xl:grid-cols-5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingForumId(null);
+                      setAdminForumForm({
+                        title: '',
+                        description: '',
+                        category: '',
+                        tags: '',
+                        externalLink: '',
+                        videoUrl: '',
+                        image: null,
+                        attachment: null,
+                      });
+                      setShowCreateForumModal(true);
+                    }}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-semibold text-emerald-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-emerald-50"
+                  >
+                    <PlusIcon className="h-4 w-4" />
+                    Create Forum
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingPostId(null);
+                      setAdminPostForm({
+                        title: '',
+                        content: '',
+                        forumId: '',
+                        tags: '',
+                        externalLink: '',
+                        videoUrl: '',
+                        image: null,
+                        attachment: null,
+                      });
+                      setShowCreatePostModal(true);
+                    }}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-semibold text-teal-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-teal-50"
+                  >
+                    <PlusIcon className="h-4 w-4" />
+                    Create Post
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAdminEventForm({
+                        title: '',
+                        description: '',
+                        type: 'lecture',
+                        date: '',
+                        locationName: '',
+                        locationAddress: '',
+                        latitude: '',
+                        longitude: '',
+                        maxCapacity: '',
+                        isOnline: false,
+                        tags: '',
+                      });
+                      setShowCreateEventModal(true);
+                    }}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-semibold text-sky-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-sky-50"
+                  >
+                    <PlusIcon className="h-4 w-4" />
+                    Create Event
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingMeetingId(null);
+                      setMeetingFieldErrors({});
+                      setMeetingFormErrorSummary([]);
+                      setAdminMeetingForm({
+                        title: '',
+                        description: '',
+                        topic: '',
+                        speakerName: '',
+                        platform: 'google_meet',
+                        meetingUrl: '',
+                        meetingId: '',
+                        passcode: '',
+                        scheduledAt: '',
+                        durationMinutes: '60',
+                        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+                        recurrence: 'weekly',
+                        maxCapacity: '',
+                        tags: '',
+                        notesLinks: '',
+                        attachment: null,
+                      });
+                      setShowCreateMeetingModal(true);
+                    }}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-semibold text-cyan-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-cyan-50"
+                  >
+                    <PlusIcon className="h-4 w-4" />
+                    Publish Meeting
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowMeetingNotificationModal(true);
+                      void fetchMeetingNotificationSettings();
+                    }}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-semibold text-violet-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-violet-50"
+                  >
+                    <BellAlertIcon className="h-4 w-4" />
+                    Meeting Alerts Settings
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
 
         {error && (
-          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700 text-sm">
+          <div className="mb-6 rounded-2xl border border-red-200 bg-red-50/95 px-4 py-3 text-sm text-red-700 shadow-sm">
             {error}
           </div>
         )}
 
         {/* Tabs */}
-        <div className="border-b border-gray-200 mb-6">
-          <nav className="-mb-px flex flex-wrap gap-x-6 gap-y-2">
-            {tabs.map((tab) => {
+        <div className="sticky top-20 z-20 mb-6">
+          <nav className="grid grid-cols-2 gap-2 rounded-2xl border border-white/80 bg-white/90 p-2 shadow-lg backdrop-blur-md sm:grid-cols-5">
+            {tabs.map((tab, index) => {
               const Icon = tab.icon;
+              const isLastMobileCard = index === tabs.length - 1;
+
               return (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
+                  className={`rounded-xl px-3 py-3 text-left transition ${
+                    isLastMobileCard ? 'col-span-2 sm:col-span-1' : ''
+                  } ${
                     activeTab === tab.id
-                      ? 'border-emerald-500 text-emerald-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      ? 'bg-slate-900 text-white shadow-md'
+                      : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
                   }`}
                 >
-                  <Icon className="h-5 w-5" />
-                  <span>{tab.name}</span>
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="inline-flex items-center gap-2">
+                      <Icon className={`h-4 w-4 ${activeTab === tab.id ? 'text-emerald-300' : 'text-emerald-600'}`} />
+                      <span className="text-sm font-semibold leading-tight">{tab.name}</span>
+                    </span>
+                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                      activeTab === tab.id
+                        ? 'bg-white/10 text-white'
+                        : 'bg-white text-slate-500 ring-1 ring-slate-200'
+                    }`}>
+                      {tabCountById[tab.id] ?? 0}
+                    </span>
+                  </span>
+                  <span className={`mt-1 hidden text-xs leading-5 sm:block ${
+                    activeTab === tab.id ? 'text-slate-200' : 'text-slate-500'
+                  }`}>
+                    {tabDescriptionById[tab.id]}
+                  </span>
                 </button>
               );
             })}
@@ -1467,12 +1555,12 @@ const Community: React.FC = () => {
             {loadingForums && renderLoadingCards(3)}
             {!loadingForums && forums.length === 0 && renderEmptyState('No forums available yet. Be the first to create community activity this week.')}
             {!loadingForums && forums.map((forum) => (
-              <div key={forum.id} className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
+              <div key={forum.id} className="rounded-2xl border border-white bg-white/95 p-4 shadow-sm transition-all hover:shadow-lg sm:p-6">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0 flex-1">
                     <h3 className="text-lg font-semibold text-gray-900 mb-2">{forum.title}</h3>
                     <p className="text-gray-600 mb-4">{forum.description}</p>
-                    <div className="flex items-center space-x-6 text-sm text-gray-500">
+                    <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-gray-500">
                       <span className="flex items-center">
                         <UserGroupIcon className="h-4 w-4 mr-1" />
                         {forum.members.toLocaleString()} members
@@ -1484,9 +1572,9 @@ const Community: React.FC = () => {
                       <span>Last activity: {formatRelativeTime(forum.lastActivity)}</span>
                     </div>
                   </div>
-                  <div className="flex flex-col items-end gap-2">
+                  <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
                     {isAdminOrManager && (
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap gap-2 sm:justify-end">
                         <button
                           type="button"
                           onClick={() => openEditForumModal(forum)}
@@ -1507,7 +1595,7 @@ const Community: React.FC = () => {
 
                     <Link
                       to={`/community/forums/${forum.id}`}
-                      className="bg-slate-700 text-white px-4 py-2 rounded-md hover:bg-slate-800 transition-colors"
+                      className="inline-flex items-center justify-center rounded-xl bg-slate-700 px-4 py-2.5 text-white transition-colors hover:bg-slate-800"
                     >
                       Open Forum
                     </Link>
@@ -1524,14 +1612,14 @@ const Community: React.FC = () => {
             {loadingPosts && renderLoadingCards(4)}
             {!loadingPosts && posts.length === 0 && renderEmptyState('No posts yet. Start the first beneficial discussion and inspire others.')}
             {!loadingPosts && posts.map((post) => (
-              <div key={post.id} className="bg-white rounded-lg shadow-md p-6">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
+              <div key={post.id} className="rounded-2xl border border-white bg-white/95 p-4 shadow-sm sm:p-6">
+                <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
                     <h3 className="text-lg font-semibold text-gray-900">{post.title}</h3>
                     <p className="text-sm text-gray-500">by {post.author.username} • {formatRelativeTime(post.createdAt)}</p>
                   </div>
                   {isAdminOrManager && (
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2 sm:justify-end">
                       <button
                         type="button"
                         onClick={() => openEditPostModal(post)}
@@ -1551,7 +1639,7 @@ const Community: React.FC = () => {
                   )}
                 </div>
                 <p className="text-gray-700 mb-4">{truncate(post.content)}</p>
-                <div className="flex items-center space-x-4 text-sm text-gray-500">
+                <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
                   <span>{post.replies} replies</span>
                   <span>{post.likes} likes</span>
                   <Link
@@ -1605,7 +1693,7 @@ const Community: React.FC = () => {
                           ))}
                         </div>
 
-                        <div className="flex gap-2">
+                        <div className="flex flex-col gap-2 sm:flex-row">
                           <input
                             type="text"
                             value={replyDraftByComment[comment.id] || ''}
@@ -1628,7 +1716,7 @@ const Community: React.FC = () => {
                       </div>
                     ))}
 
-                    <div className="flex gap-2">
+                    <div className="flex flex-col gap-2 sm:flex-row">
                       <input
                         type="text"
                         value={commentDraftByPost[post.id] || ''}
@@ -1661,7 +1749,7 @@ const Community: React.FC = () => {
             {loadingEvents && renderLoadingCards(3)}
             {!loadingEvents && upcomingEvents.length === 0 && renderEmptyState('No upcoming events yet. Community organizers can start adding gatherings soon.')}
             {!loadingEvents && upcomingEvents.map((event) => (
-              <div key={event.id} className="bg-white rounded-lg shadow-md p-6 border border-gray-100">
+              <div key={event.id} className="rounded-2xl border border-white bg-white/95 p-4 shadow-sm sm:p-6">
                 <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                   <div className="flex-1">
                     <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -1699,7 +1787,7 @@ const Community: React.FC = () => {
                     href={generateGoogleMapsDirectionsUrl(event.location)}
                     target="_blank"
                     rel="noreferrer"
-                    className="bg-emerald-600 text-white px-4 py-2 rounded-md hover:bg-emerald-700 transition-colors h-fit"
+                    className="h-fit w-full rounded-xl bg-emerald-600 px-4 py-2.5 text-center text-white transition-colors hover:bg-emerald-700 sm:w-auto"
                   >
                     Get Directions
                   </a>
@@ -1769,7 +1857,7 @@ const Community: React.FC = () => {
                   <div
                     id={`meeting-card-${meeting.id}`}
                     key={meeting.id}
-                    className={`bg-white rounded-xl border shadow-sm p-5 transition-all ${highlightMeetingId === meeting.id ? 'border-emerald-400 ring-2 ring-emerald-200' : 'border-sky-100'}`}
+                    className={`rounded-2xl border bg-white/95 p-4 shadow-sm transition-all sm:p-5 ${highlightMeetingId === meeting.id ? 'border-emerald-400 ring-2 ring-emerald-200' : 'border-sky-100'}`}
                   >
                     <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                       <div className="flex-1">
@@ -1934,7 +2022,7 @@ const Community: React.FC = () => {
               <div className="space-y-3">
                 <h3 className="text-lg font-semibold text-gray-900">Past and Closed Meetings</h3>
                 {pastMeetings.slice(0, 8).map((meeting) => (
-                  <div id={`meeting-card-${meeting.id}`} key={meeting.id} className="bg-white rounded-xl border border-gray-100 p-4">
+                  <div id={`meeting-card-${meeting.id}`} key={meeting.id} className="rounded-2xl border border-white bg-white/95 p-4 shadow-sm">
                     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                       <div>
                         <p className="font-semibold text-gray-900">{meeting.title}</p>
@@ -1978,7 +2066,7 @@ const Community: React.FC = () => {
         )}
 
         {/* Islamic Quote */}
-        <div className="mt-12 bg-white rounded-lg shadow-md p-6 text-center">
+        <div className="mt-12 rounded-2xl border border-white bg-white/90 p-6 text-center shadow-sm">
           <p className="text-lg font-arabic text-gray-700 mb-2">
             "وَالْمُؤْمِنُونَ وَالْمُؤْمِنَاتُ بَعْضُهُمْ أَوْلِيَاءُ بَعْضٍ"
           </p>

@@ -94,6 +94,16 @@ const Dashboard: React.FC = () => {
         });
     };
 
+    const formatProfileChangeSummary = (changed: ProfileFieldChange) => {
+        if (changed.field === 'profile.avatar') {
+            return 'Profile picture updated';
+        }
+
+        const beforeValue = changed.before?.trim() ? changed.before : 'Empty';
+        const afterValue = changed.after?.trim() ? changed.after : 'Empty';
+        return `"${beforeValue}" -> "${afterValue}"`;
+    };
+
   // User Creation State
   const [showCreateUserModal, setShowCreateUserModal] = useState(false);
   const [newUser, setNewUser] = useState({
@@ -686,7 +696,7 @@ const Dashboard: React.FC = () => {
                                         <div className="space-y-1">
                                             {entry.changedFields.map((changed, changedIndex) => (
                                                 <div key={`${changed.field}-${changedIndex}`} className="text-sm text-gray-700">
-                                                    <span className="font-medium">{changed.field}</span>: "{changed.before || ''}" {'->'} "{changed.after || ''}"
+                                                    <span className="font-medium">{changed.field}</span>: {formatProfileChangeSummary(changed)}
                                                 </div>
                                             ))}
                                         </div>
