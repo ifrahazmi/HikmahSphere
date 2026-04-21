@@ -52,6 +52,11 @@ export interface IUser extends Document {
       prayers: boolean;
       events: boolean;
       community: boolean;
+      meetings?: {
+        enabled: boolean;
+        channels: Array<'push' | 'email'>;
+        reminderMinutes: number[];
+      };
     };
   };
   profile: {
@@ -319,6 +324,18 @@ const UserSchema = new Schema<IUser>({
       prayers: { type: Boolean, default: true },
       events: { type: Boolean, default: true },
       community: { type: Boolean, default: true },
+      meetings: {
+        enabled: { type: Boolean, default: true },
+        channels: {
+          type: [String],
+          enum: ['push', 'email'],
+          default: ['push', 'email'],
+        },
+        reminderMinutes: {
+          type: [Number],
+          default: [1440, 60, 15],
+        },
+      },
     },
   },
   profile: {

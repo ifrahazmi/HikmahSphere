@@ -428,4 +428,87 @@ router.put('/profile', authMiddleware, [
     }
 });
 
+/**
+ * @route   PUT /api/auth/preferences/meeting-notifications
+ * @desc    Update current user meeting notification preferences
+ */
+router.put('/preferences/meeting-notifications', authMiddleware, [
+  body('enabled').optional().isBoolean(),
+  body('channels').optional().isArray(),
+  body('reminderMinutes').optional().isArray(),
+], async (req: any, res: Response) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Validation failed',
+        errors: errors.array().map((error: any) => ({ field: error.path, message: error.msg })),
+      });
+    }
+
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ status: 'error', message: 'User not found' });
+    }
+
+    if (!user.preferences) {
+      user.preferences = {
+        language: 'en',
+        prayerCalculationMethod: 'MWL',
+        madhab: 'hanafi',
+        notifications: {
+          prayers: true,
+          events: true,
+          community: true,
+        },
+      };
+    }
+
+    if (!user.preferences.notifications) {
+      user.preferences.notifications = {
+        prayers: true,
+        events: true,
+        community: true,
+      };
+    }
+
+    const channels = Array.isArray(req.body.channels)
+      ? req.body.channels.filter((item: string) => ['push', 'email'].includes(item))
+      : undefined;
+
+    const reminderMinutes = Array.isArray(req.body.reminderMinutes)
+      ? req.body.reminderMinutes
+          .map((value: unknown) => Number(value))
+          .filter((value: number) => Number.isFinite(value) && value > 0)
+          .sort((a: number, b: number) => b - a)
+      : undefined;
+
+    const existingMeetingPrefs = user.preferences.notifications.meetings || {
+      enabled: true,
+      channels: ['push', 'email'],
+      reminderMinutes: [1440, 60, 15],
+    };
+
+    user.preferences.notifications.meetings = {
+      enabled: typeof req.body.enabled === 'boolean' ? req.body.enabled : existingMeetingPrefs.enabled,
+      channels: channels && channels.length > 0 ? channels : existingMeetingPrefs.channels,
+      reminderMinutes: reminderMinutes && reminderMinutes.length > 0 ? reminderMinutes : existingMeetingPrefs.reminderMinutes,
+    };
+
+    await user.save();
+
+    return res.json({
+      status: 'success',
+      message: 'Meeting notification preferences updated',
+      data: {
+        meetings: user.preferences.notifications.meetings,
+      },
+    });
+  } catch (error) {
+    console.error('Update meeting preferences error:', error);
+    return res.status(500).json({ status: 'error', message: 'Server error' });
+  }
+});
+
 export default router;

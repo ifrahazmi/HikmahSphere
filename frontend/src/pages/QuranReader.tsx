@@ -1119,8 +1119,8 @@ const QuranReader: React.FC = () => {
       <div className={`min-h-screen ${settings.theme === 'dark' ? 'bg-gray-900' : 'bg-gradient-to-br from-emerald-50 via-white to-teal-50'}`}>
       {/* Full-screen loading spinner overlay */}
       {loading && (
-        <div className="fixed inset-0 bg-white bg-opacity-90 dark:bg-gray-900 dark:bg-opacity-90 flex items-center justify-center z-50">
-          <LoadingSpinner size="xl" text="Loading Surah..." />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/30 backdrop-blur-sm">
+          <LoadingSpinner size="xl" color="white" text="Loading Surah..." />
         </div>
       )}
       <div className="w-full">
@@ -1875,7 +1875,7 @@ const QuranReader: React.FC = () => {
                     <BookmarkIcon className="h-3 w-3 inline mr-1" />
                     Bookmarks
                   </label>
-                  <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                  <div className="space-y-2 max-h-[22rem] min-h-[16rem] overflow-y-auto pr-1">
                     {bookmarks.length > 0 ? (
                       bookmarks.map((bookmark) => (
                         <div
@@ -2991,7 +2991,7 @@ const QuranReader: React.FC = () => {
                     <BookmarkIcon className="h-4 w-4 inline mr-1" />
                     Bookmarks
                   </label>
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                  <div className="space-y-2.5 max-h-[48vh] min-h-[16rem] overflow-y-auto pr-1">
                     {bookmarks.length > 0 ? (
                       bookmarks.map((bookmark) => (
                         <div

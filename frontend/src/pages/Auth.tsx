@@ -7,6 +7,26 @@ import PageSEO from '../components/PageSEO';
 import { API_URL } from '../config';
 
 const ONBOARDING_REQUIRED_KEY = 'onboardingRequiredAfterRegister';
+const AUTH_FETCH_TIMEOUT_MS = 15000;
+
+const fetchWithTimeout = async (input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = AUTH_FETCH_TIMEOUT_MS): Promise<Response> => {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('Request timed out. Please try again.');
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+};
 
 const Auth: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -74,7 +94,7 @@ const Auth: React.FC = () => {
     try {
         if (showPasswordChange) {
             // Handle Password Change
-            const response = await fetch(`${API_URL}/auth/change-password`, {
+          const response = await fetchWithTimeout(`${API_URL}/auth/change-password`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -98,34 +118,15 @@ const Auth: React.FC = () => {
         }
 
         if (isLogin) {
-            // Manual login call to check for passwordChangeRequired flag
-            const response = await fetch(`${API_URL}/auth/login`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: submittedEmail, password: submittedPassword })
-            });
-
-            const data = await response.json();
-
-            if (data.status === 'success') {
-                if (data.passwordChangeRequired) {
-                    toast.error('You must change your password to proceed.');
-                    setPasswordChangeToken(data.token);
-                    setShowPasswordChange(true);
-                } else {
-                    // Use the login function from auth context to properly update state
-                    await login(submittedEmail, submittedPassword);
-                    toast.success('Successfully logged in!');
-                    navigate(redirectParam || '/profile', { replace: true });
-                }
+            const loginResult = await login(submittedEmail, submittedPassword);
+            if (loginResult.passwordChangeRequired) {
+              toast.error('You must change your password to proceed.');
+              const temporaryToken = localStorage.getItem('token') || '';
+              setPasswordChangeToken(temporaryToken);
+              setShowPasswordChange(true);
             } else {
-                  const normalizedMessage = typeof data.message === 'string' ? data.message : '';
-                  // Treat any missing-user or wiped-credential responses as a prompt to re-register
-                  const shouldShowRecovery = /invalid user|invalid credentials|user not found|account not found|no user/i.test(normalizedMessage);
-                  if (shouldShowRecovery) {
-                    setShowRecoveryModal(true);
-                  }
-                  toast.error(normalizedMessage || 'Login failed. Please check your credentials.');
+              toast.success('Successfully logged in!');
+              navigate(redirectParam || '/profile', { replace: true });
             }
 
         } else {
@@ -140,7 +141,14 @@ const Auth: React.FC = () => {
         }
     } catch (error: any) {
         console.error('Authentication error:', error);
-        toast.error(error.message || 'Authentication failed. Please try again.');
+        const normalizedMessage = typeof error?.message === 'string' ? error.message : '';
+        if (isLogin) {
+          const shouldShowRecovery = /invalid user|invalid credentials|user not found|account not found|no user/i.test(normalizedMessage);
+          if (shouldShowRecovery) {
+            setShowRecoveryModal(true);
+          }
+        }
+        toast.error(normalizedMessage || 'Authentication failed. Please try again.');
     } finally {
         setLoading(false);
     }
@@ -179,7 +187,7 @@ const Auth: React.FC = () => {
 
     setOnboardingSaving(true);
     try {
-      const response = await fetch(`${API_URL}/auth/profile`, {
+      const response = await fetchWithTimeout(`${API_URL}/auth/profile`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
