@@ -54,6 +54,34 @@ const fetchWithTimeout = async (input: RequestInfo | URL, init: RequestInit = {}
   }
 };
 
+const getJwtExpiryMs = (token: string): number | null => {
+  try {
+    const [, payload] = token.split('.');
+    if (!payload) {
+      return null;
+    }
+
+    const normalizedPayload = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const paddedPayload = normalizedPayload.padEnd(Math.ceil(normalizedPayload.length / 4) * 4, '=');
+    const decodedPayload = JSON.parse(window.atob(paddedPayload)) as { exp?: number };
+
+    return typeof decodedPayload.exp === 'number'
+      ? decodedPayload.exp * 1000
+      : null;
+  } catch {
+    return null;
+  }
+};
+
+const isJwtExpired = (token: string, clockSkewMs = 30_000): boolean => {
+  const expiryMs = getJwtExpiryMs(token);
+  if (!expiryMs) {
+    return false;
+  }
+
+  return Date.now() >= expiryMs - clockSkewMs;
+};
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -96,6 +124,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const token = localStorage.getItem('token');
       const storedUser = localStorage.getItem('user');
+
+      if (token && isJwtExpired(token)) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        setUser(null);
+        return;
+      }
 
       // Only set user from localStorage if we have a token
       // Otherwise wait for API validation

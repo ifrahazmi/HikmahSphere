@@ -290,7 +290,7 @@ const PrayerTimesIslamicCalendar: React.FC<IslamicCalendarProps> = ({ whiteDays,
           ))}
 
           {displayedDays.map(({ date, iso, hijri }) => {
-            const isToday = iso === toLocalISO(today);
+            const isToday = iso === todayIso;
             const isWhiteDay = allWhiteDayDates.has(iso);
             const whiteDayEntry = whiteDayMap.get(iso);
             const whiteDayLabel = whiteDayEntry?.label;

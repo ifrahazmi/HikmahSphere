@@ -8,6 +8,44 @@ importScripts('https://www.gstatic.com/firebasejs/10.7.2/firebase-messaging-comp
 const CACHE_NAME = 'hikmahsphere-app-v4';
 const TILE_CACHE = 'hikmahsphere-tiles-v1';
 const APP_SHELL = ['/', '/index.html', '/manifest.json', '/logo.png', '/favicon.ico'];
+const OFFLINE_DOCUMENT = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>HikmahSphere Offline</title><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f8fafc;color:#0f172a;display:grid;min-height:100vh;place-items:center;padding:24px}main{max-width:28rem;text-align:center}h1{margin:0 0 12px;color:#047857;font-size:1.75rem}p{margin:0;color:#475569;line-height:1.6}</style></head><body><main><h1>You're offline</h1><p>HikmahSphere could not load this page right now. Please check your connection and try again.</p></main></body></html>`;
+
+const cacheAppShell = async () => {
+  const cache = await caches.open(CACHE_NAME);
+
+  await Promise.allSettled(
+    APP_SHELL.map(async (asset) => {
+      const response = await fetch(asset, { cache: 'no-cache' });
+      if (response && response.ok) {
+        await cache.put(asset, response.clone());
+      }
+    })
+  );
+};
+
+const getNavigationFallback = async () => {
+  const cachedIndex = await caches.match('/index.html');
+  if (cachedIndex) {
+    return cachedIndex;
+  }
+
+  const cachedRoot = await caches.match('/');
+  if (cachedRoot) {
+    return cachedRoot;
+  }
+
+  return new Response(OFFLINE_DOCUMENT, {
+    status: 503,
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8'
+    }
+  });
+};
+
+const getGenericFallback = () => new Response('', {
+  status: 503,
+  statusText: 'Offline'
+});
 
 // Initialize the Firebase app in the service worker by passing in
 // your app's Firebase config object.
@@ -33,10 +71,7 @@ const recentNotificationIds = new Map();
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches
-      .open(CACHE_NAME)
-      .then((cache) => cache.addAll(APP_SHELL))
-      .catch(() => undefined)
+    cacheAppShell().catch(() => undefined)
   );
   self.skipWaiting();
 });
@@ -94,7 +129,7 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', copy));
           return response;
         })
-        .catch(() => caches.match('/index.html'))
+        .catch(() => getNavigationFallback())
     );
     return;
   }
@@ -111,7 +146,7 @@ self.addEventListener('fetch', (event) => {
           }
           return response;
         })
-        .catch(() => cachedResponse);
+        .catch(() => getGenericFallback());
     })
   );
 });

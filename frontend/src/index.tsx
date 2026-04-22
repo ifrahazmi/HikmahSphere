@@ -30,7 +30,10 @@ if (typeof window !== 'undefined') {
   });
 }
 
-if ('serviceWorker' in navigator && window.location.hostname === 'localhost') {
+const isLocalDevHost = typeof window !== 'undefined'
+  && ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
+
+if ('serviceWorker' in navigator && isLocalDevHost) {
   window.addEventListener('load', async () => {
     const registrations = await navigator.serviceWorker.getRegistrations();
     await Promise.all(registrations.map((registration) => registration.unregister()));
