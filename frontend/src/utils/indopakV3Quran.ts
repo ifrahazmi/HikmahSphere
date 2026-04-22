@@ -1,5 +1,6 @@
 // IndoPak Nastaleeq V3 - Word by Word Quran Data Fetcher
 // This utility fetches Quran data from the backend API without any Unicode conversion
+import { fetchJsonWithRecovery } from './fetchWithRecovery';
 
 export interface IndopakV3Word {
   position: number;
@@ -30,21 +31,21 @@ export interface IndopakV3SingleAyah {
 }
 
 const API_BASE_URL = '/api/quran/indopak-v3';
+const INDOPAK_CACHE_TTL_MS = 1000 * 60 * 10;
 
 /**
  * Fetch complete Surah from IndoPak V3 API
  * No Unicode conversion - fetch and display as-is
  */
 export const fetchIndopakV3Surah = async (surahNumber: number): Promise<IndopakV3Surah> => {
-  const response = await fetch(`${API_BASE_URL}/surah/${surahNumber}`);
-  
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'Failed to fetch IndoPak V3 Surah' }));
-    throw new Error(error.message || `HTTP ${response.status}`);
-  }
-  
-  const result = await response.json();
-  
+  const result = await fetchJsonWithRecovery<{ status: string; data: IndopakV3Surah; message?: string }>(
+    `${API_BASE_URL}/surah/${surahNumber}`,
+    {
+      cacheTtlMs: INDOPAK_CACHE_TTL_MS,
+      fallbackMessage: 'Failed to fetch IndoPak V3 Surah',
+    }
+  );
+
   if (result.status !== 'success') {
     throw new Error(result.message || 'Failed to fetch IndoPak V3 Surah');
   }
@@ -60,15 +61,14 @@ export const fetchIndopakV3Ayah = async (
   surahNumber: number,
   ayahNumber: number
 ): Promise<IndopakV3SingleAyah> => {
-  const response = await fetch(`${API_BASE_URL}/ayah/${surahNumber}/${ayahNumber}`);
-  
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'Failed to fetch IndoPak V3 Ayah' }));
-    throw new Error(error.message || `HTTP ${response.status}`);
-  }
-  
-  const result = await response.json();
-  
+  const result = await fetchJsonWithRecovery<{ status: string; data: IndopakV3SingleAyah; message?: string }>(
+    `${API_BASE_URL}/ayah/${surahNumber}/${ayahNumber}`,
+    {
+      cacheTtlMs: INDOPAK_CACHE_TTL_MS,
+      fallbackMessage: 'Failed to fetch IndoPak V3 Ayah',
+    }
+  );
+
   if (result.status !== 'success') {
     throw new Error(result.message || 'Failed to fetch IndoPak V3 Ayah');
   }

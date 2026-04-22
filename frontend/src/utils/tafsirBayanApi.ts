@@ -1,10 +1,10 @@
 import type { TafsirAyahResponse, TafsirSurahResponse } from '../types/tafsir';
+import { fetchJsonWithRecovery } from './fetchWithRecovery';
 
 const DEFAULT_TAFSIR_API_URL = '/api/quran/tafsir';
 const TAFHEEM_EDITION = 'tafheem-ul-quran-syed-abu-ala-maududi';
 const DEFAULT_MAUDUDI_API_URL = 'https://aws-vm.reedfish-temperature.ts.net/api/maududi';
 const REQUEST_TIMEOUT_MS = Number(process.env.REACT_APP_TAFSIR_TIMEOUT_MS || 30000);
-const MAX_RETRY_ATTEMPTS = 2;
 const TAFSIR_CACHE_TTL_MS = Number(process.env.REACT_APP_TAFSIR_CACHE_TTL_MS || 300000);
 
 type CacheEntry<T> = {
@@ -93,55 +93,6 @@ export const getTafsirRuntimeIssue = (): string | null => {
   }
 
   return null;
-};
-
-const fetchWithTimeout = async (url: string): Promise<Response> => {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
-  try {
-    return await fetch(url, { signal: controller.signal });
-  } catch (error: any) {
-    if (error?.name === 'AbortError') {
-      throw new Error(`Request timed out after ${REQUEST_TIMEOUT_MS / 1000}s`);
-    }
-
-    throw new Error('Unable to reach Tafsir API. This is usually a network, CORS, or mixed-content issue.');
-  } finally {
-    clearTimeout(timeoutId);
-  }
-};
-
-const fetchWithRetry = async (url: string): Promise<Response> => {
-  let lastError: Error | null = null;
-
-  for (let attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
-    try {
-      return await fetchWithTimeout(url);
-    } catch (error: any) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-      const message = String(lastError.message || '').toLowerCase();
-      const isRetryable = message.includes('timed out') || message.includes('unable to reach tafsir api');
-
-      if (!isRetryable || attempt === MAX_RETRY_ATTEMPTS) {
-        throw lastError;
-      }
-
-      // Brief backoff to avoid hammering the endpoint when it is temporarily saturated.
-      await new Promise((resolve) => setTimeout(resolve, 700 * attempt));
-    }
-  }
-
-  throw lastError || new Error('Unable to reach Tafsir API.');
-};
-
-const handleResponse = async <T>(response: Response, fallbackMessage: string): Promise<T> => {
-  if (!response.ok) {
-    const errorPayload = await response.json().catch(() => ({ message: fallbackMessage }));
-    throw new Error(errorPayload.message || fallbackMessage);
-  }
-
-  return response.json() as Promise<T>;
 };
 
 const getCached = <T>(cache: Map<string, CacheEntry<T>>, key: string): T | null => {
@@ -270,8 +221,11 @@ export const fetchTafsirSurah = async (surahNumber: number, edition?: string): P
   if (existingRequest) return existingRequest;
 
   const request = (async () => {
-    const response = await fetchWithRetry(url);
-    const payload = await handleResponse<any>(response, 'Failed to load tafsir for this surah');
+    const payload = await fetchJsonWithRecovery<any>(url, {
+      cacheTtlMs: 0,
+      timeoutMs: REQUEST_TIMEOUT_MS,
+      fallbackMessage: 'Failed to load tafsir for this surah',
+    });
     const normalized = normalizeTafsirSurah(payload);
     setCached(surahCache, cacheKey, normalized);
     return normalized;
@@ -310,8 +264,11 @@ export const fetchTafsirAyah = async (
   if (existingRequest) return existingRequest;
 
   const request = (async () => {
-    const response = await fetchWithRetry(url);
-    const payload = await handleResponse<any>(response, 'Failed to load tafsir for this ayah');
+    const payload = await fetchJsonWithRecovery<any>(url, {
+      cacheTtlMs: 0,
+      timeoutMs: REQUEST_TIMEOUT_MS,
+      fallbackMessage: 'Failed to load tafsir for this ayah',
+    });
     const normalized = normalizeTafsirAyah(payload);
     setCached(ayahCache, cacheKey, normalized);
     return normalized;

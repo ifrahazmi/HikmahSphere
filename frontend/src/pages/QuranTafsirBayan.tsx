@@ -22,9 +22,10 @@ import { useQuran } from '../contexts/QuranContext';
 import { useAuth } from '../hooks/useAuth';
 import { API_URL } from '../config';
 import { fetchIndopakV3Ayah, fetchIndopakV3Surah } from '../utils/indopakV3Quran';
+import { fetchJsonWithRecovery, isRateLimitError } from '../utils/fetchWithRecovery';
 import { fetchTafsirAyah, fetchTafsirSurah, getTafsirRuntimeIssue } from '../utils/tafsirBayanApi';
 import type { TafsirAyah } from '../types/tafsir';
-import { BOOKMARK_COLOR_OPTIONS, DEFAULT_TRANSLATIONS, DEFAULT_URDU_TRANSLATION, type BookmarkColor } from '../types/quran';
+import { BOOKMARK_COLOR_OPTIONS, DEFAULT_TAFSIR_TRANSLATION_PREFERENCES, DEFAULT_TRANSLATIONS, DEFAULT_URDU_TRANSLATION, type BookmarkColor, type SurahData } from '../types/quran';
 
 interface DisplayAyah {
   ayahNumber: number;
@@ -67,11 +68,6 @@ const TAFSIR_EDITION_OPTIONS = [
   { value: 'bayan-ul-quran-dr-israr-ahmed', label: 'Bayan-ul-Quran by Dr Israr Ahmed' },
   { value: 'tafheem-ul-quran-syed-abu-ala-maududi', label: "Tafheem e Qur'an - Syed Abu Ala Maududi" },
 ] as const;
-
-const TAFSIR_TRANSLATION_MAPPING: Record<string, string> = {
-  'bayan-ul-quran-dr-israr-ahmed': DEFAULT_URDU_TRANSLATION.identifier,
-  'tafheem-ul-quran-syed-abu-ala-maududi': 'ur.maududi',
-};
 
 const TAFSIR_TEXT_COLOR_OPTIONS = [
   { label: 'Default', value: '#1f2937', textClass: 'text-gray-800' },
@@ -137,7 +133,7 @@ const QuranTafsirBayan: React.FC = () => {
     ? Math.max(250, Math.floor(configuredBookmarkTapIntervalMs))
     : 2000;
 
-  const { surahs, settings, updateSettings, bookmarks, addBookmark, removeBookmark } = useQuran();
+  const { surahs, settings, updateSettings, bookmarks, addBookmark, removeBookmark, currentSurah, translations } = useQuran();
   const { isAuthenticated, loading: authLoading } = useAuth();
   const [readerMode, setReaderMode] = useState<ReaderMode>('ayah');
   const [selectedSurah, setSelectedSurah] = useState<number>(1);
@@ -168,6 +164,7 @@ const QuranTafsirBayan: React.FC = () => {
   const [bookmarkModalViewport, setBookmarkModalViewport] = useState<{ height: number; offsetTop: number } | null>(null);
   const readerContentRef = useRef<HTMLDivElement | null>(null);
   const bookmarkViewportRafRef = useRef<number | null>(null);
+  const translationMapCacheRef = useRef<Map<string, Map<number, string>>>(new Map());
   const mobileSettingsSwipeStartYRef = useRef<number | null>(null);
   const mobileSettingsSwipeCurrentYRef = useRef<number | null>(null);
   const tapTrackerRef = useRef<{ ayahNum: number | null; count: number; lastAt: number }>({
@@ -279,6 +276,9 @@ const QuranTafsirBayan: React.FC = () => {
 
   const selectedTranslation = settings.selectedTranslations[0] || DEFAULT_URDU_TRANSLATION.identifier;
   const tafsirEdition = settings.tafsirEdition || 'bayan-ul-quran-dr-israr-ahmed';
+  const preferredTafsirTranslation =
+    settings.tafsirTranslationPreferences[tafsirEdition]
+    || DEFAULT_TAFSIR_TRANSLATION_PREFERENCES[tafsirEdition];
   const tafsirFontSize = settings.tafsirFontSize ?? 26;
   const textAreaBackgroundColor = settings.tafsirTextAreaBackground || DEFAULT_TEXT_AREA_BG;
   const tafsirAreaBackgroundColor = settings.tafsirAreaBackground || DEFAULT_TAFSIR_AREA_BG;
@@ -291,21 +291,39 @@ const QuranTafsirBayan: React.FC = () => {
   const setSelectedTranslation = useCallback((value: string) => {
     updateSettings({
       selectedTranslations: [value],
+      tafsirTranslationPreferences: {
+        ...settings.tafsirTranslationPreferences,
+        [tafsirEdition]: value,
+      },
       arabicOnlyMode: false,
     });
-  }, [updateSettings]);
+  }, [settings.tafsirTranslationPreferences, tafsirEdition, updateSettings]);
 
   const setTafsirEdition = useCallback((value: string) => {
     const matchedOption = TAFSIR_EDITION_OPTIONS.find((option) => option.value === value);
     if (!matchedOption) return;
+
+    const nextPreferredTranslation =
+      settings.tafsirTranslationPreferences[matchedOption.value]
+      || DEFAULT_TAFSIR_TRANSLATION_PREFERENCES[matchedOption.value];
+
     updateSettings({
       tafsirEdition: matchedOption.value,
-      selectedTranslations: [
-        TAFSIR_TRANSLATION_MAPPING[matchedOption.value] || DEFAULT_URDU_TRANSLATION.identifier,
-      ],
+      selectedTranslations: [nextPreferredTranslation],
       arabicOnlyMode: false,
     });
-  }, [updateSettings]);
+  }, [settings.tafsirTranslationPreferences, updateSettings]);
+
+  useEffect(() => {
+    if (selectedTranslation === preferredTafsirTranslation) {
+      return;
+    }
+
+    updateSettings({
+      selectedTranslations: [preferredTafsirTranslation],
+      arabicOnlyMode: false,
+    });
+  }, [preferredTafsirTranslation, selectedTranslation, updateSettings]);
 
   const setTafsirFontSize = useCallback((value: React.SetStateAction<number>) => {
     const resolved = typeof value === 'function' ? value(tafsirFontSize) : value;
@@ -642,44 +660,62 @@ const QuranTafsirBayan: React.FC = () => {
       return map;
     };
 
+    const cacheKey = `${surahNumber}|${translationIdentifier}`;
+    const cachedMap = translationMapCacheRef.current.get(cacheKey);
+    if (cachedMap) {
+      return cachedMap;
+    }
+
+    const activeTranslation =
+      currentSurah === surahNumber
+        ? translations.find(
+            (translation: SurahData) =>
+              translation.number === surahNumber
+              && translation.edition.identifier === translationIdentifier
+          )
+        : null;
+
+    if (activeTranslation) {
+      const parsedMap = parseTranslationPayload({ data: activeTranslation });
+      translationMapCacheRef.current.set(cacheKey, parsedMap);
+      return parsedMap;
+    }
+
     try {
-      const response = await fetch(
-        `${API_URL}/quran/surah/${surahNumber}/editions?editions=${encodeURIComponent(translationIdentifier)}`
+      const payload = await fetchJsonWithRecovery<{ status: string; data: SurahData[]; message?: string }>(
+        `${API_URL}/quran/surah/${surahNumber}/editions?editions=${encodeURIComponent(translationIdentifier)}`,
+        {
+          cacheTtlMs: 1000 * 60 * 10,
+          fallbackMessage: 'Failed to load Urdu translation',
+        }
       );
-
-      if (!response.ok) {
-        const errorPayload = await response.json().catch(() => ({ message: 'Failed to load Urdu translation' }));
-        throw new Error(errorPayload.message || 'Failed to load Urdu translation');
-      }
-
-      const payload = await response.json();
       if (payload.status !== 'success') {
         throw new Error(payload.message || 'Failed to load Urdu translation');
       }
 
-      return parseTranslationPayload(payload);
+      const parsedMap = parseTranslationPayload(payload);
+      translationMapCacheRef.current.set(cacheKey, parsedMap);
+      return parsedMap;
     } catch (backendError: any) {
       // Fallback: fetch translation directly from AlQuran Cloud if backend editions route fails.
-      const fallbackResponse = await fetch(
-        `https://api.alquran.cloud/v1/surah/${surahNumber}/editions/${encodeURIComponent(translationIdentifier)}`
+      const fallbackPayload = await fetchJsonWithRecovery<{ code: number; data: SurahData[]; status?: string }>(
+        `https://api.alquran.cloud/v1/surah/${surahNumber}/editions/${encodeURIComponent(translationIdentifier)}`,
+        {
+          cacheTtlMs: 1000 * 60 * 10,
+          fallbackMessage: backendError?.message || 'Failed to load Urdu translation from both backend and fallback source',
+        }
       );
-
-      if (!fallbackResponse.ok) {
-        throw new Error(
-          backendError?.message || 'Failed to load Urdu translation from both backend and fallback source'
-        );
-      }
-
-      const fallbackPayload = await fallbackResponse.json();
       if (fallbackPayload.code !== 200 || !fallbackPayload.data) {
         throw new Error(
           backendError?.message || fallbackPayload?.status || 'Failed to load Urdu translation from fallback source'
         );
       }
 
-      return parseTranslationPayload({ data: fallbackPayload.data });
+      const parsedMap = parseTranslationPayload({ data: fallbackPayload.data });
+      translationMapCacheRef.current.set(cacheKey, parsedMap);
+      return parsedMap;
     }
-  }, []);
+  }, [currentSurah, translations]);
 
   const buildDisplayAyahs = useCallback(async () => {
     const surahNumber = selectedSurah;
@@ -773,6 +809,11 @@ const QuranTafsirBayan: React.FC = () => {
         const displayAyahs = await buildDisplayAyahs();
         setAyahList(displayAyahs);
       } catch (err: any) {
+        if (isRateLimitError(err)) {
+          setError(err.message || 'Quran data is temporarily rate limited. Please wait a moment and retry.');
+          return;
+        }
+
         setError(err.message || 'Failed to load tafsir. Please try again.');
       } finally {
         setLoading(false);
@@ -1768,7 +1809,20 @@ const QuranTafsirBayan: React.FC = () => {
 
                 {!loading && error && (
                   <div className={`rounded-lg shadow-md p-4 text-sm ${settings.theme === 'dark' ? 'bg-red-950/30 border border-red-900 text-red-200' : 'bg-red-50 border border-red-300 text-red-700'}`}>
-                    {error}
+                    <p>{error}</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void handleFetch();
+                      }}
+                      className={`mt-3 inline-flex items-center rounded-md px-3 py-2 text-xs font-semibold ${
+                        settings.theme === 'dark'
+                          ? 'bg-red-900 text-red-100 hover:bg-red-800'
+                          : 'bg-red-600 text-white hover:bg-red-700'
+                      }`}
+                    >
+                      Retry Loading
+                    </button>
                   </div>
                 )}
 

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { toast } from 'react-hot-toast';
 import { API_URL } from '../config';
 import { useAuth } from '../hooks/useAuth';
+import { fetchJsonWithRecovery, isRateLimitError } from '../utils/fetchWithRecovery';
 import {
   Surah,
   SurahData,
@@ -14,8 +15,11 @@ import {
   LastRead,
   SearchResult,
   DEFAULT_QURAN_SETTINGS,
+  DEFAULT_TAFSIR_TRANSLATION_PREFERENCES,
   DEFAULT_URDU_TRANSLATION,
   DEFAULT_TRANSLATIONS,
+  TafsirEdition,
+  TafsirTranslationPreferences,
 } from '../types/quran';
 
 const QuranContext = createContext<QuranContextType | undefined>(undefined);
@@ -35,6 +39,8 @@ const LEGACY_QURAN_SETTINGS_KEY = 'quranSettings';
 const LEGACY_QURAN_BOOKMARKS_KEY = 'quranBookmarks';
 const LEGACY_QURAN_LAST_READ_KEY = 'quranLastRead';
 const QURAN_SETTINGS_MIGRATION_VERSION = 2; // Incremented to reset default translation to Urdu
+const QURAN_SURAHS_CACHE_TTL_MS = 1000 * 60 * 30;
+const QURAN_EDITIONS_CACHE_TTL_MS = 1000 * 60 * 10;
 
 export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
   const { isAuthenticated, loading: authLoading, user } = useAuth();
@@ -210,10 +216,13 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
         surahNumber,
         identifier: selectedTranslationIdentifier,
       });
-      const response = await fetch(
-        `${API_URL}/quran/surah/${surahNumber}/editions?editions=${selectedTranslationIdentifier}`
+      const data = await fetchJsonWithRecovery<{ status: string; data: SurahData[]; message?: string }>(
+        `${API_URL}/quran/surah/${surahNumber}/editions?editions=${selectedTranslationIdentifier}`,
+        {
+          cacheTtlMs: QURAN_EDITIONS_CACHE_TTL_MS,
+          fallbackMessage: 'Failed to load translation audio text',
+        }
       );
-      const data = await response.json();
 
       if (data.status === 'success' && data.data[0]) {
         translationSurahCacheRef.current.set(cacheKey, data.data[0]);
@@ -227,6 +236,9 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
         return data.data[0] as SurahData;
       }
     } catch (translationError) {
+      if (isRateLimitError(translationError)) {
+        console.warn(`${TRANSLATION_AUDIO_LOG_PREFIX} Translation audio text request hit a temporary rate limit.`);
+      }
       console.error(`${TRANSLATION_AUDIO_LOG_PREFIX} Failed to load translation audio text:`, translationError);
     }
 
@@ -369,6 +381,33 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       : [...DEFAULT_QURAN_SETTINGS.selectedTranslations];
   }, []);
 
+  const normalizeTafsirTranslationPreferences = useCallback((value: unknown): TafsirTranslationPreferences => {
+    const basePreferences: TafsirTranslationPreferences = {
+      ...DEFAULT_TAFSIR_TRANSLATION_PREFERENCES,
+    };
+
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return basePreferences;
+    }
+
+    const rawPreferences = value as Partial<Record<TafsirEdition, unknown>>;
+    const editions = Object.keys(DEFAULT_TAFSIR_TRANSLATION_PREFERENCES) as TafsirEdition[];
+
+    editions.forEach((edition) => {
+      const rawPreference = rawPreferences[edition];
+      if (typeof rawPreference !== 'string') {
+        return;
+      }
+
+      const normalizedPreference = normalizeSelectedTranslations([rawPreference])[0];
+      if (normalizedPreference === rawPreference) {
+        basePreferences[edition] = normalizedPreference;
+      }
+    });
+
+    return basePreferences;
+  }, [normalizeSelectedTranslations]);
+
   const normalizeSettings = useCallback((value: unknown): QuranSettings => {
     const mergedSettings =
       value && typeof value === 'object'
@@ -394,12 +433,13 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       ...mergedSettings,
       arabicFont: normalizedArabicFont,
       selectedTranslations: normalizeSelectedTranslations(mergedSettings.selectedTranslations),
+      tafsirTranslationPreferences: normalizeTafsirTranslationPreferences(mergedSettings.tafsirTranslationPreferences),
       translationAudioEnabled:
         typeof mergedSettings.translationAudioEnabled === 'boolean'
           ? mergedSettings.translationAudioEnabled
           : legacyTranslationAudioMode === 'after-arabic',
     };
-  }, [normalizeSelectedTranslations]);
+  }, [normalizeSelectedTranslations, normalizeTafsirTranslationPreferences]);
 
   useEffect(() => {
     const parseJson = (raw: string | null): unknown => {
@@ -555,12 +595,20 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
   useEffect(() => {
     const fetchSurahs = async () => {
       try {
-        const response = await fetch(`${API_URL}/quran/surahs`);
-        const data = await response.json();
+        const data = await fetchJsonWithRecovery<{ status: string; data: Surah[] }>(
+          `${API_URL}/quran/surahs`,
+          {
+            cacheTtlMs: QURAN_SURAHS_CACHE_TTL_MS,
+            fallbackMessage: 'Failed to fetch Quran surahs',
+          }
+        );
         if (data.status === 'success') {
           setSurahs(data.data);
         }
       } catch (err) {
+        if (isRateLimitError(err)) {
+          console.warn('Quran surah list request hit a temporary rate limit.');
+        }
         console.error('Failed to fetch surahs:', err);
       }
     };
@@ -615,10 +663,13 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
         return;
       }
       
-      const response = await fetch(
-        `${API_URL}/quran/surah/${surahNumber}/editions?editions=${editions.join(',')}`
+      const data = await fetchJsonWithRecovery<{ status: string; data: SurahData[]; message?: string }>(
+        `${API_URL}/quran/surah/${surahNumber}/editions?editions=${editions.join(',')}`,
+        {
+          cacheTtlMs: QURAN_EDITIONS_CACHE_TTL_MS,
+          fallbackMessage: 'Failed to load surah data',
+        }
       );
-      const data = await response.json();
       
       if (data.status === 'success') {
         let fetchedEditions: SurahData[] = data.data;
@@ -637,7 +688,11 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       }
     } catch (err) {
       console.error('Load surah error:', err);
-      setError('Network error. Please try again.');
+      setError(
+        isRateLimitError(err)
+          ? 'Quran data is temporarily busy. Please wait a moment and try again.'
+          : 'Network error. Please try again.'
+      );
     } finally {
       setLoading(false);
     }

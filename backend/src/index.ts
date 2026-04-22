@@ -170,6 +170,12 @@ app.use(helmet({
 }));
 
 // Rate limiting
+const isQuranApiRequest = (req: express.Request) => req.path.startsWith('/api/quran');
+const isRateLimitSkippedRequest = (req: express.Request) => (
+  req.path.startsWith('/api/hajj-guide/images')
+  || isQuranApiRequest(req)
+);
+
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // limit each IP to 100 requests per windowMs
@@ -181,10 +187,24 @@ const limiter = rateLimit({
   validate: {
       xForwardedForHeader: false, // Disable validation if we trust proxy logic is complex
   },
-  skip: (req) => req.path.startsWith('/api/hajj-guide/images'),
+  skip: isRateLimitSkippedRequest,
 });
 
 app.use(limiter);
+
+const quranLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    status: 'error',
+    message: 'Quran content is receiving too many requests right now. Please wait a moment and try again.',
+  },
+  validate: {
+    xForwardedForHeader: false,
+  },
+});
 
 // CORS configuration
 app.use(cors({
@@ -331,7 +351,7 @@ app.get('/api/tools/users', async (req, res) => {
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/prayers', prayerRoutes);
-app.use('/api/quran', quranRoutes);
+app.use('/api/quran', quranLimiter, quranRoutes);
 app.use('/api/dhikr', dhikrRoutes);
 app.use('/api/zakat', zakatRoutes);
 app.use('/api/community', communityRoutes);

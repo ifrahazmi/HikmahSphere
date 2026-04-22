@@ -80,6 +80,12 @@ export interface SearchResult {
   page: number;
 }
 
+export type TafsirEdition =
+  | 'bayan-ul-quran-dr-israr-ahmed'
+  | 'tafheem-ul-quran-syed-abu-ala-maududi';
+
+export type TafsirTranslationPreferences = Record<TafsirEdition, string>;
+
 export interface QuranSettings {
   selectedTranslations: string[];  // Single active translation identifier stored as a one-item array
   showTransliteration: boolean;
@@ -99,7 +105,8 @@ export interface QuranSettings {
   audioEnabled: boolean;           // Enable audio playback feature
   audioMode: 'ayah' | 'surah';     // 'ayah' for ayat-by-ayat, 'surah' for complete surah
   translationAudioEnabled: boolean; // When enabled, translation audio follows the Arabic audio mode
-  tafsirEdition: 'bayan-ul-quran-dr-israr-ahmed' | 'tafheem-ul-quran-syed-abu-ala-maududi';
+  tafsirEdition: TafsirEdition;
+  tafsirTranslationPreferences: TafsirTranslationPreferences;
   tafsirFontSize: number;          // 14-38px
   tafsirTextAreaBackground: string;
   tafsirAreaBackground: string;
@@ -235,6 +242,11 @@ export const DEFAULT_TRANSLATIONS = [
   { identifier: 'ur.ahmedali', name: 'Ahmed Ali', language: 'Urdu' },
 ];
 
+export const DEFAULT_TAFSIR_TRANSLATION_PREFERENCES: TafsirTranslationPreferences = {
+  'bayan-ul-quran-dr-israr-ahmed': DEFAULT_URDU_TRANSLATION.identifier,
+  'tafheem-ul-quran-syed-abu-ala-maududi': 'ur.maududi',
+};
+
 // Available Reciters for Audio Playback
 export const AVAILABLE_RECITERS = [
   { identifier: 'ar.alafasy', name: 'Mishary Rashid Alafasy' },
@@ -270,6 +282,7 @@ export const DEFAULT_QURAN_SETTINGS: QuranSettings = {
   audioMode: 'ayah',
   translationAudioEnabled: false,
   tafsirEdition: 'bayan-ul-quran-dr-israr-ahmed',
+  tafsirTranslationPreferences: { ...DEFAULT_TAFSIR_TRANSLATION_PREFERENCES },
   tafsirFontSize: 26,
   tafsirTextAreaBackground: '#f8fffb',
   tafsirAreaBackground: '#f0fdf4',
