@@ -29,6 +29,19 @@ export interface IMeetingNotificationConfig {
   }>;
 }
 
+export interface IMeetingDeclinedAttendee {
+  userId: Types.ObjectId;
+  reason: string;
+  respondedAt: Date;
+}
+
+export interface IMeetingJoinClick {
+  userId: Types.ObjectId;
+  firstJoinedAt: Date;
+  lastJoinedAt: Date;
+  joinCount: number;
+}
+
 export interface ICommunityMeeting extends Document {
   title: string;
   description: string;
@@ -49,6 +62,8 @@ export interface ICommunityMeeting extends Document {
     verified: boolean;
   };
   attendeeIds: Types.ObjectId[];
+  declinedAttendees: IMeetingDeclinedAttendee[];
+  joinClicks: IMeetingJoinClick[];
   maxCapacity?: number;
   tags: string[];
   notesLinks: string[];
@@ -159,6 +174,44 @@ const CommunityMeetingSchema = new Schema<ICommunityMeeting>(
     attendeeIds: [{
       type: Schema.Types.ObjectId,
       ref: 'User',
+    }],
+    declinedAttendees: [{
+      userId: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+        required: true,
+      },
+      reason: {
+        type: String,
+        required: true,
+        trim: true,
+        maxlength: 600,
+      },
+      respondedAt: {
+        type: Date,
+        default: Date.now,
+      },
+    }],
+    joinClicks: [{
+      userId: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+        required: true,
+      },
+      firstJoinedAt: {
+        type: Date,
+        required: true,
+      },
+      lastJoinedAt: {
+        type: Date,
+        required: true,
+      },
+      joinCount: {
+        type: Number,
+        required: true,
+        min: 1,
+        default: 1,
+      },
     }],
     maxCapacity: {
       type: Number,

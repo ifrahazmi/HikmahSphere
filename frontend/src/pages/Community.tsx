@@ -100,6 +100,27 @@ type Meeting = {
   };
   attendees: number;
   isJoined: boolean;
+  responseStatus: 'joined' | 'not_going' | 'none';
+  myDeclineReason?: string | null;
+  declinedCount: number;
+  joinClickCount: number;
+  rsvpedUsers?: Array<{
+    userId: string;
+    name: string;
+  }>;
+  declinedUsers?: Array<{
+    userId: string;
+    name: string;
+    reason: string;
+    respondedAt: string;
+  }>;
+  joinClickUsers?: Array<{
+    userId: string;
+    name: string;
+    firstJoinedAt: string;
+    lastJoinedAt: string;
+    joinCount: number;
+  }>;
   maxCapacity: number | null;
   tags?: string[];
   notesLinks?: string[];
@@ -182,6 +203,12 @@ type AdminEventForm = {
   maxCapacity: string;
   isOnline: boolean;
   tags: string;
+};
+
+type LocationSuggestion = {
+  displayName: string;
+  lat: string;
+  lon: string;
 };
 
 type AdminMeetingForm = {
@@ -321,6 +348,12 @@ const Community: React.FC = () => {
   const [submittingCommentForPost, setSubmittingCommentForPost] = useState<string | null>(null);
   const [submittingReplyForComment, setSubmittingReplyForComment] = useState<string | null>(null);
   const [rsvpLoadingMeetingId, setRsvpLoadingMeetingId] = useState<string | null>(null);
+  const [showDeclineModal, setShowDeclineModal] = useState(false);
+  const [declineMeeting, setDeclineMeeting] = useState<Meeting | null>(null);
+  const [declineReason, setDeclineReason] = useState('');
+  const [declineSubmitting, setDeclineSubmitting] = useState(false);
+  const [showMeetingResponsesModal, setShowMeetingResponsesModal] = useState(false);
+  const [responseViewerMeeting, setResponseViewerMeeting] = useState<Meeting | null>(null);
   const [meetingFieldErrors, setMeetingFieldErrors] = useState<MeetingFieldErrors>({});
   const [meetingFormErrorSummary, setMeetingFormErrorSummary] = useState<string[]>([]);
   const [showMeetingNotificationModal, setShowMeetingNotificationModal] = useState(false);
@@ -382,6 +415,9 @@ const Community: React.FC = () => {
     notesLinks: '',
     attachment: null,
   });
+  const [locationSuggestions, setLocationSuggestions] = useState<LocationSuggestion[]>([]);
+  const [loadingLocationSuggestions, setLoadingLocationSuggestions] = useState(false);
+  const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
 
   // Set active tab based on URL query parameter
   useEffect(() => {
@@ -483,6 +519,7 @@ const Community: React.FC = () => {
   }, []);
 
   const isAdminOrManager = hasRole(['superadmin', 'manager']);
+  const isSuperAdmin = hasRole(['superadmin']);
 
   useEffect(() => {
     if (isAdminOrManager) {
@@ -490,6 +527,88 @@ const Community: React.FC = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdminOrManager]);
+
+  useEffect(() => {
+    if (!showCreateEventModal) {
+      return;
+    }
+
+    const query = adminEventForm.locationAddress.trim();
+    if (query.length < 3) {
+      setLocationSuggestions([]);
+      setLoadingLocationSuggestions(false);
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      const loadSuggestions = async () => {
+        setLoadingLocationSuggestions(true);
+        try {
+          const toSuggestions = (results: any[]): LocationSuggestion[] => (
+            Array.isArray(results)
+              ? results
+                  .map((item: any) => ({
+                    displayName: String(item?.display_name || '').trim(),
+                    lat: String(item?.lat || '').trim(),
+                    lon: String(item?.lon || '').trim(),
+                  }))
+                  .filter((item) => item.displayName && item.lat && item.lon)
+              : []
+          );
+
+          const indiaResponse = await fetch(
+            `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(query)}&addressdetails=1&limit=7&countrycodes=in&accept-language=en,en-IN`,
+            {
+              headers: {
+                Accept: 'application/json',
+              },
+            }
+          );
+
+          if (!indiaResponse.ok) {
+            setLocationSuggestions([]);
+            return;
+          }
+
+          const indiaResults = await indiaResponse.json();
+          const indiaSuggestions = toSuggestions(indiaResults);
+
+          if (indiaSuggestions.length > 0) {
+            setLocationSuggestions(indiaSuggestions);
+            return;
+          }
+
+          // Fallback to global results when no India match is found.
+          const globalResponse = await fetch(
+            `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(query)}&addressdetails=1&limit=7&accept-language=en,en-IN`,
+            {
+              headers: {
+                Accept: 'application/json',
+              },
+            }
+          );
+
+          if (!globalResponse.ok) {
+            setLocationSuggestions([]);
+            return;
+          }
+
+          const globalResults = await globalResponse.json();
+          setLocationSuggestions(toSuggestions(globalResults));
+        } catch {
+          setLocationSuggestions([]);
+        } finally {
+          setLoadingLocationSuggestions(false);
+        }
+      };
+
+      void loadSuggestions();
+    }, 350);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [adminEventForm.locationAddress, showCreateEventModal]);
 
   const getAuthHeaders = () => {
     const token = localStorage.getItem('token');
@@ -729,6 +848,8 @@ const Community: React.FC = () => {
       const response = await axios.post(`${API_URL}/community/events`, payload, { headers });
       toast.success(response.data?.message || 'Event created successfully');
       setShowCreateEventModal(false);
+      setShowLocationSuggestions(false);
+      setLocationSuggestions([]);
       setAdminEventForm({
         title: '',
         description: '',
@@ -1007,14 +1128,14 @@ const Community: React.FC = () => {
     }
   };
 
-  const handleDeleteCanceledMeeting = async (meeting: Meeting) => {
+  const handlePermanentDeleteMeeting = async (meeting: Meeting) => {
     const headers = getAuthHeaders();
     if (!headers) {
       toast.error('Please login as admin to delete meeting');
       return;
     }
 
-    const confirmed = window.confirm(`Delete canceled meeting "${meeting.title}" permanently?`);
+    const confirmed = window.confirm(`Permanently delete meeting "${meeting.title}"? This cannot be undone.`);
     if (!confirmed) {
       return;
     }
@@ -1031,7 +1152,7 @@ const Community: React.FC = () => {
     }
   };
 
-  const handleMeetingRsvp = async (meeting: Meeting, action: 'join' | 'leave') => {
+  const handleMeetingRsvpJoin = async (meeting: Meeting) => {
     const headers = getAuthHeaders();
     if (!headers) {
       toast.error('Please login to RSVP');
@@ -1041,15 +1162,91 @@ const Community: React.FC = () => {
 
     setRsvpLoadingMeetingId(meeting.id);
     try {
-      const endpoint = action === 'join' ? 'rsvp' : 'leave';
-      const response = await axios.post(`${API_URL}/community/meetings/${meeting.id}/${endpoint}`, {}, { headers });
+      const response = await axios.post(`${API_URL}/community/meetings/${meeting.id}/rsvp`, {}, { headers });
       setMeetings((prev) => prev.map((item) => (item.id === meeting.id ? response.data?.data?.meeting : item)));
-      toast.success(action === 'join' ? 'RSVP confirmed' : 'RSVP removed');
+      toast.success('RSVP confirmed');
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Unable to update RSVP');
     } finally {
       setRsvpLoadingMeetingId(null);
     }
+  };
+
+  const openDeclineModal = (meeting: Meeting) => {
+    setDeclineMeeting(meeting);
+    setDeclineReason((meeting.myDeclineReason || '').trim());
+    setShowDeclineModal(true);
+  };
+
+  const closeDeclineModal = () => {
+    setShowDeclineModal(false);
+    setDeclineMeeting(null);
+    setDeclineReason('');
+  };
+
+  const submitMeetingDecline = async () => {
+    if (!declineMeeting) {
+      return;
+    }
+
+    const headers = getAuthHeaders();
+    if (!headers) {
+      toast.error('Please login to update your response');
+      openAuthForCommunityAction('meetings');
+      return;
+    }
+
+    const reason = declineReason.trim();
+    if (!reason) {
+      toast.error('Please provide a reason for not attending');
+      return;
+    }
+
+    setDeclineSubmitting(true);
+    try {
+      const response = await axios.post(
+        `${API_URL}/community/meetings/${declineMeeting.id}/decline`,
+        { reason },
+        { headers }
+      );
+      setMeetings((prev) => prev.map((item) => (item.id === declineMeeting.id ? response.data?.data?.meeting : item)));
+      toast.success('Not attending response saved');
+      closeDeclineModal();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Unable to save not attending response');
+    } finally {
+      setDeclineSubmitting(false);
+    }
+  };
+
+  const handleJoinMeetingClick = (meeting: Meeting) => {
+    if (!meeting.meetingUrl) {
+      return;
+    }
+
+    window.open(meeting.meetingUrl, '_blank', 'noopener,noreferrer');
+
+    const headers = getAuthHeaders();
+    if (!headers) {
+      return;
+    }
+
+    void axios.post(`${API_URL}/community/meetings/${meeting.id}/join-click`, {}, { headers })
+      .then((response) => {
+        const updatedMeeting = response.data?.data?.meeting;
+        if (!updatedMeeting) {
+          return;
+        }
+        setMeetings((prev) => prev.map((item) => (item.id === meeting.id ? updatedMeeting : item)));
+      })
+      .catch(() => {
+        // Tracking failures should never block the meeting join experience.
+      });
+  };
+
+  const openMeetingResponsesViewer = (meeting: Meeting) => {
+    setResponseViewerMeeting(meeting);
+    setShowMeetingResponsesModal(true);
   };
 
   const copyMeetingDetails = async (meeting: Meeting) => {
@@ -1445,6 +1642,8 @@ const Community: React.FC = () => {
                         isOnline: false,
                         tags: '',
                       });
+                      setShowLocationSuggestions(false);
+                      setLocationSuggestions([]);
                       setShowCreateEventModal(true);
                     }}
                     className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-semibold text-sky-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-sky-50"
@@ -1888,6 +2087,18 @@ const Community: React.FC = () => {
                           <p><span className="font-semibold">RSVP:</span> {meeting.attendees}{meeting.maxCapacity ? ` / ${meeting.maxCapacity}` : ''}</p>
                         </div>
 
+                        <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                          <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-emerald-700">
+                            Attending: {meeting.attendees}
+                          </span>
+                          <span className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-rose-700">
+                            Not Attending: {meeting.declinedCount || 0}
+                          </span>
+                          <span className="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-sky-700">
+                            Join Clicks: {meeting.joinClickCount || 0}
+                          </span>
+                        </div>
+
                         {Array.isArray(meeting.notesLinks) && meeting.notesLinks.length > 0 && (
                           <div className="mt-3 flex flex-wrap gap-2">
                             {meeting.notesLinks.slice(0, 3).map((link) => (
@@ -1909,8 +2120,7 @@ const Community: React.FC = () => {
                           <div className="mt-3">
                             <a
                               href={meeting.attachment.url}
-                              target="_blank"
-                              rel="noreferrer"
+                              download={meeting.attachment.name || 'meeting-material'}
                               className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-100 rounded-full px-3 py-1 hover:bg-blue-100"
                             >
                               Download Material
@@ -1922,15 +2132,14 @@ const Community: React.FC = () => {
 
                       <div className="flex flex-col gap-2 w-full md:w-44">
                         {meeting.meetingUrl ? (
-                          <a
-                            href={meeting.meetingUrl}
-                            target="_blank"
-                            rel="noreferrer"
+                          <button
+                            type="button"
+                            onClick={() => handleJoinMeetingClick(meeting)}
                             className="inline-flex items-center justify-center gap-1.5 rounded-md bg-sky-600 text-white px-3 py-2 hover:bg-sky-700"
                           >
                             <VideoCameraIcon className="h-4 w-4" />
                             Join Meeting
-                          </a>
+                          </button>
                         ) : (
                           <button
                             type="button"
@@ -1970,14 +2179,30 @@ const Community: React.FC = () => {
                         <button
                           type="button"
                           disabled={rsvpLoadingMeetingId === meeting.id}
-                          onClick={() => handleMeetingRsvp(meeting, meeting.isJoined ? 'leave' : 'join')}
-                          className={`rounded-md px-3 py-2 text-white ${meeting.isJoined ? 'bg-slate-600 hover:bg-slate-700' : 'bg-emerald-600 hover:bg-emerald-700'} disabled:opacity-60`}
+                          onClick={() => handleMeetingRsvpJoin(meeting)}
+                          className={`rounded-md px-3 py-2 text-white ${meeting.responseStatus === 'joined' ? 'bg-emerald-700' : 'bg-emerald-600 hover:bg-emerald-700'} disabled:opacity-60`}
                         >
-                          {rsvpLoadingMeetingId === meeting.id ? 'Updating...' : (meeting.isJoined ? 'Leave RSVP' : 'RSVP Join')}
+                          {rsvpLoadingMeetingId === meeting.id ? 'Updating...' : 'RSVP Join'}
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={rsvpLoadingMeetingId === meeting.id}
+                          onClick={() => openDeclineModal(meeting)}
+                          className={`rounded-md border px-3 py-2 ${meeting.responseStatus === 'not_going' ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-rose-200 bg-white text-rose-700 hover:bg-rose-50'} disabled:opacity-60`}
+                        >
+                          {meeting.responseStatus === 'not_going' ? 'Edit Not Attending' : 'Not Attending'}
                         </button>
 
                         {isAdminOrManager && (
                           <>
+                            <button
+                              type="button"
+                              onClick={() => openMeetingResponsesViewer(meeting)}
+                              className="rounded-md bg-cyan-600 text-white px-3 py-2 hover:bg-cyan-700"
+                            >
+                              View Responses
+                            </button>
                             <button
                               type="button"
                               onClick={() => openEditMeetingModal(meeting)}
@@ -2009,6 +2234,16 @@ const Community: React.FC = () => {
                             >
                               RSVP Only
                             </button>
+                            {isSuperAdmin && (
+                              <button
+                                type="button"
+                                disabled={deletingMeetingId === meeting.id}
+                                onClick={() => handlePermanentDeleteMeeting(meeting)}
+                                className="rounded-md bg-rose-700 text-white px-3 py-2 hover:bg-rose-800 disabled:opacity-60"
+                              >
+                                {deletingMeetingId === meeting.id ? 'Deleting...' : 'Delete Permanently'}
+                              </button>
+                            )}
                           </>
                         )}
                       </div>
@@ -2027,6 +2262,11 @@ const Community: React.FC = () => {
                       <div>
                         <p className="font-semibold text-gray-900">{meeting.title}</p>
                         <p className="text-sm text-gray-600">{meeting.topic} • {new Date(meeting.scheduledAt).toLocaleString()}</p>
+                        <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+                          <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-emerald-700">Attending {meeting.attendees}</span>
+                          <span className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-rose-700">Not Attending {meeting.declinedCount || 0}</span>
+                          <span className="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-sky-700">Join Clicks {meeting.joinClickCount || 0}</span>
+                        </div>
                         <div className="mt-2 flex flex-wrap gap-2">
                           <button
                             type="button"
@@ -2036,11 +2276,20 @@ const Community: React.FC = () => {
                             <ShareIcon className="h-3.5 w-3.5" />
                             Share
                           </button>
-                          {meeting.status === 'canceled' && isAdminOrManager && (
+                          {isAdminOrManager && (
+                            <button
+                              type="button"
+                              onClick={() => openMeetingResponsesViewer(meeting)}
+                              className="inline-flex items-center gap-1 text-xs text-cyan-700 border border-cyan-200 rounded-full px-2.5 py-1 hover:bg-cyan-50"
+                            >
+                              View Responses
+                            </button>
+                          )}
+                          {isSuperAdmin && (
                             <button
                               type="button"
                               disabled={deletingMeetingId === meeting.id}
-                              onClick={() => handleDeleteCanceledMeeting(meeting)}
+                              onClick={() => handlePermanentDeleteMeeting(meeting)}
                               className="inline-flex items-center gap-1 text-xs text-rose-700 border border-rose-200 rounded-full px-2.5 py-1 hover:bg-rose-50 disabled:opacity-60"
                             >
                               <TrashIcon className="h-3.5 w-3.5" />
@@ -2076,6 +2325,125 @@ const Community: React.FC = () => {
           <p className="text-xs text-gray-400 mt-2">- Quran 9:71</p>
         </div>
       </div>
+
+      {showDeclineModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-gray-200 p-4">
+              <h3 className="text-lg font-bold text-gray-900">Not Attending Reason</h3>
+              <button
+                type="button"
+                onClick={closeDeclineModal}
+                className="rounded p-1 hover:bg-gray-100"
+              >
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 p-4">
+              <p className="text-sm text-gray-600">
+                {declineMeeting ? `Meeting: ${declineMeeting.title}` : 'Provide a reason for your response.'}
+              </p>
+              <textarea
+                required
+                rows={5}
+                value={declineReason}
+                onChange={(event) => setDeclineReason(event.target.value)}
+                placeholder="Required: briefly share why you cannot attend"
+                className="w-full rounded-md border border-gray-300 px-3 py-2"
+              />
+
+              <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={closeDeclineModal}
+                  className="rounded-md border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={submitMeetingDecline}
+                  disabled={declineSubmitting}
+                  className="rounded-md bg-rose-600 px-4 py-2 text-white hover:bg-rose-700 disabled:opacity-60"
+                >
+                  {declineSubmitting ? 'Saving...' : 'Save Not Attending'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showMeetingResponsesModal && responseViewerMeeting && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-4"
+          onClick={() => setShowMeetingResponsesModal(false)}
+        >
+          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="sticky top-0 flex items-center justify-between border-b border-gray-200 bg-white p-4">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Meeting Responses</h3>
+                <p className="text-sm text-gray-600">{responseViewerMeeting.title}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowMeetingResponsesModal(false)}
+                className="rounded p-1 hover:bg-gray-100"
+              >
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 p-4">
+              <section className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
+                <h4 className="text-sm font-semibold text-emerald-800">Attending (RSVP) ({responseViewerMeeting.rsvpedUsers?.length || 0})</h4>
+                <div className="mt-2 space-y-1 text-sm text-emerald-900">
+                  {(responseViewerMeeting.rsvpedUsers || []).length > 0 ? (
+                    (responseViewerMeeting.rsvpedUsers || []).map((user) => (
+                      <p key={`rsvp-${user.userId}`}>{user.name}</p>
+                    ))
+                  ) : (
+                    <p className="text-emerald-700">No RSVP responses yet.</p>
+                  )}
+                </div>
+              </section>
+
+              <section className="rounded-xl border border-rose-200 bg-rose-50/60 p-3">
+                <h4 className="text-sm font-semibold text-rose-800">Not Attending ({responseViewerMeeting.declinedUsers?.length || 0})</h4>
+                <div className="mt-2 space-y-2 text-sm text-rose-900">
+                  {(responseViewerMeeting.declinedUsers || []).length > 0 ? (
+                    (responseViewerMeeting.declinedUsers || []).map((user) => (
+                      <div key={`declined-${user.userId}`} className="rounded-md border border-rose-100 bg-white/70 p-2">
+                        <p className="font-semibold">{user.name}</p>
+                        <p className="text-xs text-rose-700">{user.reason}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-rose-700">No decline responses yet.</p>
+                  )}
+                </div>
+              </section>
+
+              <section className="rounded-xl border border-sky-200 bg-sky-50/70 p-3">
+                <h4 className="text-sm font-semibold text-sky-800">Join Meeting Clicks ({responseViewerMeeting.joinClickUsers?.length || 0})</h4>
+                <div className="mt-2 space-y-2 text-sm text-sky-900">
+                  {(responseViewerMeeting.joinClickUsers || []).length > 0 ? (
+                    (responseViewerMeeting.joinClickUsers || []).map((user) => (
+                      <div key={`join-${user.userId}`} className="rounded-md border border-sky-100 bg-white/70 p-2">
+                        <p className="font-semibold">{user.name}</p>
+                        <p className="text-xs text-sky-700">Clicks: {user.joinCount}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sky-700">No join clicks tracked yet.</p>
+                  )}
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showCreateForumModal && (
         <div
@@ -2187,6 +2555,7 @@ const Community: React.FC = () => {
           className="fixed inset-0 bg-gray-900/50 z-50 flex items-center justify-center p-4"
           onClick={() => {
             setShowCreateEventModal(false);
+            setShowLocationSuggestions(false);
           }}
         >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(event) => event.stopPropagation()}>
@@ -2196,6 +2565,7 @@ const Community: React.FC = () => {
                 type="button"
                 onClick={() => {
                   setShowCreateEventModal(false);
+                  setShowLocationSuggestions(false);
                 }}
                 className="p-1 rounded hover:bg-gray-100"
               >
@@ -2257,9 +2627,37 @@ const Community: React.FC = () => {
                 required
                 value={adminEventForm.locationAddress}
                 onChange={(event) => setAdminEventForm((prev) => ({ ...prev, locationAddress: event.target.value }))}
+                onFocus={() => setShowLocationSuggestions(true)}
                 placeholder="Full location address"
                 className="w-full rounded-md border border-gray-300 px-3 py-2"
               />
+
+              {showLocationSuggestions && (loadingLocationSuggestions || locationSuggestions.length > 0) && (
+                <div className="rounded-md border border-gray-200 bg-white shadow-sm">
+                  {loadingLocationSuggestions && (
+                    <p className="px-3 py-2 text-sm text-gray-500">Searching locations...</p>
+                  )}
+
+                  {!loadingLocationSuggestions && locationSuggestions.map((suggestion) => (
+                    <button
+                      key={`${suggestion.displayName}-${suggestion.lat}-${suggestion.lon}`}
+                      type="button"
+                      onClick={() => {
+                        setAdminEventForm((prev) => ({
+                          ...prev,
+                          locationAddress: suggestion.displayName,
+                          latitude: suggestion.lat,
+                          longitude: suggestion.lon,
+                        }));
+                        setShowLocationSuggestions(false);
+                      }}
+                      className="block w-full border-b border-gray-100 px-3 py-2 text-left text-sm text-gray-700 last:border-b-0 hover:bg-emerald-50"
+                    >
+                      {suggestion.displayName}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <input
@@ -2312,12 +2710,6 @@ const Community: React.FC = () => {
       {showCreateMeetingModal && (
         <div
           className="fixed inset-0 bg-gray-900/50 z-50 flex items-center justify-center p-4"
-          onClick={() => {
-            setShowCreateMeetingModal(false);
-            setEditingMeetingId(null);
-            setMeetingFieldErrors({});
-            setMeetingFormErrorSummary([]);
-          }}
         >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-gray-200 sticky top-0 bg-white">

@@ -4,7 +4,7 @@ import path from 'path';
 import mongoose from 'mongoose';
 import multer from 'multer';
 import { body, query, validationResult } from 'express-validator';
-import { authMiddleware, adminMiddleware, optionalAuthMiddleware } from '../middleware/auth';
+import { authMiddleware, adminMiddleware, optionalAuthMiddleware, superAdminMiddleware } from '../middleware/auth';
 import { logUserActivity } from '../middleware/activityLogger';
 import { sendMulticastNotification } from '../config/firebaseAdmin';
 import CommunityForum from '../models/CommunityForum';
@@ -237,6 +237,49 @@ const isAdminOrManager = (req: AuthenticatedRequest): boolean => {
   return req.user?.isAdmin === true || req.user?.role === 'superadmin' || req.user?.role === 'manager';
 };
 
+const buildMeetingUserDisplayName = (user: { firstName?: string; lastName?: string; username?: string }): string => {
+  const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
+  return fullName || user.username || 'Unknown user';
+};
+
+const buildMeetingUserDisplayMap = async (meetings: any[]): Promise<Map<string, string>> => {
+  const userIds = new Set<string>();
+
+  meetings.forEach((meeting) => {
+    const attendeeIds = Array.isArray(meeting.attendeeIds) ? meeting.attendeeIds : [];
+    attendeeIds.forEach((attendeeId: mongoose.Types.ObjectId | string) => userIds.add(attendeeId.toString()));
+
+    const declinedAttendees = Array.isArray(meeting.declinedAttendees) ? meeting.declinedAttendees : [];
+    declinedAttendees.forEach((declined: any) => {
+      if (declined?.userId) {
+        userIds.add(declined.userId.toString());
+      }
+    });
+
+    const joinClicks = Array.isArray(meeting.joinClicks) ? meeting.joinClicks : [];
+    joinClicks.forEach((entry: any) => {
+      if (entry?.userId) {
+        userIds.add(entry.userId.toString());
+      }
+    });
+  });
+
+  if (userIds.size === 0) {
+    return new Map<string, string>();
+  }
+
+  const users = await User.find({
+    _id: { $in: Array.from(userIds) },
+  }).select('_id firstName lastName username').lean();
+
+  const displayMap = new Map<string, string>();
+  users.forEach((user: any) => {
+    displayMap.set(user._id.toString(), buildMeetingUserDisplayName(user));
+  });
+
+  return displayMap;
+};
+
 const isForumMember = async (forumId: string, userId: string): Promise<boolean> => {
   const membership = await CommunityForumMember.findOne({ forumId, userId }).lean();
   return Boolean(membership);
@@ -372,13 +415,73 @@ const sendMeetingNotifications = async ({
   return summary;
 };
 
-const normalizeMeetingResponse = (meeting: any, currentUserId?: string) => {
+const normalizeMeetingResponse = (
+  meeting: any,
+  currentUserId?: string,
+  options?: {
+    includeResponseDetails?: boolean;
+    userDisplayMap?: Map<string, string>;
+  }
+) => {
   const attendeeIds = Array.isArray(meeting.attendeeIds) ? meeting.attendeeIds : [];
+  const declinedAttendees = Array.isArray(meeting.declinedAttendees) ? meeting.declinedAttendees : [];
+  const joinClicks = Array.isArray(meeting.joinClicks) ? meeting.joinClicks : [];
   const attendees = attendeeIds.length;
   const isJoined = Boolean(
     currentUserId
     && attendeeIds.some((attendeeId: mongoose.Types.ObjectId | string) => attendeeId.toString() === currentUserId)
   );
+  const userDeclinedEntry = currentUserId
+    ? declinedAttendees.find((entry: any) => entry?.userId?.toString() === currentUserId)
+    : null;
+
+  const responseStatus: 'joined' | 'not_going' | 'none' = isJoined
+    ? 'joined'
+    : userDeclinedEntry
+      ? 'not_going'
+      : 'none';
+
+  const joinClickCount = joinClicks.reduce((total: number, entry: any) => {
+    const count = Number(entry?.joinCount);
+    return total + (Number.isFinite(count) && count > 0 ? count : 0);
+  }, 0);
+
+  const getDisplayName = (userId: string): string => {
+    return options?.userDisplayMap?.get(userId) || 'Unknown user';
+  };
+
+  const includeResponseDetails = options?.includeResponseDetails === true;
+
+  const responseDetails = includeResponseDetails
+    ? {
+        rsvpedUsers: attendeeIds.map((attendeeId: mongoose.Types.ObjectId | string) => {
+          const userId = attendeeId.toString();
+          return {
+            userId,
+            name: getDisplayName(userId),
+          };
+        }),
+        declinedUsers: declinedAttendees.map((entry: any) => {
+          const userId = entry.userId.toString();
+          return {
+            userId,
+            name: getDisplayName(userId),
+            reason: entry.reason || '',
+            respondedAt: entry.respondedAt,
+          };
+        }),
+        joinClickUsers: joinClicks.map((entry: any) => {
+          const userId = entry.userId.toString();
+          return {
+            userId,
+            name: getDisplayName(userId),
+            firstJoinedAt: entry.firstJoinedAt,
+            lastJoinedAt: entry.lastJoinedAt,
+            joinCount: Number(entry.joinCount) || 0,
+          };
+        }),
+      }
+    : {};
 
   return {
     id: meeting._id.toString(),
@@ -398,6 +501,11 @@ const normalizeMeetingResponse = (meeting: any, currentUserId?: string) => {
     organizer: meeting.organizer,
     attendees,
     isJoined,
+    responseStatus,
+    myDeclineReason: userDeclinedEntry?.reason || null,
+    declinedCount: declinedAttendees.length,
+    joinClickCount,
+    ...responseDetails,
     maxCapacity: meeting.maxCapacity || null,
     tags: meeting.tags || [],
     notesLinks: meeting.notesLinks || [],
@@ -414,6 +522,24 @@ const normalizeMeetingResponse = (meeting: any, currentUserId?: string) => {
     createdAt: meeting.createdAt,
     updatedAt: meeting.updatedAt,
   };
+};
+
+const normalizeMeetingForRequest = async (meeting: any, req: AuthenticatedRequest) => {
+  const includeResponseDetails = isAdminOrManager(req);
+  const userDisplayMap = includeResponseDetails
+    ? await buildMeetingUserDisplayMap([meeting])
+    : undefined;
+
+  if (userDisplayMap) {
+    return normalizeMeetingResponse(meeting, req.user?.userId, {
+      includeResponseDetails,
+      userDisplayMap,
+    });
+  }
+
+  return normalizeMeetingResponse(meeting, req.user?.userId, {
+    includeResponseDetails,
+  });
 };
 
 /**
@@ -2110,7 +2236,23 @@ router.get('/meetings', [
       .sort({ scheduledAt: 1, createdAt: -1 })
       .lean();
 
-    const normalizedMeetings = meetings.map((meeting) => normalizeMeetingResponse(meeting, req.user?.userId));
+    const includeResponseDetails = isAdminOrManager(req);
+    const userDisplayMap = includeResponseDetails
+      ? await buildMeetingUserDisplayMap(meetings)
+      : undefined;
+
+    const normalizedMeetings = meetings.map((meeting) => {
+      if (userDisplayMap) {
+        return normalizeMeetingResponse(meeting, req.user?.userId, {
+          includeResponseDetails,
+          userDisplayMap,
+        });
+      }
+
+      return normalizeMeetingResponse(meeting, req.user?.userId, {
+        includeResponseDetails,
+      });
+    });
 
     res.json({
       status: 'success',
@@ -2298,7 +2440,7 @@ router.post('/meetings', [
       status: 'success',
       message: 'Meeting published successfully',
       data: {
-        meeting: normalizeMeetingResponse(newMeeting, userId),
+        meeting: await normalizeMeetingForRequest(newMeeting, req),
       },
     });
   } catch (error) {
@@ -2495,7 +2637,7 @@ router.put('/meetings/:meetingId', [
       status: 'success',
       message: 'Meeting updated successfully',
       data: {
-        meeting: normalizeMeetingResponse(meeting, req.user?.userId),
+        meeting: await normalizeMeetingForRequest(meeting, req),
       },
     });
   } catch (error) {
@@ -2538,7 +2680,7 @@ router.delete('/meetings/:meetingId', [
       status: 'success',
       message: 'Meeting canceled successfully',
       data: {
-        meeting: normalizeMeetingResponse(meeting, req.user?.userId),
+        meeting: await normalizeMeetingForRequest(meeting, req),
       },
     });
   } catch (error) {
@@ -2549,12 +2691,12 @@ router.delete('/meetings/:meetingId', [
 
 /**
  * @route   DELETE /api/community/meetings/:meetingId/permanent
- * @desc    Permanently delete a canceled meeting
- * @access  Private (Admin/Manager)
+ * @desc    Permanently delete a meeting
+ * @access  Private (Superadmin)
  */
 router.delete('/meetings/:meetingId/permanent', [
   authMiddleware,
-  adminMiddleware,
+  superAdminMiddleware,
 ], async (req: AuthenticatedRequest, res: Response) => {
   try {
     const meetingId = getSingleParam(req.params.meetingId);
@@ -2569,14 +2711,6 @@ router.delete('/meetings/:meetingId/permanent', [
       return;
     }
 
-    if (meeting.status !== 'canceled') {
-      res.status(400).json({
-        status: 'error',
-        message: 'Only canceled meetings can be permanently deleted',
-      });
-      return;
-    }
-
     await CommunityMeeting.deleteOne({ _id: meetingId });
 
     await logCommunityActivity(req, 'community_meeting_deleted', `Meeting deleted permanently: ${meeting.title}`, {
@@ -2586,7 +2720,7 @@ router.delete('/meetings/:meetingId/permanent', [
 
     res.json({
       status: 'success',
-      message: 'Canceled meeting deleted permanently',
+      message: 'Meeting deleted permanently',
       data: { meetingId },
     });
   } catch (error) {
@@ -2715,7 +2849,7 @@ router.put('/meetings/:meetingId/notification-config', [authMiddleware, adminMid
     res.json({
       status: 'success',
       message: 'Meeting notification config updated',
-      data: { meeting: normalizeMeetingResponse(meeting, req.user?.userId) },
+      data: { meeting: await normalizeMeetingForRequest(meeting, req) },
     });
   } catch (error) {
     console.error('Update per-meeting notification config error:', error);
@@ -2768,7 +2902,7 @@ router.post('/meetings/:meetingId/send-notification', [authMiddleware, adminMidd
     res.json({
       status: 'success',
       message: 'Meeting notifications sent',
-      data: { summary, meeting: normalizeMeetingResponse(meeting, req.user?.userId) },
+      data: { summary, meeting: await normalizeMeetingForRequest(meeting, req) },
     });
   } catch (error) {
     console.error('Send meeting notification error:', error);
@@ -2807,9 +2941,23 @@ router.post('/meetings/:meetingId/rsvp', authMiddleware, async (req: Authenticat
       return;
     }
 
+    const existingDeclineIndex = Array.isArray(meeting.declinedAttendees)
+      ? meeting.declinedAttendees.findIndex((entry: any) => entry.userId.toString() === userId)
+      : -1;
+    if (existingDeclineIndex >= 0) {
+      meeting.declinedAttendees.splice(existingDeclineIndex, 1);
+    }
+
     const alreadyJoined = meeting.attendeeIds.some((id) => id.toString() === userId);
     if (alreadyJoined) {
-      res.status(400).json({ status: 'error', message: 'You already RSVPed this meeting' });
+      await meeting.save();
+      res.json({
+        status: 'success',
+        message: 'RSVP confirmed',
+        data: {
+          meeting: await normalizeMeetingForRequest(meeting, req),
+        },
+      });
       return;
     }
 
@@ -2830,12 +2978,166 @@ router.post('/meetings/:meetingId/rsvp', authMiddleware, async (req: Authenticat
       status: 'success',
       message: 'RSVP confirmed',
       data: {
-        meeting: normalizeMeetingResponse(meeting, userId),
+        meeting: await normalizeMeetingForRequest(meeting, req),
       },
     });
   } catch (error) {
     console.error('RSVP meeting error:', error);
     res.status(500).json({ status: 'error', message: 'Failed to RSVP meeting' });
+  }
+});
+
+/**
+ * @route   POST /api/community/meetings/:meetingId/decline
+ * @desc    Mark user as not going for a meeting with reason
+ * @access  Private
+ */
+router.post('/meetings/:meetingId/decline', [
+  authMiddleware,
+  body('reason')
+    .trim()
+    .isLength({ min: 1, max: 600 })
+    .withMessage('A decline reason is required'),
+], async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (hasValidationErrors(req, res)) {
+      return;
+    }
+
+    const meetingId = getSingleParam(req.params.meetingId);
+    const userId = req.user?.userId;
+    const reason = cleanText(req.body.reason);
+
+    if (!reason) {
+      res.status(400).json({ status: 'error', message: 'A decline reason is required' });
+      return;
+    }
+
+    if (!meetingId || !mongoose.Types.ObjectId.isValid(meetingId)) {
+      res.status(400).json({ status: 'error', message: 'Invalid meeting id' });
+      return;
+    }
+
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      res.status(401).json({ status: 'error', message: 'Invalid authentication context' });
+      return;
+    }
+
+    const meeting = await CommunityMeeting.findById(meetingId);
+    if (!meeting) {
+      res.status(404).json({ status: 'error', message: 'Meeting not found' });
+      return;
+    }
+
+    if (meeting.status !== 'scheduled') {
+      res.status(400).json({ status: 'error', message: 'Only scheduled meetings accept response updates' });
+      return;
+    }
+
+    meeting.attendeeIds = meeting.attendeeIds.filter((id) => id.toString() !== userId);
+
+    if (!Array.isArray(meeting.declinedAttendees)) {
+      meeting.declinedAttendees = [];
+    }
+
+    const now = new Date();
+    const declinedIndex = meeting.declinedAttendees.findIndex((entry: any) => entry.userId.toString() === userId);
+
+    if (declinedIndex >= 0) {
+      const declinedEntry = meeting.declinedAttendees[declinedIndex];
+      if (declinedEntry) {
+        declinedEntry.reason = reason;
+        declinedEntry.respondedAt = now;
+      }
+    } else {
+      meeting.declinedAttendees.push({
+        userId: new mongoose.Types.ObjectId(userId),
+        reason,
+        respondedAt: now,
+      } as any);
+    }
+
+    await meeting.save();
+
+    await logCommunityActivity(req, 'community_meeting_declined', `Declined meeting: ${meeting.title}`, {
+      meetingId,
+      role: normalizeRole(req),
+    });
+
+    res.json({
+      status: 'success',
+      message: 'Not going response saved',
+      data: {
+        meeting: await normalizeMeetingForRequest(meeting, req),
+      },
+    });
+  } catch (error) {
+    console.error('Decline meeting error:', error);
+    res.status(500).json({ status: 'error', message: 'Failed to save decline response' });
+  }
+});
+
+/**
+ * @route   POST /api/community/meetings/:meetingId/join-click
+ * @desc    Track when user opens the meeting link
+ * @access  Private
+ */
+router.post('/meetings/:meetingId/join-click', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const meetingId = getSingleParam(req.params.meetingId);
+    const userId = req.user?.userId;
+
+    if (!meetingId || !mongoose.Types.ObjectId.isValid(meetingId)) {
+      res.status(400).json({ status: 'error', message: 'Invalid meeting id' });
+      return;
+    }
+
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      res.status(401).json({ status: 'error', message: 'Invalid authentication context' });
+      return;
+    }
+
+    const meeting = await CommunityMeeting.findById(meetingId);
+    if (!meeting) {
+      res.status(404).json({ status: 'error', message: 'Meeting not found' });
+      return;
+    }
+
+    if (!Array.isArray(meeting.joinClicks)) {
+      meeting.joinClicks = [];
+    }
+
+    const now = new Date();
+    const joinClickIndex = meeting.joinClicks.findIndex((entry: any) => entry.userId.toString() === userId);
+
+    if (joinClickIndex >= 0) {
+      const joinClickEntry = meeting.joinClicks[joinClickIndex];
+      if (joinClickEntry) {
+        const existingCount = Number(joinClickEntry.joinCount) || 0;
+        joinClickEntry.lastJoinedAt = now;
+        joinClickEntry.joinCount = existingCount + 1;
+      }
+    } else {
+      meeting.joinClicks.push({
+        userId: new mongoose.Types.ObjectId(userId),
+        firstJoinedAt: now,
+        lastJoinedAt: now,
+        joinCount: 1,
+      } as any);
+    }
+
+    await meeting.save();
+
+    res.json({
+      status: 'success',
+      message: 'Join click tracked',
+      data: {
+        meeting: await normalizeMeetingForRequest(meeting, req),
+      },
+    });
+  } catch (error) {
+    console.error('Join click tracking error:', error);
+    res.status(500).json({ status: 'error', message: 'Failed to track join click' });
   }
 });
 
@@ -2877,7 +3179,7 @@ router.post('/meetings/:meetingId/leave', authMiddleware, async (req: Authentica
       status: 'success',
       message: 'RSVP removed',
       data: {
-        meeting: normalizeMeetingResponse(meeting, userId),
+        meeting: await normalizeMeetingForRequest(meeting, req),
       },
     });
   } catch (error) {
