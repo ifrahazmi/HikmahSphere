@@ -293,6 +293,8 @@ const getGlobalMeetingNotificationSettings = async () => {
   return settings;
 };
 
+const createMeetingNotificationId = () => `meeting-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
 const getMeetingRecipients = async (meeting: any, audience: 'all_registered' | 'rsvped_only') => {
   if (audience === 'rsvped_only') {
     const rsvpUserIds = (meeting.attendeeIds || []).map((id: mongoose.Types.ObjectId | string) => id.toString());
@@ -332,6 +334,7 @@ const sendMeetingNotifications = async ({
   };
 
   const meetingPageUrl = `${process.env.FRONTEND_URL || 'https://hikmahsphere.site'}/community?tab=meetings&meetingId=${meeting._id.toString()}`;
+  const notificationId = createMeetingNotificationId();
 
   if (channels.includes('push')) {
     const tokens = recipients.flatMap((user: any) => {
@@ -359,6 +362,7 @@ const sendMeetingNotifications = async ({
           type: 'meeting_reminder',
           meetingId: meeting._id.toString(),
           url: meetingPageUrl,
+          notificationId,
         }
       );
       summary.pushSent = result.successCount;
@@ -368,7 +372,7 @@ const sendMeetingNotifications = async ({
       userId: user._id.toString(),
       title: `Upcoming Meeting: ${meeting.title}`,
       body: `${meeting.topic} by ${meeting.speakerName}. ${note}`,
-      data: { type: 'meeting_reminder', meetingId: meeting._id.toString(), url: meetingPageUrl },
+      data: { type: 'meeting_reminder', meetingId: meeting._id.toString(), url: meetingPageUrl, notificationId },
       source: 'admin-broadcast',
       read: false,
     }));

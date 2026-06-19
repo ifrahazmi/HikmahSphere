@@ -234,6 +234,15 @@ const formatGregorianDDMMYYYY = (value: Date): string => (
   `${String(value.getDate()).padStart(2, '0')}-${String(value.getMonth() + 1).padStart(2, '0')}-${value.getFullYear()}`
 );
 
+const formatOrdinal = (value: number): string => {
+  const mod10 = value % 10;
+  const mod100 = value % 100;
+  if (mod10 === 1 && mod100 !== 11) return `${value}st`;
+  if (mod10 === 2 && mod100 !== 12) return `${value}nd`;
+  if (mod10 === 3 && mod100 !== 13) return `${value}rd`;
+  return `${value}th`;
+};
+
 const addDaysToGregorianDDMMYYYY = (value: string, days: number): string | null => {
   const parsed = parseGregorianDDMMYYYY(value);
   if (!parsed) return null;
@@ -2044,9 +2053,67 @@ const PrayerTimes: React.FC = () => {
 
   const displayHijriReadable = formatHijriReadable(displayHijriDate || effectiveHijriDate || baseHijriDate);
   const visibleIslamicEvents = islamicEvents.filter((event) => event.name !== 'Ramadan');
-  const activeGregorianDate = parseGregorianDDMMYYYY(activePrayerData?.date?.gregorian?.date) || activeIslamicGregorianDate;
-  const isFriday = activeGregorianDate.getDay() === 5;
+  // Friday Dhuhr styling follows the civil/Gregorian day, which changes at midnight.
+  const isFriday = nowForHijri.getDay() === 5;
   const shouldShowRamadanTab = (displayHijriDate?.month?.number || effectiveHijriDate?.month?.number || 0) === 9;
+  const getMonthlyDayInfo = (day: any) => {
+    const gd = day.date?.gregorian || {};
+    const rowGregorianDate = parseGregorianDDMMYYYY(gd?.date)
+      || new Date(Number(gd.year), Number(gd.month?.number || 1) - 1, Number(gd.day || 1));
+    const isToday = rowGregorianDate.toDateString() === activeIslamicGregorianDate.toDateString();
+    const rowPrayerHijriDate = buildHijriDateFromPrayerSource(day.date?.hijri);
+    const fallbackRowHijriDate = buildLocationAwareHijriDateFromGregorianDate(rowGregorianDate, activeCountry);
+    const resolvedRowHijriDate = resolvePreferredHijriDate(rowPrayerHijriDate, fallbackRowHijriDate)
+      || rowPrayerHijriDate
+      || fallbackRowHijriDate;
+    const rowHijriDate = isToday
+      ? (resolvePreferredHijriDate(displayHijriDate, resolvedRowHijriDate) || displayHijriDate || resolvedRowHijriDate)
+      : resolvedRowHijriDate;
+    const hijriMonth = rowHijriDate?.month?.en || day.date?.hijri?.month?.en || '';
+    const hijriDay = parseInt(String(rowHijriDate?.day || day.date?.hijri?.day || ''), 10) || 0;
+    const normalizedHijriMonth = normalizeHijriMonthName(hijriMonth);
+    const hijriMonthNumber = rowHijriDate?.month?.number || HIJRI_MONTH_NUMBERS[normalizedHijriMonth] || 0;
+    const isRamadan = hijriMonthNumber === 9;
+    const isEidFitr = hijriMonthNumber === 10 && hijriDay === 1;
+    const isEidAdha = hijriMonthNumber === 12 && hijriDay === 10;
+    const isArafah = hijriMonthNumber === 12 && hijriDay === 9;
+    const isAshura = hijriMonthNumber === 1 && hijriDay === 10;
+    const isWhiteDayDate = [13, 14, 15].includes(hijriDay);
+    const isWhiteDay = !isToday && !isEidFitr && !isEidAdha && !isArafah && !isAshura && !isRamadan && isWhiteDayDate;
+
+    return {
+      gd,
+      rowGregorianDate,
+      isToday,
+      rowHijriDate,
+      hijriMonth,
+      hijriDay,
+      isRamadan,
+      isEidFitr,
+      isEidAdha,
+      isArafah,
+      isAshura,
+      isWhiteDayDate,
+      isWhiteDay,
+    };
+  };
+  const monthlyWhiteDayEntries: Array<{ label: string; date: Date }> = Array.isArray(monthlyData)
+    ? Array.from(monthlyData.reduce<Map<string, { label: string; date: Date }>>((entriesByDate, day: any) => {
+        const info = getMonthlyDayInfo(day);
+        if (!info.isWhiteDayDate) return entriesByDate;
+
+        const dateKey = formatGregorianDDMMYYYY(info.rowGregorianDate);
+        if (!entriesByDate.has(dateKey)) {
+          entriesByDate.set(dateKey, {
+            label: formatOrdinal(info.hijriDay),
+            date: info.rowGregorianDate,
+          });
+        }
+
+        return entriesByDate;
+      }, new Map<string, { label: string; date: Date }>()).values())
+      .sort((first, second) => first.date.getTime() - second.date.getTime())
+    : [];
 
   useEffect(() => {
     if (viewMode === 'ramadan' && !shouldShowRamadanTab) {
@@ -2817,43 +2884,21 @@ const PrayerTimes: React.FC = () => {
                       <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">Hijri</th>
                     </tr>
                   </thead>
-	                  <tbody className="divide-y divide-gray-200">
-	                    {monthlyData.map((day: any, idx: number) => {
-	                      const gd = day.date.gregorian;
-	                      const rowGregorianDate = parseGregorianDDMMYYYY(gd?.date)
-	                        || new Date(gd.year, Number(gd.month?.number || 1) - 1, Number(gd.day || 1));
-	                      const isToday = rowGregorianDate.toDateString() === activeIslamicGregorianDate.toDateString();
-	                      const rowPrayerHijriDate = buildHijriDateFromPrayerSource(day.date?.hijri);
-	                      const fallbackRowHijriDate = buildLocationAwareHijriDateFromGregorianDate(rowGregorianDate, activeCountry);
-                      // Always prefer API data (rowPrayerHijriDate) as the authoritative source.
-                      // resolvePreferredHijriDate handles month boundaries correctly.
-                      const resolvedRowHijriDate = resolvePreferredHijriDate(rowPrayerHijriDate, fallbackRowHijriDate)
-                        || rowPrayerHijriDate
-                        || fallbackRowHijriDate;
-	                      const rowHijriDate = isToday
-	                        ? (resolvePreferredHijriDate(displayHijriDate, resolvedRowHijriDate) || displayHijriDate || resolvedRowHijriDate)
-	                        : resolvedRowHijriDate;
-	                      const hijriMonth = rowHijriDate?.month?.en || day.date.hijri.month.en;
-	                      const hijriDay = parseInt(String(rowHijriDate?.day || day.date.hijri.day), 10) || 0;
+		                  <tbody className="divide-y divide-gray-200">
+		                    {monthlyData.map((day: any, idx: number) => {
+		                      const {
+		                        isToday,
+		                        hijriMonth,
+		                        hijriDay,
+		                        isRamadan,
+		                        isEidFitr,
+		                        isEidAdha,
+		                        isArafah,
+		                        isAshura,
+		                        isWhiteDay,
+		                      } = getMonthlyDayInfo(day);
 
-	                      const normalizedHijriMonth = normalizeHijriMonthName(hijriMonth);
-	                      const isRamadan = (rowHijriDate?.month?.number || HIJRI_MONTH_NUMBERS[normalizedHijriMonth] || 0) === 9;
-	                      const isEidFitr = (rowHijriDate?.month?.number || HIJRI_MONTH_NUMBERS[normalizedHijriMonth] || 0) === 10 && hijriDay === 1;
-	                      const isEidAdha = (rowHijriDate?.month?.number || HIJRI_MONTH_NUMBERS[normalizedHijriMonth] || 0) === 12 && hijriDay === 10;
-	                      const isArafah = (rowHijriDate?.month?.number || HIJRI_MONTH_NUMBERS[normalizedHijriMonth] || 0) === 12 && hijriDay === 9;
-	                      const isAshura = (rowHijriDate?.month?.number || HIJRI_MONTH_NUMBERS[normalizedHijriMonth] || 0) === 1 && hijriDay === 10;
-
-	                      // White Days: build YYYY-MM-DD from Aladhan separate fields to avoid DD-MM-YYYY parsing issues
-	                      const isoGregDate = `${gd.year}-${String(gd.month.number).padStart(2, '0')}-${String(gd.day).padStart(2, '0')}`;
-	                      const whiteDayDatesSet = new Set<string>(
-	                        fastingData?.white_days?.days
-                          ? Object.values(fastingData.white_days.days as Record<string, string>).filter(Boolean)
-                          : []
-                      );
-                      const isWhiteDay = !isToday && !isEidFitr && !isEidAdha && !isArafah && !isAshura && !isRamadan
-                        && whiteDayDatesSet.has(isoGregDate);
-
-	                      // Determine row background color (priority order)
+		                      // Determine row background color (priority order)
 	                      let rowBgClass = 'hover:bg-gray-50';
 	                      let rowBorderClass = '';
 	                      if (isToday) {
@@ -2963,16 +3008,14 @@ const PrayerTimes: React.FC = () => {
                         used to observe these fasts and encouraged the Ummah to do the same. They are called White Days
                         because the moon is full and the nights are bright.
                       </p>
-                      {fastingData?.white_days?.days && (
-                        <div className="flex flex-wrap gap-2 mt-2">
-                          {Object.entries(fastingData.white_days.days as Record<string, string>).map(([label, iso]) => {
-                            if (!iso) return null;
-                            const d = new Date(iso + 'T00:00:00');
-                            const formatted = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
-                            return (
-                              <span key={label} className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 text-xs px-2 py-0.5 rounded-full font-medium">
-                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-                                {label}: {formatted}
+	                      {monthlyWhiteDayEntries.length > 0 && (
+	                        <div className="flex flex-wrap gap-2 mt-2">
+	                          {monthlyWhiteDayEntries.map(({ label, date }) => {
+	                            const formatted = date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+	                            return (
+	                              <span key={`${label}-${formatGregorianDDMMYYYY(date)}`} className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 text-xs px-2 py-0.5 rounded-full font-medium">
+	                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+	                                {label}: {formatted}
                               </span>
                             );
                           })}

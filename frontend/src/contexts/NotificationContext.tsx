@@ -60,38 +60,84 @@ const parseStoredNotifications = (): Notification[] => {
 
 const isServerNotificationId = (id: string): boolean => MONGO_OBJECT_ID_REGEX.test(id);
 
+const getDataString = (data: any, key: string): string => {
+  const value = data?.[key];
+  return typeof value === 'string' ? value.trim() : '';
+};
+
 const getDedupKey = (notification: Notification): string => {
-  const dataNotificationId = notification.data?.notificationId;
-  return dataNotificationId && typeof dataNotificationId === 'string' ? dataNotificationId : notification.id;
+  return getDataString(notification.data, 'notificationId') || notification.id;
+};
+
+const getProcessedKeys = (notification: Notification): string[] => {
+  return Array.from(new Set([
+    notification.id,
+    getDataString(notification.data, 'notificationId'),
+  ].filter(Boolean)));
+};
+
+const areLikelySameNotification = (first: Notification, second: Notification): boolean => {
+  if (getDedupKey(first) === getDedupKey(second)) {
+    return true;
+  }
+
+  if (getDataString(first.data, 'notificationId') || getDataString(second.data, 'notificationId')) {
+    return false;
+  }
+
+  const firstMeetingId = getDataString(first.data, 'meetingId');
+  const secondMeetingId = getDataString(second.data, 'meetingId');
+  const firstType = getDataString(first.data, 'type');
+  const secondType = getDataString(second.data, 'type');
+
+  if (!firstMeetingId || firstMeetingId !== secondMeetingId || firstType !== secondType) {
+    return false;
+  }
+
+  const firstTime = new Date(first.timestamp).getTime();
+  const secondTime = new Date(second.timestamp).getTime();
+  const timestampsAreClose = !Number.isNaN(firstTime)
+    && !Number.isNaN(secondTime)
+    && Math.abs(firstTime - secondTime) <= 10 * 60 * 1000;
+
+  return timestampsAreClose && first.title === second.title && first.body === second.body;
+};
+
+const mergeNotificationPair = (first: Notification, second: Notification): Notification => {
+  const firstIsServerNotification = isServerNotificationId(first.id);
+  const secondIsServerNotification = isServerNotificationId(second.id);
+  const firstTime = new Date(first.timestamp).getTime();
+  const secondTime = new Date(second.timestamp).getTime();
+  const secondIsNewer = Number.isNaN(firstTime) || (!Number.isNaN(secondTime) && secondTime >= firstTime);
+  const preferSecond = secondIsServerNotification || (!firstIsServerNotification && secondIsNewer);
+  const preferred = preferSecond ? second : first;
+  const fallback = preferSecond ? first : second;
+
+  return {
+    ...fallback,
+    ...preferred,
+    read: first.read || second.read,
+    data: { ...(fallback.data || {}), ...(preferred.data || {}) },
+  };
 };
 
 const mergeNotifications = (incoming: Notification[], existing: Notification[]): Notification[] => {
-  const mergedByKey = new Map<string, Notification>();
+  const mergedNotifications: Notification[] = [];
 
   for (const notification of [...incoming, ...existing]) {
-    const key = getDedupKey(notification);
-    const prev = mergedByKey.get(key);
+    const existingIndex = mergedNotifications.findIndex((existingNotification) => (
+      areLikelySameNotification(existingNotification, notification)
+    ));
 
-    if (!prev) {
-      mergedByKey.set(key, notification);
+    if (existingIndex === -1) {
+      mergedNotifications.push(notification);
       continue;
     }
 
-    const prevTime = new Date(prev.timestamp).getTime();
-    const nextTime = new Date(notification.timestamp).getTime();
-    const preferCurrent = Number.isNaN(prevTime) || (!Number.isNaN(nextTime) && nextTime >= prevTime);
-    const source = preferCurrent ? notification : prev;
-    const fallback = preferCurrent ? prev : notification;
-
-    mergedByKey.set(key, {
-      ...fallback,
-      ...source,
-      read: prev.read || notification.read,
-      data: { ...(fallback.data || {}), ...(source.data || {}) },
-    });
+    mergedNotifications[existingIndex] = mergeNotificationPair(mergedNotifications[existingIndex], notification);
   }
 
-  return Array.from(mergedByKey.values()).sort(
+  return mergedNotifications.sort(
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   );
 };
@@ -145,8 +191,8 @@ const createNotificationFromServiceWorkerPayload = (payload: BackgroundNotificat
 
 export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user } = useAuth();
-  const [notifications, setNotifications] = useState<Notification[]>(parseStoredNotifications);
-  const processedNotificationIdsRef = useRef(new Set(parseStoredNotifications().map((notification) => notification.id)));
+  const [notifications, setNotifications] = useState<Notification[]>(() => mergeNotifications(parseStoredNotifications(), []));
+  const processedNotificationIdsRef = useRef(new Set(parseStoredNotifications().flatMap(getProcessedKeys)));
 
   const unreadCount = notifications.filter(n => !n.read).length;
   const addNotification = useCallback((newNotification: Notification) => {
@@ -184,7 +230,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
 
       setNotifications((prev) => {
         const merged = mergeNotifications(serverNotifications, prev);
-        processedNotificationIdsRef.current = new Set(merged.map((notification) => notification.id));
+        processedNotificationIdsRef.current = new Set(merged.flatMap(getProcessedKeys));
         return merged;
       });
     } catch (error) {
@@ -192,12 +238,13 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     }
   }, [user]);
 
-  const shouldProcessNotification = useCallback((notificationId: string) => {
-    if (processedNotificationIdsRef.current.has(notificationId)) {
+  const shouldProcessNotification = useCallback((notification: Notification) => {
+    const keys = getProcessedKeys(notification);
+    if (keys.some((key) => processedNotificationIdsRef.current.has(key))) {
       return false;
     }
 
-    processedNotificationIdsRef.current.add(notificationId);
+    keys.forEach((key) => processedNotificationIdsRef.current.add(key));
     return true;
   }, []);
 
@@ -263,7 +310,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
       console.log('Received foreground message in Context: ', payload);
       const notification = createNotificationFromPayload(payload);
 
-      if (!shouldProcessNotification(notification.id)) {
+      if (!shouldProcessNotification(notification)) {
         return;
       }
 
@@ -339,7 +386,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
 
       const notificationFromSw = createNotificationFromServiceWorkerPayload(event.data.payload);
 
-      if (!shouldProcessNotification(notificationFromSw.id)) {
+      if (!shouldProcessNotification(notificationFromSw)) {
         return;
       }
 

@@ -9,6 +9,8 @@ const INTERVAL_MS = 60 * 1000;
 let schedulerHandle: NodeJS.Timeout | null = null;
 let isRunning = false;
 
+const createMeetingNotificationId = () => `meeting-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
 const findUniqueTokens = (user: any): string[] => {
   const tokens = new Set<string>();
   if (Array.isArray(user?.fcmTokens)) {
@@ -73,6 +75,7 @@ const runTick = async () => {
 
       const channels = Array.isArray(config.channels) ? config.channels : ['push', 'email'];
       const note = `Reminder T-${dueReminder}m`;
+      const notificationId = createMeetingNotificationId();
 
       if (channels.includes('push')) {
         const tokens = Array.from(new Set(users.flatMap((user: any) => findUniqueTokens(user))));
@@ -85,6 +88,7 @@ const runTick = async () => {
               type: 'meeting_reminder',
               meetingId: meeting._id.toString(),
               url: `/community?tab=meetings&meetingId=${meeting._id.toString()}`,
+              notificationId,
             }
           );
         }
@@ -98,6 +102,7 @@ const runTick = async () => {
               type: 'meeting_reminder',
               meetingId: meeting._id.toString(),
               url: `/community?tab=meetings&meetingId=${meeting._id.toString()}`,
+              notificationId,
             },
             source: 'admin-broadcast',
             read: false,
