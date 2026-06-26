@@ -26,6 +26,41 @@ const timeStringToMinutes = (timeStr: string): number => {
 };
 
 let globalAdhanAudio: HTMLAudioElement | null = null;
+let audioUnlocked = false;
+
+// Browsers block audio that is not started from a user gesture. We "unlock"
+// playback the first time the user interacts with the page so the Adhan can
+// later be played automatically when a prayer time arrives.
+const setupAudioUnlock = () => {
+  if (typeof window === 'undefined' || audioUnlocked) return;
+
+  const unlock = () => {
+    try {
+      const primer = new Audio('/sounds/adhan.mp3');
+      primer.volume = 0;
+      primer
+        .play()
+        .then(() => {
+          primer.pause();
+          primer.currentTime = 0;
+          audioUnlocked = true;
+        })
+        .catch(() => {
+          // Even if priming fails, mark as attempted so we don't spam.
+          audioUnlocked = true;
+        });
+    } catch {
+      audioUnlocked = true;
+    }
+    window.removeEventListener('pointerdown', unlock);
+    window.removeEventListener('keydown', unlock);
+    window.removeEventListener('touchstart', unlock);
+  };
+
+  window.addEventListener('pointerdown', unlock, { once: true });
+  window.addEventListener('keydown', unlock, { once: true });
+  window.addEventListener('touchstart', unlock, { once: true });
+};
 
 const playadhanAudio = () => {
   try {
@@ -38,7 +73,7 @@ const playadhanAudio = () => {
     globalAdhanAudio = new Audio(audioUrl);
     globalAdhanAudio.volume = 0.8;
     globalAdhanAudio.play().catch(err => {
-      console.warn('[PrayerChecker] Audio play failed:', err);
+      console.warn('[PrayerChecker] Audio play failed (autoplay may be blocked until user interacts):', err);
     });
     
     // Stop after 20 seconds strictly
@@ -66,6 +101,13 @@ export const usePrayerNotificationChecker = (
     if (!prayerTimes || !user || !notificationPrefs) {
       return;
     }
+
+    // Ask for notification permission ahead of time and prepare audio so the
+    // Adhan can fire automatically the moment a prayer time arrives.
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => undefined);
+    }
+    setupAudioUnlock();
 
     const checkUpcomingPrayers = () => {
       const now = new Date();
@@ -135,7 +177,7 @@ export const usePrayerNotificationChecker = (
         clearInterval(intervalRef.current);
       }
     };
-  }, [prayerTimes, user, notificationPrefs]);
+  }, [prayerTimes, user, notificationPrefs, addSystemNotification]);
 };
 
 export default usePrayerNotificationChecker;

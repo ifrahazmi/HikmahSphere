@@ -48,6 +48,11 @@ interface Navigator {
   standalone?: boolean;
 }
 
+interface Window {
+  // Captured as early as possible so we never miss the one-click install event.
+  deferredInstallPrompt?: BeforeInstallPromptEvent | null;
+}
+
 declare namespace JSX {
   interface IntrinsicElements {
     'gmpx-api-loader': any;

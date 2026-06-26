@@ -7,33 +7,18 @@ import {
   SparklesIcon,
 } from '@heroicons/react/24/outline';
 
-const DISMISS_KEY = 'hs_install_prompt_dismissed_at';
 const INSTALLED_KEY = 'hs_app_installed';
-const DISMISS_COOLDOWN_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
-
-const getDismissedRecently = (): boolean => {
-  const raw = localStorage.getItem(DISMISS_KEY);
-  if (!raw) return false;
-  const ts = Number(raw);
-  if (!Number.isFinite(ts)) return false;
-  return Date.now() - ts < DISMISS_COOLDOWN_MS;
-};
-
-const setDismissedNow = (): void => {
-  localStorage.setItem(DISMISS_KEY, String(Date.now()));
-};
 
 const InstallAppPrompt: React.FC = () => {
   const [visible, setVisible] = useState(false);
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [iosStepsOpen, setIosStepsOpen] = useState(false);
-  const [androidStepsOpen, setAndroidStepsOpen] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(
+    () => (typeof window !== 'undefined' ? window.deferredInstallPrompt ?? null : null)
+  );
   const [installing, setInstalling] = useState(false);
 
   const ua = navigator.userAgent || '';
   const isDev = process.env.NODE_ENV === 'development';
 
-  const isMobileLike = useMemo(() => /Android|iPhone|iPad|iPod|Mobile/i.test(ua), [ua]);
   const isAndroid = useMemo(() => /Android/i.test(ua), [ua]);
   const isIOS = useMemo(() => /iPad|iPhone|iPod/.test(ua), [ua]);
   const isSafari = useMemo(
@@ -50,11 +35,12 @@ const InstallAppPrompt: React.FC = () => {
   const canUseNativeInstall = !!deferredPrompt && !isIOS;
   const shouldShowIosGuide = isIOS && !isStandalone;
   const installedAlready = localStorage.getItem(INSTALLED_KEY) === '1';
-  const dismissedRecently = getDismissedRecently();
 
   useEffect(() => {
-    // During development, always allow the prompt to re-appear for QA/device-emulation checks.
-    if (isStandalone || (!isDev && (installedAlready || dismissedRecently))) {
+    // Only stay hidden for users already running the installed app.
+    // We intentionally do NOT suppress based on previous dismissals, so the
+    // prompt keeps appearing on every visit until the app is installed.
+    if (isStandalone || (!isDev && installedAlready)) {
       return;
     }
 
@@ -67,43 +53,52 @@ const InstallAppPrompt: React.FC = () => {
     const handleBeforeInstallPrompt = (event: Event) => {
       const e = event as BeforeInstallPromptEvent;
       e.preventDefault();
+      window.deferredInstallPrompt = e;
       setDeferredPrompt(e);
+      revealPrompt();
+    };
+
+    // Fired by the early capture in index.tsx if the event already fired before mount.
+    const handleInstallAvailable = () => {
+      if (window.deferredInstallPrompt) {
+        setDeferredPrompt(window.deferredInstallPrompt);
+      }
       revealPrompt();
     };
 
     const handleAppInstalled = () => {
       localStorage.setItem(INSTALLED_KEY, '1');
+      window.deferredInstallPrompt = null;
       setVisible(false);
       setDeferredPrompt(null);
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt as EventListener);
+    window.addEventListener('hs-install-available', handleInstallAvailable);
     window.addEventListener('appinstalled', handleAppInstalled);
 
-    // iOS never fires beforeinstallprompt, and Edge Android emulation can miss this event.
-    // In development, auto-show only on mobile-like UAs, not desktop.
-    if (shouldShowIosGuide || isAndroid || (isDev && isMobileLike)) {
-      revealPrompt();
+    // If the prompt was already captured before this component mounted, use it now.
+    if (window.deferredInstallPrompt) {
+      setDeferredPrompt(window.deferredInstallPrompt);
     }
+
+    // Always reveal when not installed. Desktop (Windows), Android and iOS all
+    // get the prompt: a native one-click button when the browser supports it,
+    // otherwise platform-specific manual steps.
+    revealPrompt();
 
     return () => {
       if (revealTimer) window.clearTimeout(revealTimer);
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt as EventListener);
+      window.removeEventListener('hs-install-available', handleInstallAvailable);
       window.removeEventListener('appinstalled', handleAppInstalled);
     };
-  }, [
-    dismissedRecently,
-    installedAlready,
-    isAndroid,
-    isDev,
-    isMobileLike,
-    isStandalone,
-    shouldShowIosGuide,
-  ]);
+  }, [installedAlready, isDev, isStandalone]);
 
   const dismiss = () => {
+    // Hide for the current view only; it reappears on the next visit/reload
+    // until the app is actually installed.
     setVisible(false);
-    setDismissedNow();
   };
 
   const install = async () => {
@@ -116,14 +111,13 @@ const InstallAppPrompt: React.FC = () => {
         localStorage.setItem(INSTALLED_KEY, '1');
         setVisible(false);
       } else {
-        setDismissedNow();
         setVisible(false);
       }
     } catch (error) {
       console.error('Install prompt failed:', error);
-      setDismissedNow();
       setVisible(false);
     } finally {
+      window.deferredInstallPrompt = null;
       setDeferredPrompt(null);
       setInstalling(false);
     }
@@ -168,70 +162,82 @@ const InstallAppPrompt: React.FC = () => {
 
           {!canUseNativeInstall && shouldShowIosGuide && (
             <div className="rounded-xl border border-slate-600 bg-slate-800/90 p-3">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-emerald-300">
-                iPhone Install
+              <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-emerald-300">
+                <DevicePhoneMobileIcon className="h-4 w-4" />
+                Add to iPhone Home Screen
               </p>
-              {!isSafari ? (
-                <div className="space-y-2">
-                  <p className="text-sm text-slate-200">Open this website in Safari, then use Add to Home Screen.</p>
-                  <button
-                    type="button"
-                    onClick={() => setIosStepsOpen((prev) => !prev)}
-                    className="inline-flex items-center gap-1 text-sm font-medium text-emerald-300 hover:text-emerald-200"
-                  >
-                    <DevicePhoneMobileIcon className="h-4 w-4" />
-                    {iosStepsOpen ? 'Hide Steps' : 'Show Steps'}
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setIosStepsOpen((prev) => !prev)}
-                  className="inline-flex items-center gap-1 text-sm font-medium text-emerald-300 hover:text-emerald-200"
-                >
-                  <ShareIcon className="h-4 w-4" />
-                  {iosStepsOpen ? 'Hide Steps' : 'Show iPhone Steps'}
-                </button>
+
+              {!isSafari && (
+                <p className="mb-3 rounded-lg bg-slate-700/70 px-3 py-2 text-sm text-slate-100">
+                  Open this site in <span className="font-semibold">Safari</span> first — iPhone can only add apps from Safari.
+                </p>
               )}
 
-              {iosStepsOpen && (
-                <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-slate-200">
-                  <li>Tap the Share icon in Safari.</li>
-                  <li>Select Add to Home Screen.</li>
-                  <li>Tap Add to install the app icon.</li>
-                </ol>
-              )}
+              <ol className="space-y-2.5 text-sm text-slate-200">
+                <li className="flex items-start gap-2.5">
+                  <span className="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-emerald-500 text-[11px] font-bold text-white">1</span>
+                  <span className="flex flex-wrap items-center gap-1">
+                    Tap the
+                    <ShareIcon className="h-4 w-4 text-emerald-300" />
+                    <span className="font-semibold">Share</span> button in the Safari toolbar.
+                  </span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <span className="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-emerald-500 text-[11px] font-bold text-white">2</span>
+                  <span>Scroll down and tap <span className="font-semibold">Add to Home Screen</span>.</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <span className="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-emerald-500 text-[11px] font-bold text-white">3</span>
+                  <span>Tap <span className="font-semibold">Add</span> in the top corner — that's it!</span>
+                </li>
+              </ol>
             </div>
           )}
 
           {!canUseNativeInstall && !shouldShowIosGuide && isAndroid && (
             <div className="rounded-xl border border-slate-600 bg-slate-800/90 p-3">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-emerald-300">
-                Android Install
-              </p>
-              <button
-                type="button"
-                onClick={() => setAndroidStepsOpen((prev) => !prev)}
-                className="inline-flex items-center gap-1 text-sm font-medium text-emerald-300 hover:text-emerald-200"
-              >
+              <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-emerald-300">
                 <DevicePhoneMobileIcon className="h-4 w-4" />
-                {androidStepsOpen ? 'Hide Steps' : 'Show Android Steps'}
-              </button>
-
-              {androidStepsOpen && (
-                <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-slate-200">
-                  <li>Tap the browser menu (three dots).</li>
-                  <li>Select Install app or Add to Home screen.</li>
-                  <li>Confirm to place the app icon on your home screen.</li>
-                </ol>
-              )}
+                Add to Android Home Screen
+              </p>
+              <ol className="space-y-2.5 text-sm text-slate-200">
+                <li className="flex items-start gap-2.5">
+                  <span className="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-emerald-500 text-[11px] font-bold text-white">1</span>
+                  <span>Tap the browser menu (three dots) in the top corner.</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <span className="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-emerald-500 text-[11px] font-bold text-white">2</span>
+                  <span>Tap <span className="font-semibold">Install app</span> or <span className="font-semibold">Add to Home screen</span>.</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <span className="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-emerald-500 text-[11px] font-bold text-white">3</span>
+                  <span>Tap <span className="font-semibold">Install</span> to confirm.</span>
+                </li>
+              </ol>
             </div>
           )}
 
           {!canUseNativeInstall && !shouldShowIosGuide && !isAndroid && (
-            <p className="text-xs text-slate-300">
-              Install becomes available once your browser reports this site as installable.
-            </p>
+            <div className="rounded-xl border border-slate-600 bg-slate-800/90 p-3">
+              <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-emerald-300">
+                <ArrowDownTrayIcon className="h-4 w-4" />
+                Install on Windows / Desktop
+              </p>
+              <ol className="space-y-2.5 text-sm text-slate-200">
+                <li className="flex items-start gap-2.5">
+                  <span className="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-emerald-500 text-[11px] font-bold text-white">1</span>
+                  <span>Click the install icon on the right side of the address bar.</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <span className="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-emerald-500 text-[11px] font-bold text-white">2</span>
+                  <span>Or open the browser menu (three dots) → <span className="font-semibold">Install HikmahSphere</span>.</span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <span className="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-emerald-500 text-[11px] font-bold text-white">3</span>
+                  <span>Click <span className="font-semibold">Install</span> to add it as a desktop app.</span>
+                </li>
+              </ol>
+            </div>
           )}
         </div>
       </div>

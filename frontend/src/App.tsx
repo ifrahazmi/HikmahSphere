@@ -15,6 +15,7 @@ import Footer from './components/Footer';
 import LoadingSpinner from './components/LoadingSpinner';
 import ProtectedRoute from './components/ProtectedRoute'; // Import ProtectedRoute
 import InstallAppPrompt from './components/InstallAppPrompt';
+import PrayerAdhanScheduler from './components/PrayerAdhanScheduler';
 
 // Pages
 import Home from './pages/Home';
@@ -285,6 +286,9 @@ const AppContent: React.FC = () => {
 
       {/* Footer */}
       <Footer />
+
+      {/* Global Adhan scheduler (fires prayer notifications on any page) */}
+      <PrayerAdhanScheduler />
 
       {/* PWA Install Prompt */}
       <InstallAppPrompt />

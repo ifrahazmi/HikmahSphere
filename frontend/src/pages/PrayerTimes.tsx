@@ -26,6 +26,7 @@ import PageSEO from '../components/PageSEO';
 import MosqueFinder from '../components/mosques/MosqueFinder';
 import { API_URL } from '../config';
 import { IslamicReminder, getCurrentPrayerWindow, selectReminder } from '../data/islamicReminders';
+import { writeTodayAdhanTimes } from '../utils/adhanStorage';
 
 interface HijriDate {
   day: string;
@@ -1880,6 +1881,13 @@ const PrayerTimes: React.FC = () => {
     return () => clearInterval(interval);
   }, [prayerData, updatePrayerTimes]);
 
+  // Persist today's prayer times so the global Adhan scheduler can fire
+  // notifications/audio from any page (not only this Prayer Times page).
+  useEffect(() => {
+    if (!prayerData?.times) return;
+    writeTodayAdhanTimes(prayerData.times);
+  }, [prayerData?.times]);
+
   // Refresh fasting data at Maghrib time to ensure Sehri/Iftar times update correctly
   useEffect(() => {
     if (!prayerData?.times?.Maghrib || !location?.lat || !location?.lon) return;
@@ -2251,13 +2259,13 @@ const PrayerTimes: React.FC = () => {
         </button>
       </div>
 
-      <div className="mb-3 rounded-xl border border-emerald-100 bg-emerald-50 p-3">
+      <div className="mb-3 rounded-xl border border-emerald-100 bg-emerald-50 p-3 sm:grid sm:grid-cols-2 sm:items-start sm:gap-3">
         <p className="text-xs leading-relaxed text-emerald-900">
           According to many classical Sunni scholars, Ishraq and Duha are not two different obligatory prayers.
           Ishraq refers to praying this voluntary morning salah in its earliest time, while Duha continues later in
           the morning. Chasht is a South Asian name for Duha.
         </p>
-        <div className="mt-3 rounded-lg bg-white/80 p-3">
+        <div className="mt-3 rounded-lg bg-white/80 p-3 sm:mt-0">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Simple Timeline</p>
           <div className="mt-2 space-y-1 text-xs font-medium text-gray-700">
             <p>Sunrise</p>
@@ -2271,7 +2279,7 @@ const PrayerTimes: React.FC = () => {
         </div>
       </div>
 
-      <div className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         {extraPrayerTimingCards.map((prayer) => (
           <div key={prayer.key} className={`rounded-xl border p-3 ${prayer.accentClassName}`}>
             <div className="flex items-start justify-between gap-3">
@@ -2391,15 +2399,48 @@ const PrayerTimes: React.FC = () => {
       <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6">
         {/* Header Section */}
         <div className="max-w-4xl mx-auto text-center mb-6 sm:mb-8">
-	          <div className="flex items-center justify-center gap-3 sm:gap-4 mb-4 sm:mb-6">
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900">Prayer Times</h1>
+	          <div className="relative overflow-hidden flex flex-col sm:flex-row items-start sm:items-center sm:justify-between gap-4 mb-6 rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 p-5 sm:p-6 shadow-lg">
+            <div
+              className="pointer-events-none absolute inset-0 opacity-10"
+              style={{
+                backgroundImage: 'radial-gradient(circle at 2px 2px, #ffffff 1px, transparent 0)',
+                backgroundSize: '28px 28px',
+              }}
+            />
+            <div className="relative z-10 flex items-center gap-3 sm:gap-4 text-left">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center flex-shrink-0">
+                <ClockIcon className="w-7 h-7 sm:w-8 sm:h-8 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-bold text-white">Prayer Time</h1>
+                <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm sm:text-lg font-semibold text-white/90">
+                  <span>{activePrayerData?.date?.readable || prayerData?.date?.readable}</span>
+                  {displayHijriReadable && (
+                    <>
+                      <span className="text-white/50">•</span>
+                      <span className="font-arabic">{displayHijriReadable} AH</span>
+                    </>
+                  )}
+                  {weatherData && (
+                    <>
+                      <span className="text-white/50">•</span>
+                      <span className="whitespace-nowrap">
+                        {weatherData.current.temperature_2m}°C{' '}
+                        <span className="text-white/70">({getWeatherStyling(weatherData.current.weather_code, 'Dhuhr').label})</span>
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="relative z-10 flex items-center gap-2 self-end sm:self-auto">
             <button
               onClick={() => setShowSettings(!showSettings)}
-              className="p-2 sm:p-2.5 rounded-xl hover:bg-gray-100 transition-colors shadow-md"
+              className="p-2 sm:p-2.5 rounded-xl bg-white/15 hover:bg-white/25 transition-colors"
               title="Settings"
               aria-label="Toggle settings"
             >
-              <Cog6ToothIcon className="h-5 w-5 sm:h-6 sm:w-6 text-gray-600" />
+              <Cog6ToothIcon className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
             </button>
 		            <div
 		              ref={extraPrayerInfoRef}
@@ -2407,13 +2448,13 @@ const PrayerTimes: React.FC = () => {
 		            >
 		              <button
 		                onClick={() => setShowExtraPrayerInfo((prev) => !prev)}
-		                className="p-2 sm:p-2.5 rounded-full border border-emerald-200 bg-white hover:bg-emerald-50 transition-colors shadow-md"
+		                className="p-2 sm:p-2.5 rounded-xl bg-white/15 hover:bg-white/25 transition-colors"
 		                title="About extra prayer times"
 		                aria-label="About extra prayer times"
 	                  aria-expanded={showExtraPrayerInfo}
                     type="button"
 		              >
-	                <InformationCircleIcon className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-700" />
+	                <InformationCircleIcon className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
 	              </button>
 	
 	              {showExtraPrayerInfo && (
@@ -2445,7 +2486,7 @@ const PrayerTimes: React.FC = () => {
 	                  >
 	                    <div className="flex min-h-full items-center justify-center p-4">
 	                      <div
-	                        className="relative max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-emerald-100 bg-white p-5 text-left shadow-2xl"
+	                        className="relative max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-emerald-100 bg-white p-5 text-left shadow-2xl"
 	                        onClick={(event) => event.stopPropagation()}
 	                      >
 	                        <div className="sticky top-0 right-0 flex justify-end mb-3">
@@ -2460,10 +2501,20 @@ const PrayerTimes: React.FC = () => {
 	                      </div>
 	                    </div>
 	                  </div>
-	                  {/* Desktop - Tooltip */}
-	                  <div className="absolute left-1/2 top-full z-30 mt-3 hidden w-[min(92vw,24rem)] -translate-x-1/2 rounded-2xl border border-emerald-100 bg-white p-4 text-left shadow-2xl lg:block">
-	                    {extraPrayerInfoContent}
-	                  </div>
+                  {/* Desktop - Centered Modal */}
+                  <div
+                    className="fixed inset-0 z-50 hidden bg-black/50 backdrop-blur-sm lg:block"
+                    onClick={() => setShowExtraPrayerInfo(false)}
+                  >
+                    <div className="flex min-h-full items-center justify-center p-4">
+                      <div
+                        className="relative max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-emerald-100 bg-white p-6 text-left shadow-2xl"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        {extraPrayerInfoContent}
+                      </div>
+                    </div>
+                  </div>
 	                </>
 	              )}
 	            </div>
@@ -2492,6 +2543,7 @@ const PrayerTimes: React.FC = () => {
                 </svg>
               </button>
             )}
+            </div>
           </div>
 
           {/* View Mode Toggle - Mobile Optimized */}
@@ -2838,24 +2890,6 @@ const PrayerTimes: React.FC = () => {
               </button>
             </div>
 
-            <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 mt-1.5 text-xs sm:text-sm">
-                <p className="text-emerald-600 font-medium">
-                    {activePrayerData?.date?.readable || prayerData?.date?.readable}
-                </p>
-                <span className="text-gray-400">•</span>
-                <p className="font-arabic text-gray-700">
-                    {displayHijriReadable ? `${displayHijriReadable} AH` : ''}
-                </p>
-
-                {/* Current Weather Display next to date */}
-                {weatherData && (
-                    <span className="text-gray-500 flex items-center whitespace-nowrap">
-                         <span className="mx-1.5 hidden sm:inline">•</span>
-                         {weatherData.current.temperature_2m}°C
-                         <span className="ml-1 hidden sm:inline">({getWeatherStyling(weatherData.current.weather_code, 'Dhuhr').label})</span>
-                    </span>
-                )}
-            </div>
           </div>
 
           {/* Search Bar - Mobile Optimized */}

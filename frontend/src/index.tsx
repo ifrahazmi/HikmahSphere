@@ -30,6 +30,24 @@ if (typeof window !== 'undefined') {
       window.location.reload();
     }
   });
+
+  // Capture the install prompt as early as possible. Chrome/Edge (Android & Windows)
+  // can fire `beforeinstallprompt` before React mounts, so we stash it on window and
+  // notify the app, enabling reliable one-click install.
+  window.addEventListener('beforeinstallprompt', (event) => {
+    event.preventDefault();
+    window.deferredInstallPrompt = event as BeforeInstallPromptEvent;
+    window.dispatchEvent(new Event('hs-install-available'));
+  });
+
+  window.addEventListener('appinstalled', () => {
+    window.deferredInstallPrompt = null;
+    try {
+      localStorage.setItem('hs_app_installed', '1');
+    } catch {
+      /* ignore storage errors */
+    }
+  });
 }
 
 const isLocalDevHost = typeof window !== 'undefined'

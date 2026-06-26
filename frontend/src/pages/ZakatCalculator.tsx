@@ -289,40 +289,40 @@ const ZakatCalculator: React.FC = () => {
         {/* Header with Tabs for Admin */}
         {isAdmin && (
           <div className="mb-8">
-            <div className="bg-white rounded-xl shadow-md p-2">
-              <div className="flex gap-2">
+            <div className="bg-white rounded-xl shadow-md p-1.5 sm:p-2">
+              <div className="flex gap-1.5 sm:gap-2">
                 <button
                   onClick={() => setActiveTab('calculator')}
-                  className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all ${
+                  className={`flex-1 min-w-0 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-6 py-2 sm:py-3 rounded-lg text-[11px] sm:text-base font-semibold leading-tight text-center transition-all ${
                     activeTab === 'calculator'
                       ? 'bg-emerald-600 text-white shadow-md'
                       : 'text-gray-600 hover:bg-gray-100'
                   }`}
                 >
-                  <CalculatorIcon className="h-5 w-5" />
-                  Zakat Calculator
+                  <CalculatorIcon className="h-5 w-5 shrink-0" />
+                  <span>Calculator</span>
                 </button>
                 <button
                   onClick={() => setActiveTab('management')}
-                  className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all ${
+                  className={`flex-1 min-w-0 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-6 py-2 sm:py-3 rounded-lg text-[11px] sm:text-base font-semibold leading-tight text-center transition-all ${
                     activeTab === 'management'
                       ? 'bg-emerald-600 text-white shadow-md'
                       : 'text-gray-600 hover:bg-gray-100'
                   }`}
                 >
-                  <BuildingLibraryIcon className="h-5 w-5" />
-                  Zakat Center
+                  <BuildingLibraryIcon className="h-5 w-5 shrink-0" />
+                  <span>Zakat Center</span>
                 </button>
                 <button
                   onClick={() => setActiveTab('maktab')}
-                  className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all ${
+                  className={`flex-1 min-w-0 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-6 py-2 sm:py-3 rounded-lg text-[11px] sm:text-base font-semibold leading-tight text-center transition-all ${
                     activeTab === 'maktab'
                       ? 'bg-indigo-600 text-white shadow-md'
                       : 'text-gray-600 hover:bg-gray-100'
                   }`}
                 >
-                  <AcademicCapIcon className="h-5 w-5" />
-                  Maktab Center
+                  <AcademicCapIcon className="h-5 w-5 shrink-0" />
+                  <span>Maktab Center</span>
                 </button>
               </div>
             </div>
