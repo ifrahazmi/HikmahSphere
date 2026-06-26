@@ -764,6 +764,13 @@ print_step "Fetching branch ${DEPLOY_BRANCH} from origin..."
 git fetch origin "${DEPLOY_BRANCH}"
 print_success "Fetched origin/${DEPLOY_BRANCH}"
 
+# npm install (run on previous deploys) rewrites the lock files, leaving the
+# working tree dirty and blocking the next `git pull`. Discard those generated
+# changes so the pull can fast-forward cleanly.
+print_step "Discarding locally regenerated lock files (if any)..."
+git checkout -- backend/package-lock.json frontend/package-lock.json 2>/dev/null || true
+print_success "Working tree ready for pull"
+
 print_step "Checking out ${DEPLOY_BRANCH} branch..."
 if git show-ref --verify --quiet "refs/heads/${DEPLOY_BRANCH}"; then
     git checkout "${DEPLOY_BRANCH}"
