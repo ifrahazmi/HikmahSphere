@@ -472,7 +472,9 @@ prune_old_backup_directories() {
     for dir_name in "${directories[@]}"; do
         idx=$((idx + 1))
         if [ "${idx}" -gt "${keep_count}" ]; then
-            rm -rf "${target_dir}/${dir_name}"
+            # Frontend backups are created with `sudo rsync -a`, so their files
+            # are owned by www-data and require sudo to remove.
+            sudo rm -rf "${target_dir}/${dir_name}"
             write_report "Retention cleanup: removed ${target_dir}/${dir_name}"
         fi
     done
