@@ -44,3 +44,8 @@ db_data/
 tmp/
 temp/
 backup/
+
+# Deployment backups & env backups (keep on disk, never commit)
+db-backup/
+*.env.backup
+backend/.env.backup
