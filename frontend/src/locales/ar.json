@@ -1,0 +1,55 @@
+{
+  "header": {
+    "prayerTimes": "أوقات الصلاة",
+    "settings": "الإعدادات",
+    "language": "اللغة",
+    "darkMode": "الوضع الليلي",
+    "home": "الرئيسية",
+    "about": "عن",
+    "contact": "اتصل"
+  },
+  "prayers": {
+    "fajr": "الفجر",
+    "dhuhr": "الظهر",
+    "asr": "العصر",
+    "maghrib": "المغرب",
+    "isha": "العشاء"
+  },
+  "settings": {
+    "asrMethod": "طريقة حساب العصر",
+    "standard": "المعيار (طول الظل 1x)",
+    "hanafi": "الحنفي (طول الظل 2x)",
+    "darkMode": "الوضع الليلي",
+    "language": "اللغة",
+    "notifications": "الإخطارات",
+    "enable": "تفعيل",
+    "disable": "تعطيل",
+    "sound": "الصوت",
+    "save": "حفظ التغييرات",
+    "cancel": "إلغاء",
+    "close": "إغلاق"
+  },
+  "notifications": {
+    "prayerTime": "حان وقت {{prayer}}",
+    "enableNotification": "تم تفعيل الإخطار",
+    "disableNotification": "تم تعطيل الإخطار",
+    "soundEnabled": "الصوت مفعل",
+    "soundDisabled": "الصوت معطل",
+    "hint": "فعّل الإخطارات للحصول على تنبيهات أوقات الصلاة"
+  },
+  "mosque": {
+    "nearbyMosques": "المساجد القريبة",
+    "distance": "على بعد {{distance}} كم",
+    "jamaatTimes": "أوقات الجماعة",
+    "addMosque": "إضافة مسجد",
+    "viewMap": "عرض على الخريطة",
+    "rating": "التقييم",
+    "noMosques": "لم يتم العثور على مساجد قريبة"
+  },
+  "common": {
+    "loading": "جاري التحميل...",
+    "error": "خطأ",
+    "success": "نجح",
+    "tryAgain": "حاول مرة أخرى"
+  }
+}

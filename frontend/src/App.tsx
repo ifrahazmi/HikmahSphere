@@ -6,6 +6,9 @@ import { requestForToken, getPushSupportInfo, getPushDeviceId, storePushToken } 
 import axios from 'axios'; // Import axios
 import { toast } from 'react-hot-toast';
 
+// i18n initialization
+import './i18n/config';
+
 // Components
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
@@ -39,6 +42,8 @@ import { useAuth, AuthProvider } from './hooks/useAuth';
 // Contexts
 import { QuranProvider } from './contexts/QuranContext';
 import { NotificationProvider } from './contexts/NotificationContext'; // Import NotificationProvider
+import { DarkModeProvider } from './contexts/DarkModeContext';
+import { LanguageProvider } from './contexts/LanguageContext';
 
 // Styles
 import './App.css';
@@ -217,7 +222,7 @@ const AppContent: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50">
+    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-800 transition-colors duration-300">
       {/* Navigation */}
       <Navbar user={user} />
 
@@ -294,10 +299,14 @@ const App: React.FC = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <NotificationProvider> {/* Wrap with NotificationProvider */}
-          <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-            <AppContent />
-          </Router>
+        <NotificationProvider>
+          <DarkModeProvider>
+            <LanguageProvider>
+              <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                <AppContent />
+              </Router>
+            </LanguageProvider>
+          </DarkModeProvider>
         </NotificationProvider>
       </AuthProvider>
 

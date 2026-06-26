@@ -181,32 +181,58 @@ const extractBeforeSleepSurahBlocks = (arabicText: string): string[] => {
 const renderArabicWithStopMarkers = (
   arabicText: string,
   keyPrefix: string,
-  isDarkMode: boolean
+  isDarkMode: boolean,
+  justifyClass: string = 'justify-start'
 ): React.ReactNode => {
   const normalized = normalizeArabicForDisplay(arabicText);
-  const parts = normalized.split('،').map((part) => part.trim()).filter(Boolean);
+  
+  // Split by spaces to render word-by-word for IndoPak v3 compatibility
+  const words = normalized.split(/\s+/).filter(Boolean);
 
-  if (parts.length <= 1) {
-    return normalized;
-  }
-
-  return parts.map((part, index) => (
-    <React.Fragment key={`${keyPrefix}-${index}`}>
-      {part}
-      {index < parts.length - 1 && (
-        <>
-          {'، '}
-          <span
-            aria-hidden="true"
-            className={`mx-1 inline-block h-1.5 w-1.5 align-middle rounded-full ${
-              isDarkMode ? 'bg-emerald-300' : 'bg-emerald-600'
-            }`}
-          />
-          {' '}
-        </>
-      )}
-    </React.Fragment>
-  ));
+  return (
+    <div
+      className={`flex flex-wrap items-baseline ${justifyClass} gap-[0.08em] sm:gap-[0.12em]`}
+      dir="rtl"
+    >
+      {words.map((word, idx) => {
+        const hasComma = word.includes('،');
+        const cleanWord = word.replace(/،/g, '');
+        
+        return (
+          <React.Fragment key={`${keyPrefix}-${idx}`}>
+            {cleanWord && (
+              <span
+                className="inline-block indopak-v3-word-container px-[0.06em] sm:px-[0.12em] my-[0.04em]"
+                style={{
+                  textRendering: 'auto',
+                  WebkitFontSmoothing: 'subpixel-antialiased',
+                  MozOsxFontSmoothing: 'auto',
+                  WebkitTextSizeAdjust: '100%',
+                  fontVariantLigatures: 'common-ligatures contextual',
+                  fontFeatureSettings: '"liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1',
+                  letterSpacing: '0.02em',
+                  wordSpacing: '0.08em'
+                }}
+              >
+                {cleanWord}
+              </span>
+            )}
+            {hasComma && (
+              <span className="inline-flex items-center mx-1">
+                <span className="font-indopak-nastaleeq-v3">،</span>
+                <span
+                  aria-hidden="true"
+                  className={`mx-1 inline-block h-1.5 w-1.5 align-middle rounded-full ${
+                    isDarkMode ? 'bg-emerald-300' : 'bg-emerald-600'
+                  }`}
+                />
+              </span>
+            )}
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
 };
 
 const splitArabicHeading = (arabicText: string): { heading: string; body: string } => {
@@ -1333,14 +1359,6 @@ const DhikrDua: React.FC = () => {
     reminders.scheduleType === 'periodic'
       ? `Periodic (${reminders.periodicIntervalMinutes} min)`
       : `Specific Time (${formatReminderTime(reminders.specificTime)})`;
-  const reminderPermissionLabel =
-    reminderSupport.permission === 'unsupported'
-      ? 'Unsupported'
-      : reminderSupport.permission === 'granted'
-      ? 'Granted'
-      : reminderSupport.permission === 'denied'
-      ? 'Denied'
-      : 'Ask';
   const siteUrl = 'https://hikmahsphere.site';
   const duaPageUrl = `${siteUrl}/dhikr-dua`;
   const featuredDuaSchemaItems = DUA_LIBRARY.slice(0, 12).map((dua, index) => ({
@@ -1603,107 +1621,91 @@ const DhikrDua: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-amber-100 bg-white'}`}>
-                      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-                        <div>
-                          <h3 className={`text-sm font-bold ${headingText}`}>Dhikr &amp; Dua Reminder</h3>
-                          <p className={`text-xs ${mutedText}`}>Status: {reminderStatus} • {reminderScheduleLabel}</p>
-                        </div>
+                    <div className={`rounded-xl border p-4 sm:p-5 ${isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-amber-100 bg-gradient-to-br from-amber-50/50 to-orange-50/50'}`}>
+                      <div className="mb-4 flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={enableReminderNotifications}
-                            disabled={reminders.enabled}
-                            className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
-                              reminders.enabled
-                                ? 'cursor-not-allowed bg-emerald-600 text-white'
-                                : isDarkMode
-                                ? 'border border-slate-500 bg-slate-900 text-slate-100'
-                                : 'border border-gray-300 bg-white text-gray-700'
-                            }`}
-                          >
-                            {reminders.enabled ? 'Enabled' : 'Enable'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={disableReminderNotifications}
-                            disabled={!reminders.enabled}
-                            className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
-                              !reminders.enabled
-                                ? 'cursor-not-allowed bg-rose-600 text-white'
-                                : isDarkMode
-                                ? 'border border-slate-500 bg-slate-900 text-slate-100'
-                                : 'border border-gray-300 bg-white text-gray-700'
-                            }`}
-                          >
-                            {!reminders.enabled ? 'Disabled' : 'Disable'}
-                          </button>
+                          <span className="text-xl">🔔</span>
+                          <div>
+                            <h3 className={`font-bold ${headingText}`}>Dhikr &amp; Dua Reminder</h3>
+                            <p className={`text-xs ${mutedText}`}>{reminderScheduleLabel}</p>
+                          </div>
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => reminders.enabled ? disableReminderNotifications() : enableReminderNotifications()}
+                          className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${
+                            reminders.enabled ? 'bg-emerald-500' : 'bg-gray-300'
+                          }`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                              reminders.enabled ? 'translate-x-5' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
                       </div>
 
-                      <div className={`mb-3 rounded-lg border px-3 py-2 text-xs ${isDarkMode ? 'border-slate-600 bg-slate-900' : 'border-emerald-200 bg-emerald-50'}`}>
-                        <p className={mutedText}>
-                          Support: {reminderSupport.supported ? 'Available' : 'Not Available'} • Permission: {reminderPermissionLabel}
-                        </p>
-                        {reminderSupport.reason && (
-                          <p className={`${mutedText} mt-1`}>{reminderSupport.reason}</p>
-                        )}
-                        {!canConfigureReminderSettings && (
-                          <p className={`${mutedText} mt-1`}>
-                            Grant notification permission to configure reminder type and timing.
-                          </p>
-                        )}
-                      </div>
+                      {(!reminderSupport.supported || reminderSupport.reason || !canConfigureReminderSettings) && (
+                        <div className={`mb-4 rounded-lg border p-3 text-[11px] ${isDarkMode ? 'border-slate-600 bg-slate-900/50' : 'border-amber-200 bg-amber-50'}`}>
+                          <p className="font-semibold text-amber-600">Note on Notifications</p>
+                          {!reminderSupport.supported && <p className="mt-1 text-slate-500">Your browser does not support notifications.</p>}
+                          {reminderSupport.reason && <p className="mt-1 text-slate-500">{reminderSupport.reason}</p>}
+                          {!canConfigureReminderSettings && reminderSupport.supported && (
+                            <p className="mt-1 text-slate-500">Please enable the toggle above and grant permission to configure reminders.</p>
+                          )}
+                        </div>
+                      )}
 
-                      <div className="space-y-3 text-sm">
-                        <div className="grid grid-cols-2 gap-2">
-                          <label className="flex items-center justify-between gap-2 rounded-lg border border-emerald-200 px-3 py-2">
-                            <span className={mutedText}>Dhikr</span>
-                            <input
-                              type="checkbox"
-                              checked={reminders.includeDhikr}
-                              disabled={!canConfigureReminderSettings}
-                              onChange={(event) => handleReminderTypeToggle('includeDhikr', event.target.checked)}
-                            />
-                          </label>
-                          <label className="flex items-center justify-between gap-2 rounded-lg border border-emerald-200 px-3 py-2">
-                            <span className={mutedText}>Dua</span>
-                            <input
-                              type="checkbox"
-                              checked={reminders.includeDua}
-                              disabled={!canConfigureReminderSettings}
-                              onChange={(event) => handleReminderTypeToggle('includeDua', event.target.checked)}
-                            />
-                          </label>
+                      <div className={`space-y-4 transition-opacity ${!canConfigureReminderSettings ? 'opacity-50 pointer-events-none' : ''}`}>
+                        <div>
+                          <p className={`mb-2 text-[11px] font-semibold uppercase tracking-wider ${mutedText}`}>Include in Reminders</p>
+                          <div className="flex gap-3">
+                            <label className={`flex flex-1 items-center gap-2 rounded-lg border px-3 py-2 cursor-pointer transition ${
+                              reminders.includeDhikr ? (isDarkMode ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-emerald-200 bg-emerald-50') : (isDarkMode ? 'border-slate-600' : 'border-gray-200')
+                            }`}>
+                              <input
+                                type="checkbox"
+                                checked={reminders.includeDhikr}
+                                onChange={(event) => handleReminderTypeToggle('includeDhikr', event.target.checked)}
+                                className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                              />
+                              <span className="text-sm font-medium">Dhikr</span>
+                            </label>
+                            <label className={`flex flex-1 items-center gap-2 rounded-lg border px-3 py-2 cursor-pointer transition ${
+                              reminders.includeDua ? (isDarkMode ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-emerald-200 bg-emerald-50') : (isDarkMode ? 'border-slate-600' : 'border-gray-200')
+                            }`}>
+                              <input
+                                type="checkbox"
+                                checked={reminders.includeDua}
+                                onChange={(event) => handleReminderTypeToggle('includeDua', event.target.checked)}
+                                className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                              />
+                              <span className="text-sm font-medium">Dua</span>
+                            </label>
+                          </div>
                         </div>
 
                         <div>
-                          <p className={`text-xs font-semibold uppercase tracking-wide ${mutedText}`}>Schedule Type</p>
-                          <div className="mt-2 grid grid-cols-2 gap-2">
+                          <p className={`mb-2 text-[11px] font-semibold uppercase tracking-wider ${mutedText}`}>Schedule Type</p>
+                          <div className="flex rounded-lg bg-slate-100 p-1 dark:bg-slate-900">
                             <button
                               type="button"
-                              disabled={!canConfigureReminderSettings}
                               onClick={() => handleReminderScheduleTypeChange('periodic')}
-                              className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                              className={`flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition ${
                                 reminders.scheduleType === 'periodic'
-                                  ? 'border-emerald-600 bg-emerald-600 text-white'
-                                  : isDarkMode
-                                  ? 'border-slate-500 bg-slate-900 text-slate-100'
-                                  : 'border-emerald-200 bg-white text-emerald-700'
+                                  ? 'bg-white text-emerald-700 shadow-sm dark:bg-slate-700 dark:text-emerald-400'
+                                  : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
                               }`}
                             >
                               Periodic
                             </button>
                             <button
                               type="button"
-                              disabled={!canConfigureReminderSettings}
                               onClick={() => handleReminderScheduleTypeChange('specific')}
-                              className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                              className={`flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition ${
                                 reminders.scheduleType === 'specific'
-                                  ? 'border-emerald-600 bg-emerald-600 text-white'
-                                  : isDarkMode
-                                  ? 'border-slate-500 bg-slate-900 text-slate-100'
-                                  : 'border-emerald-200 bg-white text-emerald-700'
+                                  ? 'bg-white text-emerald-700 shadow-sm dark:bg-slate-700 dark:text-emerald-400'
+                                  : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
                               }`}
                             >
                               Specific Time
@@ -1711,43 +1713,38 @@ const DhikrDua: React.FC = () => {
                           </div>
                         </div>
 
-                        {reminders.scheduleType === 'periodic' ? (
-                          <label className="flex items-center justify-between gap-3">
-                            <span className={mutedText}>Frequency</span>
-                            <select
-                              value={reminders.periodicIntervalMinutes}
-                              disabled={!canConfigureReminderSettings}
-                              onChange={(event) => handleReminderIntervalChange(event.target.value)}
-                              className={`rounded-lg border px-2 py-1 text-sm ${
-                                isDarkMode
-                                  ? 'border-slate-500 bg-slate-900 text-slate-100'
-                                  : 'border-emerald-200 bg-white text-gray-900'
-                              }`}
-                            >
-                              {REMINDER_INTERVAL_OPTIONS.map((minutes) => (
-                                <option key={minutes} value={minutes}>
-                                  Every {minutes} min
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                        ) : (
-                          <label className="flex items-center justify-between gap-3">
-                            <span className={mutedText}>Reminder time</span>
-                            <input
-                              type="time"
-                              value={reminders.specificTime}
-                              disabled={!canConfigureReminderSettings}
-                              onChange={(event) => handleReminderTimeChange(event.target.value)}
-                              className={`rounded-lg border px-2 py-1 text-sm ${
-                                isDarkMode
-                                  ? 'border-slate-500 bg-slate-900 text-slate-100'
-                                  : 'border-emerald-200 bg-white text-gray-900'
-                              }`}
-                            />
-                          </label>
-                        )}
-
+                        <div className={`rounded-lg border p-3 ${isDarkMode ? 'border-slate-700 bg-slate-800/50' : 'border-gray-100 bg-white'}`}>
+                          {reminders.scheduleType === 'periodic' ? (
+                            <label className="flex items-center justify-between gap-3">
+                              <span className="text-sm font-medium">Frequency</span>
+                              <select
+                                value={reminders.periodicIntervalMinutes}
+                                onChange={(event) => handleReminderIntervalChange(event.target.value)}
+                                className={`rounded-md border px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-emerald-400 ${
+                                  isDarkMode ? 'border-slate-600 bg-slate-900 text-slate-100' : 'border-gray-200 bg-white'
+                                }`}
+                              >
+                                {REMINDER_INTERVAL_OPTIONS.map((minutes) => (
+                                  <option key={minutes} value={minutes}>
+                                    Every {minutes} min
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          ) : (
+                            <label className="flex items-center justify-between gap-3">
+                              <span className="text-sm font-medium">Time of day</span>
+                              <input
+                                type="time"
+                                value={reminders.specificTime}
+                                onChange={(event) => handleReminderTimeChange(event.target.value)}
+                                className={`rounded-md border px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-emerald-400 ${
+                                  isDarkMode ? 'border-slate-600 bg-slate-900 text-slate-100' : 'border-gray-200 bg-white'
+                                }`}
+                              />
+                            </label>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -2047,11 +2044,11 @@ const DhikrDua: React.FC = () => {
                                                 Dua {index + 1}
                                               </p>
                                               {blockHeading && (
-                                                <p className="mb-2 text-center text-xl font-semibold font-indopak-nastaleeq">
+                                                <p className="mb-2 text-center text-xl font-semibold font-indopak-nastaleeq-v3" dir="rtl" style={{ textRendering: 'auto', fontVariantLigatures: 'common-ligatures contextual', fontFeatureSettings: '"liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1' }}>
                                                   {blockHeading}
                                                 </p>
                                               )}
-                                              <p className="text-[1.6rem] sm:text-[1.85rem] font-indopak-nastaleeq">
+                                              <p className="text-[1.6rem] sm:text-[1.85rem] font-indopak-nastaleeq-v3 leading-[2.4] sm:leading-[2.6]" dir="rtl" style={{ textRendering: 'auto', fontVariantLigatures: 'common-ligatures contextual', fontFeatureSettings: '"liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1' }}>
                                                 {renderArabicWithStopMarkers(blockBody || block, `${dua.id}-block-text-${index}`, isDarkMode)}
                                               </p>
                                             </div>
@@ -2061,13 +2058,13 @@ const DhikrDua: React.FC = () => {
                                     ) : (
                                       <>
                                         {arabicHeading && (
-                                          <p className={`mb-2 text-center text-xl font-semibold font-indopak-nastaleeq ${
+                                          <p className={`mb-2 text-center text-xl font-semibold font-indopak-nastaleeq-v3 ${
                                             isMorningEveningOne ? 'sm:text-[1.65rem]' : ''
-                                          }`}>
+                                          }`} dir="rtl" style={{ textRendering: 'auto', fontVariantLigatures: 'common-ligatures contextual', fontFeatureSettings: '"liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1' }}>
                                             {arabicHeading}
                                           </p>
                                         )}
-                                        <p className="text-[1.75rem] sm:text-[2rem] font-indopak-nastaleeq">
+                                        <p className="text-[1.75rem] sm:text-[2rem] font-indopak-nastaleeq-v3 leading-[2.4] sm:leading-[2.6]" dir="rtl" style={{ textRendering: 'auto', fontVariantLigatures: 'common-ligatures contextual', fontFeatureSettings: '"liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1' }}>
                                           {renderArabicWithStopMarkers(arabicBody || normalizedArabic || dua.arabic, `${dua.id}-body`, isDarkMode)}
                                         </p>
                                       </>
@@ -2126,123 +2123,157 @@ const DhikrDua: React.FC = () => {
             </div>
 
             <aside className={`space-y-6 lg:col-span-4 ${activeMobileSection === 'tasbih' ? 'block' : 'hidden lg:block'}`}>
-              <div id="tasbih-counter" ref={tasbihSectionRef} className={`scroll-mt-24 rounded-2xl border p-5 shadow-sm lg:sticky lg:top-24 ${cardBg}`}>
+              <div id="tasbih-counter" ref={tasbihSectionRef} className={`scroll-mt-24 rounded-2xl border p-4 sm:p-5 shadow-sm lg:sticky lg:top-24 ${cardBg}`}>
                 <div className="mx-auto w-full max-w-md">
-                  <h2 className={`text-center text-xl font-bold ${headingText}`}>Tasbih Counter</h2>
-                  <p className={`mt-1 text-center text-sm ${mutedText}`}>Large tap area with vibration feedback on mobile.</p>
+                  {/* Header */}
+                  <div className="flex items-center justify-center gap-2 mb-4">
+                    <span className="text-2xl">📿</span>
+                    <h2 className={`text-lg font-bold ${headingText}`}>Tasbih Counter</h2>
+                  </div>
 
-                  <div className="mt-4">
-                    <label className={`mb-1 block text-xs font-semibold uppercase tracking-wide ${mutedText}`}>Select Dhikr</label>
+                  {/* Dhikr Selector - Compact */}
+                  <div className="relative mx-auto max-w-[200px]">
                     <select
                       value={selectedPreset.id}
                       onChange={(event) => updatePreset(event.target.value)}
-                      className={`w-full rounded-xl border px-3 py-2 text-[1.1rem] font-indopak-nastaleeq outline-none ${
+                      className={`w-full appearance-none rounded-full border px-4 py-2 text-sm font-medium outline-none transition focus:ring-2 focus:ring-emerald-400/50 cursor-pointer text-center ${
                         isDarkMode
-                          ? 'border-slate-600 bg-slate-800 text-slate-100'
-                          : 'border-emerald-200 bg-white text-gray-900'
+                          ? 'border-slate-600 bg-slate-800 text-slate-100 hover:bg-slate-700'
+                          : 'border-emerald-200 bg-white text-emerald-900 hover:bg-emerald-50'
                       }`}
                     >
                       {TASBIH_PRESETS.map((preset) => (
-                        <option key={preset.id} value={preset.id}>
+                        <option key={preset.id} value={preset.id} className="text-center">
                           {preset.label}
                         </option>
                       ))}
                     </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center px-2">
+                      <svg className={`h-4 w-4 ${isDarkMode ? 'text-slate-400' : 'text-emerald-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </div>
                   </div>
 
-                  <div className={`mt-5 rounded-2xl border p-4 ${isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-emerald-100 bg-emerald-50/60'}`}>
-                    <div className="text-center">
-                      <p className="text-sm font-semibold text-emerald-700">Current Dhikr</p>
-                      <p className={`mt-1 font-semibold ${selectedPreset.compact ? 'text-sm' : 'text-lg'} ${headingText}`}>{selectedPreset.label}</p>
-                      <p
-                        className={`mt-1 tasbih-arabic-text ${selectedPreset.compact ? 'text-xl leading-relaxed' : 'text-3xl'} ${
+                  {/* Current Dhikr Display */}
+                  <div className={`mt-5 rounded-2xl border p-4 sm:p-5 shadow-sm transition-colors ${isDarkMode ? 'border-slate-700/60 bg-slate-800/40' : 'border-emerald-100 bg-gradient-to-br from-emerald-50/50 to-teal-50/30'}`}>
+                    <p className={`text-center text-[10px] font-bold uppercase tracking-[0.2em] opacity-70 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-700'}`}>Current Dhikr</p>
+                    <p className={`mt-1.5 text-center font-semibold tracking-wide ${selectedPreset.compact ? 'text-xs' : 'text-sm'} ${headingText}`}>{selectedPreset.label}</p>
+                    
+                    <div
+                      className={`mt-3 flex flex-wrap items-baseline justify-center gap-[0.08em] sm:gap-[0.12em] font-indopak-nastaleeq-v3 ${selectedPreset.compact ? 'text-xl leading-loose' : 'text-[2rem] leading-loose'} ${
                         isDarkMode ? 'text-emerald-100' : 'text-emerald-900'
-                        }`}
-                        dir="rtl"
-                        lang="ar"
-                      >
-                        {selectedPreset.arabic}
-                      </p>
-                      {selectedPreset.transliteration && (
-                        <p className={`mt-2 text-[11px] leading-relaxed ${mutedText}`}>
-                          {selectedPreset.transliteration}
-                        </p>
-                      )}
+                      }`}
+                      dir="rtl"
+                      lang="ar"
+                    >
+                      {selectedPreset.arabic.split(/\s+/).filter(Boolean).map((word, idx) => (
+                        <span
+                          key={idx}
+                          className="inline-block indopak-v3-word-container px-[0.06em] sm:px-[0.12em] my-[0.04em]"
+                          style={{
+                            textRendering: 'auto',
+                            WebkitFontSmoothing: 'subpixel-antialiased',
+                            fontVariantLigatures: 'common-ligatures contextual',
+                            fontFeatureSettings: '"liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1',
+                            letterSpacing: 0,
+                            wordSpacing: '0.08em'
+                          }}
+                        >
+                          {word}
+                        </span>
+                      ))}
                     </div>
+                    
+                    {selectedPreset.transliteration && (
+                      <p className={`mt-3 text-center text-[11px] font-medium italic leading-relaxed tracking-wide ${mutedText}`}>
+                        {selectedPreset.transliteration}
+                      </p>
+                    )}
+                  </div>
 
+                  {/* Tap Counter Button */}
+                  <button
+                    type="button"
+                    onPointerDown={(event) => {
+                      if (event.pointerType === 'mouse' && event.button !== 0) return;
+                      incrementTasbih();
+                    }}
+                    onContextMenu={(event) => event.preventDefault()}
+                    className="mx-auto mt-4 flex h-40 w-40 select-none touch-manipulation items-center justify-center rounded-full bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-600 text-center text-white shadow-lg ring-4 ring-emerald-200/30 transition-all duration-150 active:scale-95 active:shadow-md hover:shadow-xl hover:ring-emerald-300/50"
+                  >
+                    <div>
+                      <p className="text-5xl font-bold tabular-nums">{tasbihCount}</p>
+                      <p className="mt-0.5 text-xs font-medium opacity-80">Tap to Count</p>
+                    </div>
+                  </button>
+
+                  {/* Progress Bar */}
+                  <div className="mt-4">
+                    <div className="mb-1 flex justify-between text-[11px] font-medium">
+                      <span className={mutedText}>{tasbihCount} / {selectedPreset.target}</span>
+                      <span className={`font-bold ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>{progressPercent}%</span>
+                    </div>
+                    <div className={`h-2 w-full overflow-hidden rounded-full ${isDarkMode ? 'bg-slate-700' : 'bg-emerald-100'}`}>
+                      <div
+                        className="h-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all duration-300 ease-out"
+                        style={{ width: `${progressPercent}%` }}
+                      />
+                    </div>
+                    <p className={`mt-1.5 text-center text-[11px] ${mutedText}`}>
+                      {completedCycles > 0 ? `${completedCycles} cycle${completedCycles > 1 ? 's' : ''} completed ✓` : `Target: ${selectedPreset.target}`}
+                    </p>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="mt-3 grid grid-cols-2 gap-2">
                     <button
                       type="button"
-                      onPointerDown={(event) => {
-                        if (event.pointerType === 'mouse' && event.button !== 0) return;
-                        incrementTasbih();
-                      }}
-                      onContextMenu={(event) => event.preventDefault()}
-                      className="mx-auto mt-4 flex h-[55vw] w-[55vw] min-h-[10rem] min-w-[10rem] max-h-48 max-w-48 select-none touch-manipulation items-center justify-center rounded-full bg-gradient-to-br from-emerald-600 to-teal-600 text-center text-white shadow-xl transition active:scale-[0.98] hover:from-emerald-700 hover:to-teal-700 md:h-[45vw] md:w-[45vw]"
+                      onClick={decrementTasbih}
+                      className={`inline-flex w-full items-center justify-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+                        isDarkMode
+                          ? 'border-slate-600 text-slate-300 hover:border-slate-500 hover:text-slate-100'
+                          : 'border-emerald-200 text-emerald-700 hover:border-emerald-400 hover:bg-emerald-50'
+                      }`}
                     >
-                      <div>
-                        <p className="text-4xl font-bold md:text-5xl">{tasbihCount}</p>
-                        <p className="mt-1 text-sm font-semibold">Tap to Count</p>
-                        <p className={`mx-auto mt-2 max-w-[10rem] break-words px-1 leading-tight ${selectedPreset.compact ? 'text-[10px]' : 'text-xs'}`}>
-                          {selectedPreset.label}
-                        </p>
-                      </div>
+                      ← Undo
                     </button>
-
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={decrementTasbih}
-                        className={`inline-flex w-full items-center justify-center rounded-xl border px-4 py-2 text-sm font-semibold transition ${
-                          isDarkMode
-                            ? 'border-slate-600 text-slate-100 hover:border-slate-500'
-                            : 'border-emerald-200 text-emerald-700 hover:border-emerald-400'
-                        }`}
-                      >
-                        Undo -1
-                      </button>
-                      <button
-                        type="button"
-                        onClick={incrementTasbih}
-                        className="inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
-                      >
-                        +1 Tasbih
-                      </button>
-                    </div>
-
-                    <div className="mt-4">
-                      <div className="mb-1 flex justify-between text-xs font-medium">
-                        <span className={mutedText}>Progress</span>
-                        <span className={mutedText}>{progressPercent}%</span>
-                      </div>
-                      <div className="h-2 w-full overflow-hidden rounded-full bg-emerald-100">
-                        <div
-                          className="h-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all duration-300"
-                          style={{ width: `${progressPercent}%` }}
-                        />
-                      </div>
-                      <p className={`mt-2 text-xs ${mutedText}`}>
-                        Target: {selectedPreset.target} | Cycles completed: {completedCycles}
-                      </p>
-                    </div>
-
                     <button
                       type="button"
                       onClick={resetTasbih}
-                      className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:border-emerald-400"
+                      className={`inline-flex w-full items-center justify-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+                        isDarkMode
+                          ? 'border-slate-600 text-slate-300 hover:border-red-500 hover:text-red-400'
+                          : 'border-emerald-200 text-emerald-700 hover:border-red-300 hover:text-red-600 hover:bg-red-50'
+                      }`}
                     >
-                      <ArrowPathIcon className="h-4 w-4" />
-                      Reset Counter
+                      <ArrowPathIcon className="h-3.5 w-3.5" />
+                      Reset
                     </button>
                   </div>
 
-                  <div className={`mt-5 rounded-xl border p-4 ${isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-emerald-100 bg-white'}`}>
-                    <h3 className={`text-sm font-bold ${headingText}`}>Today's Dhikr Tracker</h3>
-                    <div className="mt-2 space-y-1 text-sm">
-                      {TASBIH_PRESETS.slice(0, 3).map((preset) => (
-                        <p key={preset.id} className={mutedText}>
-                          {preset.label} {dailyTracker.counts[preset.id] || 0}/{preset.target}
-                        </p>
-                      ))}
+                  {/* Today's Dhikr Tracker */}
+                  <div className={`mt-4 rounded-xl border p-3 ${isDarkMode ? 'border-slate-700 bg-slate-800/80' : 'border-emerald-100 bg-white'}`}>
+                    <h3 className={`text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>Today's Progress</h3>
+                    <div className="mt-2 space-y-2">
+                      {TASBIH_PRESETS.slice(0, 3).map((preset) => {
+                        const count = dailyTracker.counts[preset.id] || 0;
+                        const pct = Math.min(100, Math.round((count / preset.target) * 100));
+                        return (
+                          <div key={preset.id}>
+                            <div className="flex items-center justify-between mb-0.5">
+                              <span className={`text-[11px] font-medium ${mutedText}`}>{preset.label}</span>
+                              <span className={`text-[11px] font-bold tabular-nums ${pct >= 100 ? (isDarkMode ? 'text-emerald-400' : 'text-emerald-600') : headingText}`}>
+                                {count}/{preset.target} {pct >= 100 ? '✓' : ''}
+                              </span>
+                            </div>
+                            <div className={`h-1.5 w-full overflow-hidden rounded-full ${isDarkMode ? 'bg-slate-700' : 'bg-gray-100'}`}>
+                              <div
+                                className={`h-1.5 rounded-full transition-all duration-300 ${pct >= 100 ? 'bg-emerald-500' : 'bg-emerald-300'}`}
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -2383,112 +2414,131 @@ const DhikrDua: React.FC = () => {
                   </div>
                 </div>
 
-                <div className={`mt-4 rounded-lg border px-3 py-2 text-xs ${isDarkMode ? 'border-slate-600 bg-slate-900' : 'border-emerald-200 bg-emerald-50'}`}>
-                  <p className={mutedText}>
-                    Support: {reminderSupport.supported ? 'Available' : 'Not Available'} • Permission: {reminderPermissionLabel}
-                  </p>
-                  {reminderSupport.reason && (
-                    <p className={`${mutedText} mt-1`}>{reminderSupport.reason}</p>
-                  )}
-                  {!canConfigureReminderSettings && (
-                    <p className={`${mutedText} mt-1`}>
-                      Grant notification permission to configure reminder type and timing.
-                    </p>
-                  )}
-                </div>
-
-                <div className="mt-4 space-y-3 text-sm">
-                  <div className="grid grid-cols-2 gap-2">
-                    <label className="flex items-center justify-between gap-2 rounded-lg border border-emerald-200 px-3 py-2">
-                      <span className={mutedText}>Dhikr</span>
-                      <input
-                        type="checkbox"
-                        checked={reminders.includeDhikr}
-                        disabled={!canConfigureReminderSettings}
-                        onChange={(event) => handleReminderTypeToggle('includeDhikr', event.target.checked)}
+                <div className={`mt-6 rounded-xl border p-4 sm:p-5 ${isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-amber-100 bg-gradient-to-br from-amber-50/50 to-orange-50/50'}`}>
+                  <div className="mb-4 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl">🔔</span>
+                      <div>
+                        <h3 className={`font-bold ${headingText}`}>Dhikr &amp; Dua Reminder</h3>
+                        <p className={`text-xs ${mutedText}`}>{reminderScheduleLabel}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => reminders.enabled ? disableReminderNotifications() : enableReminderNotifications()}
+                      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${
+                        reminders.enabled ? 'bg-emerald-500' : 'bg-gray-300'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                          reminders.enabled ? 'translate-x-5' : 'translate-x-0'
+                        }`}
                       />
-                    </label>
-                    <label className="flex items-center justify-between gap-2 rounded-lg border border-emerald-200 px-3 py-2">
-                      <span className={mutedText}>Dua</span>
-                      <input
-                        type="checkbox"
-                        checked={reminders.includeDua}
-                        disabled={!canConfigureReminderSettings}
-                        onChange={(event) => handleReminderTypeToggle('includeDua', event.target.checked)}
-                      />
-                    </label>
+                    </button>
                   </div>
 
-                  <div>
-                    <p className={`text-xs font-semibold uppercase tracking-wide ${mutedText}`}>Schedule Type</p>
-                    <div className="mt-2 grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        disabled={!canConfigureReminderSettings}
-                        onClick={() => handleReminderScheduleTypeChange('periodic')}
-                        className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${
-                          reminders.scheduleType === 'periodic'
-                            ? 'border-emerald-600 bg-emerald-600 text-white'
-                            : isDarkMode
-                            ? 'border-slate-500 bg-slate-900 text-slate-100'
-                            : 'border-emerald-200 bg-white text-emerald-700'
-                        }`}
-                      >
-                        Periodic
-                      </button>
-                      <button
-                        type="button"
-                        disabled={!canConfigureReminderSettings}
-                        onClick={() => handleReminderScheduleTypeChange('specific')}
-                        className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${
-                          reminders.scheduleType === 'specific'
-                            ? 'border-emerald-600 bg-emerald-600 text-white'
-                            : isDarkMode
-                            ? 'border-slate-500 bg-slate-900 text-slate-100'
-                            : 'border-emerald-200 bg-white text-emerald-700'
-                        }`}
-                      >
-                        Specific Time
-                      </button>
+                  {(!reminderSupport.supported || reminderSupport.reason || !canConfigureReminderSettings) && (
+                    <div className={`mb-4 rounded-lg border p-3 text-[11px] ${isDarkMode ? 'border-slate-600 bg-slate-900/50' : 'border-amber-200 bg-amber-50'}`}>
+                      <p className="font-semibold text-amber-600">Note on Notifications</p>
+                      {!reminderSupport.supported && <p className="mt-1 text-slate-500">Your browser does not support notifications.</p>}
+                      {reminderSupport.reason && <p className="mt-1 text-slate-500">{reminderSupport.reason}</p>}
+                      {!canConfigureReminderSettings && reminderSupport.supported && (
+                        <p className="mt-1 text-slate-500">Please enable the toggle above and grant permission to configure reminders.</p>
+                      )}
+                    </div>
+                  )}
+
+                  <div className={`space-y-4 transition-opacity ${!canConfigureReminderSettings ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <div>
+                      <p className={`mb-2 text-[11px] font-semibold uppercase tracking-wider ${mutedText}`}>Include in Reminders</p>
+                      <div className="flex gap-3">
+                        <label className={`flex flex-1 items-center gap-2 rounded-lg border px-3 py-2 cursor-pointer transition ${
+                          reminders.includeDhikr ? (isDarkMode ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-emerald-200 bg-emerald-50') : (isDarkMode ? 'border-slate-600' : 'border-gray-200')
+                        }`}>
+                          <input
+                            type="checkbox"
+                            checked={reminders.includeDhikr}
+                            onChange={(event) => handleReminderTypeToggle('includeDhikr', event.target.checked)}
+                            className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <span className="text-sm font-medium">Dhikr</span>
+                        </label>
+                        <label className={`flex flex-1 items-center gap-2 rounded-lg border px-3 py-2 cursor-pointer transition ${
+                          reminders.includeDua ? (isDarkMode ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-emerald-200 bg-emerald-50') : (isDarkMode ? 'border-slate-600' : 'border-gray-200')
+                        }`}>
+                          <input
+                            type="checkbox"
+                            checked={reminders.includeDua}
+                            onChange={(event) => handleReminderTypeToggle('includeDua', event.target.checked)}
+                            className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <span className="text-sm font-medium">Dua</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className={`mb-2 text-[11px] font-semibold uppercase tracking-wider ${mutedText}`}>Schedule Type</p>
+                      <div className="flex rounded-lg bg-slate-100 p-1 dark:bg-slate-900">
+                        <button
+                          type="button"
+                          onClick={() => handleReminderScheduleTypeChange('periodic')}
+                          className={`flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition ${
+                            reminders.scheduleType === 'periodic'
+                              ? 'bg-white text-emerald-700 shadow-sm dark:bg-slate-700 dark:text-emerald-400'
+                              : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                          }`}
+                        >
+                          Periodic
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleReminderScheduleTypeChange('specific')}
+                          className={`flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition ${
+                            reminders.scheduleType === 'specific'
+                              ? 'bg-white text-emerald-700 shadow-sm dark:bg-slate-700 dark:text-emerald-400'
+                              : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                          }`}
+                        >
+                          Specific Time
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className={`rounded-lg border p-3 ${isDarkMode ? 'border-slate-700 bg-slate-800/50' : 'border-gray-100 bg-white'}`}>
+                      {reminders.scheduleType === 'periodic' ? (
+                        <label className="flex items-center justify-between gap-3">
+                          <span className="text-sm font-medium">Frequency</span>
+                          <select
+                            value={reminders.periodicIntervalMinutes}
+                            onChange={(event) => handleReminderIntervalChange(event.target.value)}
+                            className={`rounded-md border px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-emerald-400 ${
+                              isDarkMode ? 'border-slate-600 bg-slate-900 text-slate-100' : 'border-gray-200 bg-white'
+                            }`}
+                          >
+                            {REMINDER_INTERVAL_OPTIONS.map((minutes) => (
+                              <option key={minutes} value={minutes}>
+                                Every {minutes} min
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : (
+                        <label className="flex items-center justify-between gap-3">
+                          <span className="text-sm font-medium">Time of day</span>
+                          <input
+                            type="time"
+                            value={reminders.specificTime}
+                            onChange={(event) => handleReminderTimeChange(event.target.value)}
+                            className={`rounded-md border px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-emerald-400 ${
+                              isDarkMode ? 'border-slate-600 bg-slate-900 text-slate-100' : 'border-gray-200 bg-white'
+                            }`}
+                          />
+                        </label>
+                      )}
                     </div>
                   </div>
-
-                  {reminders.scheduleType === 'periodic' ? (
-                    <label className="flex items-center justify-between gap-3">
-                      <span className={mutedText}>Frequency</span>
-                      <select
-                        value={reminders.periodicIntervalMinutes}
-                        disabled={!canConfigureReminderSettings}
-                        onChange={(event) => handleReminderIntervalChange(event.target.value)}
-                        className={`rounded-lg border px-2 py-1 text-sm ${
-                          isDarkMode
-                            ? 'border-slate-500 bg-slate-900 text-slate-100'
-                            : 'border-emerald-200 bg-white text-gray-900'
-                        }`}
-                      >
-                        {REMINDER_INTERVAL_OPTIONS.map((minutes) => (
-                          <option key={minutes} value={minutes}>
-                            Every {minutes} min
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  ) : (
-                    <label className="flex items-center justify-between gap-3">
-                      <span className={mutedText}>Reminder time</span>
-                      <input
-                        type="time"
-                        value={reminders.specificTime}
-                        disabled={!canConfigureReminderSettings}
-                        onChange={(event) => handleReminderTimeChange(event.target.value)}
-                        className={`rounded-lg border px-2 py-1 text-sm ${
-                          isDarkMode
-                            ? 'border-slate-500 bg-slate-900 text-slate-100'
-                            : 'border-emerald-200 bg-white text-gray-900'
-                        }`}
-                      />
-                    </label>
-                  )}
 
                 </div>
               </div>

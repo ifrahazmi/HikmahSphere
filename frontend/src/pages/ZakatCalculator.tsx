@@ -16,6 +16,7 @@ import { CheckCircleIcon as CheckCircleSolidIcon } from '@heroicons/react/24/sol
 import toast from 'react-hot-toast';
 import { useAuth } from '../hooks/useAuth';
 import ZakatManagement from '../components/Zakat/ZakatManagement';
+import MaktabManagement from '../components/Maktab/MaktabManagement';
 import PageSEO from '../components/PageSEO';
 import { API_URL } from '../config';
 
@@ -47,6 +48,7 @@ interface ZakatForm {
   silverWeight: string;
   silverWeightUnit: 'g' | 'oz';
   // Other assets
+  moneyLent: string;
   investments: string;
   businessAssets: string;
   cryptocurrency: string;
@@ -73,7 +75,7 @@ interface ZakatResult {
 const ZakatCalculator: React.FC = () => {
   const { hasRole } = useAuth();
   const [nisabData, setNisabData] = useState<NisabData | null>(null);
-  const [activeTab, setActiveTab] = useState<'calculator' | 'management'>('calculator');
+  const [activeTab, setActiveTab] = useState<'calculator' | 'management' | 'maktab'>('calculator');
 
   // Check if user is admin or manager
   const isAdmin = hasRole(['superadmin', 'manager']);
@@ -99,6 +101,7 @@ const ZakatCalculator: React.FC = () => {
     silverValue: '',
     silverWeight: '',
     silverWeightUnit: 'g',
+    moneyLent: '',
     investments: '',
     businessAssets: '',
     cryptocurrency: '',
@@ -193,6 +196,7 @@ const ZakatCalculator: React.FC = () => {
     const finalGoldValue = parseFloat(form.goldValue) || 0;
     const finalSilverValue = parseFloat(form.silverValue) || 0;
 
+    const moneyLent = parseFloat(form.moneyLent) || 0;
     const investments = parseFloat(form.investments) || 0;
     const businessAssets = parseFloat(form.businessAssets) || 0;
     const cryptocurrency = parseFloat(form.cryptocurrency) || 0;
@@ -202,7 +206,7 @@ const ZakatCalculator: React.FC = () => {
     const businessDebts = parseFloat(form.businessDebts) || 0;
 
     // Calculate totals
-    const totalAssets = cash + finalGoldValue + finalSilverValue + investments +
+    const totalAssets = cash + finalGoldValue + finalSilverValue + moneyLent + investments +
                        businessAssets + cryptocurrency + managedZakat;
 
     const totalDeductions = personalDebts + businessDebts;
@@ -242,6 +246,7 @@ const ZakatCalculator: React.FC = () => {
       silverValue: '',
       silverWeight: '',
       silverWeightUnit: 'g',
+      moneyLent: '',
       investments: '',
       businessAssets: '',
       cryptocurrency: '',
@@ -308,6 +313,17 @@ const ZakatCalculator: React.FC = () => {
                   <BuildingLibraryIcon className="h-5 w-5" />
                   Zakat Center
                 </button>
+                <button
+                  onClick={() => setActiveTab('maktab')}
+                  className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all ${
+                    activeTab === 'maktab'
+                      ? 'bg-indigo-600 text-white shadow-md'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  <AcademicCapIcon className="h-5 w-5" />
+                  Maktab Center
+                </button>
               </div>
             </div>
           </div>
@@ -320,6 +336,15 @@ const ZakatCalculator: React.FC = () => {
             showExport={false}
             showDelete={false}
             showDonorSummary={false}
+            showRecordButtons={true}
+            showFilters={true}
+          />
+        ) : isAdmin && activeTab === 'maktab' ? (
+          <MaktabManagement
+            showStats={false}
+            showExport={false}
+            showDelete={false}
+            showContributorSummary={false}
             showRecordButtons={true}
             showFilters={true}
           />
@@ -609,6 +634,22 @@ const ZakatCalculator: React.FC = () => {
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               />
               <p className="text-xs text-gray-500 mt-1">Enter value directly OR use the Weight Calculator below (auto-syncs)</p>
+            </div>
+
+            {/* Money Lent / Receivables */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                🤝 Money Lent / Receivables
+              </label>
+              <input
+                type="number"
+                value={form.moneyLent}
+                onChange={(e) => handleInputChange('moneyLent', e.target.value)}
+                onWheel={handleInputWheel}
+                placeholder="Loans you expect to recover"
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              />
+              <p className="text-xs text-gray-500 mt-1">Good-faith loans expected to be repaid are zakatable</p>
             </div>
 
             {/* Silver - Weight Input */}

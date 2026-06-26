@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { useDarkMode } from '../contexts/DarkModeContext';
 import NotificationBell from './Notifications/NotificationBell'; // Import the new NotificationBell
+import SettingsModal from './SettingsModal';
+import toast from 'react-hot-toast';
 import {
   Bars3Icon,
   XMarkIcon,
@@ -9,7 +12,9 @@ import {
   ChevronDownIcon,
   CalendarDaysIcon,
   Cog6ToothIcon,
-  ArrowRightOnRectangleIcon
+  ArrowRightOnRectangleIcon,
+  SunIcon,
+  MoonIcon,
 } from '@heroicons/react/24/outline';
 
 interface NavbarProps {
@@ -18,11 +23,13 @@ interface NavbarProps {
 
 const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
   const { user: authUser, logout, hasRole } = useAuth();
+  const { isDarkMode } = useDarkMode();
   const user = propUser || authUser;
   const [isOpen, setIsOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isPrayerMenuOpen, setIsPrayerMenuOpen] = useState(false);
   const [isQuranMenuOpen, setIsQuranMenuOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const profileMenuRef = useRef<HTMLDivElement>(null);
@@ -149,7 +156,8 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
   const isDark = (isQuranPage && quranTheme === 'dark') || (isQiblaPage && qiblaTheme === 'dark');
 
   return (
-    <nav className={`shadow-lg fixed top-0 left-0 right-0 z-50 transition-colors duration-200 ${
+    <>
+      <nav className={`shadow-lg fixed top-0 left-0 right-0 z-50 transition-colors duration-200 ${
       isDark ? 'bg-gray-800' : 'bg-white'
     }`}>
       <div className="max-w-[90rem] mx-auto px-4 sm:px-6 lg:px-8">
@@ -220,6 +228,17 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                           }`}
                         >
                           Qibla Direction
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => goToPrayerPage('/prayers?tab=mosques')}
+                          className={`block w-full px-4 py-2 text-left text-sm ${
+                            isDark
+                              ? 'text-gray-200 hover:bg-gray-600'
+                              : 'text-gray-700 hover:bg-gray-100'
+                          }`}
+                        >
+                          Find Mosque
                         </button>
                       </div>
                     )}
@@ -303,6 +322,36 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
               <>
                 {/* Notification Bell */}
                 <NotificationBell />
+
+                {/* Dark Mode Toggle */}
+                <button
+                  onClick={() => toast.success('Coming Soon!')}
+                  className={`p-1.5 lg:p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-colors duration-200 ${
+                    isDark
+                      ? 'text-gray-300 hover:text-emerald-400'
+                      : 'text-gray-700 hover:text-emerald-600'
+                  }`}
+                  title="Toggle dark mode"
+                >
+                  {isDarkMode ? (
+                    <SunIcon className="h-4 w-4 lg:h-5 lg:w-5" />
+                  ) : (
+                    <MoonIcon className="h-4 w-4 lg:h-5 lg:w-5" />
+                  )}
+                </button>
+
+                {/* Settings Icon */}
+                <button
+                  onClick={() => setIsSettingsOpen(true)}
+                  className={`p-1.5 lg:p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-colors duration-200 ${
+                    isDark
+                      ? 'text-gray-300 hover:text-emerald-400'
+                      : 'text-gray-700 hover:text-emerald-600'
+                  }`}
+                  title="Settings"
+                >
+                  <Cog6ToothIcon className="h-4 w-4 lg:h-5 lg:w-5" />
+                </button>
 
                 <div className="relative" ref={profileMenuRef}>
                   <button
@@ -391,6 +440,36 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
           <div className="lg:hidden flex items-center gap-2">
             {/* Mobile Notification Bell */}
             {user && <NotificationBell />}
+
+            {/* Mobile Dark Mode Toggle */}
+            <button
+              onClick={() => toast.success('Coming Soon!')}
+              className={`p-1.5 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-colors duration-200 ${
+                isDark
+                  ? 'text-gray-300 hover:text-emerald-400'
+                  : 'text-gray-700 hover:text-emerald-600'
+              }`}
+              title="Toggle dark mode"
+            >
+              {isDarkMode ? (
+                <SunIcon className="h-5 w-5" />
+              ) : (
+                <MoonIcon className="h-5 w-5" />
+              )}
+            </button>
+
+            {/* Mobile Settings Icon */}
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              className={`p-1.5 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-colors duration-200 ${
+                isDark
+                  ? 'text-gray-300 hover:text-emerald-400'
+                  : 'text-gray-700 hover:text-emerald-600'
+              }`}
+              title="Settings"
+            >
+              <Cog6ToothIcon className="h-5 w-5" />
+            </button>
             
             <button
               onClick={() => setIsOpen(!isOpen)}
@@ -463,6 +542,17 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                           onClick={() => goToPrayerPage('/prayers/qibla')}
                         >
                           Qibla Direction
+                        </button>
+                        <button
+                          type="button"
+                          className={`block w-full px-4 py-2 rounded-md text-left text-sm font-medium ${
+                            isDark
+                              ? 'text-gray-300 hover:bg-gray-700 hover:text-emerald-400'
+                              : 'text-gray-700 hover:bg-emerald-50 hover:text-emerald-600'
+                          }`}
+                          onClick={() => goToPrayerPage('/prayers?tab=mosques')}
+                        >
+                          Find Mosque
                         </button>
                       </div>
                     )}
@@ -617,6 +707,8 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
         </div>
       )}
     </nav>
+    <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+    </>
   );
 };
 

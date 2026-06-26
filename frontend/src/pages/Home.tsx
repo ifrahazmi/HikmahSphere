@@ -61,7 +61,7 @@ const Home: React.FC = () => {
       icon: '/Smart-Prayer-Times.png',
       title: 'Smart Prayer Times',
       path: '/prayers',
-      description: 'Ultra-precise prayer times with real-time geolocation, multiple calculation methods (MWL, ISNA, Umm al-Qura), astronomical corrections for high latitudes, and beautiful shareable prayer cards',
+      description: 'Ultra-precise prayer times with real-time geolocation, multiple calculation methods (MWL, ISNA, Umm al-Qura), astronomical corrections for high latitudes, beautiful shareable prayer cards, and a mosque finder to locate nearby mosques',
       color: 'text-emerald-600',
       bgColor: 'bg-emerald-50',
       gradient: 'from-emerald-500 to-teal-500',
@@ -79,7 +79,7 @@ const Home: React.FC = () => {
       icon: '/Qibla-Compass.png',
       title: 'Qibla Compass',
       path: '/prayers/qibla',
-      description: 'Find Qibla direction with a live compass and map-assisted fallback, so your prayer setup stays accurate wherever you are',
+      description: 'Find Qibla direction with a live compass and map-assisted fallback, and discover nearby mosques so your prayer setup stays accurate wherever you are',
       color: 'text-cyan-600',
       bgColor: 'bg-cyan-50',
       gradient: 'from-cyan-500 to-sky-500',
@@ -157,8 +157,8 @@ const Home: React.FC = () => {
 
   const stats = [
     {
-      label: 'Prayer Times & Qibla Compass',
-      description: 'Accurate Salah schedules with Qibla compass guidance and Ramadan timing support',
+      label: 'Prayer Times, Qibla & Mosques',
+      description: 'Accurate Salah schedules, Qibla compass guidance, mosque finder, and Ramadan timing support',
       icon: ClockIcon,
       color: 'text-emerald-600',
       bgColor: 'bg-emerald-100',
@@ -233,7 +233,7 @@ const Home: React.FC = () => {
     <>
       <PageSEO
         title="HikmahSphere: A Unified Islamic Platform"
-        description="Complete Islamic platform featuring Prayer Times with Qibla Compass, Quran text with Tafsir and translations, Dhikr & Dua, Zakat tools, Global Community with Islamic quiz games, and a guided Hajj journey. Free, privacy-first, and built for the global Ummah."
+        description="Complete Islamic platform featuring Prayer Times, Qibla & Mosque Finder, Quran text with Tafsir and translations, Dhikr & Dua, Zakat tools, Global Community with Islamic quiz games, and a guided Hajj journey. Free, privacy-first, and built for the global Ummah."
         path="/"
         keywords={[
           'islamic app',
@@ -384,7 +384,7 @@ const Home: React.FC = () => {
             {/* Badge */}
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full border border-white/20 mb-8">
               <SparklesIcon className="w-4 h-4 text-emerald-300" />
-            <span className="text-sm font-medium text-emerald-100">Prayer Times · Qibla Compass · Quran &amp; Tafsir · Dhikr &amp; Dua · Zakat · Community · Hajj</span>
+            <span className="text-sm font-medium text-emerald-100">Prayer Times · Qibla &amp; Mosques · Quran &amp; Tafsir · Dhikr &amp; Dua · Zakat · Community · Hajj</span>
             </div>
 
             <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold mb-8 leading-tight">
@@ -395,7 +395,7 @@ const Home: React.FC = () => {
             </h1>
 
             <p className="text-xl sm:text-2xl mb-10 text-emerald-100 max-w-3xl mx-auto leading-relaxed">
-              Accurate prayer times with Qibla compass, Quran text with Tafsir and translations, authentic Dhikr &amp; Dua, smart Zakat, a global community with Islamic games, and Hajj guidance in one sincere platform for every believer
+              Accurate prayer times with Qibla compass and mosque finder, Quran text with Tafsir and translations, authentic Dhikr &amp; Dua, smart Zakat, a global community with Islamic games, and Hajj guidance in one sincere platform for every believer
             </p>
 
             {/* CTA Buttons */}
@@ -511,7 +511,7 @@ const Home: React.FC = () => {
             <ul className="space-y-4 text-gray-700">
               <li className="flex items-start gap-3">
                 <CheckCircleIcon className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
-                <span><strong className="font-semibold text-gray-900">Prayer Times + Qibla Compass:</strong> Get precise daily Salah timings, Ramadan fasting schedules, and a live Qibla compass view so both your prayer time and direction are correct.</span>
+                <span><strong className="font-semibold text-gray-900">Prayer Times, Qibla &amp; Mosques:</strong> Get precise daily Salah timings, Ramadan fasting schedules, a live Qibla compass view, and easily discover nearby mosques so you can pray with congregation.</span>
               </li>
               <li className="flex items-start gap-3">
                 <CheckCircleIcon className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
@@ -548,11 +548,11 @@ const Home: React.FC = () => {
             {/* Prayer Times */}
             <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-8 mb-6 border border-emerald-200">
               <h3 className="text-2xl font-bold text-gray-900 mb-3">
-                Precise Daily <span className="text-emerald-700">Prayer Times &amp; Qibla</span>
+                Precise Daily <span className="text-emerald-700">Prayer Times, Qibla &amp; Mosques</span>
               </h3>
               <p className="text-gray-700 leading-relaxed">
                 Stay aligned in both time and direction. HikmahSphere delivers reliable{' '}
-                <strong className="font-semibold text-emerald-700">daily prayer times</strong> with multi-method calculation support, then helps you face the Qibla confidently through a live compass and map-assisted view.
+                <strong className="font-semibold text-emerald-700">daily prayer times</strong> with multi-method calculation support, then helps you face the Qibla confidently through a live compass, and locate nearby mosques effortlessly.
               </p>
             </div>
 
@@ -656,7 +656,7 @@ const Home: React.FC = () => {
               Everything You Need in One Place
             </h2>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              Explore prayer, compass, Quran, Tafsir, Dhikr, Zakat, community learning games, and Hajj preparation from one connected dashboard
+              Explore prayer, compass, mosques, Quran, Tafsir, Dhikr, Zakat, community learning games, and Hajj preparation from one connected dashboard
             </p>
           </div>
 

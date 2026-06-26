@@ -48,6 +48,8 @@ export interface IUser extends Document {
     language: string;
     prayerCalculationMethod: string;
     madhab: 'hanafi' | 'shafi' | 'maliki' | 'hanbali';
+    asrMethod?: 'standard' | 'hanafi';
+    darkMode?: boolean;
     notifications: {
       prayers: boolean;
       events: boolean;
@@ -57,6 +59,7 @@ export interface IUser extends Document {
         channels: Array<'push' | 'email'>;
         reminderMinutes: number[];
       };
+      prayerAlerts?: any;
     };
   };
   profile: {
@@ -320,6 +323,12 @@ const UserSchema = new Schema<IUser>({
       enum: ['hanafi', 'shafi', 'maliki', 'hanbali'],
       default: 'hanafi'
     },
+    asrMethod: { 
+      type: String, 
+      enum: ['standard', 'hanafi'],
+      default: 'standard'
+    },
+    darkMode: { type: Boolean, default: false },
     notifications: {
       prayers: { type: Boolean, default: true },
       events: { type: Boolean, default: true },
@@ -336,6 +345,7 @@ const UserSchema = new Schema<IUser>({
           default: [1440, 60, 15],
         },
       },
+      prayerAlerts: { type: Schema.Types.Mixed },
     },
   },
   profile: {

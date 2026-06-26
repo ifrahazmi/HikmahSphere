@@ -5,17 +5,16 @@ import {
   CheckCircleIcon,
   UserPlusIcon,
   XMarkIcon,
-  BuildingLibraryIcon,
+  BanknotesIcon,
   ClockIcon,
   UserCircleIcon,
-  DocumentArrowDownIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../hooks/useAuth';
 import { API_URL } from '../config';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import AdminNotificationPanel from '../components/Notifications/AdminNotificationPanel';
-import ZakatManagement from '../components/Zakat/ZakatManagement';
+import FundsManagement from '../components/Funds/FundsManagement';
 import PageSEO from '../components/PageSEO';
 
 interface ProfileFieldChange {
@@ -334,14 +333,14 @@ const Dashboard: React.FC = () => {
                         User Management
                     </button>
                 )}
-                {/* Zakat Management for Super Admin Only */}
+                {/* Funds Management for Super Admin Only */}
                 {isSuperAdmin && (
                     <button
                         onClick={() => setActiveTab('zakat')}
                         className={`px-6 py-4 text-sm font-medium whitespace-nowrap flex items-center gap-2 ${activeTab === 'zakat' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
                     >
-                        <BuildingLibraryIcon className="w-5 h-5" />
-                        Zakat Management
+                        <BanknotesIcon className="w-5 h-5" />
+                        Funds Management
                     </button>
                 )}
                 <button
@@ -385,7 +384,7 @@ const Dashboard: React.FC = () => {
                                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                 }`}
                             >
-                                Zakat Management
+                                Funds Management
                             </button>
                         </>
                     )}
@@ -496,42 +495,9 @@ const Dashboard: React.FC = () => {
             </div>
         )}
 
-        {/* Zakat Management Tab - Admin/Manager Only */}
+        {/* Funds Management Tab - Super Admin Only */}
         {activeTab === 'zakat' && (
-            <div className="space-y-6">
-                {/* Export Buttons */}
-                <div className="flex flex-wrap gap-3 justify-end">
-                    <button
-                        onClick={() => {
-                            const event = new CustomEvent('export-zakat-csv');
-                            window.dispatchEvent(event);
-                        }}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-xs font-medium shadow-sm"
-                    >
-                        <DocumentArrowDownIcon className="h-4 w-4" />
-                        Export CSV
-                    </button>
-                    <button
-                        onClick={() => {
-                            const event = new CustomEvent('export-zakat-json');
-                            window.dispatchEvent(event);
-                        }}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs font-medium shadow-sm"
-                    >
-                        <DocumentArrowDownIcon className="h-4 w-4" />
-                        Export JSON
-                    </button>
-                </div>
-
-                <ZakatManagement
-                    showStats={true}
-                    showExport={false}
-                    showDelete={isSuperAdmin}
-                    showDonorSummary={true}
-                    showRecordButtons={false}
-                    showFilters={true}
-                />
-            </div>
+            <FundsManagement />
         )}
 
         {/* Notifications Tab */}

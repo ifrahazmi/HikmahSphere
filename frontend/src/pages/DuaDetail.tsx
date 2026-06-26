@@ -449,9 +449,39 @@ const DuaDetail: React.FC = () => {
           <section className="mt-6 space-y-4">
             <div>
               <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-emerald-700">Arabic</p>
-              <div className="rounded-xl bg-emerald-50 p-4 text-right text-emerald-950">
-                {arabicHeading && <p className="mb-2 text-2xl font-indopak-nastaleeq">{arabicHeading}</p>}
-                <p className="text-4xl leading-relaxed font-indopak-nastaleeq">
+              <div dir="rtl" lang="ar" className="rounded-xl bg-emerald-50 p-4 text-right text-emerald-950">
+                {arabicHeading && (
+                  <p
+                    className="mb-2 text-2xl font-indopak-nastaleeq-v3"
+                    dir="rtl"
+                    lang="ar"
+                    style={{
+                      textRendering: 'auto',
+                      WebkitFontSmoothing: 'subpixel-antialiased',
+                      fontVariantLigatures: 'common-ligatures contextual',
+                      fontFeatureSettings: '"liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1',
+                      letterSpacing: 0,
+                      wordSpacing: '0.08em',
+                      lineHeight: 2.2,
+                    }}
+                  >
+                    {arabicHeading}
+                  </p>
+                )}
+                <p
+                  className="text-4xl leading-relaxed font-indopak-nastaleeq-v3"
+                  dir="rtl"
+                  lang="ar"
+                  style={{
+                    textRendering: 'auto',
+                    WebkitFontSmoothing: 'subpixel-antialiased',
+                    fontVariantLigatures: 'common-ligatures contextual',
+                    fontFeatureSettings: '"liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1',
+                    letterSpacing: 0,
+                    wordSpacing: '0.08em',
+                    lineHeight: 2.2,
+                  }}
+                >
                   {renderArabicWithStopMarkers(arabicBody || dua.arabic, `${dua.id}-detail`)}
                 </p>
               </div>

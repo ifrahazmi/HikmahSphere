@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import html2canvas from 'html2canvas';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ClockIcon,
   MapPinIcon,
@@ -19,9 +19,11 @@ import {
   XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../hooks/useAuth';
+import { useUserPreferences } from '../hooks/useUserPreferences';
 import LoadingSpinner from '../components/LoadingSpinner';
 import IslamicCalendar from '../components/PrayerTimesIslamicCalendar';
 import PageSEO from '../components/PageSEO';
+import MosqueFinder from '../components/mosques/MosqueFinder';
 import { API_URL } from '../config';
 import { IslamicReminder, getCurrentPrayerWindow, selectReminder } from '../data/islamicReminders';
 
@@ -566,6 +568,7 @@ const incrementHijriByOneDay = (hijri?: HijriDate | null): HijriDate | null => {
 
 const PrayerTimes: React.FC = () => {
   const { user } = useAuth();
+  const { preferences: userPrefs, updatePreference } = useUserPreferences();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -578,8 +581,24 @@ const PrayerTimes: React.FC = () => {
   const [activeFlippedCard, setActiveFlippedCard] = useState<string | null>(null);
   const [openGuideCard, setOpenGuideCard] = useState<string | null>(null);
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialViewMode = searchParams.get('tab') === 'mosques' ? 'mosques' : 'daily';
   // View mode and settings
-  const [viewMode, setViewMode] = useState<'daily' | 'monthly' | 'ramadan'>('daily');
+  const [viewMode, setViewMode] = useState<'daily' | 'monthly' | 'ramadan' | 'mosques'>(initialViewMode);
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab && ['daily', 'monthly', 'ramadan', 'mosques'].includes(tab)) {
+      setViewMode(tab as any);
+    } else if (!tab) {
+      setViewMode('daily');
+    }
+  }, [searchParams]);
+
+  const handleViewModeChange = useCallback((mode: 'daily' | 'monthly' | 'ramadan' | 'mosques') => {
+    setViewMode(mode);
+    setSearchParams(mode === 'daily' ? {} : { tab: mode });
+  }, [setSearchParams]);
   const [showSettings, setShowSettings] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -587,7 +606,15 @@ const PrayerTimes: React.FC = () => {
   const [, setIsRamadanMonth] = useState(false);
 
   // Calculation method settings
-  const [selectedMadhab, setSelectedMadhab] = useState<string>(user?.madhab || 'shafi');
+  const [selectedMadhab, setSelectedMadhab] = useState<string>(
+    userPrefs.asrMethod === 'hanafi' ? 'hanafi' : 'shafi'
+  );
+  
+  // Sync from userPrefs to selectedMadhab if changed from outside
+  useEffect(() => {
+    setSelectedMadhab(userPrefs.asrMethod === 'hanafi' ? 'hanafi' : 'shafi');
+  }, [userPrefs.asrMethod]);
+
   const [calculationMethod, setCalculationMethod] = useState(1); // Default: University of Islamic Sciences, Karachi
   const [highLatitudeRule, setHighLatitudeRule] = useState(1); // Default: Middle of Night
   const [timeFormat, setTimeFormat] = useState<'12h' | '24h'>('12h');
@@ -769,7 +796,7 @@ const PrayerTimes: React.FC = () => {
   }, [resolveLocationDetails]);
 
   const activeCountry = location?.country || detectedCountry || '';
-  const isOutsideIndia = !!activeCountry && !activeCountry.toLowerCase().includes('india');
+  const isOutsideIndia = !!activeCountry && activeCountry !== 'Unknown' && !activeCountry.toLowerCase().includes('india');
 
   useEffect(() => {
     // Default behavior by location:
@@ -793,6 +820,8 @@ const PrayerTimes: React.FC = () => {
         fetchMonthlyData(location.lat, location.lon, selectedMonth, selectedYear);
       } else if (viewMode === 'ramadan') {
         fetchRamadanData(location.lat, location.lon);
+      } else if (viewMode === 'mosques') {
+        setLoading(false);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -844,8 +873,8 @@ const PrayerTimes: React.FC = () => {
       // Fetch Prayer Times from Backend API
       let prayerUrl = '';
 
-      // Use city-based API if city and country are available
-      if (city && country) {
+      // Use city-based API if valid city and country are available
+      if (city && city !== 'Unknown' && country && country !== 'Unknown') {
         prayerUrl = `${API_URL}/prayers/timesByCity?city=${encodeURIComponent(city)}&country=${encodeURIComponent(country)}&method=${calculationMethod}&school=${school}&date=${encodeURIComponent(requestGregorianDate)}`;
       } else {
         // Fallback to coordinates-based API
@@ -2117,9 +2146,9 @@ const PrayerTimes: React.FC = () => {
 
   useEffect(() => {
     if (viewMode === 'ramadan' && !shouldShowRamadanTab) {
-      setViewMode('daily');
+      handleViewModeChange('daily');
     }
-  }, [viewMode, shouldShowRamadanTab]);
+  }, [viewMode, shouldShowRamadanTab, handleViewModeChange]);
 
   const toMinutes = (timeStr?: string): number | null => {
     if (!timeStr) return null;
@@ -2288,7 +2317,7 @@ const PrayerTimes: React.FC = () => {
   };
 
   // Show full screen spinner while loading initial data
-  if (loading || !prayerData) {
+  if (loading || (!prayerData && viewMode !== 'mosques')) {
     return (
       <>
         <PageSEO
@@ -2468,7 +2497,7 @@ const PrayerTimes: React.FC = () => {
           {/* View Mode Toggle - Mobile Optimized */}
           <div className="flex flex-wrap justify-center gap-2 sm:gap-3 mb-4 sm:mb-6">
             <button
-              onClick={() => setViewMode('daily')}
+              onClick={() => handleViewModeChange('daily')}
               className={`flex-1 min-w-[80px] sm:min-w-[100px] px-2 sm:px-4 md:px-6 py-2 sm:py-2.5 md:py-3 rounded-xl font-semibold text-xs sm:text-sm md:text-base transition-all duration-300 flex items-center justify-center gap-1 sm:gap-1.5 md:gap-2 whitespace-nowrap shadow-md ${
                 viewMode === 'daily'
                   ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg scale-105'
@@ -2480,7 +2509,7 @@ const PrayerTimes: React.FC = () => {
               <span className="xs:hidden">Day</span>
             </button>
             <button
-              onClick={() => setViewMode('monthly')}
+              onClick={() => handleViewModeChange('monthly')}
               className={`flex-1 min-w-[80px] sm:min-w-[100px] px-2 sm:px-4 md:px-6 py-2 sm:py-2.5 md:py-3 rounded-xl font-semibold text-xs sm:text-sm md:text-base transition-all duration-300 flex items-center justify-center gap-1 sm:gap-1.5 md:gap-2 whitespace-nowrap shadow-md ${
                 viewMode === 'monthly'
                   ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg scale-105'
@@ -2491,9 +2520,21 @@ const PrayerTimes: React.FC = () => {
               <span className="hidden xs:inline">Monthly</span>
               <span className="xs:hidden">Month</span>
             </button>
+            <button
+              onClick={() => handleViewModeChange('mosques')}
+              className={`flex-1 min-w-[80px] sm:min-w-[100px] px-2 sm:px-4 md:px-6 py-2 sm:py-2.5 md:py-3 rounded-xl font-semibold text-xs sm:text-sm md:text-base transition-all duration-300 flex items-center justify-center gap-1 sm:gap-1.5 md:gap-2 whitespace-nowrap shadow-md ${
+                viewMode === 'mosques'
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg scale-105'
+                  : 'bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <MapPinIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5" />
+              <span className="hidden xs:inline">Mosques</span>
+              <span className="xs:hidden">Mosques</span>
+            </button>
             {shouldShowRamadanTab && (
               <button
-                onClick={() => setViewMode('ramadan')}
+                onClick={() => handleViewModeChange('ramadan')}
                 className={`flex-1 min-w-[80px] sm:min-w-[100px] px-2 sm:px-4 md:px-6 py-2 sm:py-2.5 md:py-3 rounded-xl font-semibold text-xs sm:text-sm md:text-base transition-all duration-300 flex items-center justify-center gap-1 sm:gap-1.5 md:gap-2 whitespace-nowrap shadow-md ${
                   viewMode === 'ramadan'
                     ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg scale-105'
@@ -2567,7 +2608,11 @@ const PrayerTimes: React.FC = () => {
                   </label>
                   <select
                     value={selectedMadhab}
-                    onChange={(e) => setSelectedMadhab(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSelectedMadhab(val);
+                      updatePreference('asrMethod', val === 'hanafi' ? 'hanafi' : 'standard');
+                    }}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
                   >
                     <option value="shafi">Shafi'i / Maliki / Hanbali</option>
@@ -2859,6 +2904,12 @@ const PrayerTimes: React.FC = () => {
 
           {error && <p className="text-red-500 mt-2 text-sm">{error}</p>}
         </div>
+
+        {viewMode === 'mosques' && (
+          <div className="max-w-7xl mx-auto mb-6 sm:mb-8">
+            <MosqueFinder location={location} />
+          </div>
+        )}
 
         {/* Monthly Calendar View - Mobile Optimized */}
         {viewMode === 'monthly' && monthlyData && (

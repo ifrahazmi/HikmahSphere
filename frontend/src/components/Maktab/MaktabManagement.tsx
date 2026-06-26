@@ -15,24 +15,28 @@ import { useAuth } from '../../hooks/useAuth';
 import { API_URL } from '../../config';
 import toast from 'react-hot-toast';
 import { MAX_UPLOAD_SIZE_BYTES, optimizeImageForUpload, readFileAsDataUrl } from '../../utils/imageUpload';
-import RecordCollection from './RecordCollection';
-import RecordSpending from './RecordSpending';
-import DonorSummary from './DonorSummary';
+import RecordMaktabCollection from './RecordMaktabCollection';
+import RecordMaktabSpending from './RecordMaktabSpending';
+import MaktabContributorSummary from './MaktabContributorSummary';
 
-interface ZakatTransaction {
+type SpendingCategory = 'Teacher Salary' | 'Books/Stationery' | 'Uniform' | 'Rent' | 'Utilities' | 'Other';
+
+interface MaktabTransaction {
   _id: string;
   type: 'collection' | 'spending';
-  purpose: 'Zakat' | 'Sadaqah';
-  donorId?: {
+  contributorId?: {
     _id: string;
     name: string;
     type: string;
-    totalDonated: number;
+    totalContributed: number;
   };
-  donorName?: string;
-  donorType?: string;
+  contributorName?: string;
+  contributorType?: string;
+  contributionFrequency?: 'One-time' | 'Monthly';
   recipientName?: string;
   recipientType?: string;
+  category?: SpendingCategory;
+  studentCount?: number;
   amount: number;
   paymentDate: string;
   paymentMethod: string;
@@ -45,72 +49,72 @@ interface ZakatTransaction {
   createdAt: string;
 }
 
-interface ZakatStats {
-  zakat: {
-    collected: number;
-    spent: number;
-    currentBalance: number;
-  };
-  sadaqah: {
-    collected: number;
-    spent: number;
-    currentBalance: number;
-  };
+interface MaktabStats {
+  totalCollected: number;
+  totalSpent: number;
+  currentBalance: number;
 }
 
-interface ZakatManagementProps {
+interface MaktabManagementProps {
   onClose?: () => void;
-  showStats?: boolean; // Control stats visibility
-  showExport?: boolean; // Control export visibility
-  showDelete?: boolean; // Control delete visibility
-  showDonorSummary?: boolean; // Control donor summary visibility
-  showRecordButtons?: boolean; // Control record collection/spending buttons visibility
-  showFilters?: boolean; // Control filter tabs visibility
-  showHeader?: boolean; // Control header visibility
+  showStats?: boolean;
+  showExport?: boolean;
+  showDelete?: boolean;
+  showContributorSummary?: boolean;
+  showRecordButtons?: boolean;
+  showFilters?: boolean;
+  showHeader?: boolean;
 }
 
-const ZakatManagement: React.FC<ZakatManagementProps> = ({ 
-  onClose, 
-  showStats = true, 
+const SPENDING_CATEGORIES: SpendingCategory[] = [
+  'Teacher Salary',
+  'Books/Stationery',
+  'Uniform',
+  'Rent',
+  'Utilities',
+  'Other',
+];
+
+const MaktabManagement: React.FC<MaktabManagementProps> = ({
+  onClose,
+  showStats = true,
   showExport = true,
   showDelete = true,
-  showDonorSummary = true,
+  showContributorSummary = true,
   showRecordButtons = true,
   showFilters = true,
   showHeader = true
 }) => {
   const { hasRole } = useAuth();
   const isAdmin = hasRole(['superadmin', 'manager']);
-  
-  const [zakatStats, setZakatStats] = useState<ZakatStats>({
-    zakat: { collected: 0, spent: 0, currentBalance: 0 },
-    sadaqah: { collected: 0, spent: 0, currentBalance: 0 },
+
+  const [maktabStats, setMaktabStats] = useState<MaktabStats>({
+    totalCollected: 0,
+    totalSpent: 0,
+    currentBalance: 0,
   });
-  const [zakatTransactions, setZakatTransactions] = useState<ZakatTransaction[]>([]);
+  const [maktabTransactions, setMaktabTransactions] = useState<MaktabTransaction[]>([]);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editingTransaction, setEditingTransaction] = useState<ZakatTransaction | null>(null);
+  const [editingTransaction, setEditingTransaction] = useState<MaktabTransaction | null>(null);
   const [showViewModal, setShowViewModal] = useState(false);
-  const [viewingTransaction, setViewingTransaction] = useState<ZakatTransaction | null>(null);
+  const [viewingTransaction, setViewingTransaction] = useState<MaktabTransaction | null>(null);
   const [showProofPreview, setShowProofPreview] = useState(false);
   const [previewProofPath, setPreviewProofPath] = useState('');
   const [clickedProofPath, setClickedProofPath] = useState<string | null>(null);
-  
-  // New form modals
+
   const [showCollectionModal, setShowCollectionModal] = useState(false);
   const [showSpendingModal, setShowSpendingModal] = useState(false);
   const [editProofFile, setEditProofFile] = useState<File | null>(null);
   const [editProofPreview, setEditProofPreview] = useState<string | null>(null);
 
-  // Filter state
   const [filterType, setFilterType] = useState<'all' | 'collection' | 'spending'>('all');
-  const [filterPurpose, setFilterPurpose] = useState<'all' | 'Zakat' | 'Sadaqah'>('all');
+  const [filterCategory, setFilterCategory] = useState<'all' | SpendingCategory>('all');
+  const [filterFrequency, setFilterFrequency] = useState<'all' | 'One-time' | 'Monthly'>('all');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Export State
   const [showExportOptions, setShowExportOptions] = useState(false);
   const exportDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Close export dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (exportDropdownRef.current && !exportDropdownRef.current.contains(event.target as Node)) {
@@ -121,30 +125,15 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Listen for export events from Dashboard
-  useEffect(() => {
-    const handleExportCSV = () => exportToCSV();
-    const handleExportJSON = () => exportToJSON();
-
-    window.addEventListener('export-zakat-csv', handleExportCSV);
-    window.addEventListener('export-zakat-json', handleExportJSON);
-
-    return () => {
-      window.removeEventListener('export-zakat-csv', handleExportCSV);
-      window.removeEventListener('export-zakat-json', handleExportJSON);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [zakatTransactions]);
-
-  const fetchZakatData = async () => {
+  const fetchMaktabData = async () => {
     try {
       const token = localStorage.getItem('token');
       const [statsRes, transRes] = await Promise.all([
-        fetch(`${API_URL}/zakat/stats/split`, { 
-          headers: { 'Authorization': `Bearer ${token}` } 
+        fetch(`${API_URL}/maktab/stats`, {
+          headers: { 'Authorization': `Bearer ${token}` }
         }),
-        fetch(`${API_URL}/zakat/payments?limit=100`, { 
-          headers: { 'Authorization': `Bearer ${token}` } 
+        fetch(`${API_URL}/maktab/payments?limit=100`, {
+          headers: { 'Authorization': `Bearer ${token}` }
         })
       ]);
 
@@ -152,14 +141,14 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
       const transData = await transRes.json();
 
       if (statsData.status === 'success') {
-        setZakatStats(statsData.data);
+        setMaktabStats(statsData.data);
       }
       if (transData.status === 'success') {
-        setZakatTransactions(transData.data.payments);
+        setMaktabTransactions(transData.data.payments);
       }
     } catch (error) {
       console.error(error);
-      toast.error('Failed to load Zakat data');
+      toast.error('Failed to load Maktab data');
     }
   };
 
@@ -170,7 +159,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/zakat/payment/${id}`, {
+      const response = await fetch(`${API_URL}/maktab/payment/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -179,7 +168,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
       const data = await response.json();
       if (data.status === 'success') {
         toast.success('Transaction deleted successfully');
-        fetchZakatData();
+        fetchMaktabData();
       } else {
         toast.error(data.message || 'Delete failed');
       }
@@ -195,33 +184,36 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
     try {
       const token = localStorage.getItem('token');
       const formData = new FormData();
-      
+
       formData.append('type', editingTransaction.type);
-      formData.append('purpose', editingTransaction.purpose || 'Zakat');
       formData.append('amount', editingTransaction.amount.toString());
       formData.append('paymentDate', new Date(editingTransaction.paymentDate).toISOString().split('T')[0]);
       formData.append('paymentMethod', editingTransaction.paymentMethod);
-      
+
       if (editingTransaction.type === 'collection') {
-        formData.append('donorName', editingTransaction.donorName || '');
-        formData.append('donorType', editingTransaction.donorType || 'Individual');
+        formData.append('contributorName', editingTransaction.contributorName || '');
+        formData.append('contributorType', editingTransaction.contributorType || 'Individual');
+        formData.append('contributionFrequency', editingTransaction.contributionFrequency || 'One-time');
       } else {
         formData.append('recipientName', editingTransaction.recipientName || '');
-        formData.append('recipientType', editingTransaction.recipientType || 'Individual');
+        formData.append('recipientType', editingTransaction.recipientType || 'Teacher');
+        formData.append('category', editingTransaction.category || 'Other');
+        if (editingTransaction.studentCount !== undefined && editingTransaction.studentCount !== null) {
+          formData.append('studentCount', editingTransaction.studentCount.toString());
+        }
       }
-      
+
       if (editingTransaction.bankName) formData.append('bankName', editingTransaction.bankName);
       if (editingTransaction.senderUpiId) formData.append('senderUpiId', editingTransaction.senderUpiId);
       if (editingTransaction.chequeNumber) formData.append('chequeNumber', editingTransaction.chequeNumber);
       if (editingTransaction.transactionRefId) formData.append('transactionRefId', editingTransaction.transactionRefId);
       if (editingTransaction.notes) formData.append('notes', editingTransaction.notes);
       if (editProofFile) formData.append('proofOfPayment', editProofFile);
-      // If user removed the existing proof (red X) and didn't upload a new one
       if (!editingTransaction.proofFilePath && !editProofFile) {
         formData.append('removeProof', 'true');
       }
 
-      const response = await fetch(`${API_URL}/zakat/payment/${editingTransaction._id}`, {
+      const response = await fetch(`${API_URL}/maktab/payment/${editingTransaction._id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -234,7 +226,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
         setShowEditModal(false);
         setEditProofFile(null);
         setEditProofPreview(null);
-        fetchZakatData();
+        fetchMaktabData();
       } else {
         toast.error(data.message || 'Update failed');
       }
@@ -243,20 +235,20 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
     }
   };
 
-  // Export Functions
   const exportToCSV = () => {
-    const headers = ['Date', 'Type', 'Purpose', 'Party Name', 'Party Type', 'Amount', 'Method', 'Reference ID', 'Notes'];
+    const headers = ['Date', 'Type', 'Party Name', 'Party Type', 'Category/Frequency', 'Amount', 'Method', 'Reference ID', 'Notes'];
     const csvContent = [
       headers.join(','),
-      ...zakatTransactions.map(t => {
-        const partyName = t.type === 'collection' ? t.donorName : t.recipientName;
-        const partyType = t.type === 'collection' ? t.donorType : t.recipientType;
+      ...maktabTransactions.map(t => {
+        const partyName = t.type === 'collection' ? t.contributorName : t.recipientName;
+        const partyType = t.type === 'collection' ? t.contributorType : t.recipientType;
+        const tag = t.type === 'collection' ? (t.contributionFrequency || '') : (t.category || '');
         return [
           new Date(t.paymentDate).toLocaleDateString(),
           t.type,
-          t.purpose || 'Zakat',
           `"${partyName || ''}"`,
           partyType,
+          `"${tag}"`,
           t.amount,
           t.paymentMethod,
           t.transactionRefId || t.chequeNumber || '',
@@ -268,64 +260,78 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `zakat_transactions_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `maktab_transactions_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
     setShowExportOptions(false);
     toast.success('CSV exported successfully');
   };
 
   const exportToJSON = () => {
-    const dataStr = JSON.stringify(zakatTransactions, null, 2);
+    const dataStr = JSON.stringify(maktabTransactions, null, 2);
     const blob = new Blob([dataStr], { type: 'application/json' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `zakat_transactions_${new Date().toISOString().split('T')[0]}.json`;
+    link.download = `maktab_transactions_${new Date().toISOString().split('T')[0]}.json`;
     link.click();
     setShowExportOptions(false);
     toast.success('JSON exported successfully');
   };
 
-  const matchesSearchFilter = (transaction: ZakatTransaction) => {
+  // Listen for export events from the Funds Management header
+  useEffect(() => {
+    const handleExportCSV = () => exportToCSV();
+    const handleExportJSON = () => exportToJSON();
+
+    window.addEventListener('export-maktab-csv', handleExportCSV);
+    window.addEventListener('export-maktab-json', handleExportJSON);
+
+    return () => {
+      window.removeEventListener('export-maktab-csv', handleExportCSV);
+      window.removeEventListener('export-maktab-json', handleExportJSON);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [maktabTransactions]);
+
+  const matchesSearchFilter = (transaction: MaktabTransaction) => {
     if (!searchTerm) return true;
 
     const searchLower = searchTerm.toLowerCase();
-    const name = transaction.type === 'collection' ? transaction.donorName : transaction.recipientName;
-    const normalizedPurpose = (transaction.purpose || 'Zakat').toLowerCase();
+    const name = transaction.type === 'collection' ? transaction.contributorName : transaction.recipientName;
+    const tag = transaction.type === 'collection'
+      ? (transaction.contributionFrequency || '')
+      : (transaction.category || '');
 
     return name?.toLowerCase().includes(searchLower) ||
-      normalizedPurpose.includes(searchLower) ||
+      tag.toLowerCase().includes(searchLower) ||
       transaction.transactionRefId?.includes(searchTerm) ||
       transaction.chequeNumber?.includes(searchTerm) ||
       transaction.notes?.toLowerCase().includes(searchLower);
   };
 
-  const typeAndSearchFiltered = zakatTransactions.filter((transaction) => {
+  const typeAndSearchFiltered = maktabTransactions.filter((transaction) => {
     if (filterType !== 'all' && transaction.type !== filterType) return false;
+    if (filterFrequency !== 'all') {
+      if (transaction.type !== 'collection') return false;
+      if ((transaction.contributionFrequency || 'One-time') !== filterFrequency) return false;
+    }
     return matchesSearchFilter(transaction);
   });
 
-  const purposeCounts = {
-    all: typeAndSearchFiltered.length,
-    zakat: typeAndSearchFiltered.filter((transaction) => (transaction.purpose || 'Zakat') === 'Zakat').length,
-    sadaqah: typeAndSearchFiltered.filter((transaction) => transaction.purpose === 'Sadaqah').length,
-  };
-
-  // Filter transactions
   const filteredTransactions = typeAndSearchFiltered.filter((transaction) => {
-    if (filterPurpose === 'all') return true;
-    return (transaction.purpose || 'Zakat') === filterPurpose;
+    if (filterCategory === 'all') return true;
+    if (transaction.type !== 'spending') return false;
+    return (transaction.category || 'Other') === filterCategory;
   });
 
   useEffect(() => {
-    fetchZakatData();
+    fetchMaktabData();
   }, []);
 
   const canDelete = isAdmin && showDelete;
   const canExport = isAdmin && showExport;
   const canViewStats = isAdmin && showStats;
 
-  // Get payment details display
-  const getPaymentDetails = (t: ZakatTransaction) => {
+  const getPaymentDetails = (t: MaktabTransaction) => {
     const details: string[] = [];
     if (t.bankName) details.push(t.bankName);
     if (t.senderUpiId) details.push(`UPI: ${t.senderUpiId}`);
@@ -334,7 +340,6 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
     return details.join(' • ') || t.paymentMethod;
   };
 
-  // Handle proof preview click
   const handleProofClick = (e: React.MouseEvent, proofPath: string) => {
     e.preventDefault();
     e.stopPropagation();
@@ -348,10 +353,8 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
     setClickedProofPath(null);
   };
 
-  // Download proof file
   const handleDownloadProof = async (proofPath: string) => {
     try {
-      // Remove leading slash if present and use /uploads/ path
       const cleanPath = proofPath.replace(/^\/+/, '');
       const response = await fetch(`/${cleanPath}`);
       const blob = await response.blob();
@@ -370,9 +373,8 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
     }
   };
 
-  // Close preview when clicking outside
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleClickOutside = () => {
       if (showProofPreview && clickedProofPath) {
         handleProofClose();
       }
@@ -387,8 +389,8 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
       {showHeader && (
         <div className="flex justify-between items-center flex-wrap gap-4">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">Zakat Collection Management</h2>
-            <p className="text-sm text-gray-500 mt-1">Manage Zakat and Sadaqah collections and spending</p>
+            <h2 className="text-2xl font-bold text-gray-900">Maktab Collection Management</h2>
+            <p className="text-sm text-gray-500 mt-1">Manage maktab contributions and expenses (teacher salary, books, etc.)</p>
           </div>
           {onClose && (
             <button
@@ -409,10 +411,10 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
               <div>
                 <p className="text-sm font-medium text-gray-500 flex items-center gap-2">
                   <ArrowUpIcon className="h-4 w-4 text-green-600" />
-                  Zakat Collected
+                  Total Collected
                 </p>
                 <p className="text-3xl font-bold text-green-700 mt-2">
-                  ₹{zakatStats.zakat.collected.toLocaleString('en-IN')}
+                  ₹{maktabStats.totalCollected.toLocaleString('en-IN')}
                 </p>
               </div>
               <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center">
@@ -426,10 +428,10 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
               <div>
                 <p className="text-sm font-medium text-gray-500 flex items-center gap-2">
                   <ArrowDownIcon className="h-4 w-4 text-red-600" />
-                  Zakat Spent
+                  Total Spent
                 </p>
                 <p className="text-3xl font-bold text-red-700 mt-2">
-                  ₹{zakatStats.zakat.spent.toLocaleString('en-IN')}
+                  ₹{maktabStats.totalSpent.toLocaleString('en-IN')}
                 </p>
               </div>
               <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center">
@@ -438,82 +440,29 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-xl shadow-md border-l-4 border-blue-500 hover:shadow-lg transition-shadow">
+          <div className="bg-white p-6 rounded-xl shadow-md border-l-4 border-indigo-500 hover:shadow-lg transition-shadow">
             <div className="flex justify-between items-center">
               <div>
                 <p className="text-sm font-medium text-gray-500 flex items-center gap-2">
-                  <CurrencyRupeeIcon className="h-4 w-4 text-blue-600" />
-                  Zakat Current Balance
+                  <CurrencyRupeeIcon className="h-4 w-4 text-indigo-600" />
+                  Current Balance
                 </p>
                 <p className={`text-3xl font-bold mt-2 ${
-                  zakatStats.zakat.currentBalance >= 0 ? 'text-blue-700' : 'text-red-700'
+                  maktabStats.currentBalance >= 0 ? 'text-indigo-700' : 'text-red-700'
                 }`}>
-                  ₹{zakatStats.zakat.currentBalance.toLocaleString('en-IN')}
+                  ₹{maktabStats.currentBalance.toLocaleString('en-IN')}
                 </p>
               </div>
-              <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center">
-                <CurrencyRupeeIcon className="h-7 w-7 text-blue-600" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-xl shadow-md border-l-4 border-emerald-500 hover:shadow-lg transition-shadow">
-            <div className="flex justify-between items-center">
-              <div>
-                <p className="text-sm font-medium text-gray-500 flex items-center gap-2">
-                  <ArrowUpIcon className="h-4 w-4 text-emerald-600" />
-                  Sadaqah Collected
-                </p>
-                <p className="text-3xl font-bold text-emerald-700 mt-2">
-                  ₹{zakatStats.sadaqah.collected.toLocaleString('en-IN')}
-                </p>
-              </div>
-              <div className="w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center">
-                <ArrowUpOnSquareIcon className="h-7 w-7 text-emerald-600" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-xl shadow-md border-l-4 border-orange-500 hover:shadow-lg transition-shadow">
-            <div className="flex justify-between items-center">
-              <div>
-                <p className="text-sm font-medium text-gray-500 flex items-center gap-2">
-                  <ArrowDownIcon className="h-4 w-4 text-orange-600" />
-                  Sadaqah Spent
-                </p>
-                <p className="text-3xl font-bold text-orange-700 mt-2">
-                  ₹{zakatStats.sadaqah.spent.toLocaleString('en-IN')}
-                </p>
-              </div>
-              <div className="w-14 h-14 bg-orange-100 rounded-full flex items-center justify-center">
-                <ArrowDownOnSquareIcon className="h-7 w-7 text-orange-600" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-xl shadow-md border-l-4 border-cyan-500 hover:shadow-lg transition-shadow">
-            <div className="flex justify-between items-center">
-              <div>
-                <p className="text-sm font-medium text-gray-500 flex items-center gap-2">
-                  <CurrencyRupeeIcon className="h-4 w-4 text-cyan-600" />
-                  Sadaqah Current Balance
-                </p>
-                <p className={`text-3xl font-bold mt-2 ${
-                  zakatStats.sadaqah.currentBalance >= 0 ? 'text-cyan-700' : 'text-red-700'
-                }`}>
-                  ₹{zakatStats.sadaqah.currentBalance.toLocaleString('en-IN')}
-                </p>
-              </div>
-              <div className="w-14 h-14 bg-cyan-100 rounded-full flex items-center justify-center">
-                <CurrencyRupeeIcon className="h-7 w-7 text-cyan-600" />
+              <div className="w-14 h-14 bg-indigo-100 rounded-full flex items-center justify-center">
+                <CurrencyRupeeIcon className="h-7 w-7 text-indigo-600" />
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Donor Summary Section */}
-      {isAdmin && showDonorSummary && <DonorSummary limit={5} />}
+      {/* Contributor Summary Section */}
+      {isAdmin && showContributorSummary && <MaktabContributorSummary limit={5} />}
 
       {/* Action Buttons + Controls */}
       {((isAdmin && showRecordButtons) || showFilters || canExport) && (
@@ -522,16 +471,16 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
             <>
               <button
                 onClick={() => setShowCollectionModal(true)}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 text-sm bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg hover:from-emerald-700 hover:to-teal-700 transition-all font-semibold shadow-sm hover:shadow-md active:scale-95"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 text-sm bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-lg hover:from-indigo-700 hover:to-violet-700 transition-all font-semibold shadow-sm hover:shadow-md active:scale-95"
               >
                 <ArrowUpOnSquareIcon className="h-4 w-4" />
-                <span>Record Collection</span>
+                <span>Record Contribution</span>
               </button>
 
               <button
                 onClick={() => setShowSpendingModal(true)}
                 className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 text-sm bg-gradient-to-r from-red-600 to-orange-600 text-white rounded-lg hover:from-red-700 hover:to-orange-700 transition-all font-semibold shadow-sm hover:shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={(zakatStats.zakat.currentBalance + zakatStats.sadaqah.currentBalance) <= 0}
+                disabled={maktabStats.currentBalance <= 0}
               >
                 <ArrowDownOnSquareIcon className="h-4 w-4" />
                 <span>Record Spending</span>
@@ -548,7 +497,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                 <button
                   onClick={() => setFilterType('all')}
                   className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                    filterType === 'all' ? 'bg-emerald-100 text-emerald-700' : 'text-gray-600 hover:bg-gray-100'
+                    filterType === 'all' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-600 hover:bg-gray-100'
                   }`}
                 >
                   All Types
@@ -559,7 +508,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                     filterType === 'collection' ? 'bg-green-100 text-green-700' : 'text-gray-600 hover:bg-gray-100'
                   }`}
                 >
-                  Collections
+                  Contributions
                 </button>
                 <button
                   onClick={() => setFilterType('spending')}
@@ -571,31 +520,26 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                 </button>
               </div>
 
-              <div className="flex items-center gap-2 bg-white rounded-xl border border-gray-200 p-1 overflow-x-auto">
-                <button
-                  onClick={() => setFilterPurpose('all')}
-                  className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                    filterPurpose === 'all' ? 'bg-emerald-100 text-emerald-700' : 'text-gray-600 hover:bg-gray-100'
-                  }`}
+              <div className="flex items-center gap-2 flex-wrap">
+                <select
+                  value={filterFrequency}
+                  onChange={(e) => setFilterFrequency(e.target.value as 'all' | 'One-time' | 'Monthly')}
+                  className="px-3 py-2 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 >
-                  All Purposes ({purposeCounts.all})
-                </button>
-                <button
-                  onClick={() => setFilterPurpose('Zakat')}
-                  className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                    filterPurpose === 'Zakat' ? 'bg-emerald-100 text-emerald-700' : 'text-gray-600 hover:bg-gray-100'
-                  }`}
+                  <option value="all">All Frequencies</option>
+                  <option value="One-time">One-time</option>
+                  <option value="Monthly">Monthly</option>
+                </select>
+                <select
+                  value={filterCategory}
+                  onChange={(e) => setFilterCategory(e.target.value as 'all' | SpendingCategory)}
+                  className="px-3 py-2 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 >
-                  Zakat ({purposeCounts.zakat})
-                </button>
-                <button
-                  onClick={() => setFilterPurpose('Sadaqah')}
-                  className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                    filterPurpose === 'Sadaqah' ? 'bg-cyan-100 text-cyan-700' : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  Sadaqah ({purposeCounts.sadaqah})
-                </button>
+                  <option value="all">All Categories</option>
+                  {SPENDING_CATEGORIES.map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
               </div>
             </div>
           )}
@@ -606,7 +550,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
             placeholder="Search transactions..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full sm:w-56 px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+            className="w-full sm:w-56 px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           />
 
           {/* Export Dropdown - Admin Only */}
@@ -628,15 +572,15 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                     </div>
                     <button
                       onClick={exportToCSV}
-                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-emerald-50 hover:text-emerald-600 transition-colors"
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
                     >
-                      📊 CSV (Excel)
+                      CSV (Excel)
                     </button>
                     <button
                       onClick={exportToJSON}
-                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-emerald-50 hover:text-emerald-600 transition-colors"
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
                     >
-                      📄 JSON Data
+                      JSON Data
                     </button>
                   </div>
                 </div>
@@ -653,16 +597,16 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
             Transactions Database
           </h3>
           <span className="text-sm text-gray-500">
-            Showing {filteredTransactions.length} of {zakatTransactions.length} records
+            Showing {filteredTransactions.length} of {maktabTransactions.length} records
           </span>
         </div>
-        
+
         {filteredTransactions.length === 0 ? (
           <div className="p-12 text-center">
             <CurrencyRupeeIcon className="h-16 w-16 text-gray-300 mx-auto mb-4" />
             <p className="text-gray-500 text-lg">No transactions found</p>
             <p className="text-gray-400 text-sm mt-1">
-              {searchTerm ? 'Try adjusting your search or filters' : isAdmin ? 'Start by recording a collection or spending' : 'No transactions available'}
+              {searchTerm ? 'Try adjusting your search or filters' : isAdmin ? 'Start by recording a contribution or spending' : 'No transactions available'}
             </p>
           </div>
         ) : (
@@ -674,7 +618,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Purpose</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category / Frequency</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Party</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment Details</th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
@@ -702,22 +646,23 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                             ? 'bg-green-100 text-green-800'
                             : 'bg-red-100 text-red-800'
                         }`}>
-                          {t.type === 'collection' ? 'Collection' : 'Spending'}
+                          {t.type === 'collection' ? 'Contribution' : 'Spending'}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          t.purpose === 'Sadaqah' ? 'bg-cyan-100 text-cyan-800' : 'bg-emerald-100 text-emerald-800'
+                          t.type === 'collection' ? 'bg-indigo-100 text-indigo-800' : 'bg-amber-100 text-amber-800'
                         }`}>
-                          {t.purpose || 'Zakat'}
+                          {t.type === 'collection' ? (t.contributionFrequency || 'One-time') : (t.category || 'Other')}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">
-                          {t.type === 'collection' ? t.donorName : t.recipientName}
+                          {t.type === 'collection' ? t.contributorName : t.recipientName}
                         </div>
                         <div className="text-xs text-gray-500">
-                          {t.type === 'collection' ? t.donorType : t.recipientType}
+                          {t.type === 'collection' ? t.contributorType : t.recipientType}
+                          {t.type === 'spending' && t.studentCount ? ` • ${t.studentCount} students` : ''}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
@@ -729,9 +674,9 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                           {t.proofFilePath && isAdmin && (
                             <span
                               onClick={(e) => handleProofClick(e, t.proofFilePath!)}
-                              className="text-xs text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer inline-flex items-center gap-1 font-medium px-2.5 py-1.5 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors"
+                              className="text-xs text-indigo-600 hover:text-indigo-700 hover:underline cursor-pointer inline-flex items-center gap-1 font-medium px-2.5 py-1.5 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors"
                             >
-                              📎 View Proof
+                              View Proof
                             </span>
                           )}
                         </div>
@@ -785,7 +730,6 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                   key={t._id}
                   className="bg-white rounded-xl shadow-md border border-gray-200 p-4 hover:shadow-lg transition-shadow"
                 >
-                  {/* Header */}
                   <div className="flex justify-between items-start mb-3">
                     <div>
                       <span className={`px-2.5 py-1 inline-flex text-xs font-semibold rounded-full ${
@@ -793,12 +737,12 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                           ? 'bg-green-100 text-green-800'
                           : 'bg-red-100 text-red-800'
                       }`}>
-                        {t.type === 'collection' ? '💰 Collection' : '💸 Spending'}
+                        {t.type === 'collection' ? 'Contribution' : 'Spending'}
                       </span>
                       <span className={`ml-2 px-2.5 py-1 inline-flex text-xs font-semibold rounded-full ${
-                        t.purpose === 'Sadaqah' ? 'bg-cyan-100 text-cyan-800' : 'bg-emerald-100 text-emerald-800'
+                        t.type === 'collection' ? 'bg-indigo-100 text-indigo-800' : 'bg-amber-100 text-amber-800'
                       }`}>
-                        {t.purpose || 'Zakat'}
+                        {t.type === 'collection' ? (t.contributionFrequency || 'One-time') : (t.category || 'Other')}
                       </span>
                       <p className="text-xs text-gray-500 mt-1">
                         {new Date(t.paymentDate).toLocaleDateString('en-IN', {
@@ -815,17 +759,16 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                     </p>
                   </div>
 
-                  {/* Party Info */}
                   <div className="mb-3 pb-3 border-b border-gray-100">
                     <p className="text-sm font-medium text-gray-900">
-                      {t.type === 'collection' ? t.donorName : t.recipientName}
+                      {t.type === 'collection' ? t.contributorName : t.recipientName}
                     </p>
                     <p className="text-xs text-gray-500">
-                      {t.type === 'collection' ? t.donorType : t.recipientType}
+                      {t.type === 'collection' ? t.contributorType : t.recipientType}
+                      {t.type === 'spending' && t.studentCount ? ` • ${t.studentCount} students` : ''}
                     </p>
                   </div>
 
-                  {/* Payment Details */}
                   <div className="mb-3 text-sm">
                     <div className="flex items-center gap-2 text-gray-600 mb-1">
                       <span className="font-medium">{t.paymentMethod}</span>
@@ -836,14 +779,13 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                     {t.proofFilePath && isAdmin && (
                       <button
                         onClick={(e) => handleProofClick(e, t.proofFilePath!)}
-                        className="text-xs text-emerald-600 hover:text-emerald-700 font-medium mt-1 inline-flex items-center gap-1"
+                        className="text-xs text-indigo-600 hover:text-indigo-700 font-medium mt-1 inline-flex items-center gap-1"
                       >
-                        📎 View Proof
+                        View Proof
                       </button>
                     )}
                   </div>
 
-                  {/* Actions */}
                   <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
                     <button
                       onClick={() => { setViewingTransaction(t); setShowViewModal(true); }}
@@ -882,20 +824,17 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
 
       {/* Record Collection Modal */}
       {showCollectionModal && (
-        <RecordCollection 
-          onSuccess={fetchZakatData}
+        <RecordMaktabCollection
+          onSuccess={fetchMaktabData}
           onClose={() => setShowCollectionModal(false)}
         />
       )}
 
       {/* Record Spending Modal */}
       {showSpendingModal && (
-        <RecordSpending 
-          purposeBalances={{
-            zakat: zakatStats.zakat.currentBalance,
-            sadaqah: zakatStats.sadaqah.currentBalance,
-          }}
-          onSuccess={fetchZakatData}
+        <RecordMaktabSpending
+          currentBalance={maktabStats.currentBalance}
+          onSuccess={fetchMaktabData}
           onClose={() => setShowSpendingModal(false)}
         />
       )}
@@ -923,17 +862,17 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
             <div className="max-h-[calc(92dvh-10rem)] overflow-y-auto p-4 space-y-4 sm:max-h-[calc(92dvh-11rem)] sm:p-6">
               <div className="flex items-center gap-3">
                 <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                  viewingTransaction.type === 'collection' 
-                    ? 'bg-green-100 text-green-800' 
+                  viewingTransaction.type === 'collection'
+                    ? 'bg-green-100 text-green-800'
                     : 'bg-red-100 text-red-800'
                 }`}>
-                  {viewingTransaction.type === 'collection' ? 'Collection' : 'Spending'}
+                  {viewingTransaction.type === 'collection' ? 'Contribution' : 'Spending'}
                 </span>
                 <span className="text-2xl font-bold text-gray-900">
                   {viewingTransaction.type === 'collection' ? '+' : '-'}₹{viewingTransaction.amount.toLocaleString('en-IN')}
                 </span>
               </div>
-              
+
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <p className="text-sm text-gray-500">Date</p>
@@ -947,26 +886,40 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">
-                    {viewingTransaction.type === 'collection' ? 'Donor' : 'Recipient'}
+                    {viewingTransaction.type === 'collection' ? 'Contributor' : 'Recipient'}
                   </p>
                   <p className="font-medium">
-                    {viewingTransaction.type === 'collection' 
-                      ? viewingTransaction.donorName 
+                    {viewingTransaction.type === 'collection'
+                      ? viewingTransaction.contributorName
                       : viewingTransaction.recipientName}
                   </p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Type</p>
                   <p className="font-medium">
-                    {viewingTransaction.type === 'collection' 
-                      ? viewingTransaction.donorType 
+                    {viewingTransaction.type === 'collection'
+                      ? viewingTransaction.contributorType
                       : viewingTransaction.recipientType}
                   </p>
                 </div>
-                <div>
-                  <p className="text-sm text-gray-500">Purpose</p>
-                  <p className="font-medium">{viewingTransaction.purpose || 'Zakat'}</p>
-                </div>
+                {viewingTransaction.type === 'collection' && (
+                  <div>
+                    <p className="text-sm text-gray-500">Frequency</p>
+                    <p className="font-medium">{viewingTransaction.contributionFrequency || 'One-time'}</p>
+                  </div>
+                )}
+                {viewingTransaction.type === 'spending' && (
+                  <div>
+                    <p className="text-sm text-gray-500">Category</p>
+                    <p className="font-medium">{viewingTransaction.category || 'Other'}</p>
+                  </div>
+                )}
+                {viewingTransaction.type === 'spending' && viewingTransaction.studentCount ? (
+                  <div>
+                    <p className="text-sm text-gray-500">Students Supported</p>
+                    <p className="font-medium">{viewingTransaction.studentCount}</p>
+                  </div>
+                ) : null}
                 {viewingTransaction.bankName && (
                   <div>
                     <p className="text-sm text-gray-500">Bank Name</p>
@@ -994,26 +947,26 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                 <div>
                   <p className="text-sm text-gray-500">Recorded</p>
                   <p className="font-medium">
-                    {viewingTransaction.createdAt 
+                    {viewingTransaction.createdAt
                       ? new Date(viewingTransaction.createdAt).toLocaleDateString('en-IN')
                       : '-'}
                   </p>
                 </div>
               </div>
-              
+
               {viewingTransaction.notes && (
                 <div>
                   <p className="text-sm text-gray-500 mb-1">Notes</p>
                   <p className="text-gray-700 bg-gray-50 p-3 rounded-lg">{viewingTransaction.notes}</p>
                 </div>
               )}
-              
+
               {viewingTransaction.proofFilePath && isAdmin && (
                 <div>
                   <p className="text-sm text-gray-500 mb-1">Proof of Payment</p>
                   <button
                     onClick={() => handleDownloadProof(viewingTransaction.proofFilePath!)}
-                    className="text-emerald-600 hover:text-emerald-700 underline inline-flex items-center gap-1 cursor-pointer font-medium"
+                    className="text-indigo-600 hover:text-indigo-700 underline inline-flex items-center gap-1 cursor-pointer font-medium"
                   >
                     <DocumentArrowDownIcon className="w-4 h-4" />
                     Download Document
@@ -1046,27 +999,82 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
             <form onSubmit={handleUpdateTransaction} className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {editingTransaction.type === 'collection' ? 'Donor Name' : 'Recipient Name'}
+                  {editingTransaction.type === 'collection' ? 'Contributor Name' : 'Recipient Name'}
                 </label>
                 <input
                   type="text"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                  value={editingTransaction.type === 'collection' 
-                    ? (editingTransaction.donorName || '') 
+                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  value={editingTransaction.type === 'collection'
+                    ? (editingTransaction.contributorName || '')
                     : (editingTransaction.recipientName || '')}
                   onChange={e => setEditingTransaction({
                     ...editingTransaction,
-                    [editingTransaction.type === 'collection' ? 'donorName' : 'recipientName']: e.target.value
+                    [editingTransaction.type === 'collection' ? 'contributorName' : 'recipientName']: e.target.value
                   })}
                 />
               </div>
+
+              {editingTransaction.type === 'collection' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Frequency</label>
+                  <select
+                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    value={editingTransaction.contributionFrequency || 'One-time'}
+                    onChange={e => setEditingTransaction({ ...editingTransaction, contributionFrequency: e.target.value as 'One-time' | 'Monthly' })}
+                  >
+                    <option value="One-time">One-time</option>
+                    <option value="Monthly">Monthly</option>
+                  </select>
+                </div>
+              )}
+
+              {editingTransaction.type === 'spending' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Recipient Type</label>
+                    <select
+                      className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                      value={editingTransaction.recipientType || 'Teacher'}
+                      onChange={e => setEditingTransaction({ ...editingTransaction, recipientType: e.target.value })}
+                    >
+                      <option value="Teacher">Teacher</option>
+                      <option value="Student">Student</option>
+                      <option value="Supplier">Supplier</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                    <select
+                      className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                      value={editingTransaction.category || 'Other'}
+                      onChange={e => setEditingTransaction({ ...editingTransaction, category: e.target.value as SpendingCategory })}
+                    >
+                      {SPENDING_CATEGORIES.map((cat) => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Number of Students (Optional)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                      value={editingTransaction.studentCount ?? ''}
+                      onChange={e => setEditingTransaction({ ...editingTransaction, studentCount: e.target.value === '' ? undefined : parseInt(e.target.value, 10) })}
+                    />
+                  </div>
+                </>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
                 <input
                   type="number"
                   step="0.01"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   value={editingTransaction.amount}
                   onChange={e => setEditingTransaction({...editingTransaction, amount: parseFloat(e.target.value) || 0})}
                 />
@@ -1076,7 +1084,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                 <label className="block text-sm font-medium text-gray-700 mb-1">Payment Date</label>
                 <input
                   type="date"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   value={new Date(editingTransaction.paymentDate).toISOString().split('T')[0]}
                   onChange={e => setEditingTransaction({...editingTransaction, paymentDate: e.target.value})}
                 />
@@ -1085,7 +1093,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
                 <select
-                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   value={editingTransaction.paymentMethod}
                   onChange={e => setEditingTransaction({...editingTransaction, paymentMethod: e.target.value})}
                 >
@@ -1097,24 +1105,12 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Purpose</label>
-                <select
-                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                  value={editingTransaction.purpose || 'Zakat'}
-                  onChange={e => setEditingTransaction({ ...editingTransaction, purpose: e.target.value as 'Zakat' | 'Sadaqah' })}
-                >
-                  <option value="Zakat">Zakat</option>
-                  <option value="Sadaqah">Sadaqah</option>
-                </select>
-              </div>
-
               {editingTransaction.paymentMethod === 'Bank Transfer' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Bank Name</label>
                   <input
                     type="text"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                     value={editingTransaction.bankName || ''}
                     onChange={e => setEditingTransaction({...editingTransaction, bankName: e.target.value})}
                   />
@@ -1126,7 +1122,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                   <label className="block text-sm font-medium text-gray-700 mb-1">Sender UPI ID</label>
                   <input
                     type="text"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                     value={editingTransaction.senderUpiId || ''}
                     onChange={e => setEditingTransaction({...editingTransaction, senderUpiId: e.target.value})}
                   />
@@ -1138,7 +1134,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                   <label className="block text-sm font-medium text-gray-700 mb-1">Cheque Number</label>
                   <input
                     type="text"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                     value={editingTransaction.chequeNumber || ''}
                     onChange={e => setEditingTransaction({...editingTransaction, chequeNumber: e.target.value})}
                   />
@@ -1151,7 +1147,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                   <input
                     type="text"
                     pattern="\d{6,}"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-mono"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono"
                     value={editingTransaction.transactionRefId || ''}
                     onChange={e => setEditingTransaction({
                       ...editingTransaction,
@@ -1165,7 +1161,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                 <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
                 <textarea
                   rows={3}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 resize-none"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
                   value={editingTransaction.notes || ''}
                   onChange={e => setEditingTransaction({...editingTransaction, notes: e.target.value})}
                 />
@@ -1174,13 +1170,12 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
               {/* Proof of Payment Upload / Replace */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Proof of Payment</label>
-                
-                {/* Show existing proof if present and no new file selected */}
+
                 {editingTransaction.proofFilePath && !editProofPreview && (
                   <div className="mb-2 p-3 bg-gray-50 rounded-xl border border-gray-200 relative">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <DocumentArrowDownIcon className="w-5 h-5 text-emerald-600" />
+                        <DocumentArrowDownIcon className="w-5 h-5 text-indigo-600" />
                         <span className="text-sm text-gray-700 font-medium">Existing proof uploaded</span>
                       </div>
                       <button
@@ -1189,12 +1184,11 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                           setPreviewProofPath(editingTransaction.proofFilePath!);
                           setShowProofPreview(true);
                         }}
-                        className="text-xs text-emerald-600 hover:text-emerald-700 font-medium hover:underline"
+                        className="text-xs text-indigo-600 hover:text-indigo-700 font-medium hover:underline"
                       >
                         View
                       </button>
                     </div>
-                    {/* Red cross to remove existing proof */}
                     <button
                       type="button"
                       onClick={() => {
@@ -1209,15 +1203,14 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                   </div>
                 )}
 
-                {/* New file preview */}
                 {editProofPreview && (
                   <div className="mb-2 relative">
                     {editProofPreview.startsWith('data:image') ? (
                       <img src={editProofPreview} alt="New proof" className="max-h-32 mx-auto rounded-lg border" />
                     ) : (
-                      <div className="flex items-center gap-2 p-3 bg-emerald-50 rounded-xl border border-emerald-200">
-                        <DocumentArrowDownIcon className="w-5 h-5 text-emerald-600" />
-                        <span className="text-sm text-emerald-700 font-medium">{editProofFile?.name}</span>
+                      <div className="flex items-center gap-2 p-3 bg-indigo-50 rounded-xl border border-indigo-200">
+                        <DocumentArrowDownIcon className="w-5 h-5 text-indigo-600" />
+                        <span className="text-sm text-indigo-700 font-medium">{editProofFile?.name}</span>
                       </div>
                     )}
                     <button
@@ -1232,7 +1225,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
 
                 <input
                   type="file"
-                  id="edit-proof-upload"
+                  id="edit-maktab-proof-upload"
                   accept="image/jpeg,image/jpg,image/png,application/pdf"
                   className="hidden"
                   onChange={async (e) => {
@@ -1258,8 +1251,8 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                   }}
                 />
                 <label
-                  htmlFor="edit-proof-upload"
-                  className="inline-flex items-center gap-2 px-4 py-2 border border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-emerald-400 hover:bg-emerald-50 transition-colors text-sm text-gray-600 hover:text-emerald-700"
+                  htmlFor="edit-maktab-proof-upload"
+                  className="inline-flex items-center gap-2 px-4 py-2 border border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-indigo-400 hover:bg-indigo-50 transition-colors text-sm text-gray-600 hover:text-indigo-700"
                 >
                   <ArrowUpOnSquareIcon className="w-4 h-4" />
                   {editingTransaction.proofFilePath ? 'Replace Proof' : 'Upload Proof'}
@@ -1277,7 +1270,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors font-medium"
+                  className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors font-medium"
                 >
                   Save Changes
                 </button>
@@ -1291,11 +1284,10 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
       {showProofPreview && previewProofPath && (
         <div className="fixed inset-0 z-[99] bg-black bg-opacity-50 flex items-center justify-center" onClick={handleProofClose}>
           <div
-            className="bg-white rounded-3xl shadow-2xl border-2 border-emerald-200 overflow-hidden relative max-w-4xl mx-4"
+            className="bg-white rounded-3xl shadow-2xl border-2 border-indigo-200 overflow-hidden relative max-w-4xl mx-4"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header with Close Button */}
-            <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-8 py-5 flex justify-between items-center">
+            <div className="bg-gradient-to-r from-indigo-500 to-violet-500 px-8 py-5 flex justify-between items-center">
               <p className="text-white text-lg font-bold">Proof of Payment</p>
               <button
                 onClick={handleProofClose}
@@ -1304,17 +1296,16 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                 <XMarkIcon className="w-7 h-7" />
               </button>
             </div>
-            
-            {/* Content */}
+
             <div className="p-8 bg-white">
               {previewProofPath.toLowerCase().includes('.pdf') ? (
                 <div className="flex flex-col items-center justify-center py-16">
-                  <DocumentArrowDownIcon className="w-32 h-32 text-emerald-500 mb-6" />
+                  <DocumentArrowDownIcon className="w-32 h-32 text-indigo-500 mb-6" />
                   <p className="text-2xl text-gray-700 font-bold text-center">PDF Document</p>
                   <p className="text-base text-gray-500 text-center mt-3">Click below to download the proof document</p>
                   <button
                     onClick={() => handleDownloadProof(previewProofPath)}
-                    className="mt-8 px-8 py-4 bg-emerald-600 text-white rounded-2xl hover:bg-emerald-700 transition-colors text-lg font-semibold inline-flex items-center gap-3 shadow-xl hover:shadow-2xl hover:scale-105"
+                    className="mt-8 px-8 py-4 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 transition-colors text-lg font-semibold inline-flex items-center gap-3 shadow-xl hover:shadow-2xl hover:scale-105"
                   >
                     <DocumentArrowDownIcon className="w-6 h-6" />
                     Download PDF
@@ -1331,13 +1322,12 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                 </div>
               )}
             </div>
-            
-            {/* Footer */}
+
             <div className="px-8 py-5 bg-gradient-to-r from-gray-50 to-gray-100 border-t border-gray-200 flex justify-between items-center">
-              <p className="text-base text-gray-600 font-medium">Click outside or ✕ to close</p>
+              <p className="text-base text-gray-600 font-medium">Click outside or close to dismiss</p>
               <button
                 onClick={() => handleDownloadProof(previewProofPath)}
-                className="text-base text-emerald-600 hover:text-emerald-700 hover:underline font-semibold inline-flex items-center gap-2 bg-emerald-50 px-6 py-3 rounded-xl hover:bg-emerald-100 transition-all hover:scale-105"
+                className="text-base text-indigo-600 hover:text-indigo-700 hover:underline font-semibold inline-flex items-center gap-2 bg-indigo-50 px-6 py-3 rounded-xl hover:bg-indigo-100 transition-all hover:scale-105"
               >
                 <DocumentArrowDownIcon className="w-5 h-5" />
                 Download
@@ -1350,4 +1340,4 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
   );
 };
 
-export default ZakatManagement;
+export default MaktabManagement;

@@ -19,6 +19,7 @@ import prayerRoutes from './routes/prayers';
 import quranRoutes from './routes/quran';
 import dhikrRoutes from './routes/dhikr';
 import zakatRoutes from './routes/zakat';
+import maktabRoutes from './routes/maktab';
 import communityRoutes from './routes/community';
 import notificationRoutes from './routes/notifications'; // Import notification routes
 import supportRoutes from './routes/support'; // Import support routes
@@ -26,6 +27,7 @@ import activityRoutes from './routes/activity'; // Import activity log routes
 import salahTrackerRoutes from './routes/salahTracker';
 import hajjGuideRoutes from './routes/hajjGuide';
 import gamesRoutes from './routes/games';
+import userRoutes from './routes/users';
 
 // Load environment variables
 // Use __dirname to resolve paths correctly regardless of whether running from src/ or dist/
@@ -178,7 +180,7 @@ const isRateLimitSkippedRequest = (req: express.Request) => (
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  max: 1000, // limit each IP to 1000 requests per windowMs (dashboards/SPAs poll many endpoints)
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
   message: {
@@ -241,6 +243,7 @@ app.get('/', (req, res) => {
       quran: '/api/quran',
       dhikr: '/api/dhikr',
       zakat: '/api/zakat',
+      maktab: '/api/maktab',
       community: '/api/community',
       salahTracker: '/api/salah-tracker',
       hajjGuide: '/api/hajj-guide',
@@ -263,6 +266,7 @@ app.get(['/api', '/api/'], (req, res) => {
       quran: '/api/quran',
       dhikr: '/api/dhikr',
       zakat: '/api/zakat',
+      maktab: '/api/maktab',
       community: '/api/community',
       notifications: '/api/notifications',
       support: '/api/support',
@@ -354,6 +358,7 @@ app.use('/api/prayers', prayerRoutes);
 app.use('/api/quran', quranLimiter, quranRoutes);
 app.use('/api/dhikr', dhikrRoutes);
 app.use('/api/zakat', zakatRoutes);
+app.use('/api/maktab', maktabRoutes);
 app.use('/api/community', communityRoutes);
 app.use('/api/notifications', notificationRoutes); // Use notification routes
 app.use('/api/support', supportRoutes); // Use support routes
@@ -361,6 +366,7 @@ app.use('/api/activity', activityRoutes); // Use activity log routes
 app.use('/api/salah-tracker', salahTrackerRoutes);
 app.use('/api/hajj-guide', hajjGuideRoutes);
 app.use('/api/games', gamesRoutes);
+app.use('/api/users', userRoutes);
 
 // Admin Routes for User Management (Restricted to Super Admin)
 // Get All Users

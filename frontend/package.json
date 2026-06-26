@@ -22,6 +22,9 @@
     "firebase": "^12.9.0",
     "framer-motion": "^12.34.3",
     "html2canvas": "^1.4.1",
+    "i18next": "^26.3.1",
+    "i18next-browser-languagedetector": "^8.2.1",
+    "idb": "^8.0.3",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.331.0",
     "postcss": "^8.4.32",
@@ -31,12 +34,13 @@
     "react-helmet-async": "^2.0.5",
     "react-hook-form": "^7.71.2",
     "react-hot-toast": "^2.6.0",
+    "react-i18next": "^17.0.8",
     "react-router-dom": "^6.30.3",
     "react-scripts": "5.0.1",
     "react-toastify": "^11.0.5",
     "tailwindcss": "^3.3.6",
     "three": "^0.182.0",
-    "typescript": "^4.9.5",
+    "typescript": "^5.4.5",
     "web-vitals": "^2.1.4"
   },
   "scripts": {
@@ -65,6 +69,7 @@
     ]
   },
   "devDependencies": {
+    "@types/google.maps": "^3.65.2",
     "@types/three": "^0.182.0",
     "react-snap": "^1.23.0"
   }

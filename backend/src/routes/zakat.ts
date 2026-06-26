@@ -3,6 +3,7 @@ import { body, query, validationResult } from 'express-validator';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import * as XLSX from 'xlsx';
 import { authMiddleware, optionalAuthMiddleware, adminMiddleware } from '../middleware/auth';
 import ZakatPayment, { IZakatPayment } from '../models/ZakatPayment';
 import Donor, { IDonor } from '../models/Donor';
@@ -86,6 +87,55 @@ const upload = multer({
     cb(new Error('Only images (jpeg, jpg, png) and PDFs are allowed'));
   }
 });
+
+// In-memory upload used for bulk import files (CSV / Excel / JSON)
+const importUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+});
+
+// ==================== IMPORT HELPERS ====================
+// Read an uploaded file (CSV / XLSX / JSON) into an array of row objects.
+const parseImportRows = (file: Express.Multer.File): any[] => {
+  const name = (file.originalname || '').toLowerCase();
+  const buf = file.buffer;
+
+  if (name.endsWith('.json') || file.mimetype === 'application/json') {
+    const parsed = JSON.parse(buf.toString('utf-8'));
+    if (Array.isArray(parsed)) return parsed;
+    if (parsed && Array.isArray(parsed.data)) return parsed.data;
+    return [];
+  }
+
+  // CSV and Excel are both handled by SheetJS
+  const workbook = XLSX.read(buf, { type: 'buffer' });
+  const sheetName = workbook.SheetNames[0];
+  if (!sheetName) return [];
+  const sheet = workbook.Sheets[sheetName];
+  if (!sheet) return [];
+  return XLSX.utils.sheet_to_json(sheet, { defval: '' });
+};
+
+// Case-insensitive lookup of the first non-empty value among candidate keys.
+const pickField = (row: any, keys: string[]): string => {
+  const lowerMap: Record<string, any> = {};
+  Object.keys(row || {}).forEach((k) => {
+    lowerMap[k.toLowerCase().trim()] = row[k];
+  });
+  for (const k of keys) {
+    const v = lowerMap[k.toLowerCase().trim()];
+    if (v !== undefined && v !== null && String(v).trim() !== '') {
+      return String(v).trim();
+    }
+  }
+  return '';
+};
+
+const VALID_METHODS = ['Bank Transfer', 'UPI Transfer', 'Cash', 'Cheque', 'QR Scanner'];
+const normalizeMethod = (raw: string): string => {
+  const match = VALID_METHODS.find((m) => m.toLowerCase() === raw.toLowerCase().trim());
+  return match || 'Cash';
+};
 
 // ==================== ZAKAT CALCULATION ====================
 const ZAKAT_RATES = {
@@ -841,6 +891,136 @@ router.get('/stats/split', authMiddleware, adminMiddleware, async (req: any, res
   } catch (error) {
     console.error('Get split stats error:', error);
     res.status(500).json({ status: 'error', message: 'Failed to get split stats' });
+  }
+});
+
+/**
+ * @route   POST /api/zakat/import
+ * @desc    Bulk-import Zakat/Sadaqah transactions from CSV / Excel / JSON
+ * @access  Private (Admin/Manager)
+ */
+router.post('/import', authMiddleware, adminMiddleware, importUpload.single('file'), async (req: any, res: any) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ status: 'error', message: 'No file uploaded' });
+    }
+
+    let rows: any[];
+    try {
+      rows = parseImportRows(req.file);
+    } catch (parseErr: any) {
+      return res.status(400).json({ status: 'error', message: `Could not read file: ${parseErr.message}` });
+    }
+
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ status: 'error', message: 'No rows found in the file' });
+    }
+
+    let inserted = 0;
+    let skipped = 0;
+    const errors: { row: number; reason: string }[] = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const rowNum = i + 2; // account for header row in spreadsheets
+      try {
+        const typeRaw = pickField(row, ['Type', 'type']).toLowerCase();
+        const type = typeRaw === 'spending' ? 'spending' : typeRaw === 'collection' ? 'collection' : '';
+        if (type !== 'collection' && type !== 'spending') {
+          throw new Error(`Invalid type "${typeRaw || '(empty)'}"`);
+        }
+
+        const amount = parseFloat(pickField(row, ['Amount', 'amount']).replace(/[^0-9.\-]/g, ''));
+        if (!amount || amount <= 0) {
+          throw new Error('Amount must be greater than 0');
+        }
+
+        const partyName = pickField(row, ['Party Name', 'partyName', 'donorName', 'recipientName', 'Name']);
+        if (!partyName) {
+          throw new Error('Party name is required');
+        }
+
+        const purposeRaw = pickField(row, ['Purpose', 'purpose']);
+        const purpose = purposeRaw.toLowerCase() === 'sadaqah' ? 'Sadaqah' : 'Zakat';
+
+        const partyTypeRaw = pickField(row, ['Party Type', 'partyType', 'donorType', 'recipientType']);
+
+        const dateRaw = pickField(row, ['Date', 'paymentDate', 'date']);
+        let paymentDate = dateRaw ? new Date(dateRaw) : new Date();
+        if (isNaN(paymentDate.getTime())) paymentDate = new Date();
+        if (paymentDate > new Date()) paymentDate = new Date();
+
+        const method = normalizeMethod(pickField(row, ['Method', 'paymentMethod', 'method']));
+        const refId = pickField(row, ['Reference ID', 'transactionRefId', 'Reference', 'refId']);
+        const notes = pickField(row, ['Notes', 'notes']);
+
+        const doc: any = {
+          userId: req.user.userId,
+          type,
+          purpose,
+          amount,
+          currency: 'INR',
+          paymentDate,
+          paymentMethod: method,
+          notes: notes || undefined,
+          recordedBy: req.user.userId,
+        };
+
+        // Satisfy method-specific pre-save requirements without rejecting historical rows
+        if (method === 'Bank Transfer') {
+          doc.bankName = pickField(row, ['Bank Name', 'bankName']) || 'Imported';
+          if (refId) doc.transactionRefId = refId;
+        } else if (method === 'Cheque') {
+          doc.chequeNumber = pickField(row, ['Cheque Number', 'chequeNumber']) || refId || 'IMPORTED';
+        } else if (method === 'UPI Transfer' || method === 'QR Scanner') {
+          if (/^\d{6,}$/.test(refId)) doc.transactionRefId = refId;
+        }
+
+        if (type === 'collection') {
+          const donorType = ['Individual', 'Organization', 'Charity'].includes(partyTypeRaw)
+            ? partyTypeRaw
+            : 'Individual';
+          doc.donorName = partyName;
+          doc.donorType = donorType;
+          const donor = await DonorModel.findOrCreateDonor(partyName, donorType as any);
+          donor.totalDonated += amount;
+          donor.donationCount += 1;
+          donor.lastDonationDate = paymentDate;
+          await donor.save();
+          doc.donorId = donor._id;
+        } else {
+          const recipientType = ['Individual', 'Family', 'Mosque', 'Madrasa', 'NGO', 'Other'].includes(partyTypeRaw)
+            ? partyTypeRaw
+            : 'Other';
+          doc.recipientName = partyName;
+          doc.recipientType = recipientType;
+        }
+
+        await new ZakatPayment(doc).save();
+        inserted++;
+      } catch (rowErr: any) {
+        skipped++;
+        if (errors.length < 50) {
+          errors.push({ row: rowNum, reason: rowErr.message || 'Invalid row' });
+        }
+      }
+    }
+
+    await logUserActivity(
+      req,
+      'zakat_import',
+      'zakat',
+      `Imported ${inserted} Zakat/Sadaqah transactions (${skipped} skipped) by ${req.user.email}`,
+      { inserted, skipped, total: rows.length }
+    );
+
+    return res.json({
+      status: 'success',
+      data: { inserted, skipped, total: rows.length, errors },
+    });
+  } catch (error: any) {
+    console.error('Zakat import error:', error);
+    return res.status(500).json({ status: 'error', message: error.message || 'Import failed' });
   }
 });
 

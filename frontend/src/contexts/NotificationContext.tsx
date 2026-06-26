@@ -21,6 +21,7 @@ interface NotificationContextType {
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
   deleteNotification: (id: string) => void;
+  addSystemNotification: (title: string, body: string, type?: 'info' | 'alert' | 'success', data?: any) => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -471,13 +472,42 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     }
   }, []);
 
+  const addSystemNotification = useCallback((title: string, body: string, type: 'info' | 'alert' | 'success' = 'info', data?: any) => {
+    const generatedId = `sys-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const notification: Notification = {
+      id: generatedId,
+      title,
+      body,
+      timestamp: new Date().toISOString(),
+      read: false,
+      type,
+      data
+    };
+
+    addNotification(notification);
+
+    if ('Notification' in window && Notification.permission === 'granted') {
+      try {
+        new window.Notification(title, {
+          body,
+          icon: '/small_logo.jpeg',
+          tag: generatedId,
+          data
+        });
+      } catch (e) {
+        console.error('Native notification failed:', e);
+      }
+    }
+  }, [addNotification]);
+
   return (
     <NotificationContext.Provider value={{ 
       notifications, 
       unreadCount, 
       markAsRead, 
       markAllAsRead, 
-      deleteNotification 
+      deleteNotification,
+      addSystemNotification
     }}>
       {children}
     </NotificationContext.Provider>

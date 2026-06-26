@@ -184,16 +184,15 @@ code {
     "mark" 1,  /* Mark positioning - for harakat/tajweed */
     "mkmk" 1;  /* Mark-to-mark positioning */
   
-  /* Text rendering optimization */
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-text-stroke: 0.3px transparent;
+  /* Text rendering - use 'auto' to match Quran reader behavior */
+  text-rendering: auto;
+  -webkit-font-smoothing: subpixel-antialiased;
+  -moz-osx-font-smoothing: auto;
   
   /* Spacing */
-  line-height: 2.8;
-  letter-spacing: 0.04em;
-  word-spacing: 0.15em;
+  line-height: 2.2;
+  letter-spacing: 0 !important;
+  word-spacing: 0.05em;
   
   /* RTL support */
   direction: rtl;
@@ -229,7 +228,7 @@ code {
 }
 
 .tasbih-arabic-text {
-  font-family: 'Al Mushaf Quran', 'Amiri', 'Scheherazade New', 'Noto Naskh Arabic', serif !important;
+  font-family: 'Indopak Nastaleeq', 'Noto Naskh Arabic', 'Amiri', serif !important;
   direction: rtl !important;
   text-align: center !important;
   unicode-bidi: plaintext !important;
@@ -238,13 +237,12 @@ code {
   word-break: keep-all !important;
   overflow-wrap: break-word !important;
   letter-spacing: 0 !important;
-  word-spacing: 0.02em !important;
-  line-height: 1.9 !important;
+  word-spacing: 0.08em !important;
+  line-height: 2.2 !important;
   font-variant-ligatures: common-ligatures contextual !important;
-  font-feature-settings: "rlig" 1, "liga" 1, "calt" 1, "ccmp" 1, "mark" 1, "mkmk" 1 !important;
-  text-rendering: optimizeLegibility !important;
-  -webkit-font-smoothing: antialiased !important;
-  -moz-osx-font-smoothing: grayscale !important;
+  font-feature-settings: "liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1 !important;
+  text-rendering: auto !important;
+  -webkit-font-smoothing: subpixel-antialiased !important;
 }
 
 .eid-arabic-text {
@@ -433,7 +431,7 @@ code {
    ============================================================ */
 @media (max-width: 640px) {
   .font-indopak-nastaleeq-v3 {
-    line-height: 3.0;
+    line-height: 2.4;
     letter-spacing: 0 !important;
     word-spacing: 0 !important;
   }

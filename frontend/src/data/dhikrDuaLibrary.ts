@@ -312,9 +312,9 @@ const sanitizeNarrativeText = (value?: string): string => {
   while (text !== previous) {
     previous = text;
     text = text
-      .replace(/^\(\s*(.*)\s*\)\.?$/u, '$1')
-      .replace(/^\[\s*(.*)\s*\]\.?$/u, '$1')
-      .replace(/^\{\s*(.*)\s*\}\.?$/u, '$1')
+      .replace(/^\(\s*(.*)\s*\)\.?$/, '$1')
+      .replace(/^\[\s*(.*)\s*\]\.?$/, '$1')
+      .replace(/^\{\s*(.*)\s*\}\.?$/, '$1')
       .trim();
   }
 

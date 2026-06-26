@@ -1,0 +1,55 @@
+{
+  "header": {
+    "prayerTimes": "نماز کے اوقات",
+    "settings": "ترتیبات",
+    "language": "زبان",
+    "darkMode": "رات کی موڈ",
+    "home": "ہوم",
+    "about": "کے بارے میں",
+    "contact": "رابطہ"
+  },
+  "prayers": {
+    "fajr": "فجر",
+    "dhuhr": "ظہر",
+    "asr": "عصر",
+    "maghrib": "مغرب",
+    "isha": "عشاء"
+  },
+  "settings": {
+    "asrMethod": "عصر کا طریقہ حساب",
+    "standard": "معیاری (سایہ 1x)",
+    "hanafi": "حنفی (سایہ 2x)",
+    "darkMode": "رات کی موڈ",
+    "language": "زبان",
+    "notifications": "اطلاعات",
+    "enable": "فعال کریں",
+    "disable": "غیر فعال کریں",
+    "sound": "آواز",
+    "save": "تبدیلیاں محفوظ کریں",
+    "cancel": "منسوخ کریں",
+    "close": "بند کریں"
+  },
+  "notifications": {
+    "prayerTime": "{{prayer}} کا وقت ہو گیا",
+    "enableNotification": "اطلاع فعال ہو گئی",
+    "disableNotification": "اطلاع غیر فعال ہو گئی",
+    "soundEnabled": "آواز فعال ہے",
+    "soundDisabled": "آواز غیر فعال ہے",
+    "hint": "نماز کے اوقات کی اطلاعات کے لیے فعال کریں"
+  },
+  "mosque": {
+    "nearbyMosques": "قریبی مساجد",
+    "distance": "{{distance}} کلومیٹر دور",
+    "jamaatTimes": "جماعت کے اوقات",
+    "addMosque": "مسجد شامل کریں",
+    "viewMap": "نقشہ پر دیکھیں",
+    "rating": "درجہ بندی",
+    "noMosques": "قریب میں کوئی مسجد نہیں ملی"
+  },
+  "common": {
+    "loading": "لوڈ ہو رہا ہے...",
+    "error": "خرابی",
+    "success": "کامیاب",
+    "tryAgain": "دوبارہ کوشش کریں"
+  }
+}

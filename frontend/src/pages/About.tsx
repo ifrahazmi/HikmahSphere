@@ -146,7 +146,7 @@ const About: React.FC = () => {
     <>
       <PageSEO
         title="About Us"
-        description="Learn how HikmahSphere helps Muslims with prayer times, Quran study, Dhikr and Dua, Zakat, Hajj guidance, and community learning."
+        description="Learn how HikmahSphere helps Muslims with prayer times, finding mosques, Quran study, Dhikr and Dua, Zakat, Hajj guidance, and community learning."
         path="/about"
         keywords={[
           'about hikmahsphere',
@@ -761,7 +761,7 @@ const About: React.FC = () => {
                   <div className="w-1/2 pl-4">
                     <div className="text-teal-300 font-semibold text-xs sm:text-sm">Phase 2</div>
                     <div className="text-white font-bold text-xs sm:text-base">Features</div>
-                    <div className="text-teal-200/60 text-xs hidden sm:block">Prayer times, Qibla compass, Quran with Tafsir, Dhikr &amp; Dua, Zakat</div>
+                    <div className="text-teal-200/60 text-xs hidden sm:block">Prayer times, Mosques &amp; Qibla, Quran with Tafsir, Dhikr &amp; Dua, Zakat</div>
                   </div>
                 </div>
 

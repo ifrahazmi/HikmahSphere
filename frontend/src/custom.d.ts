@@ -33,6 +33,8 @@ declare module '*.webp' {
   export default value;
 }
 
+declare module '*.css';
+
 interface BeforeInstallPromptEvent extends Event {
   readonly platforms: string[];
   readonly userChoice: Promise<{
@@ -44,4 +46,14 @@ interface BeforeInstallPromptEvent extends Event {
 
 interface Navigator {
   standalone?: boolean;
+}
+
+declare namespace JSX {
+  interface IntrinsicElements {
+    'gmpx-api-loader': any;
+    'gmp-map': any;
+    'gmp-pin': any;
+    'gmpx-place-picker': any;
+    'gmp-advanced-marker': any;
+  }
 }
