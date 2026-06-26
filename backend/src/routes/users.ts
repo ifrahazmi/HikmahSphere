@@ -12,9 +12,9 @@ router.get('/:id', authMiddleware, async (req: any, res) => {
     }
     const user = await User.findById(req.params.id, '-password');
     if (!user) return res.status(404).json({ message: 'User not found' });
-    res.json(user);
+    return res.json(user);
   } catch (err: any) {
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 });
 
@@ -27,9 +27,9 @@ router.get('/:id/notification-prefs', authMiddleware, async (req: any, res) => {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ message: 'User not found' });
     
-    res.json({ notificationPreferences: user.preferences?.notifications?.prayerAlerts || null });
+    return res.json({ notificationPreferences: user.preferences?.notifications?.prayerAlerts || null });
   } catch (err: any) {
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 });
 
@@ -52,9 +52,9 @@ router.put('/:id/notification-prefs', authMiddleware, async (req: any, res) => {
     user.markModified('preferences');
     await user.save();
     
-    res.json({ message: 'Updated', notificationPreferences: user.preferences.notifications.prayerAlerts });
+    return res.json({ message: 'Updated', notificationPreferences: user.preferences.notifications.prayerAlerts });
   } catch (err: any) {
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 });
 
@@ -73,9 +73,9 @@ router.put('/:id/preferences', authMiddleware, async (req: any, res) => {
     user.markModified('preferences');
     await user.save();
     
-    res.json({ message: 'Updated', preferences: user.preferences });
+    return res.json({ message: 'Updated', preferences: user.preferences });
   } catch (err: any) {
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 });
 
