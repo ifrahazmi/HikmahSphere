@@ -20,9 +20,25 @@ interface NotificationPreferences {
 
 const prayerOrder = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
 
-const timeStringToMinutes = (timeStr: string): number => {
-  const [hours, minutes] = timeStr.split(':').map(Number);
-  return hours * 60 + minutes;
+// Robustly parse prayer time strings. Handles 24h ("17:30"), values with a
+// timezone suffix ("17:30 (EET)"), and 12h with meridian ("5:30 PM").
+const timeStringToMinutes = (timeStr: string): number | null => {
+  if (!timeStr) return null;
+
+  const match = timeStr.match(/(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+
+  let hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return null;
+
+  if (/\b(am|pm)\b/i.test(timeStr)) {
+    const meridian = (timeStr.match(/\b(am|pm)\b/i)?.[1] || '').toLowerCase();
+    if (meridian === 'pm' && hours < 12) hours += 12;
+    if (meridian === 'am' && hours === 12) hours = 0;
+  }
+
+  return (hours % 24) * 60 + minutes;
 };
 
 let globalAdhanAudio: HTMLAudioElement | null = null;
@@ -37,6 +53,10 @@ const setupAudioUnlock = () => {
   const unlock = () => {
     try {
       const primer = new Audio('/sounds/adhan.mp3');
+      // `muted` is reliably honored on all platforms (including iOS, where the
+      // `volume` property is ignored). This keeps the unlock completely silent
+      // so the Adhan never blares out when the user simply taps the page.
+      primer.muted = true;
       primer.volume = 0;
       primer
         .play()
@@ -120,10 +140,12 @@ export const usePrayerNotificationChecker = (
         if (!timeStr) return;
 
         const prayerMinutes = timeStringToMinutes(timeStr);
-        const timeDiff = prayerMinutes - currentMinutes;
+        if (prayerMinutes === null) return;
 
-        // Check if prayer is within the next 60 seconds
-        if (timeDiff >= 0 && timeDiff <= 1) {
+        // Fire exactly at the displayed start time (the current minute matches
+        // the prayer minute). The 30s interval samples this minute twice, and
+        // the per-day de-dupe guarantees a single Adhan.
+        if (prayerMinutes === currentMinutes) {
           const prayerKey = `${checkKey}-${prayer}`;
 
           // Only notify once per prayer per day
@@ -137,12 +159,15 @@ export const usePrayerNotificationChecker = (
                 Notification.requestPermission();
               }
 
-              // Add to in-app bell and show system push
+              // Add to in-app bell and show system push. The notificationId is
+              // deterministic and matches the server-side push so the same
+              // Adhan is never shown twice (foreground client + background push).
+              const adhanNotificationId = `adhan-${today}-${prayer.toLowerCase()}`;
               addSystemNotification(
                 `Adhan: ${capitalizedPrayer}`,
                 `It's time for ${capitalizedPrayer} prayer.`,
                 'info',
-                { type: 'adhan', prayer }
+                { type: 'adhan', prayer, notificationId: adhanNotificationId }
               );
 
               // Show toast notification

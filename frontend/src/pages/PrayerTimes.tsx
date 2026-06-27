@@ -1888,6 +1888,59 @@ const PrayerTimes: React.FC = () => {
     writeTodayAdhanTimes(prayerData.times);
   }, [prayerData?.times]);
 
+  // Save the user's location + calculation settings to the backend so the
+  // server can push Adhan notifications even when the app is closed. Only the
+  // notification (bell + system push) is delivered in the background; the
+  // custom Adhan audio still requires the app to be open.
+  useEffect(() => {
+    if (!user?.id || !location?.lat || !location?.lon) return;
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    const school = selectedMadhab === 'hanafi' ? 2 : 1;
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const now = new Date();
+    const timesDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const t = prayerData?.times;
+    // Send the exact times the page is displaying so the server fires the
+    // Adhan at precisely the shown start time (not a recomputed value).
+    const times = t
+      ? { Fajr: t.Fajr, Dhuhr: t.Dhuhr, Asr: t.Asr, Maghrib: t.Maghrib, Isha: t.Isha }
+      : undefined;
+
+    fetch(`${API_URL}/users/${user.id}/prayer-push`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        latitude: location.lat,
+        longitude: location.lon,
+        method: calculationMethod,
+        school,
+        timezone,
+        times,
+        timesDate,
+        city: location.city,
+        country: location.country,
+        enabled: true,
+      }),
+    }).catch((err) => console.warn('[PrayerPush] Failed to save prayer push settings:', err));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    user?.id,
+    location?.lat,
+    location?.lon,
+    calculationMethod,
+    selectedMadhab,
+    prayerData?.times?.Fajr,
+    prayerData?.times?.Dhuhr,
+    prayerData?.times?.Asr,
+    prayerData?.times?.Maghrib,
+    prayerData?.times?.Isha,
+  ]);
+
   // Refresh fasting data at Maghrib time to ensure Sehri/Iftar times update correctly
   useEffect(() => {
     if (!prayerData?.times?.Maghrib || !location?.lat || !location?.lon) return;

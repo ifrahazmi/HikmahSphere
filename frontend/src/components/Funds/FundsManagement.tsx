@@ -256,8 +256,8 @@ const FundsManagement: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Unified Header */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 p-6 sm:p-8 text-white shadow-lg">
-        <div className="absolute inset-0 opacity-10 pointer-events-none" style={{
+      <div className="relative rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 p-6 sm:p-8 text-white shadow-lg">
+        <div className="absolute inset-0 rounded-2xl overflow-hidden opacity-10 pointer-events-none" style={{
           backgroundImage: 'radial-gradient(circle at 2px 2px, #ffffff 1px, transparent 0)',
           backgroundSize: '28px 28px',
         }} />

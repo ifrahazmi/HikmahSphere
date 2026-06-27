@@ -76,6 +76,7 @@ const Footer: React.FC = () => {
             <h3 className="text-sm font-semibold text-emerald-400 uppercase tracking-wider mb-4">Platform</h3>
             <ul className="space-y-3">
               <li><Link to="/prayers" className="text-gray-300 hover:text-emerald-400">Prayer Times</Link></li>
+              <li><Link to="/prayers?tab=mosques" className="text-gray-300 hover:text-emerald-400">Mosque Finder</Link></li>
               <li><Link to="/dhikr-dua" onClick={goToDhikrDua} className="text-gray-300 hover:text-emerald-400">Dhikr &amp; Dua</Link></li>
               <li><Link to="/quran" className="text-gray-300 hover:text-emerald-400">Quran Reader</Link></li>
               <li><Link to="/zakat" className="text-gray-300 hover:text-emerald-400">Zakat Center</Link></li>

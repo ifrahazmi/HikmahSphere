@@ -29,6 +29,30 @@ export interface IUser extends Document {
   }>;
   notificationPermission?: 'granted' | 'denied' | 'default' | 'unknown';
   notificationPermissionUpdatedAt?: Date;
+  // Snapshot of the data the server needs to push prayer-time (Adhan) alerts
+  // even when the app is closed. Saved by the frontend Prayer Times page.
+  prayerPush?: {
+    enabled: boolean;
+    latitude: number;
+    longitude: number;
+    method: number; // calculation method id (matches the prayer-times API)
+    school: number; // 1 = Shafi/Standard, 2 = Hanafi
+    timezone?: string; // IANA timezone of the user's device (e.g. "Asia/Kolkata")
+    // The exact prayer times the Prayer Times page displayed, so the server
+    // fires the Adhan at precisely the shown start time. Valid only for the
+    // local day in `timesDate`; the scheduler recomputes for any other day.
+    times?: {
+      Fajr?: string;
+      Dhuhr?: string;
+      Asr?: string;
+      Maghrib?: string;
+      Isha?: string;
+    };
+    timesDate?: string; // local date "YYYY-MM-DD" the saved times apply to
+    city?: string;
+    country?: string;
+    updatedAt?: Date;
+  };
   location?: {
     city: string;
     country: string;
@@ -282,6 +306,25 @@ const UserSchema = new Schema<IUser>({
   },
   notificationPermissionUpdatedAt: {
     type: Date,
+  },
+  prayerPush: {
+    enabled: { type: Boolean, default: true },
+    latitude: { type: Number, min: -90, max: 90 },
+    longitude: { type: Number, min: -180, max: 180 },
+    method: { type: Number, default: 1 },
+    school: { type: Number, enum: [1, 2], default: 1 },
+    timezone: { type: String, trim: true },
+    times: {
+      Fajr: { type: String, trim: true },
+      Dhuhr: { type: String, trim: true },
+      Asr: { type: String, trim: true },
+      Maghrib: { type: String, trim: true },
+      Isha: { type: String, trim: true },
+    },
+    timesDate: { type: String, trim: true },
+    city: { type: String, trim: true },
+    country: { type: String, trim: true },
+    updatedAt: { type: Date },
   },
   dateOfBirth: {
     type: Date,

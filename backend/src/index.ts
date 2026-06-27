@@ -12,6 +12,7 @@ import { authMiddleware, superAdminMiddleware } from './middleware/auth';
 import { requestLogger, errorLogger, logStartup, logDatabaseConnection } from './middleware/logger';
 import redisClient from './config/redis'; // Import Redis client
 import { startMeetingNotificationScheduler, stopMeetingNotificationScheduler } from './services/meetingNotificationScheduler';
+import { startPrayerNotificationScheduler, stopPrayerNotificationScheduler } from './services/prayerNotificationScheduler';
 
 // Import routes
 import authRoutes from './routes/auth';
@@ -601,6 +602,7 @@ const startServer = async () => {
     app.listen(PORT, '0.0.0.0', () => {
       logStartup(PORT);
       startMeetingNotificationScheduler();
+      startPrayerNotificationScheduler();
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
@@ -624,6 +626,7 @@ process.on('uncaughtException', (err: Error) => {
 process.on('SIGTERM', async () => {
   console.log('👋 SIGTERM received. Shutting down gracefully...');
   stopMeetingNotificationScheduler();
+  stopPrayerNotificationScheduler();
   await mongoose.connection.close();
   if (redisClient.isOpen) {
       await redisClient.quit();
