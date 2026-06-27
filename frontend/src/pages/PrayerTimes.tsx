@@ -3172,7 +3172,7 @@ const PrayerTimes: React.FC = () => {
 	        <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8 max-w-6xl mx-auto">
           {/* Prayer Cards Column */}
           <div className="xl:col-span-3" ref={prayersContainerRef}>
-             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 h-full">
+             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 auto-rows-fr gap-4 sm:gap-6 h-full">
               {prayers.map((prayer, index) => {
                 // Get weather for this prayer time
                 const weather = getWeatherForTime(prayer.time);

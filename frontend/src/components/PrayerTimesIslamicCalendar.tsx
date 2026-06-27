@@ -92,6 +92,7 @@ const getHijriInfo = (date: Date): HijriInfo => {
 
 const PrayerTimesIslamicCalendar: React.FC<IslamicCalendarProps> = ({ whiteDays, todayHijri }) => {
   const [monthOffset, setMonthOffset] = useState(0);
+  const [showWhiteDayInfo, setShowWhiteDayInfo] = useState(false);
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
 
@@ -336,7 +337,29 @@ const PrayerTimesIslamicCalendar: React.FC<IslamicCalendarProps> = ({ whiteDays,
           <span className="relative h-3 w-3 flex-shrink-0 rounded bg-amber-100 ring-1 ring-amber-300">
             <span className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-amber-400"></span>
           </span>
-          <span className="font-medium text-amber-800">White Days (Al-Ayyam Al-Beed)</span>
+          <span className="inline-flex items-center gap-1 font-medium text-amber-800">
+            White Days (Al-Ayyam Al-Beed)
+            <span className="relative inline-flex">
+              <button
+                type="button"
+                onClick={() => setShowWhiteDayInfo((v) => !v)}
+                onBlur={() => setShowWhiteDayInfo(false)}
+                aria-label="About the White Days"
+                className="flex h-4 w-4 items-center justify-center rounded-full bg-amber-200 text-[10px] font-bold text-amber-800 ring-1 ring-amber-300 transition-colors hover:bg-amber-300"
+              >
+                i
+              </button>
+              {showWhiteDayInfo && (
+                <span className="absolute bottom-full left-1/2 z-20 mb-2 w-64 -translate-x-1/2 rounded-lg bg-gray-900 p-3 text-left text-[11px] font-normal leading-relaxed text-white shadow-xl">
+                  The <span className="font-semibold text-amber-300">White Days (Al-Ayyam Al-Beed)</span> are the
+                  13th, 14th &amp; 15th of every Hijri month. It is Sunnah to fast on these days — the Prophet ﷺ
+                  observed them and encouraged the Ummah to do the same. They are named for the bright,
+                  full-moon nights that light up these dates.
+                  <span className="absolute left-1/2 top-full h-2 w-2 -translate-x-1/2 -translate-y-1 rotate-45 bg-gray-900"></span>
+                </span>
+              )}
+            </span>
+          </span>
           {whiteDayEntries.length > 0 ? (
             whiteDayEntries.map((entry, index) => (
               <span key={`${entry.iso}-${index}`} className="inline-flex items-center gap-1 text-[10px] text-amber-700 sm:text-[11px]">
@@ -348,9 +371,6 @@ const PrayerTimesIslamicCalendar: React.FC<IslamicCalendarProps> = ({ whiteDays,
             <span className="text-[10px] text-gray-500 sm:text-[11px]">No White Days in this month.</span>
           )}
         </div>
-        <p className="mt-1 text-[10px] leading-relaxed text-gray-500 sm:text-[11px]">
-          13th, 14th &amp; 15th of every Hijri month. These are sunnah fasting days, named for the bright moonlit nights.
-        </p>
       </div>
     </div>
   );
