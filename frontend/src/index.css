@@ -983,6 +983,8 @@ code {
 .prayer-flip-container {
   perspective: 1200px;
   min-height: 320px;
+  /* Promote to its own compositing layer so the 3D flip stays on the GPU */
+  transform: translateZ(0);
 }
 
 .prayer-flip-inner {
@@ -991,7 +993,9 @@ code {
   height: 100%;
   min-height: inherit;
   transform-style: preserve-3d;
-  transition: transform 0.65s cubic-bezier(0.4, 0.2, 0.2, 1);
+  -webkit-transform-style: preserve-3d;
+  transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
 }
 
 .prayer-flip-inner.is-flipped {

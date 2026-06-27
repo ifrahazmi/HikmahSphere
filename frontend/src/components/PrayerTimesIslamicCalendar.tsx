@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
+import { MoonIcon } from '@heroicons/react/24/solid';
 
 interface WhiteDays {
   status?: string;
@@ -59,6 +60,33 @@ const normalizeHijriMonthName = (value: string): string => (
     .trim()
     .toLowerCase()
 );
+
+// Map a Hijri month label (in any transliteration the browser produces, e.g.
+// "Muḥarram", "Rabiʻ II", "Dhuʻl-Hijjah") to its Urdu name. Matching is done by
+// keyword on the diacritic-stripped name so it is robust across ICU versions.
+const getUrduHijriMonth = (label: string): string => {
+  const norm = normalizeHijriMonthName(label);
+  if (!norm) return '';
+  if (norm.includes('muharram')) return 'محرم';
+  if (norm.includes('safar')) return 'صفر';
+  if (norm.includes('rabi')) {
+    return /\b(ii|2|thani|akhir|aakhir|akhirah|second)\b/.test(norm) || norm.includes('thani')
+      ? 'ربیع الثانی'
+      : 'ربیع الاول';
+  }
+  if (norm.includes('jumad')) {
+    return /\b(ii|2|thani|akhir|aakhir|akhirah|second)\b/.test(norm) || norm.includes('thani') || norm.includes('akhir')
+      ? 'جمادی الثانی'
+      : 'جمادی الاول';
+  }
+  if (norm.includes('rajab')) return 'رجب';
+  if (norm.includes('shaban')) return 'شعبان';
+  if (norm.includes('ramad')) return 'رمضان';
+  if (norm.includes('shawwal')) return 'شوال';
+  if (norm.includes('hijj')) return 'ذوالحجہ';
+  if (norm.includes('qidah') || norm.includes('qadah') || norm.includes('qad') || norm.includes('qid')) return 'ذوالقعدہ';
+  return '';
+};
 
 const formatOrdinal = (value: number): string => {
   const mod10 = value % 10;
@@ -156,6 +184,7 @@ const PrayerTimesIslamicCalendar: React.FC<IslamicCalendarProps> = ({ whiteDays,
     ? orderedHijriMonthLabels.join(' / ')
     : primaryHijriMonthLabel;
   const showHijriRange = displayedHijriMonthLabel !== currentHijriMonthLabel && orderedHijriMonthLabels.length > 1;
+  const urduHijriMonth = getUrduHijriMonth(currentHijriMonthLabel);
 
   // Build white days mapping strictly from the continuous calendar grid
   const whiteDayMap = new Map<string, WhiteDayEntry>();
@@ -230,8 +259,14 @@ const PrayerTimesIslamicCalendar: React.FC<IslamicCalendarProps> = ({ whiteDays,
       onTouchEnd={handleTouchEnd}
     >
       <div className="mb-4 flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">Islamic Calendar</h2>
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm">
+            <MoonIcon className="h-5 w-5" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold leading-tight text-gray-900">Islamic Calendar</h2>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-600">Hijri Calendar</p>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -271,14 +306,32 @@ const PrayerTimesIslamicCalendar: React.FC<IslamicCalendarProps> = ({ whiteDays,
       </div>
 
       <div className="mb-2">
-        <div className="mb-4 flex flex-col">
-          <span className="text-2xl font-extrabold tracking-tight text-emerald-700">{currentHijriMonthLabel}</span>
+        <div className="relative mb-4 overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-50 via-teal-50 to-emerald-50 p-4 ring-1 ring-emerald-100">
+          <div className="pointer-events-none absolute -right-6 -top-8 h-24 w-24 rounded-full bg-emerald-100/50 blur-2xl" />
+          <div className="relative flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <span className="block bg-gradient-to-r from-emerald-700 to-teal-600 bg-clip-text text-2xl font-extrabold tracking-tight text-transparent">
+                {currentHijriMonthLabel}
+              </span>
+              <span className="mt-0.5 block text-sm font-medium text-gray-500">{monthName} {year}</span>
+            </div>
+            {urduHijriMonth && (
+              <span
+                dir="rtl"
+                lang="ur"
+                className="shrink-0 text-3xl font-bold leading-none text-emerald-800"
+                style={{ fontFamily: "'Noto Nastaliq Urdu', 'Noto Naskh Arabic', 'Amiri', serif" }}
+                title="Hijri month name in Urdu"
+              >
+                {urduHijriMonth}
+              </span>
+            )}
+          </div>
           {showHijriRange && (
-            <span className="mt-1 inline-flex w-fit rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200">
+            <span className="relative mt-2 inline-flex w-fit rounded-full bg-white/70 px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200">
               {displayedHijriMonthLabel}
             </span>
           )}
-          <span className="mt-1 text-sm text-gray-500">{monthName} {year}</span>
         </div>
 
         <div className="grid grid-cols-7 gap-1 text-center text-xs">
