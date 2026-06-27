@@ -8,21 +8,24 @@ interface DarkModeContextType {
 
 const DarkModeContext = createContext<DarkModeContextType | undefined>(undefined);
 
-const DARK_MODE_KEY = 'hikmah-dark-mode';
+// Key bumped from 'hikmah-dark-mode' so any value that the old code auto-saved
+// from the device's system theme is discarded and everyone resets to light.
+const DARK_MODE_KEY = 'hikmah-theme';
 
 export const DarkModeProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
-    // Check localStorage first
-    const saved = localStorage.getItem(DARK_MODE_KEY);
-    if (saved !== null) {
-      return JSON.parse(saved);
+    // Only honour an explicit, previously-saved user choice.
+    try {
+      const saved = localStorage.getItem(DARK_MODE_KEY);
+      if (saved !== null) {
+        return JSON.parse(saved) === true;
+      }
+    } catch {
+      // Ignore malformed storage values.
     }
 
-    // Check system preference
-    if (typeof window !== 'undefined' && window.matchMedia) {
-      return window.matchMedia('(prefers-color-scheme: dark)').matches;
-    }
-
+    // Default to light. Intentionally do NOT follow the OS/system theme —
+    // the app is light by default unless the user explicitly turns dark on.
     return false;
   });
 
