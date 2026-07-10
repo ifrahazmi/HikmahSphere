@@ -2111,8 +2111,11 @@ const PrayerTimes: React.FC = () => {
     ? parsePrayerTime(prayerData.times.Maghrib, nowForHijri)
     : null;
   const isAfterMaghrib = Boolean(maghribTimeToday && nowForHijri >= maghribTimeToday);
-  const activeIslamicGregorianDate = new Date(nowForHijri);
-  activeIslamicGregorianDate.setHours(0, 0, 0, 0);
+  // Civil Gregorian "today" (midnight) — used for month/Ramadan row highlighting.
+  // Maghrib only advances the Islamic day, not the English calendar date.
+  const civilTodayGregorianDate = new Date(nowForHijri);
+  civilTodayGregorianDate.setHours(0, 0, 0, 0);
+  const activeIslamicGregorianDate = new Date(civilTodayGregorianDate);
   if (isAfterMaghrib) {
     activeIslamicGregorianDate.setDate(activeIslamicGregorianDate.getDate() + 1);
   }
@@ -2150,15 +2153,14 @@ const PrayerTimes: React.FC = () => {
     const gd = day.date?.gregorian || {};
     const rowGregorianDate = parseGregorianDDMMYYYY(gd?.date)
       || new Date(Number(gd.year), Number(gd.month?.number || 1) - 1, Number(gd.day || 1));
-    const isToday = rowGregorianDate.toDateString() === activeIslamicGregorianDate.toDateString();
+    // Pair each row to its civil Gregorian day (same as day-tab calendar).
+    // Do not shift "Today" or override Hijri at Maghrib — that caused duplicate Hijri labels.
+    const isToday = rowGregorianDate.toDateString() === civilTodayGregorianDate.toDateString();
     const rowPrayerHijriDate = buildHijriDateFromPrayerSource(day.date?.hijri);
     const fallbackRowHijriDate = buildLocationAwareHijriDateFromGregorianDate(rowGregorianDate, activeCountry);
-    const resolvedRowHijriDate = resolvePreferredHijriDate(rowPrayerHijriDate, fallbackRowHijriDate)
+    const rowHijriDate = resolvePreferredHijriDate(rowPrayerHijriDate, fallbackRowHijriDate)
       || rowPrayerHijriDate
       || fallbackRowHijriDate;
-    const rowHijriDate = isToday
-      ? (resolvePreferredHijriDate(displayHijriDate, resolvedRowHijriDate) || displayHijriDate || resolvedRowHijriDate)
-      : resolvedRowHijriDate;
     const hijriMonth = rowHijriDate?.month?.en || day.date?.hijri?.month?.en || '';
     const hijriDay = parseInt(String(rowHijriDate?.day || day.date?.hijri?.day || ''), 10) || 0;
     const normalizedHijriMonth = normalizeHijriMonthName(hijriMonth);
@@ -4099,15 +4101,13 @@ const PrayerTimes: React.FC = () => {
                   }
                   
                   const dayDate = parseGregorianYYYYMMDDLocal(day.date) || new Date(day.date);
-                  const isToday = dayDate.toDateString() === activeIslamicGregorianDate.toDateString();
+                  const isToday = dayDate.toDateString() === civilTodayGregorianDate.toDateString();
                   // Use hijri day number if available, else fall back to 1-based index
                   const dayNumber = day.hijri
                     ? (parseInt(day.hijri.split('-')[2] || String(idx + 1)) || idx + 1)
                     : idx + 1;
                   const dateObj = dayDate;
-                  const hijriText = isToday && displayHijriReadable
-                    ? displayHijriReadable
-                    : (day.hijri_readable || day.hijri || 'Ramadan');
+                  const hijriText = day.hijri_readable || day.hijri || 'Ramadan';
 
                   return (
                     <div
