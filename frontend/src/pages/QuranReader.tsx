@@ -1568,6 +1568,43 @@ const QuranReader: React.FC = () => {
                   </div>
                 </div>
 
+                <div>
+                  <label className={`block text-xs font-medium mb-1.5 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Transliteration Size: {settings.transliterationFontSize}px
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => updateSettings({
+                        transliterationFontSize: Math.max(12, settings.transliterationFontSize - 1),
+                      })}
+                      className={`p-1.5 rounded-md ${settings.theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'}`}
+                      aria-label="Decrease transliteration font size"
+                    >
+                      <MinusIcon className="h-3 w-3" />
+                    </button>
+                    <input
+                      type="range"
+                      min="12"
+                      max="28"
+                      value={settings.transliterationFontSize}
+                      onChange={(e) => updateSettings({ transliterationFontSize: parseInt(e.target.value, 10) })}
+                      className="flex-1"
+                      aria-label="Transliteration font size"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => updateSettings({
+                        transliterationFontSize: Math.min(28, settings.transliterationFontSize + 1),
+                      })}
+                      className={`p-1.5 rounded-md ${settings.theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'}`}
+                      aria-label="Increase transliteration font size"
+                    >
+                      <PlusIcon className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+
                 {/* Theme Toggle */}
                 <div>
                   <label className={`block text-xs font-medium mb-1.5 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -2205,7 +2242,10 @@ const QuranReader: React.FC = () => {
                               <p className={`text-xs font-medium mb-1 ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
                                 Transliteration
                               </p>
-                              <p className={`text-sm italic leading-relaxed transliteration-text ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+                              <p
+                                className={`italic leading-relaxed transliteration-text ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}
+                                style={{ fontSize: `${settings.transliterationFontSize}px` }}
+                              >
                                 {transliteration.ayahs[ayahNum - 1]?.text}
                               </p>
                             </div>
@@ -2411,7 +2451,10 @@ const QuranReader: React.FC = () => {
                             <p className={`text-xs font-medium mb-1 ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
                               Transliteration
                             </p>
-                            <p className={`text-sm italic leading-relaxed ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+                            <p
+                              className={`italic leading-relaxed transliteration-text ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}
+                              style={{ fontSize: `${settings.transliterationFontSize}px` }}
+                            >
                               {transliteration.ayahs[ayah.numberInSurah - 1]?.text}
                             </p>
                           </div>
@@ -2660,6 +2703,45 @@ const QuranReader: React.FC = () => {
                     <button
                       onClick={() => updateSingleSetting('translationFontSize', Math.min(26, tempSettings.translationFontSize + 1))}
                       className={`p-2 rounded-lg ${settings.theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'}`}
+                    >
+                      <PlusIcon className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Transliteration Size: {tempSettings.transliterationFontSize}px
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => updateSingleSetting(
+                        'transliterationFontSize',
+                        Math.max(12, tempSettings.transliterationFontSize - 1),
+                      )}
+                      className={`p-2 rounded-lg ${settings.theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'}`}
+                      aria-label="Decrease transliteration font size"
+                    >
+                      <MinusIcon className="h-4 w-4" />
+                    </button>
+                    <input
+                      type="range"
+                      min="12"
+                      max="28"
+                      value={tempSettings.transliterationFontSize}
+                      onChange={(e) => updateSingleSetting('transliterationFontSize', parseInt(e.target.value, 10))}
+                      className="flex-1 h-2"
+                      aria-label="Transliteration font size"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => updateSingleSetting(
+                        'transliterationFontSize',
+                        Math.min(28, tempSettings.transliterationFontSize + 1),
+                      )}
+                      className={`p-2 rounded-lg ${settings.theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'}`}
+                      aria-label="Increase transliteration font size"
                     >
                       <PlusIcon className="h-4 w-4" />
                     </button>

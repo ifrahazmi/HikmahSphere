@@ -4,6 +4,7 @@ import { toast } from 'react-hot-toast';
 import { MessagePayload } from 'firebase/messaging';
 import { API_URL } from '../config';
 import { useAuth } from '../hooks/useAuth';
+import { playAdhanAudio, setupAdhanAudioUnlock } from '../utils/adhanAudio';
 
 export interface Notification {
   id: string;
@@ -27,6 +28,7 @@ interface NotificationContextType {
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 const STORAGE_KEY = 'notifications';
 const SW_MESSAGE_TYPE = 'HIKMAH_BACKGROUND_NOTIFICATION';
+const PLAY_ADHAN_MESSAGE_TYPE = 'HIKMAH_PLAY_ADHAN';
 const MONGO_OBJECT_ID_REGEX = /^[a-f0-9]{24}$/i;
 
 interface BackgroundNotificationPayload {
@@ -258,8 +260,18 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     }
   }, []);
 
+  const isAdhanPayload = useCallback((payload: MessagePayload | Notification | BackgroundNotificationPayload | null | undefined) => {
+    const dataType = (payload as any)?.data?.type || (payload as any)?.type;
+    return dataType === 'adhan' || (payload as any)?.data?.playAdhan === '1';
+  }, []);
+
   const showNativeNotification = useCallback((payload: MessagePayload) => {
     if (!('Notification' in window)) {
+      return;
+    }
+
+    // Adhan OS tray is shown by the service worker (single notification).
+    if (isAdhanPayload(payload)) {
       return;
     }
 
@@ -277,12 +289,51 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         console.error('Native notification failed:', e);
       }
     }
-  }, []);
+  }, [isAdhanPayload]);
 
   useEffect(() => {
     // Save to local storage whenever notifications change
     localStorage.setItem(STORAGE_KEY, JSON.stringify(notifications));
   }, [notifications]);
+
+  useEffect(() => {
+    setupAdhanAudioUnlock();
+  }, []);
+
+  // Play Adhan when user taps a background notification, or opens /prayers?playAdhan=1
+  useEffect(() => {
+    const playFromQuery = () => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('playAdhan') === '1') {
+          playAdhanAudio();
+          params.delete('playAdhan');
+          const next = `${window.location.pathname}${params.toString() ? `?${params}` : ''}${window.location.hash}`;
+          window.history.replaceState({}, '', next);
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    playFromQuery();
+
+    const handleServiceWorkerMessage = (event: MessageEvent) => {
+      if (event.data?.type === PLAY_ADHAN_MESSAGE_TYPE) {
+        playAdhanAudio();
+      }
+    };
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+    }
+
+    return () => {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!user) {
@@ -315,11 +366,19 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         return;
       }
 
-      playNotificationSound();
-      showNativeNotification(payload);
+      // Adhan while app is open: client scheduler already plays full Adhan + toast.
+      // Skip short ping + OS tray to avoid duplicate Chrome/mobile popups.
+      if (!isAdhanPayload(payload)) {
+        playNotificationSound();
+        showNativeNotification(payload);
+      }
       addNotification(notification);
 
       if (document.visibilityState !== 'visible') {
+        return;
+      }
+
+      if (isAdhanPayload(payload)) {
         return;
       }
 
@@ -373,7 +432,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, [addNotification, playNotificationSound, shouldProcessNotification, showNativeNotification]);
+  }, [addNotification, isAdhanPayload, playNotificationSound, shouldProcessNotification, showNativeNotification]);
 
   useEffect(() => {
     if (!('serviceWorker' in navigator)) {
@@ -473,9 +532,11 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
   }, []);
 
   const addSystemNotification = useCallback((title: string, body: string, type: 'info' | 'alert' | 'success' = 'info', data?: any) => {
-    const generatedId = `sys-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const stableId = typeof data?.notificationId === 'string' && data.notificationId.trim()
+      ? data.notificationId.trim()
+      : `sys-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const notification: Notification = {
-      id: generatedId,
+      id: stableId,
       title,
       body,
       timestamp: new Date().toISOString(),
@@ -484,21 +545,31 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
       data
     };
 
+    if (!shouldProcessNotification(notification)) {
+      return;
+    }
+
     addNotification(notification);
+
+    // Skip OS tray for Adhan — FCM/service worker owns the single system popup.
+    // This prevents "Chrome notification + mobile notification" doubles.
+    if (data?.type === 'adhan') {
+      return;
+    }
 
     if ('Notification' in window && Notification.permission === 'granted') {
       try {
         new window.Notification(title, {
           body,
           icon: '/small_logo.jpeg',
-          tag: generatedId,
+          tag: stableId,
           data
         });
       } catch (e) {
         console.error('Native notification failed:', e);
       }
     }
-  }, [addNotification]);
+  }, [addNotification, shouldProcessNotification]);
 
   return (
     <NotificationContext.Provider value={{ 

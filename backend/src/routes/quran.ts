@@ -2,6 +2,7 @@ import express from 'express';
 import { query, validationResult } from 'express-validator';
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth';
 import User from '../models/User';
+import { rewriteAyahAudioPayload } from '../utils/quranAudioUrl';
 
 const router = express.Router();
 
@@ -397,7 +398,7 @@ router.get('/surah/:number/editions', [
     if (cached && cached.expiresAt > now) {
       return res.json({
         status: 'success',
-        data: cached.data,
+        data: rewriteAyahAudioPayload(cached.data, normalizedEditions[0]),
       });
     }
 
@@ -425,11 +426,11 @@ router.get('/surah/:number/editions', [
           }
 
           editionsCache.set(cacheKey, {
-            data: data.data,
+            data: rewriteAyahAudioPayload(data.data, normalizedEditions[0]),
             expiresAt: Date.now() + EDITIONS_CACHE_TTL_MS,
           });
 
-          return data.data;
+          return rewriteAyahAudioPayload(data.data, normalizedEditions[0]);
         } finally {
           editionsInFlight.delete(cacheKey);
         }
@@ -443,7 +444,7 @@ router.get('/surah/:number/editions', [
     if (resolvedData) {
       res.json({
         status: 'success',
-        data: resolvedData
+        data: rewriteAyahAudioPayload(resolvedData, normalizedEditions[0])
       });
     } else {
       throw new Error('Failed to fetch surah editions');
@@ -500,7 +501,7 @@ router.get('/ayah/:reference', optionalAuthMiddleware, async (req: any, res: any
     if (data.code === 200 && data.data) {
       res.json({
         status: 'success',
-        data: data.data
+        data: rewriteAyahAudioPayload(data.data, String(editions).split(',')[0])
       });
     } else {
       throw new Error('Failed to fetch ayah');

@@ -5,7 +5,7 @@
 importScripts('https://www.gstatic.com/firebasejs/10.7.2/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.2/firebase-messaging-compat.js');
 
-const CACHE_NAME = 'hikmahsphere-app-v4';
+const CACHE_NAME = 'hikmahsphere-app-v5';
 const TILE_CACHE = 'hikmahsphere-tiles-v1';
 const APP_SHELL = ['/', '/index.html', '/manifest.json', '/logo.png', '/favicon.ico'];
 const OFFLINE_DOCUMENT = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>HikmahSphere Offline</title><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f8fafc;color:#0f172a;display:grid;min-height:100vh;place-items:center;padding:24px}main{max-width:28rem;text-align:center}h1{margin:0 0 12px;color:#047857;font-size:1.75rem}p{margin:0;color:#475569;line-height:1.6}</style></head><body><main><h1>You're offline</h1><p>HikmahSphere could not load this page right now. Please check your connection and try again.</p></main></body></html>`;
@@ -93,6 +93,11 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
 
+  // Never intercept media / Range requests. Android audio players send Range
+  // and get HTTP 206; Cache.put() rejects partial responses and breaks playback.
+  if (request.headers.get('range')) return;
+  if (/\.(mp3|m4a|aac|ogg|opus|wav|webm|mp4|m4v|flac)(\?|$)/i.test(url.pathname)) return;
+
   // Tile requests: cache-first so offline map works after pre-cache.
   if (url.hostname.includes('basemaps.cartocdn.com')) {
     event.respondWith(
@@ -102,8 +107,8 @@ self.addEventListener('fetch', (event) => {
 
           return fetch(request)
             .then((response) => {
-              if (response && response.ok) {
-                cache.put(request, response.clone());
+              if (response && response.status === 200) {
+                cache.put(request, response.clone()).catch(() => undefined);
               }
               return response;
             })
@@ -114,6 +119,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Cross-origin (Quran CDNs, etc.): do not touch — let the browser stream natively.
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/api/')) return;
 
@@ -125,8 +131,10 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', copy));
+          if (response && response.status === 200) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', copy)).catch(() => undefined);
+          }
           return response;
         })
         .catch(() => getNavigationFallback())
@@ -140,9 +148,10 @@ self.addEventListener('fetch', (event) => {
 
       return fetch(request)
         .then((response) => {
-          if (response && response.ok) {
+          // Only cache complete 200 responses (never 206 Partial Content).
+          if (response && response.status === 200) {
             const copy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)).catch(() => undefined);
           }
           return response;
         })
@@ -273,7 +282,25 @@ messaging.onBackgroundMessage((payload) => {
     return;
   }
   const notificationTitle = normalizedPayload.title;
-  const targetUrl = payload?.data?.url || '/';
+  const targetUrl = payload?.data?.url || '/prayers?playAdhan=1';
+  const isAdhan = (payload?.data?.type || normalizedPayload.type) === 'adhan'
+    || payload?.data?.playAdhan === '1';
+
+  // If FCM already included a visible `notification` block, the browser/OS
+  // may auto-display it. Showing again here causes the classic double popup.
+  // Data-only Adhan pushes have no notification block, so we always show once.
+  const hasVisibleNotificationPayload = Boolean(
+    payload?.notification?.title || payload?.notification?.body
+  );
+  if (hasVisibleNotificationPayload) {
+    broadcastToOpenClients({
+      type: APP_MESSAGE_TYPE,
+      payload: normalizedPayload
+    }).catch((error) => {
+      console.error('[firebase-messaging-sw.js] Failed to send message to clients:', error);
+    });
+    return;
+  }
 
   broadcastToOpenClients({
     type: APP_MESSAGE_TYPE,
@@ -285,11 +312,13 @@ messaging.onBackgroundMessage((payload) => {
   const notificationOptions = {
     body: normalizedPayload.body,
     icon: '/small_logo.jpeg',
+    badge: '/small_logo.jpeg',
     tag: normalizedPayload.id,
     renotify: false,
     vibrate: [200, 100, 200],
     data: {
       url: targetUrl,
+      playAdhan: isAdhan ? '1' : '0',
       notificationPayload: normalizedPayload
     }
   };
@@ -302,8 +331,11 @@ self.addEventListener('notificationclick', function(event) {
   console.log('[firebase-messaging-sw.js] Notification click Received.', event);
 
   event.notification.close();
-  const targetUrl = event.notification?.data?.url || '/';
+  const targetUrl = event.notification?.data?.url || '/prayers?playAdhan=1';
   const notificationPayload = event.notification?.data?.notificationPayload;
+  const shouldPlayAdhan = event.notification?.data?.playAdhan === '1'
+    || notificationPayload?.data?.type === 'adhan'
+    || notificationPayload?.type === 'adhan';
 
   // This looks to see if the current is already open and
   // focuses if it is
@@ -313,6 +345,10 @@ self.addEventListener('notificationclick', function(event) {
       includeUncontrolled: true
     })
     .then(function(clientList) {
+      const playMessage = shouldPlayAdhan
+        ? { type: 'HIKMAH_PLAY_ADHAN', payload: notificationPayload || null }
+        : null;
+
       for (let i = 0; i < clientList.length; i++) {
         const client = clientList[i];
 
@@ -321,6 +357,9 @@ self.addEventListener('notificationclick', function(event) {
             type: APP_MESSAGE_TYPE,
             payload: notificationPayload
           });
+        }
+        if (playMessage) {
+          client.postMessage(playMessage);
         }
 
         if ('focus' in client) {
@@ -335,6 +374,12 @@ self.addEventListener('notificationclick', function(event) {
               type: APP_MESSAGE_TYPE,
               payload: notificationPayload
             });
+          }
+          if (windowClient && playMessage) {
+            // Small delay so the newly opened page can attach its listener.
+            setTimeout(() => {
+              windowClient.postMessage(playMessage);
+            }, 800);
           }
           return windowClient;
         });

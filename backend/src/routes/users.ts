@@ -112,10 +112,114 @@ router.put('/:id/prayer-push', authMiddleware, async (req: any, res) => {
       updatedAt: new Date(),
     } as any;
 
+    // Keep user.location in sync so the Prayer Times page can bootstrap without GPS.
+    user.location = {
+      ...(typeof city === 'string' && city.trim() ? { city: city.trim() } : user.location?.city ? { city: user.location.city } : {}),
+      ...(typeof country === 'string' && country.trim() ? { country: country.trim() } : user.location?.country ? { country: user.location.country } : {}),
+      coordinates: { latitude: lat, longitude: lon },
+    } as any;
+
+    user.markModified('prayerPush');
+    user.markModified('location');
+    await user.save();
+
+    return res.json({ message: 'Prayer push settings saved', prayerPush: user.prayerPush, location: user.location });
+  } catch (err: any) {
+    return res.status(500).json({ message: err.message });
+  }
+});
+
+// Get saved prayer/geo location for a logged-in user (null when never granted).
+router.get('/:id/location', authMiddleware, async (req: any, res) => {
+  try {
+    if (req.user.userId !== req.params.id && !req.user.role?.includes('admin')) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    const user = await User.findById(req.params.id).select('location prayerPush');
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const loc = user.location;
+    const push = user.prayerPush as any;
+    const lat = loc?.coordinates?.latitude ?? push?.latitude;
+    const lon = loc?.coordinates?.longitude ?? push?.longitude;
+
+    if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lon))) {
+      return res.json({ location: null });
+    }
+
+    return res.json({
+      location: {
+        latitude: Number(lat),
+        longitude: Number(lon),
+        city: loc?.city || push?.city || undefined,
+        country: loc?.country || push?.country || undefined,
+        method: push?.method,
+        school: push?.school,
+      },
+    });
+  } catch (err: any) {
+    return res.status(500).json({ message: err.message });
+  }
+});
+
+// Persist browser-granted location for prayer times (and sync prayerPush coords).
+router.put('/:id/location', authMiddleware, async (req: any, res) => {
+  try {
+    if (req.user.userId !== req.params.id && !req.user.role?.includes('admin')) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    const { latitude, longitude, city, country, method, school } = req.body || {};
+    const lat = Number(latitude);
+    const lon = Number(longitude);
+    if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lon) || lon < -180 || lon > 180) {
+      return res.status(400).json({ message: 'Valid latitude and longitude are required' });
+    }
+
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const cityTrim = typeof city === 'string' && city.trim() ? city.trim() : undefined;
+    const countryTrim = typeof country === 'string' && country.trim() ? country.trim() : undefined;
+    const normalizedSchool = Number(school) === 2 ? 2 : (user.prayerPush?.school === 2 ? 2 : 1);
+    const normalizedMethod = Number.isFinite(Number(method))
+      ? Number(method)
+      : (Number.isFinite(Number(user.prayerPush?.method)) ? Number(user.prayerPush?.method) : 1);
+
+    user.location = {
+      ...(cityTrim ? { city: cityTrim } : {}),
+      ...(countryTrim ? { country: countryTrim } : {}),
+      coordinates: { latitude: lat, longitude: lon },
+    } as any;
+
+    user.prayerPush = {
+      ...(user.prayerPush || {}),
+      enabled: user.prayerPush?.enabled !== false,
+      latitude: lat,
+      longitude: lon,
+      method: normalizedMethod,
+      school: normalizedSchool,
+      ...(cityTrim ? { city: cityTrim } : {}),
+      ...(countryTrim ? { country: countryTrim } : {}),
+      updatedAt: new Date(),
+    } as any;
+
+    user.markModified('location');
     user.markModified('prayerPush');
     await user.save();
 
-    return res.json({ message: 'Prayer push settings saved', prayerPush: user.prayerPush });
+    return res.json({
+      message: 'Location saved',
+      location: {
+        latitude: lat,
+        longitude: lon,
+        city: cityTrim,
+        country: countryTrim,
+        method: normalizedMethod,
+        school: normalizedSchool,
+      },
+    });
   } catch (err: any) {
     return res.status(500).json({ message: err.message });
   }

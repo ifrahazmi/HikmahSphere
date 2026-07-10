@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { useAuth } from './useAuth';
 import { useNotification } from '../contexts/NotificationContext';
+import { playAdhanAudio, setupAdhanAudioUnlock } from '../utils/adhanAudio';
 
 interface PrayerTimes {
   Fajr: string;
@@ -41,73 +42,6 @@ const timeStringToMinutes = (timeStr: string): number | null => {
   return (hours % 24) * 60 + minutes;
 };
 
-let globalAdhanAudio: HTMLAudioElement | null = null;
-let audioUnlocked = false;
-
-// Browsers block audio that is not started from a user gesture. We "unlock"
-// playback the first time the user interacts with the page so the Adhan can
-// later be played automatically when a prayer time arrives.
-const setupAudioUnlock = () => {
-  if (typeof window === 'undefined' || audioUnlocked) return;
-
-  const unlock = () => {
-    try {
-      const primer = new Audio('/sounds/adhan.mp3');
-      // `muted` is reliably honored on all platforms (including iOS, where the
-      // `volume` property is ignored). This keeps the unlock completely silent
-      // so the Adhan never blares out when the user simply taps the page.
-      primer.muted = true;
-      primer.volume = 0;
-      primer
-        .play()
-        .then(() => {
-          primer.pause();
-          primer.currentTime = 0;
-          audioUnlocked = true;
-        })
-        .catch(() => {
-          // Even if priming fails, mark as attempted so we don't spam.
-          audioUnlocked = true;
-        });
-    } catch {
-      audioUnlocked = true;
-    }
-    window.removeEventListener('pointerdown', unlock);
-    window.removeEventListener('keydown', unlock);
-    window.removeEventListener('touchstart', unlock);
-  };
-
-  window.addEventListener('pointerdown', unlock, { once: true });
-  window.addEventListener('keydown', unlock, { once: true });
-  window.addEventListener('touchstart', unlock, { once: true });
-};
-
-const playadhanAudio = () => {
-  try {
-    if (globalAdhanAudio) {
-      globalAdhanAudio.pause();
-      globalAdhanAudio.currentTime = 0;
-    }
-
-    const audioUrl = '/sounds/adhan.mp3';
-    globalAdhanAudio = new Audio(audioUrl);
-    globalAdhanAudio.volume = 0.8;
-    globalAdhanAudio.play().catch(err => {
-      console.warn('[PrayerChecker] Audio play failed (autoplay may be blocked until user interacts):', err);
-    });
-    
-    // Stop after 20 seconds strictly
-    setTimeout(() => {
-      if (globalAdhanAudio) {
-        globalAdhanAudio.pause();
-        globalAdhanAudio.currentTime = 0;
-      }
-    }, 20000);
-  } catch (err) {
-    console.warn('Error creating audio element:', err);
-  }
-};
-
 export const usePrayerNotificationChecker = (
   prayerTimes: PrayerTimes | null,
   notificationPrefs: NotificationPreferences | null
@@ -127,7 +61,7 @@ export const usePrayerNotificationChecker = (
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission().catch(() => undefined);
     }
-    setupAudioUnlock();
+    setupAdhanAudioUnlock();
 
     const checkUpcomingPrayers = () => {
       const now = new Date();
@@ -153,15 +87,14 @@ export const usePrayerNotificationChecker = (
             const prefs = notificationPrefs[prayer.toLowerCase()];
             if (prefs?.enabled) {
               const capitalizedPrayer = prayer.charAt(0).toUpperCase() + prayer.slice(1);
-              
+
               // Request notification permission if needed
               if ('Notification' in window && Notification.permission === 'default') {
                 Notification.requestPermission();
               }
 
-              // Add to in-app bell and show system push. The notificationId is
-              // deterministic and matches the server-side push so the same
-              // Adhan is never shown twice (foreground client + background push).
+              // Add to in-app bell. OS tray for Adhan is left to FCM/SW so we
+              // do not show two system notifications when the app is open.
               const adhanNotificationId = `adhan-${today}-${prayer.toLowerCase()}`;
               addSystemNotification(
                 `Adhan: ${capitalizedPrayer}`,
@@ -170,17 +103,15 @@ export const usePrayerNotificationChecker = (
                 { type: 'adhan', prayer, notificationId: adhanNotificationId }
               );
 
-              // Show toast notification
               toast.success(`Time for ${capitalizedPrayer}`);
 
-              // Play audio if enabled
+              // Play audio if enabled (only works while the app is open)
               if (prefs.sound) {
-                playadhanAudio();
+                playAdhanAudio();
               }
 
               notifiedPrayersRef.current.add(prayerKey);
 
-              // Keep set size manageable (remove old entries if >20)
               if (notifiedPrayersRef.current.size > 20) {
                 const arr = Array.from(notifiedPrayersRef.current);
                 notifiedPrayersRef.current = new Set(arr.slice(-10));
@@ -191,10 +122,7 @@ export const usePrayerNotificationChecker = (
       });
     };
 
-    // Check every 30 seconds
     intervalRef.current = setInterval(checkUpcomingPrayers, 30000);
-
-    // Also check immediately
     checkUpcomingPrayers();
 
     return () => {

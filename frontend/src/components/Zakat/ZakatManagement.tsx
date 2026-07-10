@@ -143,7 +143,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
         fetch(`${API_URL}/zakat/stats/split`, { 
           headers: { 'Authorization': `Bearer ${token}` } 
         }),
-        fetch(`${API_URL}/zakat/payments?limit=100`, { 
+        fetch(`${API_URL}/zakat/payments?limit=1000`, { 
           headers: { 'Authorization': `Bearer ${token}` } 
         })
       ]);
@@ -244,25 +244,77 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
   };
 
   // Export Functions
+  const csvEscape = (value: unknown): string => {
+    const text = value == null ? '' : String(value);
+    if (/[",\n\r]/.test(text)) {
+      return `"${text.replace(/"/g, '""')}"`;
+    }
+    return text;
+  };
+
+  const buildZakatExportRows = () =>
+    zakatTransactions.map((t) => {
+      const isCollection = t.type === 'collection';
+      return {
+        paymentDate: t.paymentDate
+          ? new Date(t.paymentDate).toLocaleDateString('en-IN')
+          : '',
+        recordedAt: t.createdAt
+          ? new Date(t.createdAt).toLocaleString('en-IN')
+          : '',
+        type: isCollection ? 'Collection' : 'Spending',
+        purpose: t.purpose || 'Zakat',
+        partyName: isCollection ? (t.donorName || '') : (t.recipientName || ''),
+        partyType: isCollection ? (t.donorType || '') : (t.recipientType || ''),
+        amount: t.amount,
+        paymentMethod: t.paymentMethod || '',
+        bankName: t.bankName || '',
+        senderUpiId: t.senderUpiId || '',
+        chequeNumber: t.chequeNumber || '',
+        transactionRefId: t.transactionRefId || '',
+        notes: t.notes || '',
+        proofOfPayment: t.proofFilePath ? 'Image is present' : 'No',
+      };
+    });
+
   const exportToCSV = () => {
-    const headers = ['Date', 'Type', 'Purpose', 'Party Name', 'Party Type', 'Amount', 'Method', 'Reference ID', 'Notes'];
+    const rows = buildZakatExportRows();
+    const headers = [
+      'Payment Date',
+      'Recorded At',
+      'Type',
+      'Purpose',
+      'Party Name',
+      'Party Type',
+      'Amount',
+      'Payment Method',
+      'Bank Name',
+      'Sender UPI ID',
+      'Cheque Number',
+      'Reference ID',
+      'Notes',
+      'Proof of Payment',
+    ];
     const csvContent = [
       headers.join(','),
-      ...zakatTransactions.map(t => {
-        const partyName = t.type === 'collection' ? t.donorName : t.recipientName;
-        const partyType = t.type === 'collection' ? t.donorType : t.recipientType;
-        return [
-          new Date(t.paymentDate).toLocaleDateString(),
-          t.type,
-          t.purpose || 'Zakat',
-          `"${partyName || ''}"`,
-          partyType,
-          t.amount,
-          t.paymentMethod,
-          t.transactionRefId || t.chequeNumber || '',
-          `"${t.notes || ''}"`
-        ].join(',');
-      })
+      ...rows.map((row) =>
+        [
+          row.paymentDate,
+          row.recordedAt,
+          row.type,
+          row.purpose,
+          row.partyName,
+          row.partyType,
+          row.amount,
+          row.paymentMethod,
+          row.bankName,
+          row.senderUpiId,
+          row.chequeNumber,
+          row.transactionRefId,
+          row.notes,
+          row.proofOfPayment,
+        ].map(csvEscape).join(','),
+      ),
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -275,7 +327,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
   };
 
   const exportToJSON = () => {
-    const dataStr = JSON.stringify(zakatTransactions, null, 2);
+    const dataStr = JSON.stringify(buildZakatExportRows(), null, 2);
     const blob = new Blob([dataStr], { type: 'application/json' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);

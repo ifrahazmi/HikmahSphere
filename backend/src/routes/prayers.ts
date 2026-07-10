@@ -23,12 +23,15 @@ const ISLAMIC_API_PRAYER_URL = 'https://islamicapi.com/api/v1/prayer-time';
 const ISLAMIC_API_FASTING_URL = 'https://islamicapi.com/api/v1/fasting';
 const ISLAMIC_API_RAMADAN_URL = 'https://islamicapi.com/api/v1/ramadan';
 
-// Cache TTL configuration (in seconds) - 1 hour for prayer times
+// Cache TTL from .env (minutes → seconds). Fallbacks match .env.example.
+const cacheTtlSeconds = (value: string | undefined, fallbackMinutes: number): number =>
+  Math.max(1, Number(value) || fallbackMinutes) * 60;
+
 const CACHE_TTL = {
-  PRAYER_TIMES: 3600, // 1 hour cache for faster loading
-  FASTING_TIMES: 3600, // 1 hour cache
-  RAMADAN_TIMES: 3600, // 1 hour cache
-  WEATHER: 1800, // 30 minutes cache
+  PRAYER_TIMES: cacheTtlSeconds(process.env.PRAYER_TIMES_CACHE_TTL, 15),
+  FASTING_TIMES: cacheTtlSeconds(process.env.FASTING_TIMES_CACHE_TTL, 15),
+  RAMADAN_TIMES: cacheTtlSeconds(process.env.RAMADAN_TIMES_CACHE_TTL, 60),
+  WEATHER: cacheTtlSeconds(process.env.WEATHER_CACHE_TTL, 30),
 };
 
 // Mecca/Kaaba coordinates
@@ -746,10 +749,10 @@ router.get('/times', [
     const cacheKey = `prayer_times:${latitude}:${longitude}:${method}:${school}:${requestDate}:tuning:${tuningSignature}`;
 
     try {
-      // Try to get from cache first (1 hour cache)
+      // Try to get from cache first
       const cachedData = await redisClient.get(cacheKey);
       if (cachedData) {
-        console.log(`✅ Cache hit for prayer times (${latitude}, ${longitude}) - Serving from 1hr cache`);
+        console.log(`✅ Cache hit for prayer times (${latitude}, ${longitude})`);
         return res.json(JSON.parse(cachedData));
       }
     } catch (cacheError) {

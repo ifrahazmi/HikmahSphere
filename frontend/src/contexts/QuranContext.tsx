@@ -3,6 +3,7 @@ import { toast } from 'react-hot-toast';
 import { API_URL } from '../config';
 import { useAuth } from '../hooks/useAuth';
 import { fetchJsonWithRecovery, isRateLimitError } from '../utils/fetchWithRecovery';
+import { resolveQuranAudioUrl } from '../utils/quranAudioUrl';
 import {
   Surah,
   SurahData,
@@ -438,6 +439,15 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
         typeof mergedSettings.translationAudioEnabled === 'boolean'
           ? mergedSettings.translationAudioEnabled
           : legacyTranslationAudioMode === 'after-arabic',
+      fontSize: Math.min(38, Math.max(14, Number(mergedSettings.fontSize) || DEFAULT_QURAN_SETTINGS.fontSize)),
+      translationFontSize: Math.min(
+        26,
+        Math.max(14, Number(mergedSettings.translationFontSize) || DEFAULT_QURAN_SETTINGS.translationFontSize),
+      ),
+      transliterationFontSize: Math.min(
+        28,
+        Math.max(12, Number(mergedSettings.transliterationFontSize) || DEFAULT_QURAN_SETTINGS.transliterationFontSize),
+      ),
     };
   }, [normalizeSelectedTranslations, normalizeTafsirTranslationPreferences]);
 
@@ -1019,7 +1029,11 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
         console.log('🎵 API Response:', data);
 
         if (data.status === 'success' && Array.isArray(data.data) && data.data[0]?.audio) {
-          audioUrl = data.data[0].audio;
+          audioUrl = resolveQuranAudioUrl(data.data[0].audio, {
+            surah: surahNumber,
+            ayah: ayahNumber,
+            edition: settings.reciter,
+          });
           ayahAudioUrlMapRef.current.set(ayahNumber, audioUrl);
           console.log('🎵 Audio URL:', audioUrl);
         } else {
@@ -1028,6 +1042,13 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
           console.log('Actual data.data:', data.data);
           return;
         }
+      } else {
+        audioUrl = resolveQuranAudioUrl(audioUrl, {
+          surah: surahNumber,
+          ayah: ayahNumber,
+          edition: settings.reciter,
+        });
+        ayahAudioUrlMapRef.current.set(ayahNumber, audioUrl);
       }
 
       // Reuse persistent Audio element (critical for iOS Safari autoplay chain)
@@ -1269,8 +1290,11 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       isBismillahRef.current = true; // Mark that Bismillah is playing
       isSurahModeRef.current = true; // Set surah mode
       
-      // Bismillah audio URL (Mishary Alafasy)
-      const bismillahAudioUrl = 'https://cdn.islamic.network/quran/audio/128/ar.alafasy/1.mp3';
+      // Bismillah audio (EveryAyah — islamic.network TLS is currently broken)
+      const bismillahAudioUrl = resolveQuranAudioUrl(
+        'https://cdn.islamic.network/quran/audio/128/ar.alafasy/1.mp3',
+        { surah: 1, ayah: 1, edition: 'ar.alafasy' },
+      );
       
       // Reuse persistent Audio element (critical for iOS Safari autoplay chain)
       const audio = initAudioElement();
@@ -1331,7 +1355,14 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
         const hasBismillah = surahNumber !== 1 && surahNumber !== 9;
         ayahs.forEach((ayah: Ayah) => {
           if (ayah.audio) {
-            audioUrlMap.set(ayah.numberInSurah, ayah.audio);
+            audioUrlMap.set(
+              ayah.numberInSurah,
+              resolveQuranAudioUrl(ayah.audio, {
+                surah: surahNumber,
+                ayah: ayah.numberInSurah,
+                edition: settings.reciter,
+              }),
+            );
           }
         });
 

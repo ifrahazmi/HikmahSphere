@@ -190,7 +190,10 @@ const HIJRI_MONTH_NUMBERS: Record<string, number> = {
 };
 
 const PRAYER_PAGE_CACHE_PREFIX = 'hikmah-sphere:prayer-times:v3';
-const PRAYER_PAGE_CACHE_TTL_MS = 30 * 60 * 1000;
+const PRAYER_PAGE_CACHE_TTL_MS = Math.max(
+  1,
+  Number(process.env.REACT_APP_PRAYER_TIMES_CACHE_TTL) || 15,
+) * 60 * 1000;
 
 const DEFAULT_PRAYER_TUNING: PrayerTuningState = {
   offsets: {
@@ -568,7 +571,7 @@ const incrementHijriByOneDay = (hijri?: HijriDate | null): HijriDate | null => {
 };
 
 const PrayerTimes: React.FC = () => {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { preferences: userPrefs, updatePreference } = useUserPreferences();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -581,6 +584,8 @@ const PrayerTimes: React.FC = () => {
   const [showExtraPrayerInfo, setShowExtraPrayerInfo] = useState(false);
   const [activeFlippedCard, setActiveFlippedCard] = useState<string | null>(null);
   const [openGuideCard, setOpenGuideCard] = useState<string | null>(null);
+  const [locationPermissionNeeded, setLocationPermissionNeeded] = useState(false);
+  const allowDurableClientCacheRef = useRef(true);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const initialViewMode = searchParams.get('tab') === 'mosques' ? 'mosques' : 'daily';
@@ -738,7 +743,7 @@ const PrayerTimes: React.FC = () => {
     };
   }, [showExtraPrayerInfo]);
 
-  const resolveLocationDetails = useCallback(async (lat: number, lon: number) => {
+  const resolveLocationDetails = useCallback(async (lat: number, lon: number): Promise<{ city?: string; country?: string }> => {
     try {
       const response = await fetch(
         `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`
@@ -761,40 +766,171 @@ const PrayerTimes: React.FC = () => {
       if (city) {
         setCityQuery((prev) => prev || city);
       }
+      if (city || country) {
+        setLocation((prev) => (
+          prev && prev.lat === lat && prev.lon === lon
+            ? {
+                ...prev,
+                ...(city ? { city } : {}),
+                ...(country ? { country } : {}),
+              }
+            : prev
+        ));
+      }
+      return {
+        ...(city ? { city } : {}),
+        ...(country ? { country } : {}),
+      };
     } catch (err) {
       console.warn('Reverse geocoding failed:', err);
+      return {};
     }
   }, []);
 
-  useEffect(() => {
-    setLoading(true); // Ensure loading starts immediately on mount
-    // Try getting current location first
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          const lat = position.coords.latitude;
-          const lon = position.coords.longitude;
+  const persistUserLocation = useCallback(async (
+    lat: number,
+    lon: number,
+    city?: string,
+    country?: string,
+  ) => {
+    if (!user?.id) return;
+    const token = localStorage.getItem('token');
+    if (!token) return;
 
-          setLocation({
-            lat,
-            lon
-          });
-          await resolveLocationDetails(lat, lon);
-          // Note: We don't set loading false here, we wait for fetchPrayerTimes
+    const school = selectedMadhab === 'hanafi' ? 2 : 1;
+    try {
+      await fetch(`${API_URL}/users/${user.id}/location`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
         },
-        (err) => {
-          console.warn("Geolocation denied or failed:", err);
-          setLocation({ lat: 12.96, lon: 77.57, city: 'Bengaluru', country: 'India' }); // Default to Bangalore
-          setDetectedCountry('India');
-          setCityQuery('Bengaluru');
-        }
-      );
-    } else {
-      setLocation({ lat: 12.96, lon: 77.57, city: 'Bengaluru', country: 'India' });
-      setDetectedCountry('India');
-      setCityQuery('Bengaluru');
+        body: JSON.stringify({
+          latitude: lat,
+          longitude: lon,
+          city,
+          country,
+          method: calculationMethod,
+          school,
+        }),
+      });
+      allowDurableClientCacheRef.current = true;
+      setLocationPermissionNeeded(false);
+    } catch (err) {
+      console.warn('Failed to save user location:', err);
     }
-  }, [resolveLocationDetails]);
+  // selectedMadhab / calculationMethod read at call time; omit from deps so
+  // location bootstrap does not re-run when settings change.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (authLoading) return;
+
+    let cancelled = false;
+
+    const bootstrapLocation = async () => {
+      setLoading(true);
+
+      // Logged-in: prefer saved DB location so we skip GPS and load from cache.
+      if (user?.id) {
+        const token = localStorage.getItem('token');
+        if (token) {
+          try {
+            const response = await fetch(`${API_URL}/users/${user.id}/location`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (response.ok) {
+              const payload = await response.json();
+              const saved = payload?.location;
+              if (
+                !cancelled
+                && saved
+                && Number.isFinite(Number(saved.latitude))
+                && Number.isFinite(Number(saved.longitude))
+              ) {
+                allowDurableClientCacheRef.current = true;
+                setLocationPermissionNeeded(false);
+                setLocation({
+                  lat: Number(saved.latitude),
+                  lon: Number(saved.longitude),
+                  city: saved.city,
+                  country: saved.country,
+                });
+                if (saved.city) setCityQuery(saved.city);
+                if (saved.country) setDetectedCountry(saved.country);
+                return;
+              }
+            }
+          } catch (err) {
+            console.warn('Failed to load saved location:', err);
+          }
+        }
+
+        if (cancelled) return;
+
+        // No saved location — ask every visit until granted.
+        if (!navigator.geolocation) {
+          allowDurableClientCacheRef.current = false;
+          setLocationPermissionNeeded(true);
+          setLoading(false);
+          return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            if (cancelled) return;
+            const lat = position.coords.latitude;
+            const lon = position.coords.longitude;
+            allowDurableClientCacheRef.current = true;
+            setLocationPermissionNeeded(false);
+            setLocation({ lat, lon });
+            const details = await resolveLocationDetails(lat, lon);
+            await persistUserLocation(lat, lon, details.city, details.country);
+          },
+          (err) => {
+            if (cancelled) return;
+            console.warn('Geolocation denied or failed:', err);
+            allowDurableClientCacheRef.current = false;
+            setLocationPermissionNeeded(true);
+            setLoading(false);
+          },
+        );
+        return;
+      }
+
+      // Guests: GPS with Bengaluru fallback; durable client cache allowed.
+      allowDurableClientCacheRef.current = true;
+      setLocationPermissionNeeded(false);
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            if (cancelled) return;
+            const lat = position.coords.latitude;
+            const lon = position.coords.longitude;
+            setLocation({ lat, lon });
+            await resolveLocationDetails(lat, lon);
+          },
+          (err) => {
+            if (cancelled) return;
+            console.warn('Geolocation denied or failed:', err);
+            setLocation({ lat: 12.96, lon: 77.57, city: 'Bengaluru', country: 'India' });
+            setDetectedCountry('India');
+            setCityQuery('Bengaluru');
+          },
+        );
+      } else {
+        setLocation({ lat: 12.96, lon: 77.57, city: 'Bengaluru', country: 'India' });
+        setDetectedCountry('India');
+        setCityQuery('Bengaluru');
+      }
+    };
+
+    void bootstrapLocation();
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, user?.id, resolveLocationDetails, persistUserLocation]);
 
   const activeCountry = location?.country || detectedCountry || '';
   const isOutsideIndia = !!activeCountry && activeCountry !== 'Unknown' && !activeCountry.toLowerCase().includes('india');
@@ -854,7 +990,9 @@ const PrayerTimes: React.FC = () => {
       tuningMarker: globalTuningMarker,
     });
 
-    const cachedDailyData = readPrayerCache<DailyPrayerCacheData>(dailyCacheKey);
+    const cachedDailyData = allowDurableClientCacheRef.current
+      ? readPrayerCache<DailyPrayerCacheData>(dailyCacheKey)
+      : null;
     if (cachedDailyData) {
       setPrayerData(cachedDailyData.prayerData);
       setFastingData(cachedDailyData.fastingData);
@@ -1098,18 +1236,20 @@ const PrayerTimes: React.FC = () => {
         setRamadanData(null);
       }
 
-      writePrayerCache<DailyPrayerCacheData>(dailyCacheKey, {
-        prayerData: prayerJson.data,
-        fastingData: fastingPayload,
-        weatherData: weatherPayload,
-        islamicEvents: events,
-        isRamadanMonth: isRamadan,
-        currentHijriDate: resolvedCurrentHijriDate,
-        nextHijriDate: resolvedNextHijriDate,
-        nextDayPrayerData: nextDayPrayerPayload,
-        nextDayFastingData: nextDayFastingPayload,
-        ramadanData: ramadanPayload,
-      });
+      if (allowDurableClientCacheRef.current) {
+        writePrayerCache<DailyPrayerCacheData>(dailyCacheKey, {
+          prayerData: prayerJson.data,
+          fastingData: fastingPayload,
+          weatherData: weatherPayload,
+          islamicEvents: events,
+          isRamadanMonth: isRamadan,
+          currentHijriDate: resolvedCurrentHijriDate,
+          nextHijriDate: resolvedNextHijriDate,
+          nextDayPrayerData: nextDayPrayerPayload,
+          nextDayFastingData: nextDayFastingPayload,
+          ramadanData: ramadanPayload,
+        });
+      }
 
     } catch (err) {
       setError('Network error. Please try again later.');
@@ -1134,7 +1274,9 @@ const PrayerTimes: React.FC = () => {
       year,
       tuningMarker: globalTuningMarker,
     });
-    const cachedMonthlyData = readPrayerCache<any[]>(monthlyCacheKey);
+    const cachedMonthlyData = allowDurableClientCacheRef.current
+      ? readPrayerCache<any[]>(monthlyCacheKey)
+      : null;
 
     if (cachedMonthlyData) {
       setMonthlyData(cachedMonthlyData);
@@ -1151,7 +1293,9 @@ const PrayerTimes: React.FC = () => {
       
       if (data.code === 200 && data.data) {
         setMonthlyData(data.data);
-        writePrayerCache(monthlyCacheKey, data.data);
+        if (allowDurableClientCacheRef.current) {
+          writePrayerCache(monthlyCacheKey, data.data);
+        }
       } else {
         setError('Unable to fetch monthly data.');
       }
@@ -1175,7 +1319,9 @@ const PrayerTimes: React.FC = () => {
       school,
       tuningMarker: globalTuningMarker,
     });
-    const cachedRamadanData = readPrayerCache<any>(ramadanCacheKey);
+    const cachedRamadanData = allowDurableClientCacheRef.current
+      ? readPrayerCache<any>(ramadanCacheKey)
+      : null;
 
     if (cachedRamadanData) {
       setRamadanData(cachedRamadanData);
@@ -1196,7 +1342,9 @@ const PrayerTimes: React.FC = () => {
       if (data.status === 'success' && data.data?.fasting?.length > 0) {
         setRamadanData(data.data);
         setIsRamadanMonth(true);
-        writePrayerCache(ramadanCacheKey, data.data);
+        if (allowDurableClientCacheRef.current) {
+          writePrayerCache(ramadanCacheKey, data.data);
+        }
       } else {
         setError('Unable to fetch Ramadan data.');
         setIsRamadanMonth(false);
@@ -1640,6 +1788,11 @@ const PrayerTimes: React.FC = () => {
     setSearchResults([]);
     setShowSearch(false);
     setError(null);
+    if (user?.id) {
+      allowDurableClientCacheRef.current = true;
+      setLocationPermissionNeeded(false);
+      void persistUserLocation(newLocation.lat, newLocation.lon, city, country);
+    }
   };
 
   const handleUseCurrentLocation = (e?: React.MouseEvent) => {
@@ -1664,7 +1817,12 @@ const PrayerTimes: React.FC = () => {
         const lon = position.coords.longitude;
 
         setLocation({ lat, lon });
-        await resolveLocationDetails(lat, lon);
+        const details = await resolveLocationDetails(lat, lon);
+        if (user?.id) {
+          allowDurableClientCacheRef.current = true;
+          setLocationPermissionNeeded(false);
+          await persistUserLocation(lat, lon, details.city, details.country);
+        }
         setLoading(false);
         setShowSearch(false);
         setSearchResults([]);
@@ -1672,6 +1830,10 @@ const PrayerTimes: React.FC = () => {
       (geoError) => {
         console.warn('Failed to get current location:', geoError);
         setLoading(false);
+        if (user?.id) {
+          allowDurableClientCacheRef.current = false;
+          setLocationPermissionNeeded(true);
+        }
         setError('Unable to get your current location. Please allow location permission.');
       }
     );
@@ -1889,9 +2051,9 @@ const PrayerTimes: React.FC = () => {
   }, [prayerData?.times]);
 
   // Save the user's location + calculation settings to the backend so the
-  // server can push Adhan notifications even when the app is closed. Only the
-  // notification (bell + system push) is delivered in the background; the
-  // custom Adhan audio still requires the app to be open.
+  // server can push Adhan notifications even when the app is closed. Custom
+  // Adhan audio cannot autoplay in background on mobile PWAs (OS ring only);
+  // tapping the notification opens the app and plays /sounds/adhan.mp3.
   useEffect(() => {
     if (!user?.id || !location?.lat || !location?.lon) return;
     const token = localStorage.getItem('token');
@@ -2380,7 +2542,7 @@ const PrayerTimes: React.FC = () => {
   };
 
   // Show full screen spinner while loading initial data
-  if (loading || (!prayerData && viewMode !== 'mosques')) {
+  if (loading || (!prayerData && viewMode !== 'mosques' && !locationPermissionNeeded)) {
     return (
       <>
         <PageSEO
@@ -2414,6 +2576,79 @@ const PrayerTimes: React.FC = () => {
           ]}
         />
         <LoadingSpinner fullScreen text="Loading prayer times..." />
+      </>
+    );
+  }
+
+  if (locationPermissionNeeded && !prayerData && viewMode !== 'mosques') {
+    return (
+      <>
+        <PageSEO
+          title="Prayer Times"
+          description="Get accurate daily Salah times with Ramadan schedule support, multiple calculation methods, and Hijri date tools."
+          path="/prayers"
+        />
+        <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 pt-16 pb-8">
+          <div className="max-w-lg mx-auto px-4 py-10">
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-6 text-center shadow-sm">
+              <h1 className="text-lg font-semibold text-amber-950">Location permission needed</h1>
+              <p className="mt-2 text-sm text-amber-900/90">
+                Allow location access for accurate prayer times, or search for your city. We will ask again on each visit until permission is granted.
+              </p>
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleUseCurrentLocation}
+                  className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+                >
+                  Allow location
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowSearch(true)}
+                  className="rounded-lg border border-emerald-300 bg-white px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50"
+                >
+                  Search city
+                </button>
+              </div>
+              {error && (
+                <p className="mt-3 text-sm text-red-600">{error}</p>
+              )}
+              {showSearch && (
+                <form onSubmit={handleCitySearch} className="relative mt-4 text-left">
+                  <input
+                    type="text"
+                    placeholder="Enter city name..."
+                    className="w-full rounded-xl border border-gray-300 px-4 py-2.5 pl-10 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    value={cityQuery}
+                    onChange={(e) => setCityQuery(e.target.value)}
+                  />
+                  <MagnifyingGlassIcon className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+                  <button
+                    type="submit"
+                    className="absolute right-1 top-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
+                  >
+                    Search
+                  </button>
+                  {searchResults.length > 0 && (
+                    <div className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg">
+                      {searchResults.map((result, idx) => (
+                        <button
+                          key={`${result.place_id || idx}`}
+                          type="button"
+                          onClick={() => selectLocation(result)}
+                          className="block w-full border-b border-gray-100 px-4 py-2 text-left text-sm hover:bg-emerald-50"
+                        >
+                          {result.display_name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
       </>
     );
   }
@@ -2925,6 +3160,30 @@ const PrayerTimes: React.FC = () => {
 
           {/* Location and Date Display - Mobile Optimized */}
           <div className="flex flex-col items-center justify-center text-gray-600 mb-3 sm:mb-4">
+            {locationPermissionNeeded && (
+              <div className="w-full max-w-lg mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm text-amber-900">
+                <p className="font-medium">Location permission needed</p>
+                <p className="mt-1 text-amber-800/90">
+                  Allow location access for accurate prayer times, or search for your city. We will ask again on each visit until permission is granted.
+                </p>
+                <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleUseCurrentLocation}
+                    className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700"
+                  >
+                    Allow location
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowSearch(true)}
+                    className="rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+                  >
+                    Search city
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <button
                   onClick={() => setShowSearch(!showSearch)}

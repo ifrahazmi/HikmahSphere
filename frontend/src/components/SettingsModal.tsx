@@ -5,9 +5,8 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { useNotificationPreferences } from '../hooks/useNotificationPreferences';
 import { useNotification } from '../contexts/NotificationContext';
 import { useUserPreferences } from '../hooks/useUserPreferences';
+import { playAdhanAudio } from '../utils/adhanAudio';
 import toast from 'react-hot-toast';
-
-let globalTestAudio: HTMLAudioElement | null = null;
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -172,23 +171,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                     toast.success('Test successful: Notification displayed!');
                     if (anySound) {
                       try {
-                        if (globalTestAudio) {
-                          globalTestAudio.pause();
-                          globalTestAudio.currentTime = 0;
-                        }
-                        
-                        globalTestAudio = new Audio('/sounds/adhan.mp3');
-                        globalTestAudio.volume = 0.8;
-                        globalTestAudio.play().catch(e => console.warn('Audio test failed', e));
+                        playAdhanAudio();
                         toast.success('Test successful: Audio playing for 20s!');
-
-                        // Stop audio after 20 seconds
-                        setTimeout(() => {
-                          if (globalTestAudio) {
-                            globalTestAudio.pause();
-                            globalTestAudio.currentTime = 0;
-                          }
-                        }, 20000);
                       } catch (err) {
                         console.error('Audio playback error', err);
                       }

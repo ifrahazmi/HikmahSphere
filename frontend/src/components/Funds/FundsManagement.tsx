@@ -213,9 +213,9 @@ const FundsManagement: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Export dispatches a window event handled by the active section's component
-  const handleExport = (format: 'csv' | 'json') => {
-    window.dispatchEvent(new CustomEvent(`export-${section}-${format}`));
+  // Export dispatches a window event handled by the mounted section components
+  const handleExport = (target: 'zakat' | 'maktab', format: 'csv' | 'json') => {
+    window.dispatchEvent(new CustomEvent(`export-${target}-${format}`));
     setShowExportOptions(false);
   };
 
@@ -282,19 +282,38 @@ const FundsManagement: React.FC = () => {
                 Export
               </button>
               {showExportOptions && (
-                <div className="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-lg z-30 ring-1 ring-black ring-opacity-5 overflow-hidden">
+                <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg z-30 ring-1 ring-black ring-opacity-5 overflow-hidden">
                   <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50">
-                    Export {section === 'zakat' ? 'Zakat & Sadaqah' : 'Maktab'} as
+                    Zakat &amp; Sadaqah
                   </div>
                   <button
-                    onClick={() => handleExport('csv')}
+                    type="button"
+                    onClick={() => handleExport('zakat', 'csv')}
                     className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-emerald-50 hover:text-emerald-600 transition-colors"
                   >
                     CSV (Excel)
                   </button>
                   <button
-                    onClick={() => handleExport('json')}
+                    type="button"
+                    onClick={() => handleExport('zakat', 'json')}
                     className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-emerald-50 hover:text-emerald-600 transition-colors"
+                  >
+                    JSON Data
+                  </button>
+                  <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50 border-t border-gray-100">
+                    Maktab
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleExport('maktab', 'csv')}
+                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
+                  >
+                    CSV (Excel)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleExport('maktab', 'json')}
+                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
                   >
                     JSON Data
                   </button>
@@ -418,8 +437,8 @@ const FundsManagement: React.FC = () => {
         </div>
       </div>
 
-      {/* Active Section */}
-      {section === 'zakat' ? (
+      {/* Keep both sections mounted (hidden when inactive) so export listeners always work */}
+      <div className={section === 'zakat' ? 'block' : 'hidden'}>
         <ZakatManagement
           key={`zakat-${refreshKey}`}
           showHeader={false}
@@ -430,7 +449,8 @@ const FundsManagement: React.FC = () => {
           showRecordButtons={false}
           showFilters={true}
         />
-      ) : (
+      </div>
+      <div className={section === 'maktab' ? 'block' : 'hidden'}>
         <MaktabManagement
           key={`maktab-${refreshKey}`}
           showHeader={false}
@@ -441,7 +461,7 @@ const FundsManagement: React.FC = () => {
           showRecordButtons={false}
           showFilters={true}
         />
-      )}
+      </div>
     </div>
   );
 };

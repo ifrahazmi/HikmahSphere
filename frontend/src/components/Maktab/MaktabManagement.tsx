@@ -132,7 +132,7 @@ const MaktabManagement: React.FC<MaktabManagementProps> = ({
         fetch(`${API_URL}/maktab/stats`, {
           headers: { 'Authorization': `Bearer ${token}` }
         }),
-        fetch(`${API_URL}/maktab/payments?limit=100`, {
+        fetch(`${API_URL}/maktab/payments?limit=1000`, {
           headers: { 'Authorization': `Bearer ${token}` }
         })
       ]);
@@ -235,26 +235,84 @@ const MaktabManagement: React.FC<MaktabManagementProps> = ({
     }
   };
 
+  const csvEscape = (value: unknown): string => {
+    const text = value == null ? '' : String(value);
+    if (/[",\n\r]/.test(text)) {
+      return `"${text.replace(/"/g, '""')}"`;
+    }
+    return text;
+  };
+
+  const buildMaktabExportRows = () =>
+    maktabTransactions.map((t) => {
+      const isCollection = t.type === 'collection';
+      const proofStatus = t.proofFilePath ? 'Image is present' : 'No';
+      return {
+        paymentDate: t.paymentDate
+          ? new Date(t.paymentDate).toLocaleDateString('en-IN')
+          : '',
+        recordedAt: t.createdAt
+          ? new Date(t.createdAt).toLocaleString('en-IN')
+          : '',
+        type: isCollection ? 'Contribution' : 'Spending',
+        partyName: isCollection ? (t.contributorName || '') : (t.recipientName || ''),
+        partyType: isCollection ? (t.contributorType || '') : (t.recipientType || ''),
+        frequency: isCollection ? (t.contributionFrequency || 'One-time') : '',
+        category: !isCollection ? (t.category || 'Other') : '',
+        studentsSupported: !isCollection && t.studentCount != null ? t.studentCount : '',
+        amount: t.amount,
+        paymentMethod: t.paymentMethod || '',
+        bankName: t.bankName || '',
+        senderUpiId: t.senderUpiId || '',
+        chequeNumber: t.chequeNumber || '',
+        transactionRefId: t.transactionRefId || '',
+        notes: t.notes || '',
+        proofOfPayment: proofStatus,
+      };
+    });
+
   const exportToCSV = () => {
-    const headers = ['Date', 'Type', 'Party Name', 'Party Type', 'Category/Frequency', 'Amount', 'Method', 'Reference ID', 'Notes'];
+    const rows = buildMaktabExportRows();
+    const headers = [
+      'Payment Date',
+      'Recorded At',
+      'Type',
+      'Party Name',
+      'Party Type',
+      'Frequency',
+      'Category',
+      'Students Supported',
+      'Amount',
+      'Payment Method',
+      'Bank Name',
+      'Sender UPI ID',
+      'Cheque Number',
+      'Reference ID',
+      'Notes',
+      'Proof of Payment',
+    ];
     const csvContent = [
       headers.join(','),
-      ...maktabTransactions.map(t => {
-        const partyName = t.type === 'collection' ? t.contributorName : t.recipientName;
-        const partyType = t.type === 'collection' ? t.contributorType : t.recipientType;
-        const tag = t.type === 'collection' ? (t.contributionFrequency || '') : (t.category || '');
-        return [
-          new Date(t.paymentDate).toLocaleDateString(),
-          t.type,
-          `"${partyName || ''}"`,
-          partyType,
-          `"${tag}"`,
-          t.amount,
-          t.paymentMethod,
-          t.transactionRefId || t.chequeNumber || '',
-          `"${t.notes || ''}"`
-        ].join(',');
-      })
+      ...rows.map((row) =>
+        [
+          row.paymentDate,
+          row.recordedAt,
+          row.type,
+          row.partyName,
+          row.partyType,
+          row.frequency,
+          row.category,
+          row.studentsSupported,
+          row.amount,
+          row.paymentMethod,
+          row.bankName,
+          row.senderUpiId,
+          row.chequeNumber,
+          row.transactionRefId,
+          row.notes,
+          row.proofOfPayment,
+        ].map(csvEscape).join(','),
+      ),
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -267,7 +325,8 @@ const MaktabManagement: React.FC<MaktabManagementProps> = ({
   };
 
   const exportToJSON = () => {
-    const dataStr = JSON.stringify(maktabTransactions, null, 2);
+    const exportData = buildMaktabExportRows();
+    const dataStr = JSON.stringify(exportData, null, 2);
     const blob = new Blob([dataStr], { type: 'application/json' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);

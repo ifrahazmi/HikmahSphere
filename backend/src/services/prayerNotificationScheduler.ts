@@ -128,16 +128,17 @@ const runTick = async () => {
 
         const notificationId = `adhan-${localDateKey}-${prayer.toLowerCase()}`;
         const title = `Adhan: ${prayer}`;
-        const body = `It's time for ${prayer} prayer.`;
+        const body = `It's time for ${prayer} prayer. Tap to play the Adhan.`;
         const data = {
           type: 'adhan',
           prayer,
-          url: '/prayers',
+          url: '/prayers?playAdhan=1',
           notificationId,
+          playAdhan: '1',
         };
 
         try {
-          await sendMulticastNotification(tokens, title, body, data);
+          await sendMulticastNotification(tokens, title, body, data, { dataOnly: true });
         } catch (err) {
           console.error(`Prayer push: FCM send failed for user ${user._id}:`, err);
         }

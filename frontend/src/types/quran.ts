@@ -92,6 +92,7 @@ export interface QuranSettings {
   arabicOnlyMode: boolean;         // Show only Arabic text
   fontSize: number;                // 14-38px
   translationFontSize: number;     // 14-26px
+  transliterationFontSize: number; // 12-28px
   theme: 'light' | 'dark';
   arabicFont: 'al-mushaf' | 'indopak-nastaleeq-v3' | 'amiri' | 'scheherazade' | 'noto-naskh' | 'cairo' | 'lateef' | 'reem-kufi';
   fontColor: 'default' | 'emerald' | 'blue' | 'amber' | 'rose';
@@ -268,6 +269,7 @@ export const DEFAULT_QURAN_SETTINGS: QuranSettings = {
   arabicOnlyMode: false,
   fontSize: 20,
   translationFontSize: 20,
+  transliterationFontSize: 16,
   theme: 'light',
   arabicFont: 'indopak-nastaleeq-v3',
   fontColor: 'default',

@@ -124,7 +124,13 @@ const normalizeNotificationData = (data?: Record<string, unknown>): Record<strin
     }, {});
 };
 
-export const sendMulticastNotification = async (tokens: string[], title: string, body: string, data?: any) => {
+export const sendMulticastNotification = async (
+    tokens: string[],
+    title: string,
+    body: string,
+    data?: any,
+    options?: { dataOnly?: boolean },
+) => {
     if (!admin.apps.length) {
          throw new Error("Firebase Admin not initialized. Check server logs.");
     }
@@ -135,11 +141,36 @@ export const sendMulticastNotification = async (tokens: string[], title: string,
     }
 
     try {
-        const message: admin.messaging.MulticastMessage = {
-            notification: { title, body },
-            data: normalizeNotificationData(data),
-            tokens: tokens
-        };
+        // Data-only avoids Chrome/Android auto-displaying a notification AND
+        // the service worker showing a second one (classic FCM double popup).
+        const useDataOnly = options?.dataOnly === true || data?.type === 'adhan';
+        const normalizedData = normalizeNotificationData({
+            title,
+            body,
+            ...(data || {}),
+        });
+
+        const message: admin.messaging.MulticastMessage = useDataOnly
+            ? {
+                data: normalizedData,
+                webpush: {
+                    headers: {
+                        Urgency: 'high',
+                    },
+                    fcmOptions: {
+                        link: typeof data?.url === 'string' ? data.url : '/prayers',
+                    },
+                },
+                android: {
+                    priority: 'high',
+                },
+                tokens,
+            }
+            : {
+                notification: { title, body },
+                data: normalizeNotificationData(data),
+                tokens,
+            };
 
         const response = await admin.messaging().sendEachForMulticast(message);
         console.log(`📢 [Firebase] Broadcast: ${response.successCount} sent, ${response.failureCount} failed.`);

@@ -16,7 +16,8 @@ import PrayerTimeTuningModel, {
 const ISLAMIC_API_PRAYER_URL = 'https://islamicapi.com/api/v1/prayer-time';
 const ALADHAN_TIMINGS_URL = 'https://api.aladhan.com/v1/timings';
 
-const CACHE_TTL_SECONDS = 6 * 60 * 60; // 6 hours – prayer times are stable for the day
+// Align with public /api/prayers/times Redis TTL (env minutes → seconds).
+const CACHE_TTL_SECONDS = Math.max(1, Number(process.env.PRAYER_TIMES_CACHE_TTL) || 15) * 60;
 
 export interface ProviderPrayerTimes {
   Fajr: string;
