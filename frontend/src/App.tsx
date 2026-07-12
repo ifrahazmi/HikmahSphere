@@ -35,6 +35,7 @@ import Profile from './pages/Profile';
 import SalahTracker from './pages/SalahTracker';
 import About from './pages/About';
 import Contact from './pages/Contact'; // Import Contact page
+import Maktab from './pages/Maktab';
 import HajjGuide from './pages/HajjGuide';
 
 // Hooks
@@ -234,6 +235,7 @@ const AppContent: React.FC = () => {
           <Route path="/home" element={<Navigate to="/" replace />} />
           <Route path="/about" element={<About />} />
           <Route path="/about-us" element={<Navigate to="/about" replace />} />
+          <Route path="/maktab" element={<Maktab />} />
           <Route path="/contact" element={<Contact />} /> {/* Add Contact Route */}
           <Route path="/hajj-guide" element={<HajjGuide />} />
           <Route path="/auth" element={<Auth />} />

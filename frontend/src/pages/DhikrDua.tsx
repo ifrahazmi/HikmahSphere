@@ -75,6 +75,8 @@ interface DhikrUserStatePayload {
   settings?: {
     darkMode: boolean;
     translationLanguage: 'english' | 'urdu';
+    arabicFontScale?: number;
+    transliterationFontScale?: number;
   };
 }
 
@@ -86,8 +88,15 @@ const REMINDER_STORAGE_KEY = 'hikmahsphere:dhikr-dua:reminders';
 const REMINDER_LAST_SENT_KEY = 'hikmahsphere:dhikr-dua:reminders:last-sent';
 const DARK_MODE_STORAGE_KEY = 'hikmahsphere:dhikr-dua:dark-mode';
 const TRANSLATION_LANGUAGE_KEY = 'hikmahsphere:dhikr-dua:translation-language';
+const ARABIC_FONT_SCALE_KEY = 'hikmahsphere:dhikr-dua:arabic-font-scale';
+const TRANSLIT_FONT_SCALE_KEY = 'hikmahsphere:dhikr-dua:transliteration-font-scale';
 const REMINDER_TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const REMINDER_INTERVAL_OPTIONS = [30, 60, 120, 180, 360];
+const DEFAULT_ARABIC_FONT_SCALE = 1;
+const DEFAULT_TRANSLIT_FONT_SCALE = 1;
+const MIN_FONT_SCALE = 0.8;
+const MAX_FONT_SCALE = 1.6;
+const FONT_SCALE_STEP = 0.1;
 const DEFAULT_REMINDER_SETTINGS: ReminderSettings = {
   enabled: false,
   morning: true,
@@ -246,6 +255,19 @@ const splitArabicHeading = (arabicText: string): { heading: string; body: string
   return { heading: '', body: clean };
 };
 
+const normalizeFontScale = (value: unknown, fallback: number): number => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  const rounded = Math.round(numeric * 10) / 10;
+  if (rounded < MIN_FONT_SCALE || rounded > MAX_FONT_SCALE) return fallback;
+  return rounded;
+};
+
+const adjustFontScale = (current: number, delta: number): number => {
+  const next = Math.round((current + delta) * 10) / 10;
+  return Math.min(MAX_FONT_SCALE, Math.max(MIN_FONT_SCALE, next));
+};
+
 const DhikrDua: React.FC = () => {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
@@ -266,6 +288,10 @@ const DhikrDua: React.FC = () => {
 
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [translationLanguage, setTranslationLanguage] = useState<'english' | 'urdu'>('english');
+  const [arabicFontScale, setArabicFontScale] = useState<number>(DEFAULT_ARABIC_FONT_SCALE);
+  const [transliterationFontScale, setTransliterationFontScale] = useState<number>(
+    DEFAULT_TRANSLIT_FONT_SCALE
+  );
   const [playingDuaId, setPlayingDuaId] = useState<string | null>(null);
   const [activeMobileSection, setActiveMobileSection] = useState<'search' | 'tasbih' | 'profile'>('search');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -490,6 +516,18 @@ const DhikrDua: React.FC = () => {
       if (savedTranslationLanguage === 'urdu' || savedTranslationLanguage === 'english') {
         setTranslationLanguage(savedTranslationLanguage);
       }
+
+      const savedArabicFontScale = localStorage.getItem(ARABIC_FONT_SCALE_KEY);
+      if (savedArabicFontScale !== null) {
+        setArabicFontScale(normalizeFontScale(savedArabicFontScale, DEFAULT_ARABIC_FONT_SCALE));
+      }
+
+      const savedTranslitFontScale = localStorage.getItem(TRANSLIT_FONT_SCALE_KEY);
+      if (savedTranslitFontScale !== null) {
+        setTransliterationFontScale(
+          normalizeFontScale(savedTranslitFontScale, DEFAULT_TRANSLIT_FONT_SCALE)
+        );
+      }
     } catch (error) {
       console.error('Failed to load Dhikr & Dua state:', error);
     }
@@ -524,6 +562,14 @@ const DhikrDua: React.FC = () => {
   useEffect(() => {
     localStorage.setItem(TRANSLATION_LANGUAGE_KEY, translationLanguage);
   }, [translationLanguage]);
+
+  useEffect(() => {
+    localStorage.setItem(ARABIC_FONT_SCALE_KEY, String(arabicFontScale));
+  }, [arabicFontScale]);
+
+  useEffect(() => {
+    localStorage.setItem(TRANSLIT_FONT_SCALE_KEY, String(transliterationFontScale));
+  }, [transliterationFontScale]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -588,8 +634,20 @@ const DhikrDua: React.FC = () => {
         const remoteDarkMode =
           typeof remoteSettings.darkMode === 'boolean' ? remoteSettings.darkMode : false;
         const remoteTranslation = normalizeTranslationLanguage(remoteSettings.translationLanguage);
+        const remoteArabicScale = normalizeFontScale(
+          remoteSettings.arabicFontScale,
+          DEFAULT_ARABIC_FONT_SCALE
+        );
+        const remoteTransliterationScale = normalizeFontScale(
+          remoteSettings.transliterationFontScale,
+          DEFAULT_TRANSLIT_FONT_SCALE
+        );
         const hasRemoteReminderState = hasCustomReminderConfiguration(remoteReminders);
-        const hasRemoteSettingsState = remoteDarkMode !== false || remoteTranslation !== 'english';
+        const hasRemoteSettingsState =
+          remoteDarkMode !== false ||
+          remoteTranslation !== 'english' ||
+          remoteArabicScale !== DEFAULT_ARABIC_FONT_SCALE ||
+          remoteTransliterationScale !== DEFAULT_TRANSLIT_FONT_SCALE;
 
         const hasRemoteState =
           Boolean(remote.updatedAt) ||
@@ -613,6 +671,8 @@ const DhikrDua: React.FC = () => {
           setReminders(remoteReminders);
           setIsDarkMode(remoteDarkMode);
           setTranslationLanguage(remoteTranslation);
+          setArabicFontScale(remoteArabicScale);
+          setTransliterationFontScale(remoteTransliterationScale);
         } else {
           const readJson = (key: string): unknown => {
             const raw = localStorage.getItem(key);
@@ -637,6 +697,18 @@ const DhikrDua: React.FC = () => {
             localTranslationRaw === null
               ? translationLanguage
               : normalizeTranslationLanguage(localTranslationRaw);
+          const localArabicScaleRaw = localStorage.getItem(ARABIC_FONT_SCALE_KEY);
+          const localArabicScale = normalizeFontScale(
+            localArabicScaleRaw === null ? DEFAULT_ARABIC_FONT_SCALE : Number(localArabicScaleRaw),
+            DEFAULT_ARABIC_FONT_SCALE
+          );
+          const localTranslitScaleRaw = localStorage.getItem(TRANSLIT_FONT_SCALE_KEY);
+          const localTranslitScale = normalizeFontScale(
+            localTranslitScaleRaw === null
+              ? DEFAULT_TRANSLIT_FONT_SCALE
+              : Number(localTranslitScaleRaw),
+            DEFAULT_TRANSLIT_FONT_SCALE
+          );
 
           const payload: DhikrUserStatePayload = {
             bookmarks: localBookmarks.length ? localBookmarks : bookmarkedIds,
@@ -654,6 +726,8 @@ const DhikrDua: React.FC = () => {
             settings: {
               darkMode: hasLocalDarkMode ? localDarkMode : isDarkMode,
               translationLanguage: localTranslation,
+              arabicFontScale: localArabicScale,
+              transliterationFontScale: localTranslitScale,
             },
           };
 
@@ -697,6 +771,8 @@ const DhikrDua: React.FC = () => {
       settings: {
         darkMode: isDarkMode,
         translationLanguage,
+        arabicFontScale,
+        transliterationFontScale,
       },
     };
 
@@ -725,6 +801,8 @@ const DhikrDua: React.FC = () => {
     reminders,
     isDarkMode,
     translationLanguage,
+    arabicFontScale,
+    transliterationFontScale,
     isAuthenticated,
     authLoading,
   ]);
@@ -1621,6 +1699,60 @@ const DhikrDua: React.FC = () => {
                       </div>
                     </div>
 
+                    <div>
+                      <p className={`text-xs font-semibold uppercase tracking-wide ${mutedText}`}>Text Size</p>
+                      <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                        <div className={`rounded-xl border p-3 ${isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-emerald-100 bg-white'}`}>
+                          <p className={`text-[11px] font-semibold uppercase tracking-wide ${mutedText}`}>Arabic</p>
+                          <div className="mt-2 flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setArabicFontScale((prev) => adjustFontScale(prev, -FONT_SCALE_STEP))}
+                              className={`rounded-lg px-2.5 py-1 text-sm font-bold ${isDarkMode ? 'bg-slate-700 text-slate-100' : 'bg-emerald-100 text-emerald-800'}`}
+                              aria-label="Decrease Arabic font size"
+                            >
+                              A-
+                            </button>
+                            <span className={`min-w-[3.2rem] text-center text-xs font-semibold ${mutedText}`}>
+                              {arabicFontScale.toFixed(1)}x
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setArabicFontScale((prev) => adjustFontScale(prev, FONT_SCALE_STEP))}
+                              className={`rounded-lg px-2.5 py-1 text-sm font-bold ${isDarkMode ? 'bg-slate-700 text-slate-100' : 'bg-emerald-100 text-emerald-800'}`}
+                              aria-label="Increase Arabic font size"
+                            >
+                              A+
+                            </button>
+                          </div>
+                        </div>
+                        <div className={`rounded-xl border p-3 ${isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-emerald-100 bg-white'}`}>
+                          <p className={`text-[11px] font-semibold uppercase tracking-wide ${mutedText}`}>Transliteration</p>
+                          <div className="mt-2 flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setTransliterationFontScale((prev) => adjustFontScale(prev, -FONT_SCALE_STEP))}
+                              className={`rounded-lg px-2.5 py-1 text-sm font-bold ${isDarkMode ? 'bg-slate-700 text-slate-100' : 'bg-emerald-100 text-emerald-800'}`}
+                              aria-label="Decrease transliteration font size"
+                            >
+                              A-
+                            </button>
+                            <span className={`min-w-[3.2rem] text-center text-xs font-semibold ${mutedText}`}>
+                              {transliterationFontScale.toFixed(1)}x
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setTransliterationFontScale((prev) => adjustFontScale(prev, FONT_SCALE_STEP))}
+                              className={`rounded-lg px-2.5 py-1 text-sm font-bold ${isDarkMode ? 'bg-slate-700 text-slate-100' : 'bg-emerald-100 text-emerald-800'}`}
+                              aria-label="Increase transliteration font size"
+                            >
+                              A+
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
                     <div className={`rounded-xl border p-4 sm:p-5 ${isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-amber-100 bg-gradient-to-br from-amber-50/50 to-orange-50/50'}`}>
                       <div className="mb-4 flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -2044,11 +2176,30 @@ const DhikrDua: React.FC = () => {
                                                 Dua {index + 1}
                                               </p>
                                               {blockHeading && (
-                                                <p className="mb-2 text-center text-xl font-semibold font-indopak-nastaleeq-v3" dir="rtl" style={{ textRendering: 'auto', fontVariantLigatures: 'common-ligatures contextual', fontFeatureSettings: '"liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1' }}>
+                                                <p
+                                                  className="mb-2 text-center font-semibold font-indopak-nastaleeq-v3"
+                                                  dir="rtl"
+                                                  style={{
+                                                    textRendering: 'auto',
+                                                    fontVariantLigatures: 'common-ligatures contextual',
+                                                    fontFeatureSettings: '"liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1',
+                                                    fontSize: `${1.25 * arabicFontScale}rem`,
+                                                  }}
+                                                >
                                                   {blockHeading}
                                                 </p>
                                               )}
-                                              <p className="text-[1.6rem] sm:text-[1.85rem] font-indopak-nastaleeq-v3 leading-[2.4] sm:leading-[2.6]" dir="rtl" style={{ textRendering: 'auto', fontVariantLigatures: 'common-ligatures contextual', fontFeatureSettings: '"liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1' }}>
+                                              <p
+                                                className="font-indopak-nastaleeq-v3"
+                                                dir="rtl"
+                                                style={{
+                                                  textRendering: 'auto',
+                                                  fontVariantLigatures: 'common-ligatures contextual',
+                                                  fontFeatureSettings: '"liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1',
+                                                  fontSize: `${1.7 * arabicFontScale}rem`,
+                                                  lineHeight: 2.5,
+                                                }}
+                                              >
                                                 {renderArabicWithStopMarkers(blockBody || block, `${dua.id}-block-text-${index}`, isDarkMode)}
                                               </p>
                                             </div>
@@ -2058,13 +2209,30 @@ const DhikrDua: React.FC = () => {
                                     ) : (
                                       <>
                                         {arabicHeading && (
-                                          <p className={`mb-2 text-center text-xl font-semibold font-indopak-nastaleeq-v3 ${
-                                            isMorningEveningOne ? 'sm:text-[1.65rem]' : ''
-                                          }`} dir="rtl" style={{ textRendering: 'auto', fontVariantLigatures: 'common-ligatures contextual', fontFeatureSettings: '"liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1' }}>
+                                          <p
+                                            className="mb-2 text-center font-semibold font-indopak-nastaleeq-v3"
+                                            dir="rtl"
+                                            style={{
+                                              textRendering: 'auto',
+                                              fontVariantLigatures: 'common-ligatures contextual',
+                                              fontFeatureSettings: '"liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1',
+                                              fontSize: `${(isMorningEveningOne ? 1.45 : 1.25) * arabicFontScale}rem`,
+                                            }}
+                                          >
                                             {arabicHeading}
                                           </p>
                                         )}
-                                        <p className="text-[1.75rem] sm:text-[2rem] font-indopak-nastaleeq-v3 leading-[2.4] sm:leading-[2.6]" dir="rtl" style={{ textRendering: 'auto', fontVariantLigatures: 'common-ligatures contextual', fontFeatureSettings: '"liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1' }}>
+                                        <p
+                                          className="font-indopak-nastaleeq-v3"
+                                          dir="rtl"
+                                          style={{
+                                            textRendering: 'auto',
+                                            fontVariantLigatures: 'common-ligatures contextual',
+                                            fontFeatureSettings: '"liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1',
+                                            fontSize: `${1.9 * arabicFontScale}rem`,
+                                            lineHeight: 2.45,
+                                          }}
+                                        >
                                           {renderArabicWithStopMarkers(arabicBody || normalizedArabic || dua.arabic, `${dua.id}-body`, isDarkMode)}
                                         </p>
                                       </>
@@ -2074,7 +2242,10 @@ const DhikrDua: React.FC = () => {
 
                                 <div>
                                   <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-teal-700">Transliteration</p>
-                                  <p className={`rounded-xl p-4 text-sm leading-relaxed ${isDarkMode ? 'bg-slate-800 text-slate-100' : 'bg-teal-50 text-teal-900'}`}>
+                                  <p
+                                    className={`rounded-xl p-4 leading-relaxed ${isDarkMode ? 'bg-slate-800 text-slate-100' : 'bg-teal-50 text-teal-900'}`}
+                                    style={{ fontSize: `${0.95 * transliterationFontScale}rem` }}
+                                  >
                                     {dua.transliteration}
                                   </p>
                                 </div>
@@ -2159,11 +2330,15 @@ const DhikrDua: React.FC = () => {
                     <p className={`mt-1.5 text-center font-semibold tracking-wide ${selectedPreset.compact ? 'text-xs' : 'text-sm'} ${headingText}`}>{selectedPreset.label}</p>
                     
                     <div
-                      className={`mt-3 flex flex-wrap items-baseline justify-center gap-[0.08em] sm:gap-[0.12em] font-indopak-nastaleeq-v3 ${selectedPreset.compact ? 'text-xl leading-loose' : 'text-[2rem] leading-loose'} ${
+                      className={`mt-3 flex flex-wrap items-baseline justify-center gap-[0.08em] sm:gap-[0.12em] font-indopak-nastaleeq-v3 ${
                         isDarkMode ? 'text-emerald-100' : 'text-emerald-900'
                       }`}
                       dir="rtl"
                       lang="ar"
+                      style={{
+                        fontSize: `${(selectedPreset.compact ? 1.25 : 2) * arabicFontScale}rem`,
+                        lineHeight: 2.1,
+                      }}
                     >
                       {selectedPreset.arabic.split(/\s+/).filter(Boolean).map((word, idx) => (
                         <span
@@ -2184,7 +2359,10 @@ const DhikrDua: React.FC = () => {
                     </div>
                     
                     {selectedPreset.transliteration && (
-                      <p className={`mt-3 text-center text-[11px] font-medium italic leading-relaxed tracking-wide ${mutedText}`}>
+                      <p
+                        className={`mt-3 text-center font-medium italic leading-relaxed tracking-wide ${mutedText}`}
+                        style={{ fontSize: `${0.72 * transliterationFontScale}rem` }}
+                      >
                         {selectedPreset.transliteration}
                       </p>
                     )}
@@ -2411,6 +2589,60 @@ const DhikrDua: React.FC = () => {
                     >
                       Urdu
                     </button>
+                  </div>
+                </div>
+
+                <div>
+                  <p className={`text-xs font-semibold uppercase tracking-wide ${mutedText}`}>Text Size</p>
+                  <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                    <div className={`rounded-xl border p-3 ${isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-emerald-100 bg-white'}`}>
+                      <p className={`text-[11px] font-semibold uppercase tracking-wide ${mutedText}`}>Arabic</p>
+                      <div className="mt-2 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setArabicFontScale((prev) => adjustFontScale(prev, -FONT_SCALE_STEP))}
+                          className={`rounded-lg px-2.5 py-1 text-sm font-bold ${isDarkMode ? 'bg-slate-700 text-slate-100' : 'bg-emerald-100 text-emerald-800'}`}
+                          aria-label="Decrease Arabic font size"
+                        >
+                          A-
+                        </button>
+                        <span className={`min-w-[3.2rem] text-center text-xs font-semibold ${mutedText}`}>
+                          {arabicFontScale.toFixed(1)}x
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setArabicFontScale((prev) => adjustFontScale(prev, FONT_SCALE_STEP))}
+                          className={`rounded-lg px-2.5 py-1 text-sm font-bold ${isDarkMode ? 'bg-slate-700 text-slate-100' : 'bg-emerald-100 text-emerald-800'}`}
+                          aria-label="Increase Arabic font size"
+                        >
+                          A+
+                        </button>
+                      </div>
+                    </div>
+                    <div className={`rounded-xl border p-3 ${isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-emerald-100 bg-white'}`}>
+                      <p className={`text-[11px] font-semibold uppercase tracking-wide ${mutedText}`}>Transliteration</p>
+                      <div className="mt-2 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setTransliterationFontScale((prev) => adjustFontScale(prev, -FONT_SCALE_STEP))}
+                          className={`rounded-lg px-2.5 py-1 text-sm font-bold ${isDarkMode ? 'bg-slate-700 text-slate-100' : 'bg-emerald-100 text-emerald-800'}`}
+                          aria-label="Decrease transliteration font size"
+                        >
+                          A-
+                        </button>
+                        <span className={`min-w-[3.2rem] text-center text-xs font-semibold ${mutedText}`}>
+                          {transliterationFontScale.toFixed(1)}x
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setTransliterationFontScale((prev) => adjustFontScale(prev, FONT_SCALE_STEP))}
+                          className={`rounded-lg px-2.5 py-1 text-sm font-bold ${isDarkMode ? 'bg-slate-700 text-slate-100' : 'bg-emerald-100 text-emerald-800'}`}
+                          aria-label="Increase transliteration font size"
+                        >
+                          A+
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
 

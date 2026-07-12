@@ -1,923 +1,969 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import {
-  HeartIcon,
+  BookOpenIcon,
   CheckCircleIcon,
-  SparklesIcon,
   GlobeAltIcon,
-  ClockIcon,
-  BookOpenIcon
+  HeartIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../hooks/useAuth';
 import PageSEO from '../components/PageSEO';
+import {
+  getHomeFeatures,
+  HOME_FAQ,
+  HOME_JSON_LD,
+  HOME_PILLARS,
+  HOME_SEO,
+  HOME_STORY,
+  HOME_TESTIMONIALS,
+  HOME_TRUST,
+  MAKTAB_HIGHLIGHTS,
+  MAKTAB_SLIDES,
+  type HomeFeature,
+} from '../data/homeContent';
 
 const Home: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [isVisible, setIsVisible] = useState(false);
-  
-  // Check for admin OR manager role
+  const [heroReady, setHeroReady] = useState(false);
+  const [visible, setVisible] = useState<Set<string>>(new Set());
+  const [maktabSlide, setMaktabSlide] = useState(0);
+  const [maktabPaused, setMaktabPaused] = useState(false);
+  const [ctaInView, setCtaInView] = useState(false);
+
   const isAdmin = user && (user.role === 'superadmin' || user.isAdmin);
   const isManager = user && user.role === 'manager';
-  const hasManagementAccess = isAdmin || isManager;
+  const hasManagementAccess = Boolean(isAdmin || isManager);
+  const features = getHomeFeatures(hasManagementAccess);
 
   useEffect(() => {
-    setIsVisible(true);
+    const frame = requestAnimationFrame(() => setHeroReady(true));
+    return () => cancelAnimationFrame(frame);
   }, []);
+
+  useEffect(() => {
+    const nodes = document.querySelectorAll<HTMLElement>('[data-home-reveal]');
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          const id = entry.target.getAttribute('data-home-reveal');
+          if (id) setVisible((prev) => new Set(prev).add(id));
+          if (id === 'cta') setCtaInView(true);
+        });
+      },
+      { threshold: 0.12, rootMargin: '0px 0px -48px 0px' }
+    );
+    nodes.forEach((node) => observer.observe(node));
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (maktabPaused) return undefined;
+    const timer = window.setInterval(() => {
+      setMaktabSlide((prev) => (prev + 1) % MAKTAB_SLIDES.length);
+    }, 4200);
+    return () => window.clearInterval(timer);
+  }, [maktabPaused]);
+
+  const goToMaktabSlide = (index: number) => {
+    setMaktabSlide((index + MAKTAB_SLIDES.length) % MAKTAB_SLIDES.length);
+  };
+
+  const handleHeroPrimary = (e: React.MouseEvent) => {
+    e.preventDefault();
+    navigate(user ? '/about' : '/auth');
+  };
 
   const handleStartJourney = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (user) {
-        navigate('/profile');
-    } else {
-        navigate('/auth');
-    }
+    navigate(user ? '/profile' : '/auth');
   };
 
   const handleManagementAction = (e: React.MouseEvent) => {
-      e.preventDefault();
-      if (hasManagementAccess) {
-          navigate('/zakat');
-      } else {
-          if (user) {
-             navigate('/zakat');
-          } else {
-             navigate('/auth');
-          }
-      }
-  }
-
-  const scrollToFeatures = (e: React.MouseEvent) => {
     e.preventDefault();
-    const element = document.getElementById('features-section');
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth' });
+    if (hasManagementAccess || user) {
+      navigate('/zakat');
+    } else {
+      navigate('/auth');
     }
   };
 
-  const features = [
-    {
-      icon: '/Smart-Prayer-Times.png',
-      title: 'Smart Prayer Times',
-      path: '/prayers',
-      description: 'Ultra-precise prayer times with real-time geolocation, multiple calculation methods (MWL, ISNA, Umm al-Qura), astronomical corrections for high latitudes, beautiful shareable prayer cards, and a mosque finder to locate nearby mosques',
-      color: 'text-emerald-600',
-      bgColor: 'bg-emerald-50',
-      gradient: 'from-emerald-500 to-teal-500',
-    },
-    {
-      icon: '/Quran-Reader.png',
-      title: 'Quran Reader',
-      path: '/quran',
-      description: 'Read the complete Quran with Arabic text, translations, bookmarks, recitations, and seamless ayah navigation designed for daily study',
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-50',
-      gradient: 'from-blue-500 to-cyan-500',
-    },
-    {
-      icon: '/Qibla-Compass.png',
-      title: 'Qibla Compass',
-      path: '/prayers/qibla',
-      description: 'Find Qibla direction with a live compass and map-assisted fallback, and discover nearby mosques so your prayer setup stays accurate wherever you are',
-      color: 'text-cyan-600',
-      bgColor: 'bg-cyan-50',
-      gradient: 'from-cyan-500 to-sky-500',
-    },
-    {
-      icon: '/Tafsir.png',
-      title: 'Tafsir e Quran',
-      path: '/quran/tafsir',
-      description: 'Go deeper with ayah-by-ayah tafsir and translations to understand meaning, context, and practical lessons from the Quran',
-      color: 'text-indigo-600',
-      bgColor: 'bg-indigo-50',
-      gradient: 'from-indigo-500 to-blue-500',
-    },
-    {
-      icon: '/Zakat.png',
-      title: hasManagementAccess ? 'Zakat Management' : 'Zakat Calculator',
-      path: '/zakat',
-      description: hasManagementAccess
-        ? 'Complete Zakat dashboard with donor tracking, collection/spending records, real-time balance, donor leaderboards, and export capabilities for transparent fund management'
-        : 'Intelligent Zakat calculator with live nisab rates, support for gold/silver/assets/crypto, 2.5% calculation, and multiple verified authentic source methodologies',
-      color: 'text-yellow-600',
-      bgColor: 'bg-yellow-50',
-      gradient: 'from-yellow-500 to-amber-500',
-    },
-    {
-      icon: '/Global-Community.png',
-      title: 'Global Community',
-      path: '/community',
-      description: 'Connect in forums, discover events, and grow through Islamic quiz games that make knowledge-building engaging for all ages',
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-50',
-      gradient: 'from-purple-500 to-pink-500',
-    },
-    {
-      icon: '/Tasbih.png',
-      title: 'Dhikr & Dua',
-      path: '/dhikr-dua',
-      description: 'Authentic daily duas and adhkar with Arabic, transliteration, English/Urdu translation, verified references, favorites, and a built-in online tasbih counter for daily remembrance',
-      color: 'text-teal-600',
-      bgColor: 'bg-teal-50',
-      gradient: 'from-teal-500 to-emerald-500',
-    },
-    {
-      icon: '/Hajj-guide.png',
-      title: 'Hajj Guide',
-      path: '/hajj-guide',
-      description: 'Prepare for pilgrimage with practical step-by-step Hajj guidance and essential ritual references in one guided experience',
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-50',
-      gradient: 'from-orange-500 to-amber-500',
-    },
-    {
-      icon: '/AI-Scholar-Assistant.png',
-      title: 'AI Assistant',
-      description: 'Islamic AI assistant for religious questions and guidance — powered by verified authentic source references',
-      color: 'text-gray-400',
-      bgColor: 'bg-gray-100',
-      disabled: true,
-      gradient: 'from-gray-400 to-gray-500',
-    },
-  ];
+  const scrollToFeatures = (e: React.MouseEvent) => {
+    e.preventDefault();
+    document.getElementById('features-section')?.scrollIntoView({ behavior: 'smooth' });
+  };
 
-  const handleFeatureCardClick = (feature: (typeof features)[number]) => {
+  const handleFeatureCardClick = (feature: HomeFeature) => {
     if (feature.disabled) {
       if (feature.title === 'AI Assistant') {
         toast.error('AI Assistant is not yet implemented.');
       }
       return;
     }
-
-    if (feature.path) {
-      navigate(feature.path);
-    }
+    if (feature.path) navigate(feature.path);
   };
 
-  const stats = [
-    {
-      label: 'Prayer Times, Qibla & Mosques',
-      description: 'Accurate Salah schedules, Qibla compass guidance, mosque finder, and Ramadan timing support',
-      icon: ClockIcon,
-      color: 'text-emerald-600',
-      bgColor: 'bg-emerald-100',
-    },
-    {
-      label: 'Quran, Tafsir & Translations',
-      description: 'Quran text, Tafsir, and translations with recitation and bookmarking tools',
-      icon: BookOpenIcon,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-100',
-    },
-    {
-      label: 'Dhikr & Dua',
-      description: 'Morning/evening adhkar · Authentic references · Tasbih counter',
-      icon: HeartIcon,
-      color: 'text-teal-600',
-      bgColor: 'bg-teal-100',
-    },
-    {
-      label: 'Smart Zakat',
-      description: 'Live nisab rates · All asset types · Crypto support',
-      icon: SparklesIcon,
-      color: 'text-yellow-600',
-      bgColor: 'bg-yellow-100',
-    },
-    {
-      label: 'Global Community',
-      description: 'Forums, Islamic events, and brotherhood worldwide',
-      icon: GlobeAltIcon,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-100',
-    },
-  ];
-
-  const testimonials = [
-    {
-      name: 'Tasneem Fatima',
-      location: 'Kolkata, India',
-      text: 'The prayer times feature has transformed my daily Salah routine. The accurate geolocation-based calculations and beautiful prayer cards I can share with family make staying connected to my faith effortless. The notifications are perfectly timed!',
-      rating: 5,
-      avatar: '🧕🏽',
-      feature: 'Prayer Times',
-    },
-    {
-      name: 'Ahemed Khan',
-      location: 'Bangalore, India',
-      text: 'The Zakat calculator is incredibly comprehensive. It calculated my Zakat considering gold, silver, savings, and even my investments. The live nisab rates gave me confidence that my calculation was accurate. Made my annual Zakat so much easier!',
-      rating: 4,
-      avatar: '🧔🏽',
-      feature: 'Zakat Calculator',
-    },
-    {
-      name: 'Zafia Chowdhury',
-      location: 'Bangalore, India',
-      text: 'As someone who reads Quran daily, the multi-translation reader with Indopak script is a blessing. I can compare translations, bookmark my favorite ayahs, and the audio recitations help me improve my Tajweed. The semantic search finds exactly what I need!',
-      rating: 5,
-      avatar: '🧕🏼',
-      feature: 'Quran Reader',
-    },
-    {
-      name: 'Zeenat Chowdhury',
-      location: 'Kolkata, India',
-      text: 'As a mother, my heart fills with pride seeing my son create something so beneficial for the Ummah. This platform beautifully combines technology with Islamic values. May Allah accept this sincere effort, bless you abundantly, and grant you the ability to continue serving the Deen. Aameen.',
-      rating: 5,
-      avatar: '🧕🏼',
-      feature: 'Mother\'s Message',
-      special: true,
-    },
-  ];
+  const reveal = (id: string, extra = '') =>
+    `transition-all duration-700 ease-out ${
+      visible.has(id) ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
+    } ${extra}`;
 
   return (
     <>
-      <PageSEO
-        title="HikmahSphere: A Unified Islamic Platform"
-        description="Complete Islamic platform featuring Prayer Times, Qibla & Mosque Finder, Quran text with Tafsir and translations, Dhikr & Dua, Zakat tools, Global Community with Islamic quiz games, and a guided Hajj journey. Free, privacy-first, and built for the global Ummah."
-        path="/"
-        keywords={[
-          'islamic app',
-          'muslim app',
-          'islamic platform',
-          'islamic digital platform',
-          'accurate prayer times',
-          'prayer times india',
-          'salah times',
-          'namaz times',
-          'quran reader',
-          'quran with audio',
-          'quran with translation',
-          'quran tafsir',
-          'tafsir e quran',
-          'urdu quran',
-          'indo pak quran',
-          'qibla compass',
-          'qibla direction',
-          'dhikr and dua',
-          'morning evening adhkar',
-          'online tasbih counter',
-          'zakat calculator',
-          'zakat calculator india',
-          'nisab value today',
-          'muslim community app',
-          'islamic quiz games',
-          'hajj guide',
-          'hajj preparation app',
-          'ramadan fasting times',
-          'hikmahsphere',
-        ]}
-        siteLinks={[
-          { name: 'Prayer Times', url: 'https://hikmahsphere.site/prayers' },
-          { name: 'Qibla Compass', url: 'https://hikmahsphere.site/prayers/qibla' },
-          { name: 'Quran Reader', url: 'https://hikmahsphere.site/quran' },
-          { name: 'Tafsir e Quran', url: 'https://hikmahsphere.site/quran/tafsir' },
-          { name: 'Dhikr & Dua', url: 'https://hikmahsphere.site/dhikr-dua' },
-          { name: 'Zakat Calculator', url: 'https://hikmahsphere.site/zakat' },
-          { name: 'Community', url: 'https://hikmahsphere.site/community' },
-          { name: 'Hajj Guide', url: 'https://hikmahsphere.site/hajj-guide' },
-          { name: 'Salah Tracker', url: 'https://hikmahsphere.site/salah-tracker' }
-        ]}
-      />
-      {/* Structured Data for Founder/Developer - Ifrahuddin Azmi */}
-      <script type="application/ld+json">
-        {JSON.stringify({
-          "@context": "https://schema.org",
-          "@type": "Person",
-          "name": "Ifrahuddin Azmi",
-          "alternateName": ["Ifrah Azmi", "Ifrahuddin", "Azmi", "Ifrah A.", "Ifrahuddin A."],
-          "url": "https://hikmahsphere.site",
-          "image": "https://hikmahsphere.site/admin-pic.png",
-          "jobTitle": "Lead Architect & Developer | Founder",
-          "worksFor": {
-            "@type": "Organization",
-            "name": "HikmahSphere",
-            "url": "https://hikmahsphere.site",
-            "sameAs": "https://github.com/yani2298/HikmahSphere"
-          },
-          "description": "Founder and Lead Developer of HikmahSphere - a unified Islamic digital platform serving the global Muslim community. Expert in React, Node.js, TypeScript, MongoDB, Python, AI/ML, and Islamic digital solutions.",
-          "sameAs": [
-            "https://github.com/ifrahazmi",
-            "https://www.linkedin.com/in/ifrahuddin-azmi-8869787a/",
-            "https://twitter.com/ifrahazmi"
-          ],
-          "knowsAbout": [
-            "React.js",
-            "Node.js",
-            "TypeScript",
-            "MongoDB",
-            "Python",
-            "Artificial Intelligence",
-            "Machine Learning",
-            "Test Automation",
-            "System Architecture",
-            "Islamic Studies",
-            "Full-Stack Development",
-            "Web Development"
-          ],
-          "award": "Developer of HikmahSphere Islamic Platform"
-        })}
-      </script>
-      <script type="application/ld+json">
-        {JSON.stringify({
-          "@context": "https://schema.org",
-          "@type": "Organization",
-          "name": "HikmahSphere",
-          "url": "https://hikmahsphere.site",
-          "logo": {
-            "@type": "ImageObject",
-            "url": "https://hikmahsphere.site/logo.png"
-          },
-          "description": "A Unified Islamic Digital Platform for the global Muslim community - providing prayer times, Quran reader, Dhikr & Dua, Zakat calculator, and community features",
-          "founder": {
-            "@type": "Person",
-            "name": "Ifrahuddin Azmi",
-            "url": "https://hikmahsphere.site/about",
-            "sameAs": [
-              "https://github.com/ifrahazmi",
-              "https://www.linkedin.com/in/ifrahuddin-azmi-8869787a/"
-            ]
-          },
-          "sameAs": [
-            "https://github.com/yani2298/HikmahSphere"
-          ],
-          "contactPoint": {
-            "@type": "ContactPoint",
-            "email": "ifrahazmi@hikmahsphere.site",
-            "contactType": "developer",
-            "availableLanguage": ["English", "Urdu", "Hindi", "Arabic"]
-          },
-          "areaServed": {
-            "@type": "Country",
-            "name": "Worldwide"
-          }
-        })}
-      </script>
-      <div className="min-h-screen">
-      {/* Hero Section */}
-      <section className="relative bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-950 text-white overflow-hidden">
-        {/* Animated Background Pattern */}
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute inset-0" style={{
-            backgroundImage: `radial-gradient(circle at 2px 2px, white 1px, transparent 0)`,
-            backgroundSize: '40px 40px'
-          }}></div>
-        </div>
-        
-        {/* Gradient Orbs */}
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-teal-500/20 rounded-full blur-3xl animate-pulse delay-1000"></div>
-        
-        <div className="absolute inset-0 bg-gradient-to-r from-emerald-600/20 to-teal-600/20"></div>
+      <Helmet>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Outfit:wght@400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
+      </Helmet>
 
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-32">
-          <div className={`text-center transition-all duration-1000 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
-            {/* Logo with Glow Effect */}
-            <div className="flex justify-center mb-10">
-              <div className="relative">
-                <div className="absolute inset-0 bg-emerald-400/30 rounded-full blur-2xl animate-pulse"></div>
-                <div className="relative p-5 bg-white rounded-full border-4 border-white/30 shadow-2xl">
-                  <img src="/logo.png" alt="HikmahSphere Logo" className="w-40 h-40 sm:w-48 sm:h-48 object-contain" />
+      <PageSEO
+        title={HOME_SEO.title}
+        description={HOME_SEO.description}
+        path="/"
+        keywords={[...HOME_SEO.keywords]}
+        siteLinks={[...HOME_SEO.siteLinks]}
+      />
+
+      <script type="application/ld+json">{JSON.stringify(HOME_JSON_LD.person)}</script>
+      <script type="application/ld+json">{JSON.stringify(HOME_JSON_LD.organization)}</script>
+      <script type="application/ld+json">{JSON.stringify(HOME_JSON_LD.software)}</script>
+      <script type="application/ld+json">{JSON.stringify(HOME_JSON_LD.faq)}</script>
+
+      <main
+        className="home-page overflow-x-hidden"
+        style={
+          {
+            fontFamily: "'Outfit', system-ui, sans-serif",
+            '--hs-emerald': '#059669',
+            '--hs-teal': '#0f766e',
+            '--hs-ink': '#0f172a',
+            '--hs-indigo': '#4f46e5',
+          } as React.CSSProperties
+        }
+      >
+        {/* Hero — brand first, centered under navbar */}
+        <section
+          className="relative min-h-[100svh] flex items-center overflow-hidden text-white"
+          aria-labelledby="home-hero-heading"
+        >
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-950 via-teal-950 to-slate-950" />
+          <div
+            className="absolute inset-0 opacity-50 home-hero-mesh"
+            style={{
+              backgroundImage:
+                'radial-gradient(ellipse 70% 50% at 15% 20%, rgba(16,185,129,0.45), transparent), radial-gradient(ellipse 60% 45% at 85% 70%, rgba(45,212,191,0.28), transparent), radial-gradient(circle at 50% 100%, rgba(15,23,42,0.9), transparent 55%)',
+            }}
+          />
+          <div
+            className="absolute inset-0 opacity-[0.12] pointer-events-none home-hero-pattern"
+            style={{
+              backgroundImage:
+                'url("data:image/svg+xml,%3Csvg width=\'72\' height=\'72\' viewBox=\'0 0 72 72\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'0.35\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/svg%3E")',
+            }}
+          />
+          <div className="absolute top-[18%] left-[8%] w-64 h-64 rounded-full bg-emerald-400/20 blur-3xl home-hero-orb" />
+          <div className="absolute bottom-[22%] right-[10%] w-72 h-72 rounded-full bg-teal-300/15 blur-3xl home-hero-orb home-hero-orb-delay" />
+          <div className="absolute top-[42%] right-[28%] w-40 h-40 rounded-full bg-cyan-400/10 blur-2xl home-hero-orb home-hero-orb-slow" />
+
+          <div
+            className={`relative z-10 w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 sm:pt-28 pb-16 ${
+              heroReady ? 'home-hero-ready' : 'home-hero-pending'
+            }`}
+          >
+            <div className="flex items-center gap-4 mb-8 home-hero-stage home-hero-stage-1">
+              <div className="relative w-20 h-20 sm:w-24 sm:h-24 lg:w-28 lg:h-28 shrink-0">
+                <div className="absolute inset-0 rounded-full bg-emerald-400/40 blur-md home-logo-glow" />
+                <div className="relative w-full h-full rounded-full overflow-hidden bg-white shadow-lg shadow-emerald-950/40 ring-2 ring-emerald-400/40">
+                  <img src="/logo.png" alt="HikmahSphere logo" className="h-full w-full object-cover" />
                 </div>
               </div>
-            </div>
-
-            {/* Badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full border border-white/20 mb-8">
-              <SparklesIcon className="w-4 h-4 text-emerald-300" />
-            <span className="text-sm font-medium text-emerald-100">Prayer Times · Qibla &amp; Mosques · Quran &amp; Tafsir · Dhikr &amp; Dua · Zakat · Community · Hajj</span>
-            </div>
-
-            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold mb-8 leading-tight">
-              <span className="block text-white">Welcome to</span>
-              <span className="block bg-gradient-to-r from-emerald-300 via-teal-300 to-cyan-300 bg-clip-text text-transparent">
+              <p className="text-emerald-200/95 text-base sm:text-lg lg:text-xl tracking-[0.2em] uppercase font-semibold">
                 HikmahSphere
-              </span>
-            </h1>
+              </p>
+            </div>
 
-            <p className="text-xl sm:text-2xl mb-10 text-emerald-100 max-w-3xl mx-auto leading-relaxed">
-              Accurate prayer times with Qibla compass and mosque finder, Quran text with Tafsir and translations, authentic Dhikr &amp; Dua, smart Zakat, a global community with Islamic games, and Hajj guidance in one sincere platform for every believer
+            <h1
+              id="home-hero-heading"
+              className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl leading-[1.08] max-w-3xl mb-5 home-hero-stage home-hero-stage-2"
+              style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 700 }}
+            >
+              One sincere home for worship, learning, and the Ummah
+            </h1>
+            <p className="text-lg sm:text-xl text-emerald-50/90 max-w-2xl mb-10 leading-relaxed home-hero-stage home-hero-stage-3">
+              Prayer, Quran, Dhikr, Zakat, community, and Hajj guidance—together in a free, privacy-first islamic
+              platform built for everyday faith.
             </p>
 
-            {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
+            <div className="flex flex-wrap gap-3 home-hero-stage home-hero-stage-4">
               <button
-                onClick={handleStartJourney}
-                className="group px-8 py-4 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold rounded-xl hover:from-emerald-600 hover:to-teal-600 transform hover:scale-105 transition-all duration-300 shadow-xl hover:shadow-2xl cursor-pointer flex items-center gap-2"
+                type="button"
+                onClick={handleHeroPrimary}
+                className="inline-flex items-center justify-center px-7 py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-semibold shadow-lg shadow-emerald-950/30 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-emerald-900/40"
               >
-                Start Your Journey
-                <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
+                {user ? 'Our Mission' : 'Start Your Journey'}
               </button>
               <button
+                type="button"
                 onClick={scrollToFeatures}
-                className="px-8 py-4 bg-white/10 backdrop-blur-sm border-2 border-white/30 text-white font-semibold rounded-xl hover:bg-white/20 transform hover:scale-105 transition-all duration-300 cursor-pointer"
+                className="inline-flex items-center justify-center px-7 py-3.5 rounded-xl border border-white/30 bg-white/10 hover:bg-white/20 text-white font-semibold backdrop-blur-sm transition-all duration-300 hover:-translate-y-0.5"
               >
                 Explore Features
               </button>
             </div>
-
-            {/* Trust Indicators */}
-            <div className="flex flex-wrap justify-center items-center gap-6 text-emerald-200/80 text-sm">
-              <div className="flex items-center gap-2">
-                <CheckCircleIcon className="w-5 h-5 text-emerald-400" />
-                <span>Free Forever</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircleIcon className="w-5 h-5 text-emerald-400" />
-                <span>No Ads</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircleIcon className="w-5 h-5 text-emerald-400" />
-                <span>Privacy First</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircleIcon className="w-5 h-5 text-emerald-400" />
-                <span>Trusted Globally</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Wave Divider */}
-        <div className="absolute bottom-0 left-0 right-0">
-          <svg viewBox="0 0 1440 120" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-auto">
-            <path d="M0 0L60 10C120 20 240 40 360 53.3C480 67 600 73 720 73.3C840 73 960 67 1080 53.3C1200 40 1320 20 1380 10L1440 0V120H1380C1320 120 1200 120 1080 120C960 120 840 120 720 120C600 120 480 120 360 120C240 120 120 120 60 120H0V0Z" fill="white"/>
-          </svg>
-        </div>
-      </section>
-
-      {/* Stats Section */}
-      <section className="py-20 bg-white relative">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
-              Why Choose HikmahSphere?
-            </h2>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              Built with love for the global Muslim community
-            </p>
-          </div>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 lg:gap-8">
-            {stats.map((stat, index) => (
-              <div 
-                key={index} 
-                className={`text-center p-6 rounded-2xl bg-gradient-to-br from-gray-50 to-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}
-                style={{ transitionDelay: `${index * 150}ms` }}
-              >
-                <div className={`w-14 h-14 ${stat.bgColor} rounded-2xl flex items-center justify-center mx-auto mb-4`}>
-                  <stat.icon className={`w-7 h-7 ${stat.color}`} />
-                </div>
-                <div className="text-base font-bold text-gray-900 mb-2">
-                  {stat.label}
-                </div>
-                <div className="text-sm text-gray-500">
-                  {stat.description}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* SEO Content Section */}
-      <section className="py-20 bg-gradient-to-br from-emerald-50 via-white to-teal-50">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-
-          {/* Main Heading */}
-          <div className="text-center mb-14">
-            <h2 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-6 leading-tight">
-              <span className="text-emerald-700">The Premier </span>
-              <span className="bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">Islamic App</span>
-              <span className="text-gray-900"> for the Modern Believer</span>
-            </h2>
-            <p className="text-lg text-gray-700 max-w-4xl mx-auto leading-relaxed">
-              HikmahSphere is where timeless Islamic tradition meets the precision of modern technology. Built by Muslims, for Muslims — our{' '}
-              <strong className="text-emerald-700 font-semibold">islamic digital platform</strong> removes the friction between you and your faith, giving you the tools for every act of worship in one seamless, ad-free experience.
-            </p>
           </div>
 
-          {/* All-in-One Section */}
-          <div className="mb-12 bg-white rounded-2xl shadow-lg p-8 border border-emerald-100">
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
-              Your All-in-One{' '}
-              <span className="text-emerald-700">Muslim App</span>
-            </h2>
-            <p className="text-gray-700 mb-6 leading-relaxed">
-              Stop switching between disconnected tools. HikmahSphere is a complete{' '}
-              <strong className="text-emerald-700 font-semibold">muslim app</strong> experience that brings guidance, worship tools, learning, and community together in one clean interface built for daily life.
-            </p>
-            <ul className="space-y-4 text-gray-700">
-              <li className="flex items-start gap-3">
-                <CheckCircleIcon className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
-                <span><strong className="font-semibold text-gray-900">Prayer Times, Qibla &amp; Mosques:</strong> Get precise daily Salah timings, Ramadan fasting schedules, a live Qibla compass view, and easily discover nearby mosques so you can pray with congregation.</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <CheckCircleIcon className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
-                <span><strong className="font-semibold text-gray-900">Complete Quran Study:</strong> Read Quran text with translations and Tafsir, listen to recitation, and save ayahs for focused understanding and revision.</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <CheckCircleIcon className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
-                <span><strong className="font-semibold text-gray-900">Authentic Dhikr &amp; Dua Companion:</strong> Access daily adhkar and duas with Arabic text, transliteration, English/Urdu translation, hadith references, bookmarking, and a built-in online tasbih counter for focused remembrance.</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <CheckCircleIcon className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
-                <span><strong className="font-semibold text-gray-900">Intelligent Zakat Tools:</strong> Calculate with live nisab and complete asset coverage, while management users can handle collection, records, and transparent reporting.</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <CheckCircleIcon className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
-                <span><strong className="font-semibold text-gray-900">Global Muslim Community + Islamic Games:</strong> Join moderated discussions, discover events, and build Islamic knowledge through engaging quiz games with the Ummah.</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <CheckCircleIcon className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
-                <span><strong className="font-semibold text-gray-900">Hajj Guide:</strong> Prepare for one of life&apos;s most important journeys with structured Hajj guidance and practical references you can revisit anytime.</span>
-              </li>
-            </ul>
+          <div className="absolute bottom-0 left-0 right-0 pointer-events-none">
+            <svg viewBox="0 0 1440 100" className="w-full h-auto" aria-hidden>
+              <path
+                d="M0 40L60 45C120 50 240 60 360 62C480 64 600 56 720 48C840 40 960 32 1080 34C1200 36 1320 48 1380 54L1440 60V100H0V40Z"
+                fill="#020617"
+              />
+            </svg>
           </div>
+        </section>
 
-          {/* Feature Deep-Dives */}
-          <div className="mb-12">
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-8 text-center">
-              Essential Tools for Daily Islamic Practice
-            </h2>
-            <p className="text-center text-gray-700 mb-10 max-w-3xl mx-auto leading-relaxed">
-              These tools are designed for real daily rhythm: pray on time, face the right direction, understand what you recite, remember Allah consistently, and prepare for major acts of worship.
-            </p>
+        {/* Maktab campaign — primary sponsorship story */}
+        <section
+          className="relative overflow-hidden bg-slate-950 text-white"
+          aria-labelledby="home-maktab-heading"
+          data-home-reveal="maktab"
+        >
+          <div
+            className="absolute inset-0 opacity-40"
+            style={{
+              backgroundImage:
+                'radial-gradient(ellipse 80% 60% at 10% 20%, rgba(79,70,229,0.4), transparent), radial-gradient(ellipse 70% 50% at 90% 80%, rgba(16,185,129,0.3), transparent)',
+            }}
+          />
+          <div className={`relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20 ${reveal('maktab')}`}>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
+              <div className="lg:col-span-5 order-2 lg:order-1">
+                <div
+                  className="relative aspect-[4/5] sm:aspect-[5/4] lg:aspect-[4/5] overflow-hidden rounded-3xl shadow-2xl shadow-indigo-950/50 ring-1 ring-white/10"
+                  onMouseEnter={() => setMaktabPaused(true)}
+                  onMouseLeave={() => setMaktabPaused(false)}
+                  onFocus={() => setMaktabPaused(true)}
+                  onBlur={() => setMaktabPaused(false)}
+                  role="region"
+                  aria-roledescription="carousel"
+                  aria-label="Maktab campaign images"
+                >
+                  {MAKTAB_SLIDES.map((slide, index) => {
+                    const active = index === maktabSlide;
+                    const prev =
+                      index === (maktabSlide - 1 + MAKTAB_SLIDES.length) % MAKTAB_SLIDES.length;
+                    return (
+                      <div
+                        key={slide.src}
+                        className={`absolute inset-0 transition-all duration-1000 ease-out ${
+                          active
+                            ? 'opacity-100 translate-x-0 scale-100 z-10'
+                            : prev
+                              ? 'opacity-0 -translate-x-8 scale-105 z-0'
+                              : 'opacity-0 translate-x-10 scale-100 z-0'
+                        }`}
+                        aria-hidden={!active}
+                      >
+                        <img
+                          src={slide.src}
+                          alt={slide.alt}
+                          className={`absolute inset-0 h-full w-full object-cover transition-transform duration-[6500ms] ease-out ${
+                            active ? 'scale-110' : 'scale-100'
+                          }`}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/15 to-indigo-950/25" />
+                      </div>
+                    );
+                  })}
 
-            {/* Prayer Times */}
-            <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-8 mb-6 border border-emerald-200">
-              <h3 className="text-2xl font-bold text-gray-900 mb-3">
-                Precise Daily <span className="text-emerald-700">Prayer Times, Qibla &amp; Mosques</span>
-              </h3>
-              <p className="text-gray-700 leading-relaxed">
-                Stay aligned in both time and direction. HikmahSphere delivers reliable{' '}
-                <strong className="font-semibold text-emerald-700">daily prayer times</strong> with multi-method calculation support, then helps you face the Qibla confidently through a live compass, and locate nearby mosques effortlessly.
-              </p>
-            </div>
-
-            {/* Quran */}
-            <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-8 mb-6 border border-blue-200">
-              <h3 className="text-2xl font-bold text-gray-900 mb-3">
-                Quran Text, <span className="text-blue-700">Tafsir &amp; Translations</span>
-              </h3>
-              <p className="text-gray-700 leading-relaxed">
-                Move from recitation to understanding in one flow. Read the Quran with Arabic text, compare translations, open Tafsir for context, and listen to recitations while bookmarking verses for reflection.
-              </p>
-            </div>
-
-            {/* Dhikr & Dua */}
-            <div className="bg-gradient-to-br from-teal-50 to-emerald-50 rounded-2xl p-8 mb-6 border border-teal-200">
-              <h3 className="text-2xl font-bold text-gray-900 mb-3">
-                Authentic <span className="text-teal-700">Dhikr &amp; Dua</span> for Daily Life
-              </h3>
-              <p className="text-gray-700 leading-relaxed">
-                HikmahSphere provides a practical <strong className="font-semibold text-teal-700">dhikr and dua app</strong> experience with morning and evening adhkar, daily life supplications, Salah duas, and situational duas. Every entry includes Arabic, transliteration, English and Urdu translation, plus source references. Use the built-in <strong className="font-semibold text-teal-700">online tasbih counter</strong> to track remembrance with focus every day.
-              </p>
-            </div>
-
-            {/* Zakat */}
-            <div className="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-2xl p-8 mb-6 border border-amber-200">
-              <h3 className="text-2xl font-bold text-gray-900 mb-3">
-                The Smartest <span className="text-amber-700">Zakat Calculator</span> Online
-              </h3>
-              <p className="text-gray-700 leading-relaxed">
-                Fulfilling the Third Pillar of Islam has never been this straightforward. HikmahSphere's{' '}
-                <strong className="font-semibold text-amber-700">zakat calculator</strong> is designed to make the entire process simple, accurate, and stress-free — just enter your assets and we handle the rest.
-              </p>
-              <ul className="mt-4 space-y-3 text-gray-700">
-                <li className="flex items-start gap-3">
-                  <CheckCircleIcon className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                  <span>
-                    <strong className="font-semibold">Live Nisab Value, Updated Daily</strong> — the current nisab threshold is displayed in real time, fetched automatically from today's gold and silver market prices across INR, USD, GBP, SAR and more. You always know exactly where you stand.
-                  </span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <CheckCircleIcon className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                  <span>
-                    <strong className="font-semibold">Every Asset Type, One Place</strong> — cash, savings accounts, gold, silver, business inventory, investments, and cryptocurrency. All eligible categories covered so nothing is missed.
-                  </span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <CheckCircleIcon className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                  <span>
-                    <strong className="font-semibold">Instant 2.5% Calculation</strong> — your Zakat due is calculated live as you enter values, with a clear breakdown so you fully understand your obligation before you give.
-                  </span>
-                </li>
-              </ul>
-              <p className="mt-4 text-gray-700 leading-relaxed">
-                The most thorough{' '}
-                <strong className="font-semibold text-amber-700">zakat calculator india</strong> and a globally trusted solution — because your obligation deserves clarity, not confusion.
-              </p>
-            </div>
-
-            {/* Community */}
-            <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-8 border border-purple-200">
-              <h3 className="text-2xl font-bold text-gray-900 mb-3">
-                A Thriving <span className="text-purple-700">Global Muslim Community</span>
-              </h3>
-              <p className="text-gray-700 leading-relaxed">
-                Grow together through moderated forums, beneficial discussions, local events, and interactive Islamic quiz games that keep learning active inside your community routine.
-              </p>
-            </div>
-
-            {/* Hajj Guide */}
-            <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl p-8 mt-6 border border-orange-200">
-              <h3 className="text-2xl font-bold text-gray-900 mb-3">
-                Step-by-Step <span className="text-orange-700">Hajj Guide</span>
-              </h3>
-              <p className="text-gray-700 leading-relaxed">
-                Prepare with confidence for pilgrimage using a structured Hajj guide that helps you review key steps, sequence, and essential acts before and during your journey.
-              </p>
-            </div>
-          </div>
-
-          {/* Trust Statement */}
-          <div className="text-center bg-white rounded-2xl shadow-lg p-8 border border-gray-200">
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
-              Free Forever. Ad-Free. Privacy First.
-            </h2>
-            <p className="text-gray-700 leading-relaxed max-w-3xl mx-auto">
-              HikmahSphere is and will always be free. No advertisements interrupt your ibadah. Your data is never sold or shared. We believe your spiritual journey is sacred — and your Islamic digital companion should honour that. Join a community of believers who trust HikmahSphere every single day.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Features Section */}
-      <section id="features-section" className="py-24 bg-gradient-to-b from-white to-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-100 rounded-full mb-6">
-              <SparklesIcon className="w-4 h-4 text-emerald-600" />
-              <span className="text-sm font-semibold text-emerald-700">Powerful Features</span>
-            </div>
-            <h2 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-6">
-              Everything You Need in One Place
-            </h2>
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              Explore prayer, compass, mosques, Quran, Tafsir, Dhikr, Zakat, community learning games, and Hajj preparation from one connected dashboard
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {features.map((feature, index) => (
-              <button
-                key={index}
-                type="button"
-                onClick={() => handleFeatureCardClick(feature)}
-                className={`group relative bg-white rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-2 border border-gray-100 overflow-hidden text-left w-full ${
-                  feature.disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
-                }`}
-              >
-                {/* Gradient Background on Hover */}
-                <div className={`absolute inset-0 bg-gradient-to-br ${feature.gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-500`}></div>
-                
-                <div className="relative">
-                  {/* Icon with Animation */}
-                  <div className={`w-16 h-16 ${feature.bgColor} rounded-2xl flex items-center justify-center mb-6 overflow-hidden group-hover:scale-110 transition-transform duration-300`}>
-                    {typeof feature.icon === 'string' && (feature.icon.includes('.png') || feature.icon.includes('.jpg') || feature.icon.includes('.svg')) ? (
-                      <img src={feature.icon} alt={feature.title} className="w-14 h-14 object-contain" />
-                    ) : typeof feature.icon === 'string' ? (
-                      <span className="text-3xl">{feature.icon}</span>
-                    ) : (
-                      React.createElement(feature.icon as any, { className: `w-8 h-8 ${feature.color}` })
-                    )}
-                  </div>
-                  
-                  {/* Coming Soon Badge */}
-                  {feature.disabled && (
-                    <div className="absolute top-0 right-0 bg-gradient-to-r from-gray-500 to-gray-600 text-white text-xs font-semibold px-3 py-1 rounded-full shadow-lg">
-                      Coming Soon
+                  <div className="absolute bottom-0 left-0 right-0 p-5 sm:p-6 z-20">
+                    <p
+                      key={`eyebrow-${maktabSlide}`}
+                      className="text-emerald-200 text-xs font-semibold tracking-[0.18em] uppercase mb-1 home-fade-up"
+                    >
+                      {MAKTAB_SLIDES[maktabSlide].eyebrow}
+                    </p>
+                    <p
+                      key={`caption-${maktabSlide}`}
+                      className="text-white text-lg sm:text-xl font-semibold leading-snug home-fade-up"
+                    >
+                      {MAKTAB_SLIDES[maktabSlide].caption}
+                    </p>
+                    <div className="mt-4 flex items-center gap-2">
+                      {MAKTAB_SLIDES.map((slide, index) => (
+                        <button
+                          key={slide.src}
+                          type="button"
+                          aria-label={`Show slide ${index + 1}: ${slide.caption}`}
+                          aria-current={index === maktabSlide}
+                          onClick={() => goToMaktabSlide(index)}
+                          className={`h-1.5 rounded-full transition-all duration-500 ${
+                            index === maktabSlide ? 'w-8 bg-emerald-400' : 'w-2.5 bg-white/35 hover:bg-white/60'
+                          }`}
+                        />
+                      ))}
                     </div>
-                  )}
-                  
-                  {/* Feature Card Content */}
-                  <h3 className="text-xl font-bold text-gray-900 mb-3 group-hover:text-emerald-600 transition-colors duration-300">
-                    {feature.title}
-                  </h3>
-                  <p className={`leading-relaxed ${feature.disabled ? 'text-gray-500' : 'text-gray-600'}`}>
-                    {feature.description}
-                  </p>
-                  
-                  {/* Learn More Link */}
-                  {!feature.disabled && (
-                    <div className="mt-6 flex items-center gap-2 text-emerald-600 font-semibold opacity-0 group-hover:opacity-100 transition-opacity duration-300 transform translate-y-2 group-hover:translate-y-0">
-                      <span>Learn more</span>
+                  </div>
+
+                  <div className="absolute top-4 right-4 z-20 flex gap-2">
+                    <button
+                      type="button"
+                      aria-label="Previous image"
+                      onClick={() => goToMaktabSlide(maktabSlide - 1)}
+                      className="w-9 h-9 rounded-full bg-black/35 hover:bg-black/55 text-white backdrop-blur-sm border border-white/15 flex items-center justify-center transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Next image"
+                      onClick={() => goToMaktabSlide(maktabSlide + 1)}
+                      className="w-9 h-9 rounded-full bg-black/35 hover:bg-black/55 text-white backdrop-blur-sm border border-white/15 flex items-center justify-center transition-colors"
+                    >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                       </svg>
-                    </div>
-                  )}
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Testimonials Section */}
-      <section className="py-24 bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full mb-6 shadow-md">
-              <HeartIcon className="w-4 h-4 text-emerald-600" />
-              <span className="text-sm font-semibold text-emerald-700">Community Love</span>
-            </div>
-            <h2 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-6">
-              Loved by Muslims Worldwide
-            </h2>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              Join millions who have transformed their spiritual journey with HikmahSphere
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {testimonials.map((testimonial, index) => (
-              <div
-                key={index}
-                className={`group rounded-2xl p-8 transition-all duration-300 transform hover:-translate-y-2 ${
-                  testimonial.special
-                    ? 'bg-gradient-to-br from-emerald-50 to-teal-50 border-2 border-emerald-300 shadow-xl col-span-full max-w-3xl mx-auto'
-                    : 'bg-white rounded-2xl p-8 shadow-lg hover:shadow-2xl border border-emerald-100'
-                }`}
-              >
-                {/* Special Badge for Founder's Message */}
-                {testimonial.special && (
-                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-600 text-white text-xs font-semibold rounded-full mb-4">
-                    <HeartIcon className="w-3 h-3" />
-                    Mother's Message
-                  </div>
-                )}
-
-                {/* Rating Stars */}
-                <div className="flex items-center mb-4">
-                  {[...Array(testimonial.rating)].map((_, i) => (
-                    <svg key={i} className="w-5 h-5 text-yellow-400 fill-current" viewBox="0 0 20 20">
-                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                    </svg>
-                  ))}
-                </div>
-
-                {/* Feature Tag */}
-                {!testimonial.special && (
-                  <div className="inline-block px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-medium rounded-full mb-4">
-                    {testimonial.feature}
-                  </div>
-                )}
-
-                {/* Testimonial Text */}
-                <p className={`mb-6 leading-relaxed ${
-                  testimonial.special 
-                    ? 'text-gray-800 text-lg italic font-medium' 
-                    : 'text-gray-700 italic'
-                }`}>
-                  {testimonial.special ? (
-                    <>
-                      <span className="text-3xl text-emerald-600 mr-2">"</span>
-                      {testimonial.text}
-                      <span className="text-3xl text-emerald-600 ml-2">"</span>
-                    </>
-                  ) : (
-                    `"${testimonial.text}"`
-                  )}
-                </p>
-
-                {/* User Info */}
-                <div className="flex items-center gap-4">
-                  <div className={`w-14 h-14 rounded-full flex items-center justify-center text-3xl ${
-                    testimonial.special
-                      ? 'bg-gradient-to-br from-emerald-500 to-teal-500 shadow-lg'
-                      : 'bg-gradient-to-br from-emerald-400 to-teal-400'
-                  }`}>
-                    {testimonial.avatar}
-                  </div>
-                  <div>
-                    <div className="font-bold text-gray-900 text-lg">
-                      {testimonial.name}
-                    </div>
-                    <div className="text-sm text-gray-500 flex items-center gap-1">
-                      <GlobeAltIcon className="w-3 h-3" />
-                      {testimonial.location}
-                    </div>
+                    </button>
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
 
-      {/* CTA Section */}
-      <section className="py-24 bg-gradient-to-r from-emerald-700 via-teal-700 to-cyan-700 text-white relative overflow-hidden">
-        {/* Background Pattern */}
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute inset-0" style={{
-            backgroundImage: `radial-gradient(circle at 2px 2px, white 1px, transparent 0)`,
-            backgroundSize: '32px 32px'
-          }}></div>
-        </div>
-        
-        {/* Decorative Circles */}
-        <div className="absolute top-10 left-10 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
-        <div className="absolute bottom-10 right-10 w-40 h-40 bg-emerald-400/10 rounded-full blur-2xl"></div>
-        
-        <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8 relative">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full mb-8">
-            <SparklesIcon className="w-4 h-4 text-emerald-300" />
-            <span className="text-sm font-medium">Get Started Today</span>
-          </div>
-          
-          <h2 className="text-4xl sm:text-5xl font-bold mb-6">
-            {hasManagementAccess
-              ? 'Start Managing Zakat Funds'
-              : 'Ready to Transform Your Islamic Journey?'
-            }
-          </h2>
-          <p className="text-xl mb-10 text-emerald-100 max-w-2xl mx-auto">
-            {hasManagementAccess
-              ? 'Efficiently track, allocate, and distribute Zakat to those in need with HikmahSphere Management.'
-              : 'Join the global Muslim community and experience the future of Islamic technology'
-            }
-          </p>
-
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-10">
-            {hasManagementAccess ? (
-                <button
-                  onClick={handleManagementAction}
-                  className="group px-8 py-4 bg-white text-emerald-700 font-bold rounded-xl hover:bg-emerald-50 transform hover:scale-105 transition-all duration-300 shadow-2xl cursor-pointer flex items-center gap-2"
+              <div className="lg:col-span-7 order-1 lg:order-2">
+                <div className="flex items-center gap-3 mb-3">
+                  <img
+                    src="/maktab.png"
+                    alt="Maktab"
+                    className="w-12 h-12 rounded-xl object-contain bg-white/95 p-1 shadow-md"
+                  />
+                  <p className="text-indigo-300 text-sm font-semibold tracking-[0.16em] uppercase">
+                    HikmahSphere Maktab
+                  </p>
+                </div>
+                <h2
+                  id="home-maktab-heading"
+                  className="text-3xl sm:text-4xl lg:text-[2.75rem] text-white leading-tight mb-4"
+                  style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 700 }}
                 >
-                  Start Managing Zakat
-                  <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                  </svg>
-                </button>
-            ) : (
-                <button
-                  onClick={handleStartJourney}
-                  className="group px-8 py-4 bg-white text-emerald-700 font-bold rounded-xl hover:bg-emerald-50 transform hover:scale-105 transition-all duration-300 shadow-2xl cursor-pointer flex items-center gap-2"
-                >
-                  Get Started Free
-                  <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                  </svg>
-                </button>
-            )}
+                  Sponsor a child’s Islamic education
+                </h2>
+                <p className="text-lg text-slate-300 max-w-xl leading-relaxed mb-8">
+                  Many children want to learn Quran and Deen but cannot afford fees. Your sponsorship keeps
+                  classrooms open—Tajweed, Hifz, Hadith, culture, and basic school support—free for families in need.
+                </p>
 
-            <Link
-              to="/community"
-              className="px-8 py-4 bg-white/10 backdrop-blur-sm border-2 border-white/30 text-white font-bold rounded-xl hover:bg-white/20 transform hover:scale-105 transition-all duration-300"
+                <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-9 max-w-xl">
+                  {MAKTAB_HIGHLIGHTS.map((item) => (
+                    <li key={item} className="flex items-start gap-2.5 text-slate-200 text-sm sm:text-base">
+                      <CheckCircleIcon className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <div className="flex flex-wrap gap-3">
+                  <Link
+                    to="/maktab#sponsor"
+                    className="inline-flex items-center justify-center px-7 py-3.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white font-semibold shadow-lg shadow-indigo-900/40 transition-colors"
+                  >
+                    Donate / Sponsor
+                  </Link>
+                  <Link
+                    to="/maktab"
+                    className="inline-flex items-center justify-center px-7 py-3.5 rounded-xl border border-white/25 bg-white/5 hover:bg-white/10 text-white font-semibold backdrop-blur-sm transition-colors"
+                  >
+                    Learn about Maktab
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Pillars + trust once */}
+        <section
+          className="relative py-20 sm:py-24 bg-gradient-to-b from-white via-emerald-50/40 to-white"
+          aria-labelledby="home-pillars-heading"
+          data-home-reveal="pillars"
+        >
+          <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 ${reveal('pillars')}`}>
+            <div className="text-center max-w-2xl mx-auto mb-12">
+              <h2
+                id="home-pillars-heading"
+                className="text-3xl sm:text-4xl text-slate-900 mb-3"
+                style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 700 }}
+              >
+                Why Choose HikmahSphere?
+              </h2>
+              <p className="text-lg text-slate-600">
+                Built with love for the global Muslim community—clear purpose in every pillar.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5 lg:gap-6 mb-12">
+              {HOME_PILLARS.map((pillar, index) => (
+                <div
+                  key={pillar.label}
+                  data-home-reveal={`pillar-${index}`}
+                  className={`text-center p-6 rounded-2xl bg-white/80 border border-emerald-100/80 shadow-sm hover:shadow-md transition-all duration-500 ${
+                    visible.has(`pillar-${index}`) ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
+                  }`}
+                  style={{
+                    transitionDelay: visible.has(`pillar-${index}`) ? `${index * 80}ms` : '0ms',
+                  }}
+                >
+                  <div
+                    className={`w-12 h-12 ${pillar.bgColor} rounded-xl flex items-center justify-center mx-auto mb-4`}
+                  >
+                    <pillar.icon className={`w-6 h-6 ${pillar.color}`} />
+                  </div>
+                  <h3
+                    className="text-base font-bold text-slate-900 mb-2"
+                    style={{ fontFamily: "'Fraunces', Georgia, serif" }}
+                  >
+                    {pillar.label}
+                  </h3>
+                  <p className="text-sm text-slate-500 leading-relaxed">{pillar.description}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
+              {HOME_TRUST.map((item) => (
+                <div
+                  key={item}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-800 text-sm font-medium"
+                >
+                  <CheckCircleIcon className="w-4 h-4 text-emerald-600" />
+                  {item}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Features — canonical catalog */}
+        <section
+          id="features-section"
+          className="relative py-20 sm:py-24 bg-slate-50"
+          aria-labelledby="home-features-heading"
+          data-home-reveal="features"
+        >
+          <div
+            className="absolute inset-0 opacity-40 pointer-events-none"
+            style={{
+              backgroundImage:
+                'radial-gradient(ellipse at top, rgba(16,185,129,0.12), transparent 55%), radial-gradient(ellipse at bottom right, rgba(14,116,144,0.1), transparent 45%)',
+            }}
+          />
+          <div className={`relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 ${reveal('features')}`}>
+            <div className="text-center max-w-2xl mx-auto mb-14">
+              <h2
+                id="home-features-heading"
+                className="text-3xl sm:text-4xl lg:text-5xl text-slate-900 mb-4"
+                style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 700 }}
+              >
+                Tools for every act of worship
+              </h2>
+              <p className="text-lg text-slate-600">
+                Open any feature below—this is the full HikmahSphere catalog in one place.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-7">
+              {features.map((feature, index) => (
+                <button
+                  key={feature.title}
+                  type="button"
+                  data-home-reveal={`feature-${index}`}
+                  onClick={() => handleFeatureCardClick(feature)}
+                  className={`group relative text-left w-full rounded-2xl p-7 bg-white border border-slate-200/80 overflow-hidden transition-all duration-500 hover:-translate-y-1.5 hover:shadow-xl hover:border-emerald-200 ${
+                    feature.disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
+                  } ${
+                    visible.has(`feature-${index}`) ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
+                  }`}
+                  style={{
+                    transitionDelay: visible.has(`feature-${index}`) ? `${(index % 3) * 70}ms` : '0ms',
+                  }}
+                >
+                  <div
+                    className={`absolute inset-0 bg-gradient-to-br ${feature.gradient} opacity-0 group-hover:opacity-[0.06] transition-opacity duration-500`}
+                  />
+                  <div className="relative">
+                    <div
+                      className={`w-14 h-14 ${feature.bgColor} rounded-2xl flex items-center justify-center mb-5 overflow-hidden group-hover:scale-110 transition-transform duration-300`}
+                    >
+                      <img src={feature.icon} alt="" className="w-12 h-12 object-contain" />
+                    </div>
+                    {feature.disabled && (
+                      <span className="absolute top-0 right-0 text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-500 text-white">
+                        Coming Soon
+                      </span>
+                    )}
+                    <h3
+                      className="text-xl text-slate-900 mb-2 group-hover:text-emerald-700 transition-colors"
+                      style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 600 }}
+                    >
+                      {feature.title}
+                    </h3>
+                    <p className={`text-sm leading-relaxed ${feature.disabled ? 'text-slate-500' : 'text-slate-600'}`}>
+                      {feature.description}
+                    </p>
+                    {!feature.disabled && (
+                      <span className="mt-5 inline-flex items-center gap-2 text-emerald-700 font-semibold text-sm opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300">
+                        Open
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </span>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Site story — different from Features catalog */}
+        <section
+          className="relative py-20 sm:py-24 overflow-hidden"
+          aria-labelledby="home-story-heading"
+          data-home-reveal="editorial"
+        >
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-emerald-950 to-teal-900" />
+          <div
+            className="absolute inset-0 opacity-30 pointer-events-none"
+            style={{
+              backgroundImage:
+                'radial-gradient(ellipse at 20% 20%, rgba(16,185,129,0.35), transparent 50%), radial-gradient(ellipse at 80% 70%, rgba(45,212,191,0.2), transparent 45%)',
+            }}
+          />
+          <div className={`relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 ${reveal('editorial')}`}>
+            <div className="max-w-3xl mb-12">
+              <p className="text-emerald-300/90 text-sm font-semibold tracking-[0.16em] uppercase mb-3">
+                Why HikmahSphere exists
+              </p>
+              <h2
+                id="home-story-heading"
+                className="text-3xl sm:text-4xl lg:text-5xl text-white mb-5 leading-tight"
+                style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 700 }}
+              >
+                {HOME_STORY.heading}
+              </h2>
+              <p className="text-lg text-emerald-50/90 leading-relaxed">{HOME_STORY.lead}</p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-12">
+              {HOME_STORY.chapters.map((chapter, index) => (
+                <article
+                  key={chapter.id}
+                  data-home-reveal={`story-${index}`}
+                  className={`rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm p-6 sm:p-7 transition-all duration-700 ${
+                    visible.has(`story-${index}`) ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
+                  }`}
+                  style={{
+                    transitionDelay: visible.has(`story-${index}`) ? `${index * 90}ms` : '0ms',
+                  }}
+                >
+                  <span className="text-emerald-400/80 text-xs font-bold tracking-widest uppercase">
+                    {String(index + 1).padStart(2, '0')}
+                  </span>
+                  <h3
+                    className="text-xl text-white mt-2 mb-3"
+                    style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 600 }}
+                  >
+                    {chapter.title}
+                  </h3>
+                  <p className="text-emerald-50/80 leading-relaxed text-sm sm:text-base">{chapter.body}</p>
+                </article>
+              ))}
+            </div>
+
+            <div
+              data-home-reveal="story-moments"
+              className={`rounded-2xl border border-emerald-400/20 bg-emerald-950/40 p-6 sm:p-8 mb-10 transition-all duration-700 ${
+                visible.has('story-moments') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
+              }`}
             >
-              Join Community
-            </Link>
-          </div>
+              <h3
+                className="text-lg sm:text-xl text-white mb-6"
+                style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 600 }}
+              >
+                Moments the platform is meant to serve
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {HOME_STORY.moments.map((moment) => (
+                  <div key={moment.label} className="flex gap-3 items-start">
+                    <HeartIcon className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                    <p className="text-emerald-50/90 text-sm sm:text-base leading-relaxed">
+                      <span className="font-semibold text-white">{moment.label}.</span> {moment.text}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
 
-          <div className="flex flex-wrap justify-center items-center gap-6 text-emerald-200">
-            <div className="flex items-center gap-2">
-              <CheckCircleIcon className="w-5 h-5 text-emerald-300" />
-              <span className="font-medium">Free Forever</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <CheckCircleIcon className="w-5 h-5 text-emerald-300" />
-              <span className="font-medium">No Ads</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <CheckCircleIcon className="w-5 h-5 text-emerald-300" />
-              <span className="font-medium">Privacy Focused</span>
-            </div>
+            <p className="text-emerald-100/85 max-w-3xl leading-relaxed text-base sm:text-lg">
+              {HOME_STORY.closing}{' '}
+              <Link to="/about" className="text-white font-semibold underline underline-offset-4 hover:text-emerald-200">
+                Read our mission
+              </Link>
+              {' · '}
+              <button
+                type="button"
+                onClick={scrollToFeatures}
+                className="text-white font-semibold underline underline-offset-4 hover:text-emerald-200"
+              >
+                Browse tools above
+              </button>
+            </p>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Quran Verse Section */}
-      <section className="py-20 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white relative overflow-hidden">
-        {/* Islamic Pattern Overlay */}
-        <div className="absolute inset-0 opacity-5">
-          <div className="absolute inset-0" style={{
-            backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 10px, #fff 10px, #fff 11px)`,
-          }}></div>
-        </div>
-        
-        <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8 relative">
-          <div className="mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-2xl shadow-lg">
-              <BookOpenIcon className="w-8 h-8 text-white" />
+        {/* Lower Maktab advertise band */}
+        <section className="relative overflow-hidden" aria-labelledby="home-maktab-band-heading" data-home-reveal="maktab-band">
+          <div className="absolute inset-0">
+            <img src="/maktab/hero.jpg" alt="" className="h-full w-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-indigo-950/75 to-emerald-950/55" />
+          </div>
+          <div className={`relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-24 ${reveal('maktab-band')}`}>
+            <div className="flex items-center gap-3 mb-4">
+              <img
+                src="/maktab.png"
+                alt="Maktab"
+                className="w-12 h-12 rounded-xl object-contain bg-white/95 p-1 shadow-md"
+              />
+              <p className="text-emerald-200/90 text-sm font-semibold tracking-[0.16em] uppercase">
+                HikmahSphere Maktab
+              </p>
+            </div>
+            <h2
+              id="home-maktab-band-heading"
+              className="text-3xl sm:text-4xl lg:text-5xl text-white max-w-2xl mb-4 leading-tight"
+              style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 700 }}
+            >
+              Free Islamic education for children who need it most
+            </h2>
+            <p className="text-lg text-emerald-50/90 max-w-xl mb-8 leading-relaxed">
+              Sponsor a seat for Quran, Hifz, Deen, and classroom support — so learning never depends on a family’s
+              income.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <Link
+                to="/maktab"
+                className="inline-flex items-center justify-center px-7 py-3.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white font-semibold shadow-lg transition-colors"
+              >
+                Explore Maktab
+              </Link>
+              <Link
+                to="/maktab#sponsor"
+                className="inline-flex items-center justify-center px-7 py-3.5 rounded-xl border border-white/35 bg-white/10 hover:bg-white/20 text-white font-semibold backdrop-blur-sm transition-colors"
+              >
+                Donate / Sponsor
+              </Link>
             </div>
           </div>
-          <blockquote className="text-3xl sm:text-4xl font-light mb-8 leading-relaxed font-scheherazade text-emerald-100">
-            "وَاعْتَصِمُوا بِحَبْلِ اللَّهِ جَمِيعًا وَلَا تَفَرَّقُوا"
-          </blockquote>
-          <p className="text-xl text-gray-300 mb-6 max-w-2xl mx-auto leading-relaxed">
-            "And hold firmly to the rope of Allah all together and do not become divided"
-          </p>
-          <div className="flex items-center justify-center gap-3">
-            <div className="w-12 h-px bg-gradient-to-r from-transparent to-emerald-500"></div>
-            <cite className="text-lg font-semibold text-emerald-400">Quran 3:103</cite>
-            <div className="w-12 h-px bg-gradient-to-l from-transparent to-emerald-500"></div>
+        </section>
+
+        {/* Testimonials */}
+        <section
+          className="relative py-20 sm:py-24 bg-gradient-to-b from-teal-50/80 via-white to-emerald-50/50"
+          aria-labelledby="home-voices-heading"
+          data-home-reveal="voices"
+        >
+          <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 ${reveal('voices')}`}>
+            <div className="text-center mb-14">
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full mb-5 shadow-sm border border-emerald-100">
+                <HeartIcon className="w-4 h-4 text-emerald-600" />
+                <span className="text-sm font-semibold text-emerald-700">Community love</span>
+              </div>
+              <h2
+                id="home-voices-heading"
+                className="text-3xl sm:text-4xl lg:text-5xl text-slate-900 mb-4"
+                style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 700 }}
+              >
+                Loved by Muslims worldwide
+              </h2>
+              <p className="text-lg text-slate-600 max-w-2xl mx-auto">
+                Real voices from people who use HikmahSphere in their daily spiritual journey.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
+              {HOME_TESTIMONIALS.map((testimonial, index) => (
+                <article
+                  key={testimonial.name}
+                  data-home-reveal={`voice-${index}`}
+                  className={`rounded-2xl p-7 sm:p-8 transition-all duration-700 hover:-translate-y-1 ${
+                    testimonial.special
+                      ? 'bg-gradient-to-br from-emerald-50 to-teal-50 border-2 border-emerald-200 shadow-lg md:col-span-2 lg:col-span-3 max-w-3xl mx-auto w-full'
+                      : 'bg-white border border-emerald-100/80 shadow-md hover:shadow-xl'
+                  } ${
+                    visible.has(`voice-${index}`) ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
+                  }`}
+                >
+                  {testimonial.special && (
+                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-600 text-white text-xs font-semibold rounded-full mb-4">
+                      <HeartIcon className="w-3 h-3" />
+                      Mother&apos;s Message
+                    </div>
+                  )}
+                  <div className="flex items-center mb-3">
+                    {Array.from({ length: testimonial.rating }).map((_, i) => (
+                      <svg key={i} className="w-5 h-5 text-amber-400 fill-current" viewBox="0 0 20 20">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                      </svg>
+                    ))}
+                  </div>
+                  {!testimonial.special && (
+                    <span className="inline-block px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-medium rounded-full mb-4">
+                      {testimonial.feature}
+                    </span>
+                  )}
+                  <p className="text-slate-700 leading-relaxed mb-6">{testimonial.text}</p>
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl ${
+                        testimonial.special
+                          ? 'bg-gradient-to-br from-emerald-500 to-teal-500'
+                          : 'bg-gradient-to-br from-emerald-400 to-teal-400'
+                      }`}
+                    >
+                      {testimonial.avatar}
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-900">{testimonial.name}</p>
+                      <p className="text-sm text-slate-500 inline-flex items-center gap-1">
+                        <GlobeAltIcon className="w-3.5 h-3.5" />
+                        {testimonial.location}
+                      </p>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
-      </div>
+        </section>
+
+        {/* FAQ — long-tail SEO content + FAQPage rich results */}
+        <section
+          className="relative py-20 sm:py-24 bg-white"
+          aria-labelledby="home-faq-heading"
+          data-home-reveal="faq"
+        >
+          <div className={`max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 ${reveal('faq')}`}>
+            <div className="text-center max-w-2xl mx-auto mb-12">
+              <p className="text-emerald-700 text-sm font-semibold tracking-[0.16em] uppercase mb-3">
+                Questions & answers
+              </p>
+              <h2
+                id="home-faq-heading"
+                className="text-3xl sm:text-4xl text-slate-900 mb-3"
+                style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 700 }}
+              >
+                Frequently asked questions
+              </h2>
+              <p className="text-lg text-slate-600">
+                Everything you need to know about using HikmahSphere for prayer, Quran, Dhikr, Zakat, and more.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              {HOME_FAQ.map((item, index) => (
+                <details
+                  key={item.question}
+                  data-home-reveal={`faq-${index}`}
+                  className={`group rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-sm transition-all duration-500 open:border-emerald-200 open:shadow-md ${
+                    visible.has(`faq-${index}`) ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
+                  }`}
+                  style={{
+                    transitionDelay: visible.has(`faq-${index}`) ? `${(index % 4) * 60}ms` : '0ms',
+                  }}
+                >
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4">
+                    <h3
+                      className="text-base sm:text-lg font-semibold text-slate-900"
+                      style={{ fontFamily: "'Fraunces', Georgia, serif" }}
+                    >
+                      {item.question}
+                    </h3>
+                    <span className="shrink-0 rounded-full bg-emerald-50 p-2 text-emerald-700 transition-transform duration-300 group-open:rotate-45">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                    </span>
+                  </summary>
+                  <p className="mt-4 text-slate-600 leading-relaxed text-sm sm:text-base">{item.answer}</p>
+                </details>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Final CTA + light Maktab reminder */}
+        <section
+          className="relative py-20 sm:py-24 overflow-hidden text-white"
+          aria-labelledby="home-cta-heading"
+          data-home-reveal="cta"
+        >
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-700 via-teal-700 to-cyan-800" />
+          <div
+            className="absolute inset-0 opacity-15"
+            style={{
+              backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)',
+              backgroundSize: '28px 28px',
+            }}
+          />
+          <div className={`relative max-w-3xl mx-auto text-center px-4 sm:px-6 lg:px-8 ${reveal('cta')}`}>
+            <h2
+              id="home-cta-heading"
+              className="text-3xl sm:text-4xl lg:text-5xl mb-5"
+              style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 700 }}
+            >
+              {hasManagementAccess ? 'Manage giving with clarity' : 'Begin with sincerity today'}
+            </h2>
+            <p className="text-lg text-emerald-50/90 mb-8 leading-relaxed">
+              {hasManagementAccess
+                ? 'Open Zakat & fund tools to track collections, spending, and transparent records for your community.'
+                : 'Create your space on HikmahSphere—or continue exploring prayer, Quran, Dhikr, and more.'}
+            </p>
+            <div className="flex flex-wrap justify-center gap-3 mb-10">
+              <button
+                type="button"
+                onClick={hasManagementAccess ? handleManagementAction : handleStartJourney}
+                className={`inline-flex items-center justify-center px-8 py-3.5 rounded-xl bg-white text-emerald-900 font-semibold shadow-lg transition-colors hover:bg-emerald-50 ${
+                  ctaInView ? 'home-cta-pulse' : ''
+                }`}
+              >
+                {hasManagementAccess ? 'Open Zakat Management' : user ? 'Open Profile' : 'Get Started Free'}
+              </button>
+              <Link
+                to="/community"
+                className="inline-flex items-center justify-center px-8 py-3.5 rounded-xl border border-white/40 hover:bg-white/10 font-semibold transition-colors"
+              >
+                Join Community
+              </Link>
+            </div>
+            <p className="text-sm sm:text-base text-emerald-100/90">
+              Want to support free Islamic education for children?{' '}
+              <Link to="/maktab#sponsor" className="font-semibold text-white underline underline-offset-4 hover:text-emerald-100">
+                Sponsor through HikmahSphere Maktab
+              </Link>
+            </p>
+          </div>
+        </section>
+
+        {/* Verse close */}
+        <section
+          className="relative py-16 sm:py-20 bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 text-white"
+          aria-labelledby="home-verse-heading"
+          data-home-reveal="verse"
+        >
+          <div className={`max-w-3xl mx-auto text-center px-4 sm:px-6 lg:px-8 ${reveal('verse')}`}>
+            <div className="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-2xl shadow-lg mb-8">
+              <BookOpenIcon className="w-7 h-7 text-white" />
+            </div>
+            <h2 id="home-verse-heading" className="sr-only">
+              Closing verse from the Quran
+            </h2>
+            <blockquote className="text-3xl sm:text-4xl font-light mb-6 leading-relaxed font-scheherazade text-emerald-100">
+              &ldquo;وَاعْتَصِمُوا بِحَبْلِ اللَّهِ جَمِيعًا وَلَا تَفَرَّقُوا&rdquo;
+            </blockquote>
+            <p className="text-lg text-slate-300 mb-5 max-w-2xl mx-auto leading-relaxed">
+              &ldquo;And hold firmly to the rope of Allah all together and do not become divided&rdquo;
+            </p>
+            <div className="flex items-center justify-center gap-3">
+              <div className="w-12 h-px bg-gradient-to-r from-transparent to-emerald-500" />
+              <cite className="text-base font-semibold text-emerald-400 not-italic">Quran 3:103</cite>
+              <div className="w-12 h-px bg-gradient-to-l from-transparent to-emerald-500" />
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <style>{`
+        @keyframes homeFadeUp {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes homeCtaPulse {
+          0%, 100% { box-shadow: 0 10px 28px rgba(6, 78, 59, 0.25); }
+          50% { box-shadow: 0 14px 36px rgba(6, 78, 59, 0.4); }
+        }
+        @keyframes homeHeroOrb {
+          0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.55; }
+          50% { transform: translate(12px, -18px) scale(1.08); opacity: 0.85; }
+        }
+        @keyframes homeLogoGlow {
+          0%, 100% { opacity: 0.45; transform: scale(1); }
+          50% { opacity: 0.9; transform: scale(1.12); }
+        }
+        @keyframes homeMeshDrift {
+          0% { transform: scale(1) translate(0, 0); }
+          50% { transform: scale(1.06) translate(-1.5%, 1%); }
+          100% { transform: scale(1) translate(0, 0); }
+        }
+        @keyframes homePatternShift {
+          0% { background-position: 0 0; }
+          100% { background-position: 72px 72px; }
+        }
+        .home-fade-up {
+          animation: homeFadeUp 0.55s ease-out;
+        }
+        .home-cta-pulse {
+          animation: homeCtaPulse 2.4s ease-in-out infinite;
+        }
+        .home-hero-orb {
+          animation: homeHeroOrb 9s ease-in-out infinite;
+        }
+        .home-hero-orb-delay {
+          animation-delay: 1.4s;
+        }
+        .home-hero-orb-slow {
+          animation-duration: 14s;
+          animation-delay: 0.6s;
+        }
+        .home-logo-glow {
+          animation: homeLogoGlow 3.2s ease-in-out infinite;
+        }
+        .home-hero-mesh {
+          animation: homeMeshDrift 18s ease-in-out infinite;
+        }
+        .home-hero-pattern {
+          animation: homePatternShift 28s linear infinite;
+        }
+        .home-hero-pending .home-hero-stage {
+          opacity: 0;
+          transform: translateY(18px);
+        }
+        .home-hero-ready .home-hero-stage {
+          opacity: 1;
+          transform: translateY(0);
+          transition: opacity 0.7s ease-out, transform 0.7s ease-out;
+        }
+        .home-hero-ready .home-hero-stage-1 { transition-delay: 0.05s; }
+        .home-hero-ready .home-hero-stage-2 { transition-delay: 0.18s; }
+        .home-hero-ready .home-hero-stage-3 { transition-delay: 0.32s; }
+        .home-hero-ready .home-hero-stage-4 { transition-delay: 0.46s; }
+        @media (prefers-reduced-motion: reduce) {
+          .home-page * {
+            animation: none !important;
+            transition-duration: 0.01ms !important;
+          }
+          .home-hero-pending .home-hero-stage,
+          .home-hero-ready .home-hero-stage {
+            opacity: 1 !important;
+            transform: none !important;
+          }
+        }
+      `}</style>
     </>
   );
 };

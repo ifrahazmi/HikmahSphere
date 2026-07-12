@@ -179,16 +179,22 @@ export const spiritualFeatures: SpiritualFeature[] = [
     description: "Never miss the connection with your Lord. Ultra-precise daily calculations with real-time geolocation, multiple verified methods, high-latitude adjustments, and Ramadan schedule support."
   },
   {
+    icon: "/Quran-Reader.png",
+    title: "Quran Reader",
+    path: "/quran",
+    description: "Read all 114 Surahs with Arabic text, audio recitation, bookmarks, and smooth navigation designed for focused daily recitation and revision."
+  },
+  {
     icon: "/Qibla-Compass.png",
     title: "Qibla Compass",
     path: "/prayers/qibla",
     description: "Confirm Qibla direction with a live compass and map-supported fallback guidance for better confidence while traveling or praying in new locations."
   },
   {
-    icon: "/Quran-Reader.png",
-    title: "Quran Reader",
-    path: "/quran",
-    description: "Read all 114 Surahs with Arabic text, audio recitation, bookmarks, and smooth navigation designed for focused daily recitation and revision."
+    icon: "/mosque-find.png",
+    title: "Mosque Finder",
+    path: "/prayers?tab=mosques",
+    description: "Discover nearby mosques with distance, directions, and map support so you can join the congregation wherever life takes you."
   },
   {
     icon: "/Tafsir.png",
@@ -201,6 +207,12 @@ export const spiritualFeatures: SpiritualFeature[] = [
     title: "Zakat Management",
     path: "/zakat",
     description: "Purify your wealth with confidence. Complete dashboard for Zakat collection and distribution, donor tracking, real-time balance, leaderboards, and transparent fund management with export capabilities."
+  },
+  {
+    icon: "/maktab.png",
+    title: "Maktab Sponsorship",
+    path: "/maktab",
+    description: "Turn your giving into sadaqah jariyah. Sponsor free Quran, Tajweed, Hifz, and Deen education for children who cannot afford fees — a growing campaign for the Ummah's next generation."
   },
   {
     icon: "/Global-Community.png",
@@ -229,6 +241,21 @@ export const spiritualFeatures: SpiritualFeature[] = [
     bgColor: "bg-gray-100"
   }
 ];
+
+export const maktabSection = {
+  eyebrow: "HikmahSphere Maktab",
+  heading: "Knowledge that keeps giving",
+  lead:
+    "Part of our mission is making sure no child is turned away from learning their Deen because of money. HikmahSphere Maktab funds free Islamic education for children in need — a form of sadaqah jariyah whose reward continues long after the lesson ends.",
+  highlights: [
+    "Free Quran & Tajweed classes",
+    "Hifz pathway support",
+    "Deen, Hadith & Islamic culture",
+    "Books, uniform & classroom needs"
+  ],
+  primaryCta: { label: "Donate / Sponsor", path: "/maktab#sponsor" },
+  secondaryCta: { label: "Learn about Maktab", path: "/maktab" }
+};
 
 export const promises = [
   {

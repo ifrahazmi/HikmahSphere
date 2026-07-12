@@ -173,7 +173,8 @@ const MosqueFinder: React.FC<MosqueFinderProps> = ({ location }) => {
         <div className="p-3 sm:p-5 border-b border-emerald-100 bg-white shadow-sm shrink-0">
           <div className="flex justify-between items-center mb-2 sm:mb-3">
             <h3 className="text-base sm:text-xl font-bold text-emerald-800 flex items-center gap-1.5">
-              <MapPinIcon className="h-5 w-5 sm:h-6 sm:w-6" /> Mosque Finder
+              <img src="/mosque-find.png" alt="" className="h-6 w-6 sm:h-7 sm:w-7 object-contain" />
+              Mosque Finder
             </h3>
             <div className="flex gap-2">
               <button 

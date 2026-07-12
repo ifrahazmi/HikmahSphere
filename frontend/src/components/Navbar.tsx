@@ -107,6 +107,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
     { name: 'Dhikr & Dua', href: '/dhikr-dua', current: location.pathname === '/dhikr-dua' },
     { name: 'Quran', href: '/quran', current: location.pathname.startsWith('/quran') },
     { name: 'Zakat', href: '/zakat', current: location.pathname === '/zakat' },
+    { name: 'Maktab', href: '/maktab', current: location.pathname === '/maktab' },
     { name: 'Community', href: '/community', current: location.pathname === '/community' },
     { name: 'Hajj Guide', href: '/hajj-guide', current: location.pathname === '/hajj-guide' },
     { name: 'Contact', href: '/contact', current: location.pathname === '/contact' },
@@ -161,17 +162,17 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
       isDark ? 'bg-gray-800' : 'bg-white'
     }`}>
       <div className="max-w-[90rem] mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
-          <div className="flex items-center">
-            <Link to="/" className="flex-shrink-0 flex items-center">
-              <div className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 lg:w-11 lg:h-11 xl:w-12 xl:h-12 flex items-center justify-center overflow-hidden rounded-full bg-white">
+        <div className="flex justify-between items-center h-16 gap-3">
+          <div className="flex items-center shrink-0 min-w-0 z-10">
+            <Link to="/" className="flex shrink-0 items-center max-w-full">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 xl:w-11 xl:h-11 2xl:w-12 2xl:h-12 flex items-center justify-center overflow-hidden rounded-full bg-white shrink-0">
                 <img src="/logo.png" alt="HikmahSphere Logo" className="h-full w-full object-cover" />
               </div>
-              <div className="ml-2 flex items-baseline">
-                <span className={`text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl font-bold ${
+              <div className="ml-2 flex items-baseline min-w-0">
+                <span className={`text-sm sm:text-base md:text-lg xl:text-xl 2xl:text-2xl font-bold truncate ${
                   isDark ? 'text-white' : 'text-gray-900'
                 }`}>HikmahSphere</span>
-                <span className={`hidden lg:inline-flex ml-0.5 text-[8px] sm:text-[9px] lg:text-[10px] xl:text-xs font-semibold px-0.5 py-0.5 rounded-full ${
+                <span className={`hidden 2xl:inline-flex ml-1 text-[10px] 2xl:text-xs font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${
                   isDark
                     ? 'bg-emerald-900 text-emerald-300'
                     : 'bg-emerald-100 text-emerald-700'
@@ -182,8 +183,8 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
             </Link>
           </div>
 
-          {/* Navigation Links - Responsive sizing based on screen width */}
-          <div className="hidden lg:flex flex-1 items-center justify-center gap-0.5 xl:gap-1 2xl:gap-2 min-w-0">
+          {/* Full nav from xl up — lg was too tight after adding Maktab */}
+          <div className="hidden xl:flex flex-1 items-center justify-center gap-0.5 2xl:gap-1.5 min-w-0">
             {navigation.map((item) => {
               if (item.name === 'Prayer') {
                 return (
@@ -191,7 +192,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                     <button
                       type="button"
                       onClick={() => setIsPrayerMenuOpen((prev) => !prev)}
-                      className={`px-1.5 lg:px-2 xl:px-2.5 py-1.5 lg:py-2 xl:py-2.5 rounded-md text-[11px] lg:text-xs xl:text-sm 2xl:text-base font-medium whitespace-nowrap transition-colors duration-200 inline-flex items-center gap-1 ${
+                      className={`px-1.5 xl:px-2 2xl:px-2.5 py-2 rounded-md text-xs xl:text-[13px] 2xl:text-sm font-medium whitespace-nowrap transition-colors duration-200 inline-flex items-center gap-0.5 ${
                         item.current
                           ? isDark
                             ? 'bg-emerald-900 text-emerald-300'
@@ -252,7 +253,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                     <button
                       type="button"
                       onClick={() => setIsQuranMenuOpen((prev) => !prev)}
-                      className={`px-1.5 lg:px-2 xl:px-2.5 py-1.5 lg:py-2 xl:py-2.5 rounded-md text-[11px] lg:text-xs xl:text-sm 2xl:text-base font-medium whitespace-nowrap transition-colors duration-200 inline-flex items-center gap-1 ${
+                      className={`px-1.5 xl:px-2 2xl:px-2.5 py-2 rounded-md text-xs xl:text-[13px] 2xl:text-sm font-medium whitespace-nowrap transition-colors duration-200 inline-flex items-center gap-0.5 ${
                         item.current
                           ? isDark
                             ? 'bg-emerald-900 text-emerald-300'
@@ -300,7 +301,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                 <Link
                   key={item.name}
                   to={item.href}
-                  className={`px-1.5 lg:px-2 xl:px-2.5 py-1.5 lg:py-2 xl:py-2.5 rounded-md text-[11px] lg:text-xs xl:text-sm 2xl:text-base font-medium whitespace-nowrap transition-colors duration-200 ${
+                  className={`px-1.5 xl:px-2 2xl:px-2.5 py-2 rounded-md text-xs xl:text-[13px] 2xl:text-sm font-medium whitespace-nowrap transition-colors duration-200 ${
                     item.current
                       ? isDark
                         ? 'bg-emerald-900 text-emerald-300'
@@ -317,7 +318,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
           </div>
 
           {/* Right Section - Responsive sizing */}
-          <div className="hidden lg:flex items-center gap-1 lg:gap-1.5 xl:gap-2 shrink-0">
+          <div className="hidden xl:flex items-center gap-1.5 2xl:gap-2 shrink-0">
             {user ? (
               <>
                 {/* Notification Bell */}
@@ -437,7 +438,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
             )}
           </div>
 
-          <div className="lg:hidden flex items-center gap-2">
+          <div className="xl:hidden flex items-center gap-2 shrink-0">
             {/* Mobile Notification Bell */}
             {user && <NotificationBell />}
 
@@ -490,7 +491,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
       </div>
 
       {isOpen && (
-        <div className="lg:hidden">
+        <div className="xl:hidden">
           <div className={`px-2 pt-2 pb-3 space-y-1 sm:px-3 border-t transition-colors duration-200 ${
             isDark ? 'bg-gray-800 border-gray-700' : 'bg-white'
           }`}>

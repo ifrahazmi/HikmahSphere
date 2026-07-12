@@ -47,7 +47,7 @@ const PageSEO: React.FC<PageSEOProps> = ({
     "description": description,
     "potentialAction": {
       "@type": "SearchAction",
-      "target": `${SITE_URL}/search?q={search_term_string}`,
+      "target": `${SITE_URL}/quran?q={search_term_string}`,
       "query-input": "required name=search_term_string"
     },
     "hasPart": siteLinks.map(link => ({

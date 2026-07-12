@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import {
   ChatBubbleLeftRightIcon,
@@ -20,8 +21,32 @@ type ContactFormData = {
 };
 
 const Contact: React.FC = () => {
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<ContactFormData>();
+  const [searchParams] = useSearchParams();
+  const { register, handleSubmit, reset, setValue, formState: { errors, isSubmitting } } = useForm<ContactFormData>({
+    defaultValues: {
+      name: '',
+      email: '',
+      type: 'Support',
+      message: '',
+    },
+  });
   const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    const name = searchParams.get('name');
+    const message = searchParams.get('message');
+    const email = searchParams.get('email');
+    const type = searchParams.get('type');
+    if (name) setValue('name', name);
+    if (message) setValue('message', message);
+    if (email) setValue('email', email);
+    if (type && ['Support', 'Bug', 'Suggestion', 'Correction', 'Other'].includes(type)) {
+      setValue('type', type as ContactFormData['type']);
+    }
+    if (message?.includes('[Maktab Sponsor')) {
+      setValue('type', 'Other');
+    }
+  }, [searchParams, setValue]);
 
   const onSubmit = async (data: ContactFormData) => {
     try {

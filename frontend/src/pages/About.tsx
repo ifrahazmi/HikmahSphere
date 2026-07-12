@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../hooks/useAuth';
 import {
@@ -9,6 +10,7 @@ import {
   BookOpenIcon,
   HeartIcon,
   ShieldCheckIcon,
+  CheckCircleIcon,
 } from '@heroicons/react/24/outline';
 import {
   missionStatement,
@@ -19,6 +21,7 @@ import {
   storyContent,
   footerQuote,
   developers,
+  maktabSection,
 } from '../data/aboutContent';
 import { getRandomVerse } from '../data/quranVerses';
 import PageSEO from '../components/PageSEO';
@@ -48,6 +51,7 @@ const About: React.FC = () => {
   const missionRef = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const featuresRef = useRef<HTMLDivElement>(null);
+  const maktabRef = useRef<HTMLDivElement>(null);
   const promisesRef = useRef<HTMLDivElement>(null);
   const developersRef = useRef<HTMLDivElement>(null);
   const journeyRef = useRef<HTMLDivElement>(null);
@@ -100,6 +104,7 @@ const About: React.FC = () => {
       missionRef.current,
       timelineRef.current,
       featuresRef.current,
+      maktabRef.current,
       promisesRef.current,
       developersRef.current,
       journeyRef.current,
@@ -144,9 +149,18 @@ const About: React.FC = () => {
 
   return (
     <>
+      <Helmet>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Outfit:wght@400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
+      </Helmet>
+
       <PageSEO
         title="About Us"
-        description="Learn how HikmahSphere helps Muslims with prayer times, finding mosques, Quran study, Dhikr and Dua, Zakat, Hajj guidance, and community learning."
+        description="Learn how HikmahSphere helps Muslims with prayer times, mosque finder, Quran study, Dhikr and Dua, Zakat, Hajj guidance, Maktab sponsorship, and community learning."
         path="/about"
         keywords={[
           'about hikmahsphere',
@@ -154,10 +168,14 @@ const About: React.FC = () => {
           'authentic islamic knowledge',
           'muslim technology platform',
           'qibla compass app',
+          'mosque finder',
           'quran tafsir and translation',
           'hajj guide app',
           'islamic quiz games',
           'dhikr and dua platform',
+          'maktab sponsorship',
+          'free islamic education',
+          'sadaqah jariyah',
           'ifrahuddin azmi',
           'ifrah azmi developer',
           'hikmahsphere founder',
@@ -222,12 +240,23 @@ const About: React.FC = () => {
           }
         })}
       </script>
-      <div className="min-h-screen">
+      <div
+        className="about-page min-h-screen"
+        style={
+          {
+            fontFamily: "'Outfit', system-ui, sans-serif",
+            '--hs-emerald': '#059669',
+            '--hs-teal': '#0f766e',
+            '--hs-ink': '#0f172a',
+            '--hs-indigo': '#4f46e5',
+          } as React.CSSProperties
+        }
+      >
       {/* Hero Section */}
       <section
         ref={heroRef}
         data-section="hero"
-        className="relative min-h-screen flex items-center justify-center overflow-hidden pt-14 sm:pt-16 bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-950"
+        className="relative min-h-[100svh] flex items-center justify-center overflow-hidden pt-14 sm:pt-16 bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-950"
       >
         {/* Animated Background Pattern */}
         <div className="absolute inset-0 opacity-5">
@@ -236,69 +265,123 @@ const About: React.FC = () => {
             backgroundSize: '48px 48px'
           }}></div>
         </div>
-        
+
+        {/* Islamic geometric pattern overlay */}
+        <div
+          className="absolute inset-0 opacity-[0.06] pointer-events-none"
+          style={{
+            backgroundImage:
+              'url("data:image/svg+xml,%3Csvg width=\'72\' height=\'72\' viewBox=\'0 0 72 72\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'0.35\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/svg%3E")',
+          }}
+        ></div>
+
         {/* Floating Gradient Orbs */}
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-teal-500/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
-        <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-cyan-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }}></div>
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl about-orb"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-teal-500/20 rounded-full blur-3xl about-orb about-orb-delay"></div>
+        <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-cyan-500/10 rounded-full blur-3xl about-orb about-orb-slow"></div>
+
+        {/* Decorative sparkles */}
+        <SparklesIcon className="absolute top-[22%] right-[14%] w-6 h-6 text-emerald-300/40 about-orb about-orb-slow" />
+        <SparklesIcon className="absolute bottom-[26%] left-[12%] w-5 h-5 text-teal-200/40 about-orb about-orb-delay" />
 
         {/* Content */}
-        <div className={`relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center transition-all duration-1000 ${visibleSections.has('hero') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+        <div className={`relative z-10 w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center transition-all duration-1000 ${visibleSections.has('hero') ? 'opacity-100 translate-y-0 about-hero-in' : 'opacity-0 translate-y-10'}`}>
+          {/* Eyebrow badge */}
+          <div className="mb-7 flex justify-center about-hero-stage about-hero-stage-1">
+            <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-xs sm:text-sm font-semibold uppercase tracking-[0.18em] text-emerald-100 backdrop-blur-sm">
+              <SparklesIcon className="w-4 h-4 text-emerald-300" />
+              About HikmahSphere
+            </span>
+          </div>
+
           {/* Daily Wisdom - Quran Verse */}
           {dailyVerse && (
-            <div className="mb-6 sm:mb-10 inline-block w-full max-w-full">
-              <div className="px-4 sm:px-6 py-3 sm:py-4 bg-white/10 backdrop-blur-sm rounded-2xl border border-white/20 shadow-xl">
-                {/* Arabic Verse */}
-                <p className="text-xl sm:text-2xl md:text-3xl text-white font-scheherazade leading-loose mb-2 sm:mb-3" dir="rtl">
-                  {dailyVerse.verse}
-                </p>
+            <div className="mb-9 sm:mb-11 flex justify-center about-hero-stage about-hero-stage-2">
+              <div className="relative w-full max-w-2xl">
+                {/* gradient ring */}
+                <div className="absolute -inset-px rounded-3xl bg-gradient-to-br from-emerald-400/40 via-teal-300/20 to-cyan-400/30"></div>
+                <div className="relative overflow-hidden rounded-3xl bg-white/[0.07] px-5 py-6 shadow-2xl shadow-emerald-950/40 backdrop-blur-md sm:px-8 sm:py-7">
+                  {/* corner glow */}
+                  <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-emerald-400/20 blur-2xl"></div>
 
-                {/* Translation */}
-                <p className="text-xs sm:text-sm text-emerald-100 italic mb-1.5 sm:mb-2">
-                  {dailyVerse.translation}
-                </p>
+                  {/* label */}
+                  <div className="relative mb-4 flex items-center justify-center gap-3">
+                    <span className="h-px w-8 bg-gradient-to-r from-transparent to-emerald-400/60"></span>
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-300/90 sm:text-xs">
+                      Ayah of the Moment
+                    </span>
+                    <span className="h-px w-8 bg-gradient-to-l from-transparent to-emerald-400/60"></span>
+                  </div>
 
-                {/* Reference */}
-                <p className="text-xs text-emerald-200 font-medium">
-                  {dailyVerse.chapter} • {dailyVerse.reference}
-                </p>
+                  {/* Arabic Verse */}
+                  <p className="relative mb-4 text-2xl leading-[2] text-white font-scheherazade sm:text-3xl md:text-4xl" dir="rtl">
+                    {dailyVerse.verse}
+                  </p>
+
+                  {/* Translation */}
+                  <p className="relative mx-auto mb-4 max-w-xl text-sm italic leading-relaxed text-emerald-50/90 sm:text-base">
+                    &ldquo;{dailyVerse.translation}&rdquo;
+                  </p>
+
+                  {/* Reference */}
+                  <p className="relative inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-200">
+                    {dailyVerse.chapter} • {dailyVerse.reference}
+                  </p>
+                </div>
               </div>
             </div>
           )}
 
           {/* Main Title */}
-          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold mb-6 leading-tight">
+          <h1 className="mb-6 text-5xl font-bold leading-[1.05] sm:text-6xl lg:text-7xl xl:text-8xl about-hero-stage about-hero-stage-3">
             <span className="block text-white">Guiding the</span>
-            <span className="block bg-gradient-to-r from-emerald-300 via-teal-300 to-cyan-300 bg-clip-text text-transparent">
-              Ummah Digitally
+            <span className="relative inline-block">
+              <span className="block bg-gradient-to-r from-emerald-300 via-teal-200 to-cyan-300 bg-clip-text text-transparent">
+                Ummah Digitally
+              </span>
+              <span className="absolute -bottom-2 left-1/2 h-1 w-2/3 -translate-x-1/2 rounded-full bg-gradient-to-r from-transparent via-emerald-400/70 to-transparent"></span>
             </span>
           </h1>
 
-          <p className="text-xl sm:text-2xl text-emerald-100 max-w-3xl mx-auto leading-relaxed mt-8 font-light">
+          <p className="mx-auto mt-8 max-w-2xl text-lg font-light leading-relaxed text-emerald-100/90 sm:text-xl md:text-2xl about-hero-stage about-hero-stage-4">
             Where timeless Islamic wisdom meets intelligent technology
           </p>
 
           {/* CTA Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mt-12">
+          <div className="mt-11 flex flex-col items-center justify-center gap-4 sm:flex-row about-hero-stage about-hero-stage-4">
             <button
               onClick={() => scrollToSection('story-section')}
-              className="group px-8 py-4 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold rounded-xl hover:from-emerald-600 hover:to-teal-600 transform hover:scale-105 transition-all duration-300 shadow-2xl cursor-pointer flex items-center gap-2"
+              className="group inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-8 py-4 font-semibold text-white shadow-lg shadow-emerald-900/40 transition-all duration-300 hover:-translate-y-0.5 hover:scale-[1.02] hover:from-emerald-400 hover:to-teal-400 hover:shadow-xl"
             >
               Discover Our Story
-              <ArrowDownIcon className="w-5 h-5 group-hover:translate-y-1 transition-transform" />
+              <ArrowDownIcon className="h-5 w-5 transition-transform group-hover:translate-y-1" />
             </button>
             <button
               onClick={scrollToFeatures}
-              className="px-8 py-4 bg-white/10 backdrop-blur-sm border-2 border-white/30 text-white font-semibold rounded-xl hover:bg-white/20 transform hover:scale-105 transition-all duration-300 cursor-pointer"
+              className="group inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/25 bg-white/10 px-8 py-4 font-semibold text-white backdrop-blur-sm transition-all duration-300 hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-white/20"
             >
+              <SparklesIcon className="h-5 w-5 text-emerald-300" />
               Explore Features
             </button>
           </div>
 
           {/* Scroll Indicator */}
-          <div className="mt-20 animate-bounce">
-            <ArrowDownIcon className="w-6 h-6 text-emerald-300 mx-auto" />
+          <div className="mt-16 flex flex-col items-center gap-2 about-hero-stage about-hero-stage-4">
+            <span className="text-[11px] uppercase tracking-[0.2em] text-emerald-200/70">Scroll to explore</span>
+            <span className="flex h-9 w-6 items-start justify-center rounded-full border border-emerald-300/40 p-1.5">
+              <span className="h-2 w-1 rounded-full bg-emerald-300 animate-bounce"></span>
+            </span>
           </div>
+        </div>
+
+        {/* Bottom wave divider into Story section */}
+        <div className="absolute bottom-0 left-0 right-0 pointer-events-none">
+          <svg viewBox="0 0 1440 120" className="w-full h-auto" aria-hidden preserveAspectRatio="none">
+            <path
+              d="M0 60L60 65C120 70 240 80 360 78C480 76 600 62 720 56C840 50 960 52 1080 58C1200 64 1320 74 1380 79L1440 84V120H0V60Z"
+              fill="#ffffff"
+            />
+          </svg>
         </div>
       </section>
 
@@ -479,6 +562,79 @@ const About: React.FC = () => {
                 </div>
               </button>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Maktab Mission Section */}
+      <section
+        ref={maktabRef}
+        data-section="maktab"
+        className="relative overflow-hidden"
+      >
+        <div className="absolute inset-0">
+          <img src="/maktab/hero.jpg" alt="" className="h-full w-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-r from-slate-950/92 via-indigo-950/80 to-emerald-950/60"></div>
+        </div>
+        <div
+          className="absolute inset-0 opacity-40 pointer-events-none"
+          style={{
+            backgroundImage:
+              'radial-gradient(ellipse 80% 60% at 12% 20%, rgba(79,70,229,0.4), transparent), radial-gradient(ellipse 70% 50% at 88% 80%, rgba(16,185,129,0.3), transparent)',
+          }}
+        ></div>
+
+        <div className={`relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-24 transition-all duration-1000 ${visibleSections.has('maktab') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-center">
+            <div className="lg:col-span-7">
+              <div className="flex items-center gap-3 mb-4">
+                <img
+                  src="/maktab.png"
+                  alt="HikmahSphere Maktab"
+                  className="w-12 h-12 rounded-xl object-contain bg-white/95 p-1 shadow-md"
+                />
+                <p className="text-indigo-200 text-sm font-semibold tracking-[0.16em] uppercase">
+                  {maktabSection.eyebrow}
+                </p>
+              </div>
+              <h2 className="text-4xl sm:text-5xl font-bold text-white mb-5 leading-tight">
+                {maktabSection.heading}
+              </h2>
+              <p className="text-lg text-emerald-50/90 max-w-2xl leading-relaxed mb-8">
+                {maktabSection.lead}
+              </p>
+
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  to={maktabSection.primaryCta.path}
+                  className="inline-flex items-center justify-center px-7 py-3.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white font-semibold shadow-lg shadow-indigo-900/40 transition-colors"
+                >
+                  {maktabSection.primaryCta.label}
+                </Link>
+                <Link
+                  to={maktabSection.secondaryCta.path}
+                  className="inline-flex items-center justify-center px-7 py-3.5 rounded-xl border border-white/30 bg-white/10 hover:bg-white/20 text-white font-semibold backdrop-blur-sm transition-colors"
+                >
+                  {maktabSection.secondaryCta.label}
+                </Link>
+              </div>
+            </div>
+
+            <div className="lg:col-span-5">
+              <div className="rounded-3xl border border-white/15 bg-white/10 backdrop-blur-sm p-7 sm:p-8 shadow-2xl">
+                <h3 className="text-lg font-semibold text-white mb-5">
+                  What your sponsorship provides
+                </h3>
+                <ul className="space-y-4">
+                  {maktabSection.highlights.map((item) => (
+                    <li key={item} className="flex items-start gap-3 text-emerald-50/95">
+                      <CheckCircleIcon className="w-6 h-6 text-emerald-300 shrink-0 mt-0.5" />
+                      <span className="text-base">{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -966,6 +1122,49 @@ const About: React.FC = () => {
         </div>
       </section>
       </div>
+
+      <style>{`
+        .about-page :is(h1, h2, h3):not(.font-scheherazade) {
+          font-family: 'Fraunces', Georgia, serif;
+        }
+        @keyframes aboutOrb {
+          0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.55; }
+          50% { transform: translate(12px, -18px) scale(1.08); opacity: 0.85; }
+        }
+        .about-orb {
+          animation: aboutOrb 9s ease-in-out infinite;
+        }
+        .about-orb-delay {
+          animation-delay: 1.4s;
+        }
+        .about-orb-slow {
+          animation-duration: 14s;
+          animation-delay: 0.6s;
+        }
+        .about-hero-stage {
+          opacity: 0;
+          transform: translateY(18px);
+        }
+        .about-hero-in .about-hero-stage {
+          opacity: 1;
+          transform: translateY(0);
+          transition: opacity 0.7s ease-out, transform 0.7s ease-out;
+        }
+        .about-hero-in .about-hero-stage-1 { transition-delay: 0.05s; }
+        .about-hero-in .about-hero-stage-2 { transition-delay: 0.18s; }
+        .about-hero-in .about-hero-stage-3 { transition-delay: 0.32s; }
+        .about-hero-in .about-hero-stage-4 { transition-delay: 0.46s; }
+        @media (prefers-reduced-motion: reduce) {
+          .about-page * {
+            animation: none !important;
+            transition-duration: 0.01ms !important;
+          }
+          .about-hero-stage {
+            opacity: 1 !important;
+            transform: none !important;
+          }
+        }
+      `}</style>
     </>
   );
 };
