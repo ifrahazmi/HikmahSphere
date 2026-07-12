@@ -162,7 +162,11 @@ const buildGenericContactEmail = (name: string, email: string, type: string, mes
     const safeName = escapeHtml(name);
     const safeEmail = escapeHtml(email);
     const safeType = escapeHtml(type);
-    const meta = TYPE_META[type] || TYPE_META.Other;
+    const meta = TYPE_META[type] ?? {
+        title: 'General Enquiry',
+        blurb: 'A new message from the contact form',
+        badge: '#475569',
+    };
     const emailLink = `<a href="mailto:${safeEmail}" style="color:#059669; text-decoration:none; font-weight:600;">${safeEmail}</a>`;
     const messageHtml = message?.trim()
         ? escapeHtml(message.trim()).replace(/\n/g, '<br>')
@@ -251,7 +255,7 @@ router.post('/contact', [
         : `[HikmahSphere ${type}] ${name} — new contact message`;
 
     const html = isMaktab
-        ? buildMaktabSponsorEmail({ name, email, phone, program, amount: amount != null ? String(amount) : undefined, message })
+        ? buildMaktabSponsorEmail({ name, email, phone, program, ...(amount != null ? { amount: String(amount) } : {}), message })
         : buildGenericContactEmail(name, email, type, message);
 
     const replyToEmail = isMaktab && email.includes('maktab-sponsor@')
