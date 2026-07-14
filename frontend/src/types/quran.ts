@@ -283,7 +283,7 @@ export const DEFAULT_QURAN_SETTINGS: QuranSettings = {
   audioEnabled: false,
   audioMode: 'ayah',
   translationAudioEnabled: false,
-  tafsirEdition: 'bayan-ul-quran-dr-israr-ahmed',
+  tafsirEdition: 'tafheem-ul-quran-syed-abu-ala-maududi',
   tafsirTranslationPreferences: { ...DEFAULT_TAFSIR_TRANSLATION_PREFERENCES },
   tafsirFontSize: 26,
   tafsirTextAreaBackground: '#f8fffb',

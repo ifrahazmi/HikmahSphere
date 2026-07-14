@@ -20,6 +20,9 @@ interface TodayHijri {
 interface IslamicCalendarProps {
   whiteDays?: WhiteDays;
   todayHijri?: TodayHijri;
+  // Global admin-controlled day offset applied to every cell so the calendar stays in
+  // sync with the daily header / Month tab. Defaults to India moon-sighting (-1).
+  adjustmentOffset?: number | null;
 }
 
 interface HijriInfo {
@@ -106,9 +109,13 @@ const getDaysInMonth = (date: Date) => {
   return Array.from({ length: totalDays }, (_, index) => new Date(year, month, index + 1));
 };
 
-const getHijriInfo = (date: Date): HijriInfo => {
-  const longParts = HIJRI_LONG_FORMATTER.formatToParts(date);
-  const shortParts = HIJRI_SHORT_FORMATTER.formatToParts(date);
+const getHijriInfo = (date: Date, offsetDays = 0): HijriInfo => {
+  const source = new Date(date);
+  if (Number.isFinite(offsetDays) && offsetDays !== 0) {
+    source.setDate(source.getDate() + offsetDays);
+  }
+  const longParts = HIJRI_LONG_FORMATTER.formatToParts(source);
+  const shortParts = HIJRI_SHORT_FORMATTER.formatToParts(source);
 
   return {
     day: parseInt(longParts.find((part) => part.type === 'day')?.value ?? '0', 10) || 0,
@@ -118,11 +125,17 @@ const getHijriInfo = (date: Date): HijriInfo => {
   };
 };
 
-const PrayerTimesIslamicCalendar: React.FC<IslamicCalendarProps> = ({ whiteDays, todayHijri }) => {
+const PrayerTimesIslamicCalendar: React.FC<IslamicCalendarProps> = ({ whiteDays, todayHijri, adjustmentOffset }) => {
   const [monthOffset, setMonthOffset] = useState(0);
   const [showWhiteDayInfo, setShowWhiteDayInfo] = useState(false);
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
+
+  // Single source of truth for the day offset. Falls back to India moon-sighting (-1)
+  // until the global admin value has loaded.
+  const hijriOffsetDays = typeof adjustmentOffset === 'number' && Number.isFinite(adjustmentOffset)
+    ? adjustmentOffset
+    : -1;
 
   const today = new Date();
   const todayIso = toLocalISO(today);
@@ -133,7 +146,7 @@ const PrayerTimesIslamicCalendar: React.FC<IslamicCalendarProps> = ({ whiteDays,
   // preventing sequence breaks (like double 14ths) in the calendar layout.
   const displayedDays = getDaysInMonth(displayedMonth).map((date) => {
     const iso = toLocalISO(date);
-    const hijri = getHijriInfo(date);
+    const hijri = getHijriInfo(date, hijriOffsetDays);
     
     return { date, iso, hijri };
   });

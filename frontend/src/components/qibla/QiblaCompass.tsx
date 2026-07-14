@@ -1,6 +1,9 @@
 import React from 'react';
 import './QiblaCompass.css';
 
+type TurnDirection = 'left' | 'right' | 'aligned';
+type HeadingSource = 'ios' | 'absolute' | 'relative' | null;
+
 interface QiblaCompassProps {
   qiblaBearing: number | null;
   currentHeading: number;
@@ -17,6 +20,13 @@ interface QiblaCompassProps {
   userLng: number | null;
   onCompassCircleClick: () => void;
   darkMode?: boolean;
+  turnDirection?: TurnDirection;
+  turnDegrees?: number;
+  holdFlat?: boolean;
+  manualMode?: boolean;
+  headingSource?: HeadingSource;
+  onToggleManualMode?: (enabled?: boolean) => void;
+  onSetManualHeading?: (deg: number) => void;
 }
 
 const degreeText = (value: number | null): string => {
@@ -40,10 +50,21 @@ const QiblaCompass: React.FC<QiblaCompassProps> = ({
   userLng,
   onCompassCircleClick,
   darkMode = false,
+  turnDirection = 'aligned',
+  turnDegrees = 0,
+  holdFlat = false,
+  manualMode = false,
+  headingSource = null,
+  onToggleManualMode,
+  onSetManualHeading,
 }) => {
   const compassRotation = noCompassAvailable ? 0 : -currentHeading;
   const indicatorRotation = qiblaBearing === null ? 0 : noCompassAvailable ? qiblaBearing : qiblaBearing - currentHeading;
   const liveHeading = noCompassAvailable ? null : currentHeading;
+
+  // Offer manual mode when the live sensor is unreliable (relative-only or none).
+  const manualAvailable = Boolean(onToggleManualMode) && (manualMode || headingSource === 'relative' || noCompassAvailable);
+  const showTurnGuidance = !noCompassAvailable && qiblaBearing !== null;
 
   const ticks: JSX.Element[] = [];
   for (let i = 0; i < 360; i += 5) {
@@ -80,6 +101,12 @@ const QiblaCompass: React.FC<QiblaCompassProps> = ({
         <span className={`qibla-status-dot ${statusLevelClass}`} />
         {statusText}
       </div>
+
+      {holdFlat && !manualMode && !noCompassAvailable && (
+        <div className="qibla-flat-chip">
+          <span aria-hidden="true">📱</span> Hold your phone flat and level for accuracy
+        </div>
+      )}
 
       <div
         className="qibla-compass-wrapper"
@@ -147,7 +174,60 @@ const QiblaCompass: React.FC<QiblaCompassProps> = ({
           <div className="qibla-degree-chip-value">{degreeText(qiblaBearing)}</div>
         </div>
       </div>
-      <div className={`qibla-alignment-msg ${isAligned && !noCompassAvailable ? 'visible' : ''}`}>Facing the Kaaba ✦</div>
+      {showTurnGuidance && (
+        <div className={`qibla-turn-banner ${turnDirection === 'aligned' ? 'aligned' : ''}`}>
+          {turnDirection === 'aligned' ? (
+            <span className="qibla-turn-text">Facing the Kaaba ✦</span>
+          ) : (
+            <>
+              <span className="qibla-turn-chevron" aria-hidden="true">{turnDirection === 'left' ? '‹' : '›'}</span>
+              <span className="qibla-turn-text">
+                Turn {turnDegrees}° {turnDirection === 'left' ? 'left' : 'right'}
+              </span>
+              <span className="qibla-turn-chevron" aria-hidden="true">{turnDirection === 'left' ? '‹' : '›'}</span>
+            </>
+          )}
+        </div>
+      )}
+
+      {manualAvailable && (
+        <div className={`qibla-manual-panel ${tone}`}>
+          <div className="qibla-manual-header">
+            <span className="qibla-manual-title">Manual mode</span>
+            <button
+              type="button"
+              className={`qibla-manual-toggle ${manualMode ? 'on' : ''}`}
+              onClick={() => onToggleManualMode?.(!manualMode)}
+            >
+              {manualMode ? 'Using manual' : 'Switch to manual'}
+            </button>
+          </div>
+          {manualMode ? (
+            <>
+              <p className="qibla-manual-hint">
+                Rotate the dial to the direction you are physically facing, then align the Kaaba marker to the top pointer.
+              </p>
+              <div className="qibla-manual-controls">
+                <button type="button" className="qibla-manual-step" onClick={() => onSetManualHeading?.(currentHeading - 1)} aria-label="Rotate left 1 degree">−</button>
+                <input
+                  type="range"
+                  min={0}
+                  max={359}
+                  value={Math.round(((currentHeading % 360) + 360) % 360)}
+                  onChange={(e) => onSetManualHeading?.(Number(e.target.value))}
+                  className="qibla-manual-slider"
+                  aria-label="Set your facing direction in degrees"
+                />
+                <button type="button" className="qibla-manual-step" onClick={() => onSetManualHeading?.(currentHeading + 1)} aria-label="Rotate right 1 degree">+</button>
+              </div>
+            </>
+          ) : (
+            <p className="qibla-manual-hint">
+              Your device compass looks unreliable. Manual mode lets you set your facing direction by hand.
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="qibla-info-grid">
         <div className={`qibla-info-card ${tone}`}>

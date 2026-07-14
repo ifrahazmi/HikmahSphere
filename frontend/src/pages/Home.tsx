@@ -352,11 +352,11 @@ const Home: React.FC = () => {
                   className="text-3xl sm:text-4xl lg:text-[2.75rem] text-white leading-tight mb-4"
                   style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 700 }}
                 >
-                  Sponsor a child’s Islamic education
+                  Free Islamic education for children who need it most
                 </h2>
                 <p className="text-lg text-slate-300 max-w-xl leading-relaxed mb-8">
-                  Many children want to learn Quran and Deen but cannot afford fees. Your sponsorship keeps
-                  classrooms open—Tajweed, Hifz, Hadith, culture, and basic school support—free for families in need.
+                  Admit your child for Quran, Hifz, Urdu, and Deen — or sponsor a seat so another child can learn
+                  without cost to their family. Taught by Hafiz teachers, with backup power and free books when needed.
                 </p>
 
                 <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-9 max-w-xl">
@@ -369,6 +369,12 @@ const Home: React.FC = () => {
                 </ul>
 
                 <div className="flex flex-wrap gap-3">
+                  <Link
+                    to="/maktab#admit"
+                    className="inline-flex items-center justify-center px-7 py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white font-semibold shadow-lg shadow-emerald-900/40 transition-colors"
+                  >
+                    Admit your child
+                  </Link>
                   <Link
                     to="/maktab#sponsor"
                     className="inline-flex items-center justify-center px-7 py-3.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white font-semibold shadow-lg shadow-indigo-900/40 transition-colors"
@@ -649,24 +655,30 @@ const Home: React.FC = () => {
               className="text-3xl sm:text-4xl lg:text-5xl text-white max-w-2xl mb-4 leading-tight"
               style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 700 }}
             >
-              Free Islamic education for children who need it most
+              Admit your child — or sponsor a seat
             </h2>
             <p className="text-lg text-emerald-50/90 max-w-xl mb-8 leading-relaxed">
-              Sponsor a seat for Quran, Hifz, Deen, and classroom support — so learning never depends on a family’s
-              income.
+              Free Quran, Hifz, Urdu, and Deen education at HikmahSphere Maktab. Enrol your child, or help another
+              family keep learning without fees.
             </p>
             <div className="flex flex-wrap gap-3">
               <Link
-                to="/maktab"
-                className="inline-flex items-center justify-center px-7 py-3.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white font-semibold shadow-lg transition-colors"
+                to="/maktab#admit"
+                className="inline-flex items-center justify-center px-7 py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white font-semibold shadow-lg transition-colors"
               >
-                Explore Maktab
+                Admit your child
               </Link>
               <Link
                 to="/maktab#sponsor"
-                className="inline-flex items-center justify-center px-7 py-3.5 rounded-xl border border-white/35 bg-white/10 hover:bg-white/20 text-white font-semibold backdrop-blur-sm transition-colors"
+                className="inline-flex items-center justify-center px-7 py-3.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white font-semibold shadow-lg transition-colors"
               >
                 Donate / Sponsor
+              </Link>
+              <Link
+                to="/maktab"
+                className="inline-flex items-center justify-center px-7 py-3.5 rounded-xl border border-white/35 bg-white/10 hover:bg-white/20 text-white font-semibold backdrop-blur-sm transition-colors"
+              >
+                Explore Maktab
               </Link>
             </div>
           </div>
@@ -852,9 +864,9 @@ const Home: React.FC = () => {
               </Link>
             </div>
             <p className="text-sm sm:text-base text-emerald-100/90">
-              Want to support free Islamic education for children?{' '}
-              <Link to="/maktab#sponsor" className="font-semibold text-white underline underline-offset-4 hover:text-emerald-100">
-                Sponsor through HikmahSphere Maktab
+              Looking for free Islamic education for your child — or want to sponsor a seat?{' '}
+              <Link to="/maktab" className="font-semibold text-white underline underline-offset-4 hover:text-emerald-100">
+                Visit HikmahSphere Maktab
               </Link>
             </p>
           </div>

@@ -25,6 +25,13 @@ const QiblaDirection: React.FC = () => {
     permissionHelpMessage,
     isAligned,
     calibrateCompass,
+    turnDirection,
+    turnDegrees,
+    holdFlat,
+    manualMode,
+    headingSource,
+    toggleManualMode,
+    setManualHeading,
   } = useQiblaCompass();
 
   useEffect(() => {
@@ -102,7 +109,7 @@ const QiblaDirection: React.FC = () => {
             </div>
           )}
 
-          <div className="mx-auto grid max-w-6xl grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
+          <div className="mx-auto flex max-w-2xl flex-col gap-4 lg:gap-6">
             <QiblaCompass
               qiblaBearing={qiblaBearing}
               currentHeading={currentHeading}
@@ -119,6 +126,13 @@ const QiblaDirection: React.FC = () => {
               userLng={userLng}
               onCompassCircleClick={calibrateCompass}
               darkMode={darkMode}
+              turnDirection={turnDirection}
+              turnDegrees={turnDegrees}
+              holdFlat={holdFlat}
+              manualMode={manualMode}
+              headingSource={headingSource}
+              onToggleManualMode={toggleManualMode}
+              onSetManualHeading={setManualHeading}
             />
 
             <QiblaMap

@@ -39,7 +39,7 @@ const TRANSLATION_AUDIO_SOURCES: Record<string, { baseUrl: string; label: string
 const LEGACY_QURAN_SETTINGS_KEY = 'quranSettings';
 const LEGACY_QURAN_BOOKMARKS_KEY = 'quranBookmarks';
 const LEGACY_QURAN_LAST_READ_KEY = 'quranLastRead';
-const QURAN_SETTINGS_MIGRATION_VERSION = 2; // Incremented to reset default translation to Urdu
+const QURAN_SETTINGS_MIGRATION_VERSION = 3; // v2: reset default translation to Urdu; v3: default tafsir edition to Maududi (Tafheem)
 const QURAN_SURAHS_CACHE_TTL_MS = 1000 * 60 * 30;
 const QURAN_EDITIONS_CACHE_TTL_MS = 1000 * 60 * 10;
 
@@ -466,20 +466,24 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     const fallbackSettingsRaw = isGuestScope ? localStorage.getItem(LEGACY_QURAN_SETTINGS_KEY) : null;
     const settingsPayload = parseJson(userSettingsRaw) ?? parseJson(fallbackSettingsRaw);
     
-    // Migration: Force Urdu as default translation for existing users
+    // Migration: apply version-specific resets for existing users
     let migratedPayload = settingsPayload;
     if (migratedPayload && typeof migratedPayload === 'object') {
-      const storedVersion = (migratedPayload as any)._migrationVersion ?? 1;
-      if (storedVersion < QURAN_SETTINGS_MIGRATION_VERSION) {
-        // Reset to Urdu for users who haven't been migrated yet
-        migratedPayload = {
-          ...migratedPayload,
-          selectedTranslations: [DEFAULT_URDU_TRANSLATION.identifier],
-          _migrationVersion: QURAN_SETTINGS_MIGRATION_VERSION,
-        };
-      } else {
-        migratedPayload = { ...migratedPayload, _migrationVersion: QURAN_SETTINGS_MIGRATION_VERSION };
+      let migrated: Record<string, any> = { ...(migratedPayload as Record<string, any>) };
+      const storedVersion = migrated._migrationVersion ?? 1;
+
+      // v2: Force Urdu as default translation for users who haven't been migrated yet
+      if (storedVersion < 2) {
+        migrated.selectedTranslations = [DEFAULT_URDU_TRANSLATION.identifier];
       }
+
+      // v3: Default tafsir edition to Maududi (Tafheem) once; later user changes still persist
+      if (storedVersion < 3) {
+        migrated.tafsirEdition = DEFAULT_QURAN_SETTINGS.tafsirEdition;
+      }
+
+      migrated._migrationVersion = QURAN_SETTINGS_MIGRATION_VERSION;
+      migratedPayload = migrated;
     }
     
     const hydratedSettings = normalizeSettings(migratedPayload);

@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  absoluteHeadingFromAlpha,
   applyLowPassAngle,
   calculateDistanceKm,
   calculateQiblaBearing,
-  correctedHeadingFromEuler,
+  distanceBetweenMeters,
   normalizeAngle,
   smallestAngleDiff,
+  tiltCompensatedHeading,
 } from '../utils/qiblaMath';
 
 interface GeolocationErrorLike {
@@ -14,6 +16,8 @@ interface GeolocationErrorLike {
 }
 
 type CompassPermissionState = 'unknown' | 'granted' | 'denied' | 'blocked';
+type HeadingSource = 'ios' | 'absolute' | 'relative' | null;
+type TurnDirection = 'left' | 'right' | 'aligned';
 
 const LOW_ACCURACY_THRESHOLD_METERS = 35;
 const JITTER_THRESHOLD_DEG = 20;
@@ -31,6 +35,10 @@ const DESKTOP_NO_COMPASS_MESSAGE = 'Desktop mode: compass not detected. Map mode
 const DESKTOP_NO_COMPASS_HELP = 'Desktop browsers usually do not provide motion sensors. Pan and zoom the map to align direction.';
 const COMPASS_DETECTION_TIMEOUT_MS = 5000;
 const DESKTOP_COMPASS_DETECTION_TIMEOUT_MS = 3000;
+const HOLD_FLAT_TILT_THRESHOLD_DEG = 35;
+const ALIGNED_THRESHOLD_DEG = 5;
+const GPS_MOVE_THRESHOLD_METERS = 20;
+const RELATIVE_SENSOR_MESSAGE = 'Using basic sensor mode. Heading may drift — switch to Manual mode for reliable alignment.';
 
 const isSecureOrLocalhost = (): boolean => {
   if (typeof window === 'undefined') return false;
@@ -97,6 +105,9 @@ export const useQiblaCompass = () => {
   const [permissionHelpMessage, setPermissionHelpMessage] = useState<string | null>(null);
   const [isSupported, setIsSupported] = useState(true);
   const [direction, setDirection] = useState<number | null>(null);
+  const [holdFlat, setHoldFlat] = useState(false);
+  const [manualMode, setManualMode] = useState(false);
+  const [headingSource, setHeadingSource] = useState<HeadingSource>(null);
 
   const headingBufferRef = useRef<number[]>([]);
   const compassSupportedRef = useRef(false);
@@ -120,6 +131,12 @@ export const useQiblaCompass = () => {
   const calibrationTimerRef = useRef<number | null>(null);
   const calibrationLiveUntilRef = useRef(0);
   const orientationHandlerRef = useRef<((e: DeviceOrientationEvent) => void) | null>(null);
+  const headingSourceRef = useRef<HeadingSource>(null);
+  const watchIdRef = useRef<number | null>(null);
+  const bestAccuracyRef = useRef<number | null>(null);
+  const alignedVibratedRef = useRef(false);
+  const manualModeRef = useRef(false);
+  const manualHeadingRef = useRef(0);
 
   const alignmentDiff = useMemo(() => {
     if (qiblaBearing === null) return null;
@@ -128,7 +145,17 @@ export const useQiblaCompass = () => {
     return diff;
   }, [qiblaBearing, currentHeading]);
 
-  const isAligned = alignmentDiff !== null && alignmentDiff < 5;
+  const isAligned = alignmentDiff !== null && alignmentDiff < ALIGNED_THRESHOLD_DEG;
+
+  // Signed shortest turn from the current heading to the Qibla bearing.
+  // Positive delta => Qibla is clockwise (turn right); negative => turn left.
+  const { turnDirection, turnDegrees } = useMemo<{ turnDirection: TurnDirection; turnDegrees: number }>(() => {
+    if (qiblaBearing === null) return { turnDirection: 'aligned', turnDegrees: 0 };
+    const delta = ((qiblaBearing - currentHeading + 540) % 360) - 180;
+    const magnitude = Math.abs(delta);
+    if (magnitude < ALIGNED_THRESHOLD_DEG) return { turnDirection: 'aligned', turnDegrees: 0 };
+    return { turnDirection: delta > 0 ? 'right' : 'left', turnDegrees: Math.round(magnitude) };
+  }, [qiblaBearing, currentHeading]);
 
   const isUnstableHeading = useCallback((newHeading: number): boolean => {
     if (lastUnstableHeadingRef.current === null) {
@@ -181,6 +208,23 @@ export const useQiblaCompass = () => {
     const lat = position.coords.latitude;
     const lng = position.coords.longitude;
     const accuracy = Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null;
+
+    // Refinement gate: after the first fix, only accept a new reading when it is
+    // more accurate than the best so far, or the user has physically moved.
+    if (userLatRef.current !== null && userLngRef.current !== null) {
+      const movedMeters = distanceBetweenMeters(userLatRef.current, userLngRef.current, lat, lng);
+      const isMoreAccurate =
+        accuracy !== null && (bestAccuracyRef.current === null || accuracy <= bestAccuracyRef.current);
+      const hasMoved = movedMeters > GPS_MOVE_THRESHOLD_METERS;
+      if (!isMoreAccurate && !hasMoved) {
+        return;
+      }
+    }
+
+    if (accuracy !== null && (bestAccuracyRef.current === null || accuracy < bestAccuracyRef.current)) {
+      bestAccuracyRef.current = accuracy;
+    }
+
     const bearing = calculateQiblaBearing(lat, lng);
 
     userLatRef.current = lat;
@@ -233,6 +277,11 @@ export const useQiblaCompass = () => {
       calibrationTimerRef.current = null;
     }
 
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+
     headingBufferRef.current = [];
     lastRawHeadingRef.current = null;
     smoothedHeadingRef.current = null;
@@ -240,6 +289,9 @@ export const useQiblaCompass = () => {
     lastUnstableHeadingRef.current = null;
     unstableCountRef.current = 0;
     compassEventSeenRef.current = false;
+    headingSourceRef.current = null;
+    bestAccuracyRef.current = null;
+    alignedVibratedRef.current = false;
     reliabilityRef.current = { total: 0, relativeCount: 0, jitterCount: 0, unstableCount: 0 };
   }, []);
 
@@ -299,6 +351,9 @@ export const useQiblaCompass = () => {
     declinationFetchedRef.current = false;
     userLatRef.current = null;
     userLngRef.current = null;
+    headingSourceRef.current = null;
+    bestAccuracyRef.current = null;
+    alignedVibratedRef.current = false;
 
     setCompassSupported(false);
     setNoCompassAvailable(false);
@@ -307,6 +362,8 @@ export const useQiblaCompass = () => {
     setIsLowAccuracy(true);
     setIsSupported(true);
     setDirection(null);
+    setHoldFlat(false);
+    setHeadingSource(null);
 
     if (!isSecureOrLocalhost()) {
       setIsSupported(false);
@@ -327,35 +384,89 @@ export const useQiblaCompass = () => {
       return;
     }
 
-    const handleOrientation = (event: DeviceOrientationEvent) => {
-      const iosEvent = event as DeviceOrientationEvent & { webkitCompassHeading?: number };
-      let heading: number | null = null;
-      let usesRelativeSensor = false;
+    // Continuously refine location: keep the most accurate fix and follow movement.
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+    }
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (position) => onLocationSuccess(position),
+      () => {
+        // Non-fatal: keep the last good fix if the watch errors intermittently.
+      },
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+    );
 
-      if (iosEvent.webkitCompassHeading !== undefined) {
-        heading = normalizeAngle(iosEvent.webkitCompassHeading);
+    const handleOrientation = (event: DeviceOrientationEvent) => {
+      // Manual mode drives the heading from user input; ignore live sensors.
+      if (manualModeRef.current) return;
+
+      const iosEvent = event as DeviceOrientationEvent & { webkitCompassHeading?: number };
+      const screenAngle = getScreenOrientationAngle();
+
+      // Determine this event's source.
+      let eventSource: HeadingSource = null;
+      if (iosEvent.webkitCompassHeading !== undefined && !Number.isNaN(iosEvent.webkitCompassHeading)) {
+        eventSource = 'ios';
       } else if (event.absolute === true && event.alpha !== null) {
-        heading = normalizeAngle(360 - event.alpha + getScreenOrientationAngle());
+        eventSource = 'absolute';
       } else if (event.alpha !== null) {
-        usesRelativeSensor = true;
-        heading = correctedHeadingFromEuler(event.alpha, event.beta ?? 0, event.gamma ?? 0, getScreenOrientationAngle());
+        eventSource = 'relative';
       }
 
-      if (heading === null) {
+      if (eventSource === null) {
         setIsLowAccuracy(true);
         setPermissionHelpMessage(`${FIGURE_8_GUIDANCE}. ${INTERFERENCE_WARNING}`);
         return;
       }
 
+      // Source lock: once a true-north source (ios/absolute) is active, ignore the
+      // interleaved relative (`deviceorientation`, absolute:false) stream that
+      // otherwise fights the good stream and spins the needle on Android.
+      const locked = headingSourceRef.current;
+      if ((locked === 'ios' || locked === 'absolute') && eventSource === 'relative') {
+        return;
+      }
+
+      // Upgrade the locked source if a better one arrives (relative -> absolute -> ios stays).
+      if (locked === null || (locked === 'relative' && eventSource !== 'relative')) {
+        headingSourceRef.current = eventSource;
+        setHeadingSource(eventSource);
+      }
+      const activeSource = headingSourceRef.current ?? eventSource;
+
+      // Compute the raw heading for this source.
+      let heading: number | null = null;
+      if (activeSource === 'ios') {
+        heading = normalizeAngle(iosEvent.webkitCompassHeading as number);
+      } else if (activeSource === 'absolute') {
+        heading = absoluteHeadingFromAlpha(event.alpha as number, screenAngle);
+      } else {
+        heading = tiltCompensatedHeading(event.alpha as number, event.beta ?? 0, event.gamma ?? 0, screenAngle);
+      }
+
+      if (heading === null) {
+        // Too vertical to be meaningful; ask the user to hold the phone flat.
+        setHoldFlat(true);
+        setIsLowAccuracy(true);
+        return;
+      }
+
+      // Hold-flat detection from tilt magnitude (beta = front/back, gamma = left/right).
+      const tiltMagnitude = Math.max(Math.abs(event.beta ?? 0), Math.abs(event.gamma ?? 0));
+      setHoldFlat(tiltMagnitude > HOLD_FLAT_TILT_THRESHOLD_DEG);
+
       compassEventSeenRef.current = true;
 
-      // Convert magnetic heading to true-north heading using declination correction.
-      heading = normalizeAngle(heading + declinationRef.current);
+      // Source-aware declination: only iOS webkitCompassHeading is magnetic-referenced
+      // and needs declination. Android absolute/fused sensors are already true-north.
+      if (activeSource === 'ios') {
+        heading = normalizeAngle(heading + declinationRef.current);
+      }
 
       const reliability = reliabilityRef.current;
       reliability.total += 1;
 
-      if (usesRelativeSensor || event.absolute === false) {
+      if (activeSource === 'relative') {
         reliability.relativeCount += 1;
       }
 
@@ -431,24 +542,32 @@ export const useQiblaCompass = () => {
         setDirection(normalizeAngle(bearing - headingForDirection));
       }
 
+      const usingRelative = activeSource === 'relative';
+
       const lowAccuracy =
+        usingRelative ||
         locationAccuracyRef.current === null ||
         locationAccuracyRef.current > LOW_ACCURACY_THRESHOLD_METERS ||
         reliability.jitterCount >= 2 ||
         unstableByJump ||
         unstable;
 
-      if (inCalibrationLiveWindow) {
+      // Relative-only devices can't give a trustworthy live heading; always nudge
+      // toward Manual mode regardless of the calibration window.
+      if (usingRelative) {
+        setIsLowAccuracy(true);
+        setStatusText(COMPASS_ACTIVE_LOW_ACCURACY);
+        setPermissionHelpMessage(RELATIVE_SENSOR_MESSAGE);
+      } else if (inCalibrationLiveWindow) {
         setIsLowAccuracy(false);
         setStatusText('Compass active');
         setPermissionHelpMessage(null);
       } else {
         setIsLowAccuracy(lowAccuracy);
         setStatusText(lowAccuracy ? COMPASS_ACTIVE_LOW_ACCURACY : 'Compass active');
-      }
-
-      if (lowAccuracy && !inCalibrationLiveWindow) {
-        setPermissionHelpMessage(`${FIGURE_8_GUIDANCE}. ${INTERFERENCE_WARNING}`);
+        if (lowAccuracy) {
+          setPermissionHelpMessage(`${FIGURE_8_GUIDANCE}. ${INTERFERENCE_WARNING}`);
+        }
       }
     };
 
@@ -537,7 +656,51 @@ export const useQiblaCompass = () => {
     }, CALIBRATION_SETTLE_MS);
   }, [cleanupSensors, requestCompassPermission, start]);
 
+  const setManualHeading = useCallback((deg: number) => {
+    const normalized = normalizeAngle(deg);
+    manualHeadingRef.current = normalized;
+    stableHeadingRef.current = normalized;
+    smoothedHeadingRef.current = normalized;
+    setCurrentHeading(normalized);
+    const bearing = qiblaBearingRef.current;
+    if (bearing !== null) {
+      setDirection(normalizeAngle(bearing - normalized));
+    }
+  }, []);
+
+  const toggleManualMode = useCallback((enabled?: boolean) => {
+    setManualMode((prev) => {
+      const next = typeof enabled === 'boolean' ? enabled : !prev;
+      manualModeRef.current = next;
+      if (next) {
+        setIsLowAccuracy(false);
+        setHoldFlat(false);
+        setStatusText('Manual mode — rotate the dial to your facing direction');
+        setPermissionHelpMessage(null);
+        // Seed from the last known heading so the dial starts where the user was pointing.
+        setManualHeading(stableHeadingRef.current ?? smoothedHeadingRef.current ?? currentHeading);
+      } else {
+        setStatusText('Detecting compass...');
+      }
+      return next;
+    });
+  }, [currentHeading, setManualHeading]);
+
   useEffect(() => () => cleanupSensors(), [cleanupSensors]);
+
+  // Haptic buzz once when the user first faces the Qibla (mobile only, if supported).
+  useEffect(() => {
+    if (isAligned && !noCompassAvailable) {
+      if (!alignedVibratedRef.current) {
+        alignedVibratedRef.current = true;
+        if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+          navigator.vibrate(60);
+        }
+      }
+    } else {
+      alignedVibratedRef.current = false;
+    }
+  }, [isAligned, noCompassAvailable]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
@@ -577,5 +740,12 @@ export const useQiblaCompass = () => {
     isAligned,
     alignmentDiff,
     calibrateCompass,
+    turnDirection,
+    turnDegrees,
+    holdFlat,
+    manualMode,
+    headingSource,
+    toggleManualMode,
+    setManualHeading,
   };
 };

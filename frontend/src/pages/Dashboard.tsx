@@ -262,9 +262,10 @@ const Dashboard: React.FC = () => {
       }
   };
 
-  // Only Super Admin can access Dashboard
-  const canAccessDashboard = hasRole(['superadmin']);
+  // Super Admin gets the full dashboard; Manager gets Fund Management only.
   const isSuperAdmin = hasRole(['superadmin']);
+  const canManageFunds = hasRole(['superadmin', 'manager']);
+  const canAccessDashboard = isSuperAdmin || canManageFunds;
 
   useEffect(() => {
       if (isSuperAdmin) {
@@ -272,6 +273,13 @@ const Dashboard: React.FC = () => {
           fetchActivityLogs();
       }
   }, [user, isSuperAdmin]);
+
+  // Managers can only see Fund Management, so land them on that tab.
+  useEffect(() => {
+      if (canAccessDashboard && !isSuperAdmin && activeTab !== 'zakat') {
+          setActiveTab('zakat');
+      }
+  }, [canAccessDashboard, isSuperAdmin, activeTab]);
 
   if (!canAccessDashboard) {
       return (
@@ -312,18 +320,21 @@ const Dashboard: React.FC = () => {
           <div className="w-12 h-12 flex items-center justify-center overflow-hidden rounded-full bg-white shadow-md mr-4">
             <img src="/logo.png" alt="HikmahSphere Logo" className="w-full h-full object-cover" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">Super Admin Dashboard</h1>
+          <h1 className="text-3xl font-bold text-gray-900">{isSuperAdmin ? 'Super Admin Dashboard' : 'Fund Management'}</h1>
         </div>
         
         <div className="bg-white rounded-lg shadow mb-8">
             {/* Desktop Tab Navigation */}
             <nav className="hidden md:flex border-b border-gray-200 overflow-x-auto">
-                <button
-                    onClick={() => setActiveTab('overview')}
-                    className={`px-6 py-4 text-sm font-medium whitespace-nowrap ${activeTab === 'overview' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
-                >
-                    Overview
-                </button>
+                {/* Overview only for Super Admin */}
+                {isSuperAdmin && (
+                    <button
+                        onClick={() => setActiveTab('overview')}
+                        className={`px-6 py-4 text-sm font-medium whitespace-nowrap ${activeTab === 'overview' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                        Overview
+                    </button>
+                )}
                 {/* User Management only for Super Admin */}
                 {isSuperAdmin && (
                     <button
@@ -333,8 +344,8 @@ const Dashboard: React.FC = () => {
                         User Management
                     </button>
                 )}
-                {/* Funds Management for Super Admin Only */}
-                {isSuperAdmin && (
+                {/* Funds Management for Super Admin and Manager */}
+                {canManageFunds && (
                     <button
                         onClick={() => setActiveTab('zakat')}
                         className={`px-6 py-4 text-sm font-medium whitespace-nowrap flex items-center gap-2 ${activeTab === 'zakat' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
@@ -343,66 +354,73 @@ const Dashboard: React.FC = () => {
                         Funds Management
                     </button>
                 )}
-                <button
-                    onClick={() => setActiveTab('notifications')}
-                    className={`px-6 py-4 text-sm font-medium whitespace-nowrap ${activeTab === 'notifications' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
-                >
-                    Notifications
-                </button>
+                {/* Notifications only for Super Admin */}
+                {isSuperAdmin && (
+                    <button
+                        onClick={() => setActiveTab('notifications')}
+                        className={`px-6 py-4 text-sm font-medium whitespace-nowrap ${activeTab === 'notifications' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                        Notifications
+                    </button>
+                )}
             </nav>
 
             {/* Mobile Tab Navigation - Non-scrollable */}
             <div className="md:hidden p-3 border-b border-gray-200">
                 <div className="grid grid-cols-2 gap-2">
-                    <button
-                        onClick={() => setActiveTab('overview')}
-                        className={`w-full px-3 py-2.5 text-xs sm:text-sm font-medium rounded-lg text-center leading-tight transition-colors ${
-                            activeTab === 'overview'
-                                ? 'bg-emerald-500 text-white shadow-md'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
-                    >
-                        Overview
-                    </button>
                     {isSuperAdmin && (
-                        <>
-                            <button
-                                onClick={() => setActiveTab('users')}
-                                className={`w-full px-3 py-2.5 text-xs sm:text-sm font-medium rounded-lg text-center leading-tight transition-colors ${
-                                    activeTab === 'users'
-                                        ? 'bg-emerald-500 text-white shadow-md'
-                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                }`}
-                            >
-                                User Management
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('zakat')}
-                                className={`w-full px-3 py-2.5 text-xs sm:text-sm font-medium rounded-lg text-center leading-tight transition-colors ${
-                                    activeTab === 'zakat'
-                                        ? 'bg-emerald-500 text-white shadow-md'
-                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                }`}
-                            >
-                                Funds Management
-                            </button>
-                        </>
+                        <button
+                            onClick={() => setActiveTab('overview')}
+                            className={`w-full px-3 py-2.5 text-xs sm:text-sm font-medium rounded-lg text-center leading-tight transition-colors ${
+                                activeTab === 'overview'
+                                    ? 'bg-emerald-500 text-white shadow-md'
+                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                        >
+                            Overview
+                        </button>
                     )}
-                    <button
-                        onClick={() => setActiveTab('notifications')}
-                        className={`w-full px-3 py-2.5 text-xs sm:text-sm font-medium rounded-lg text-center leading-tight transition-colors ${
-                            activeTab === 'notifications'
-                                ? 'bg-emerald-500 text-white shadow-md'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
-                    >
-                        Notifications
-                    </button>
+                    {isSuperAdmin && (
+                        <button
+                            onClick={() => setActiveTab('users')}
+                            className={`w-full px-3 py-2.5 text-xs sm:text-sm font-medium rounded-lg text-center leading-tight transition-colors ${
+                                activeTab === 'users'
+                                    ? 'bg-emerald-500 text-white shadow-md'
+                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                        >
+                            User Management
+                        </button>
+                    )}
+                    {canManageFunds && (
+                        <button
+                            onClick={() => setActiveTab('zakat')}
+                            className={`w-full px-3 py-2.5 text-xs sm:text-sm font-medium rounded-lg text-center leading-tight transition-colors ${
+                                activeTab === 'zakat'
+                                    ? 'bg-emerald-500 text-white shadow-md'
+                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                        >
+                            Funds Management
+                        </button>
+                    )}
+                    {isSuperAdmin && (
+                        <button
+                            onClick={() => setActiveTab('notifications')}
+                            className={`w-full px-3 py-2.5 text-xs sm:text-sm font-medium rounded-lg text-center leading-tight transition-colors ${
+                                activeTab === 'notifications'
+                                    ? 'bg-emerald-500 text-white shadow-md'
+                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                        >
+                            Notifications
+                        </button>
+                    )}
                 </div>
             </div>
         </div>
 
-        {activeTab === 'overview' && (
+        {isSuperAdmin && activeTab === 'overview' && (
             <div className="space-y-6">
                 {/* Stats Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -495,13 +513,13 @@ const Dashboard: React.FC = () => {
             </div>
         )}
 
-        {/* Funds Management Tab - Super Admin Only */}
-        {activeTab === 'zakat' && (
+        {/* Funds Management Tab - Super Admin and Manager */}
+        {canManageFunds && activeTab === 'zakat' && (
             <FundsManagement />
         )}
 
-        {/* Notifications Tab */}
-        {activeTab === 'notifications' && (
+        {/* Notifications Tab - Super Admin Only */}
+        {isSuperAdmin && activeTab === 'notifications' && (
             <div className="space-y-8">
                 <div className="max-w-4xl mx-auto">
                     <AdminNotificationPanel />

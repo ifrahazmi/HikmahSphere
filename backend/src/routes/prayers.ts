@@ -12,6 +12,7 @@ import {
   getGlobalHijriAdjustment,
   setGlobalHijriAdjustment,
 } from '../services/hijriDateService';
+import type { HijriAdjustmentValue } from '../models/HijriAdjustment';
 
 const router = express.Router();
 
@@ -546,9 +547,27 @@ router.get('/hijri-date', [
   }
 });
 
+// Public read so anonymous visitors can align the Month tab / calendar Hijri numbers
+// with the admin-controlled global offset.
+router.get('/hijri-adjustment/public', async (_req: Request, res: Response) => {
+  try {
+    const adjustment = await getGlobalHijriAdjustment();
+    return res.json({
+      status: 'success',
+      data: { adjustment },
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch Hijri adjustment',
+      details: error.message,
+    });
+  }
+});
+
 router.get('/hijri-adjustment', authMiddleware, adminMiddleware, async (req: Request, res: Response) => {
   try {
-    const adjustment = await getGlobalHijriAdjustment('India');
+    const adjustment = await getGlobalHijriAdjustment();
     return res.json({
       status: 'success',
       data: { adjustment },
@@ -566,8 +585,8 @@ router.put('/hijri-adjustment', [
   authMiddleware,
   adminMiddleware,
   body('adjustment')
-    .isInt({ min: -1, max: 0 })
-    .withMessage('Adjustment must be one of -1 or 0'),
+    .isInt({ min: -2, max: 2 })
+    .withMessage('Adjustment must be an integer between -2 and 2'),
 ], async (req: any, res: Response) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -579,7 +598,7 @@ router.put('/hijri-adjustment', [
   }
 
   try {
-    const nextValue = parseInt(String(req.body.adjustment), 10) as -1 | 0;
+    const nextValue = parseInt(String(req.body.adjustment), 10) as HijriAdjustmentValue;
     const updated = await setGlobalHijriAdjustment(nextValue, req.user?.userId);
 
     return res.json({

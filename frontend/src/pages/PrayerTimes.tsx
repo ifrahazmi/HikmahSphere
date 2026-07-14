@@ -476,9 +476,17 @@ const getHijriObservationOffsetDays = (country?: string): number => {
   return 0;
 };
 
-const buildLocationAwareHijriDateFromGregorianDate = (date: Date, country?: string): HijriDate | null => {
+const buildLocationAwareHijriDateFromGregorianDate = (
+  date: Date,
+  country?: string,
+  offsetOverride?: number | null,
+): HijriDate | null => {
   const adjustedDate = new Date(date);
-  const offsetDays = getHijriObservationOffsetDays(country);
+  // When a global admin-controlled offset is available, it is the single source of
+  // truth; otherwise fall back to the country-based default (India = -1).
+  const offsetDays = typeof offsetOverride === 'number' && Number.isFinite(offsetOverride)
+    ? offsetOverride
+    : getHijriObservationOffsetDays(country);
 
   if (offsetDays !== 0) {
     adjustedDate.setDate(adjustedDate.getDate() + offsetDays);
@@ -634,6 +642,15 @@ const PrayerTimes: React.FC = () => {
   const [prayerTuningMessage, setPrayerTuningMessage] = useState<string | null>(null);
   const [globalTuningMarker, setGlobalTuningMarker] = useState<string>('unknown');
 
+  // Global Hijri date adjustment (admin controlled, applies to all users)
+  const HIJRI_ADJUSTMENT_MIN = -2;
+  const HIJRI_ADJUSTMENT_MAX = 2;
+  const [hijriAdjustment, setHijriAdjustment] = useState<number | null>(null);
+  const [hijriAdjustmentInput, setHijriAdjustmentInput] = useState<number>(0);
+  const [isHijriAdjustmentSaving, setIsHijriAdjustmentSaving] = useState(false);
+  const [hijriAdjustmentError, setHijriAdjustmentError] = useState<string | null>(null);
+  const [hijriAdjustmentMessage, setHijriAdjustmentMessage] = useState<string | null>(null);
+
   // Data states
   const [prayerData, setPrayerData] = useState<any>(null);
   const [fastingData, setFastingData] = useState<any>(null);
@@ -702,6 +719,27 @@ const PrayerTimes: React.FC = () => {
   useEffect(() => {
     refreshGlobalTuningMarker();
   }, [refreshGlobalTuningMarker]);
+
+  const refreshHijriAdjustment = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_URL}/prayers/hijri-adjustment/public`);
+      const payload = await response.json();
+
+      if (payload?.status === 'success' && payload?.data && payload.data.adjustment != null) {
+        const value = Number(payload.data.adjustment);
+        if (Number.isFinite(value)) {
+          setHijriAdjustment(value);
+          setHijriAdjustmentInput(value);
+        }
+      }
+    } catch (adjustmentError) {
+      console.warn('Unable to refresh global Hijri adjustment:', adjustmentError);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshHijriAdjustment();
+  }, [refreshHijriAdjustment]);
 
   useEffect(() => {
     if (!showExtraPrayerInfo) return;
@@ -1481,6 +1519,75 @@ const PrayerTimes: React.FC = () => {
     }
   }, [
     prayerTuning,
+    location,
+    viewMode,
+    selectedMonth,
+    selectedYear,
+    fetchData,
+    fetchMonthlyData,
+    fetchRamadanData,
+  ]);
+
+  const adjustHijriInput = useCallback((delta: number) => {
+    setHijriAdjustmentError(null);
+    setHijriAdjustmentMessage(null);
+    setHijriAdjustmentInput((prev) => {
+      const next = prev + delta;
+      if (next < HIJRI_ADJUSTMENT_MIN) return HIJRI_ADJUSTMENT_MIN;
+      if (next > HIJRI_ADJUSTMENT_MAX) return HIJRI_ADJUSTMENT_MAX;
+      return next;
+    });
+  }, [HIJRI_ADJUSTMENT_MIN, HIJRI_ADJUSTMENT_MAX]);
+
+  const saveHijriAdjustment = useCallback(async () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setHijriAdjustmentError('Please log in again to update the Islamic date.');
+      return;
+    }
+
+    setIsHijriAdjustmentSaving(true);
+    setHijriAdjustmentError(null);
+    setHijriAdjustmentMessage(null);
+
+    try {
+      const response = await fetch(`${API_URL}/prayers/hijri-adjustment`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ adjustment: hijriAdjustmentInput }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok || payload?.status !== 'success' || payload?.data?.adjustment == null) {
+        throw new Error(payload?.message || 'Unable to update the Islamic date adjustment');
+      }
+
+      const savedValue = Number(payload.data.adjustment);
+      setHijriAdjustment(savedValue);
+      setHijriAdjustmentInput(savedValue);
+      setHijriAdjustmentMessage(payload?.message || 'Islamic date updated for all users.');
+
+      // Refresh visible data so the header, Month tab, and calendar reflect the change now.
+      if (location) {
+        if (viewMode === 'daily') {
+          await fetchData(location.lat, location.lon, location.city, location.country);
+        } else if (viewMode === 'monthly') {
+          await fetchMonthlyData(location.lat, location.lon, selectedMonth, selectedYear);
+        } else if (viewMode === 'ramadan') {
+          await fetchRamadanData(location.lat, location.lon);
+        }
+      }
+    } catch (saveError: any) {
+      setHijriAdjustmentError(saveError?.message || 'Failed to save the Islamic date adjustment');
+    } finally {
+      setIsHijriAdjustmentSaving(false);
+    }
+  }, [
+    hijriAdjustmentInput,
     location,
     viewMode,
     selectedMonth,
@@ -2277,10 +2384,6 @@ const PrayerTimes: React.FC = () => {
   // Maghrib only advances the Islamic day, not the English calendar date.
   const civilTodayGregorianDate = new Date(nowForHijri);
   civilTodayGregorianDate.setHours(0, 0, 0, 0);
-  const activeIslamicGregorianDate = new Date(civilTodayGregorianDate);
-  if (isAfterMaghrib) {
-    activeIslamicGregorianDate.setDate(activeIslamicGregorianDate.getDate() + 1);
-  }
   const fallbackNextHijri = incrementHijriByOneDay(baseHijriDate);
   const nextPrayerHijriDate = buildHijriDateFromPrayerSource(nextDayPrayerData?.date?.hijri);
   const nextFastingHijriDate = buildHijriDateFromFastingEntry(nextFastingEntry);
@@ -2293,11 +2396,14 @@ const PrayerTimes: React.FC = () => {
     ? (resolvedNextHijriDate || baseHijriDate)
     : baseHijriDate;
   
-  // Final fallback only: local calculation with offset when all API sources fail.
-  const fallbackCurrentHijriDate = buildLocationAwareHijriDateFromGregorianDate(activeIslamicGregorianDate, activeCountry);
-  const displayHijriDate = resolvePreferredHijriDate(effectiveHijriDate, fallbackCurrentHijriDate)
-    || effectiveHijriDate
-    || fallbackCurrentHijriDate;
+  // Global admin-controlled offset (single source of truth). While it is still loading
+  // (null), local Intl fallbacks defer to the country-based default (India = -1).
+  const resolvedHijriOffset = hijriAdjustment;
+  // The header Hijri date follows the civil (Gregorian) day so it always matches the
+  // calendar grid, changing at midnight rather than Maghrib. Prayer and fasting times
+  // below still roll at Maghrib via activePrayerData/activeFastingData.
+  const fallbackCurrentHijriDate = buildLocationAwareHijriDateFromGregorianDate(civilTodayGregorianDate, activeCountry, resolvedHijriOffset);
+  const displayHijriDate = baseHijriDate || fallbackCurrentHijriDate;
   const activePrayerData = isAfterMaghrib && nextDayPrayerData?.times
     ? nextDayPrayerData
     : prayerData;
@@ -2319,10 +2425,10 @@ const PrayerTimes: React.FC = () => {
     // Do not shift "Today" or override Hijri at Maghrib — that caused duplicate Hijri labels.
     const isToday = rowGregorianDate.toDateString() === civilTodayGregorianDate.toDateString();
     const rowPrayerHijriDate = buildHijriDateFromPrayerSource(day.date?.hijri);
-    const fallbackRowHijriDate = buildLocationAwareHijriDateFromGregorianDate(rowGregorianDate, activeCountry);
-    const rowHijriDate = resolvePreferredHijriDate(rowPrayerHijriDate, fallbackRowHijriDate)
-      || rowPrayerHijriDate
-      || fallbackRowHijriDate;
+    // Use the offset-aware local Hijri as the primary so Month tab numbers stay in sync
+    // with the admin-adjusted daily date (Aladhan calendar rows carry no admin offset).
+    const fallbackRowHijriDate = buildLocationAwareHijriDateFromGregorianDate(rowGregorianDate, activeCountry, resolvedHijriOffset);
+    const rowHijriDate = fallbackRowHijriDate || rowPrayerHijriDate;
     const hijriMonth = rowHijriDate?.month?.en || day.date?.hijri?.month?.en || '';
     const hijriDay = parseInt(String(rowHijriDate?.day || day.date?.hijri?.day || ''), 10) || 0;
     const normalizedHijriMonth = normalizeHijriMonthName(hijriMonth);
@@ -3079,6 +3185,76 @@ const PrayerTimes: React.FC = () => {
                   </div>
                 )}
 
+                {canManagePrayerTuning && (
+                  <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-3 sm:p-4">
+                    <div className="mb-2">
+                      <h4 className="text-sm sm:text-base font-semibold text-indigo-800">Islamic Date (Admin)</h4>
+                      <p className="text-xs text-indigo-700 mt-1">
+                        Nudge the Hijri date by a day for all visitors if the local moon sighting differs. Saved globally.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-xs sm:text-sm font-medium text-gray-700">Day adjustment</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => adjustHijriInput(-1)}
+                          disabled={isHijriAdjustmentSaving || hijriAdjustmentInput <= HIJRI_ADJUSTMENT_MIN}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-indigo-300 bg-white text-lg font-bold text-indigo-700 transition-colors hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-40"
+                          aria-label="Decrease Islamic date by one day"
+                        >
+                          −
+                        </button>
+                        <span className="min-w-[3rem] text-center text-sm font-semibold text-indigo-900">
+                          {hijriAdjustmentInput > 0 ? `+${hijriAdjustmentInput}` : hijriAdjustmentInput} {Math.abs(hijriAdjustmentInput) === 1 ? 'day' : 'days'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => adjustHijriInput(1)}
+                          disabled={isHijriAdjustmentSaving || hijriAdjustmentInput >= HIJRI_ADJUSTMENT_MAX}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-indigo-300 bg-white text-lg font-bold text-indigo-700 transition-colors hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-40"
+                          aria-label="Increase Islamic date by one day"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+
+                    <p className="mt-2 text-[11px] text-gray-500">
+                      Preview:{' '}
+                      <span className="font-arabic font-semibold text-indigo-900">
+                        {formatHijriReadable(
+                          buildLocationAwareHijriDateFromGregorianDate(civilTodayGregorianDate, activeCountry, hijriAdjustmentInput)
+                        ) || '—'}{' '}
+                        AH
+                      </span>
+                    </p>
+
+                    {hijriAdjustmentError && (
+                      <p className="mt-2 text-xs text-red-600">{hijriAdjustmentError}</p>
+                    )}
+                    {hijriAdjustmentMessage && (
+                      <p className="mt-2 text-xs text-indigo-700">{hijriAdjustmentMessage}</p>
+                    )}
+
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        onClick={saveHijriAdjustment}
+                        disabled={isHijriAdjustmentSaving || (hijriAdjustment != null && hijriAdjustmentInput === hijriAdjustment)}
+                        className={`rounded-lg px-3 py-2 text-sm font-semibold text-white transition-colors ${
+                          isHijriAdjustmentSaving || (hijriAdjustment != null && hijriAdjustmentInput === hijriAdjustment)
+                            ? 'cursor-not-allowed bg-indigo-300'
+                            : 'bg-indigo-600 hover:bg-indigo-700'
+                        }`}
+                      >
+                        {isHijriAdjustmentSaving ? 'Saving...' : 'Save Islamic Date'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* Month/Year Selection for Monthly View */}
                 {viewMode === 'monthly' && (
                   <>
@@ -3813,7 +3989,7 @@ const PrayerTimes: React.FC = () => {
 
           {/* Calendar Column */}
           <div className="xl:col-span-1">
-            <IslamicCalendar whiteDays={activeFastingData?.white_days || fastingData?.white_days} todayHijri={displayHijriDate || effectiveHijriDate || prayerData?.date?.hijri} />
+            <IslamicCalendar whiteDays={activeFastingData?.white_days || fastingData?.white_days} todayHijri={displayHijriDate || effectiveHijriDate || prayerData?.date?.hijri} adjustmentOffset={resolvedHijriOffset} />
           </div>
         </div>
 

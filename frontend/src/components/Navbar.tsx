@@ -152,6 +152,8 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
 
   // Check for Super Admin Role
   const isSuperAdmin = hasRole && hasRole(['superadmin']);
+  // Super Admins get the full dashboard; Managers get Fund Management only.
+  const canAccessDashboard = hasRole && hasRole(['superadmin', 'manager']);
 
   // Determine if we should use dark mode
   const isDark = (isQuranPage && quranTheme === 'dark') || (isQiblaPage && qiblaTheme === 'dark');
@@ -397,8 +399,8 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                         Salah Tracker
                       </Link>
                       
-                      {/* Dashboard only for Super Admin */}
-                      {isSuperAdmin && (
+                      {/* Dashboard for Super Admin (full) and Manager (funds only) */}
+                      {canAccessDashboard && (
                           <Link
                           to="/dashboard"
                           className={`flex items-center px-4 py-2 text-sm ${
@@ -409,7 +411,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                           onClick={() => setIsProfileOpen(false)}
                           >
                           <Cog6ToothIcon className="h-4 w-4 mr-2" />
-                          Dashboard
+                          {isSuperAdmin ? 'Dashboard' : 'Fund Management'}
                           </Link>
                       )}
                       
@@ -670,7 +672,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                   >
                     Salah Tracker
                   </Link>
-                  {isSuperAdmin && (
+                  {canAccessDashboard && (
                     <Link
                         to="/dashboard"
                         className={`block px-3 py-2 text-base font-medium transition-colors duration-200 ${
@@ -680,7 +682,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                         }`}
                         onClick={() => setIsOpen(false)}
                     >
-                        Dashboard
+                        {isSuperAdmin ? 'Dashboard' : 'Fund Management'}
                     </Link>
                   )}
                   <button

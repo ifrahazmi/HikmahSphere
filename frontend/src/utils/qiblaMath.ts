@@ -32,9 +32,61 @@ export const correctedHeadingFromEuler = (
   gamma: number,
   screenOrientationAngle = 0
 ): number => {
-  // Fallback correction for relative Android sensor streams.
+  // Legacy crude fallback (kept for back-compat). Prefer tiltCompensatedHeading.
   const corrected = -(alpha + (beta * gamma) / 90);
   return normalizeAngle(corrected + screenOrientationAngle);
+};
+
+/**
+ * Compass heading directly from an absolute/iOS-referenced alpha.
+ * `alpha` increases counter-clockwise, so the compass heading is `360 - alpha`,
+ * then compensated for the current screen rotation.
+ */
+export const absoluteHeadingFromAlpha = (alpha: number, screenOrientationAngle = 0): number =>
+  normalizeAngle(360 - alpha + screenOrientationAngle);
+
+/**
+ * Tilt-compensated compass heading derived from the device orientation Euler
+ * angles. Builds the device->world rotation matrix, then projects the device's
+ * +Y axis onto the horizontal plane to recover a stable heading even when the
+ * phone is tilted. Used for the relative-sensor fallback on Android.
+ *
+ * Returns a heading in [0, 360) measured clockwise from magnetic/device north,
+ * or null when the orientation is too close to vertical to be meaningful.
+ */
+export const tiltCompensatedHeading = (
+  alpha: number,
+  beta: number,
+  gamma: number,
+  screenOrientationAngle = 0
+): number | null => {
+  const a = toRad(alpha);
+  const b = toRad(beta);
+  const g = toRad(gamma);
+
+  const cA = Math.cos(a);
+  const sA = Math.sin(a);
+  const cB = Math.cos(b);
+  const sB = Math.sin(b);
+  const cG = Math.cos(g);
+  const sG = Math.sin(g);
+
+  // Rotation matrix (Z-X'-Y'' intrinsic, per W3C DeviceOrientation spec).
+  // We only need the world-frame components of the device's screen-up (+Y) axis.
+  const rC = -cA * sG - sA * sB * cG;
+  const rF = -sA * sG + cA * sB * cG;
+  const rI = -cB * cG;
+
+  // If the device is nearly vertical (screen facing horizon), heading is unstable.
+  if (Math.abs(rI) > 0.995) {
+    return null;
+  }
+
+  // Heading = direction the top of the phone points, projected to the ground plane.
+  let heading = Math.atan2(rC, rF);
+  heading = toDeg(heading);
+
+  return normalizeAngle(heading + screenOrientationAngle);
 };
 
 export const calculateQiblaBearing = (lat: number, lng: number): number => {
@@ -50,6 +102,21 @@ export const calculateQiblaBearing = (lat: number, lng: number): number => {
       )
     )
   );
+};
+
+export const distanceBetweenMeters = (
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number
+): number => {
+  const earthRadiusKm = 6371;
+  const deltaPhi = toRad(lat2 - lat1);
+  const deltaLambda = toRad(lng2 - lng1);
+  const a =
+    Math.sin(deltaPhi / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(deltaLambda / 2) ** 2;
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * 1000;
 };
 
 export const calculateDistanceKm = (lat: number, lng: number): number => {

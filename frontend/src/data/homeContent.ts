@@ -60,10 +60,10 @@ export const MAKTAB_SLIDES = [
 ] as const;
 
 export const MAKTAB_HIGHLIGHTS = [
-  'Free Quran & Tajweed classes',
-  'Hifz pathway support',
-  'Deen, Hadith & culture',
-  'Books, uniform & classroom needs',
+  'Hafiz teachers with 5+ years experience',
+  'Quran, Hifz, Urdu & Deen curriculum',
+  'Inverter backup for calm study',
+  'Free books & copies when needed',
 ] as const;
 
 /** Short “why” pillars — not full feature blurbs */

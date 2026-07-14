@@ -52,8 +52,6 @@ interface AladhanGtoHResponse {
   };
 }
 
-const HIJRI_LEAP_YEAR_POSITIONS = new Set([2, 5, 7, 10, 13, 16, 18, 21, 24, 26, 29]);
-
 const fetchWithTimeout = async (url: string, timeoutMs = 8000): Promise<Response> => {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -73,62 +71,27 @@ const normalizeCoordinateForKey = (value: string | number): string => {
   return numeric.toFixed(4);
 };
 
-const isHijriLeapYear = (year: number): boolean => {
-  const cycleYear = ((year - 1) % 30) + 1;
-  return HIJRI_LEAP_YEAR_POSITIONS.has(cycleYear);
-};
+// Shift a DD-MM-YYYY Gregorian date string by a (possibly negative) number of days.
+// Applying the offset on the Gregorian side lets the astronomical source return the
+// correct Hijri date directly, avoiding fragile assumptions about Hijri month lengths.
+const shiftGregorianDDMMYYYY = (dateStr: string, offsetDays: number): string => {
+  const match = /^(\d{2})-(\d{2})-(\d{4})$/.exec(dateStr.trim());
+  if (!match) return dateStr;
 
-const getHijriMonthMaxDays = (month: number, year: number): number => {
-  if (month < 1 || month > 12) return 30;
+  const day = parseInt(match[1] as string, 10);
+  const month = parseInt(match[2] as string, 10);
+  const year = parseInt(match[3] as string, 10);
 
-  if (month === 12) {
-    return isHijriLeapYear(year) ? 30 : 29;
-  }
+  const base = new Date(Date.UTC(year, month - 1, day));
+  if (Number.isNaN(base.getTime())) return dateStr;
 
-  return month % 2 === 1 ? 30 : 29;
-};
+  base.setUTCDate(base.getUTCDate() + offsetDays);
 
-const applyHijriDayAdjustment = (
-  dayRaw: string,
-  monthRaw: number,
-  yearRaw: string,
-  adjustment: HijriAdjustmentValue,
-): { day: number; month: number; year: number } => {
-  let day = parseInt(dayRaw, 10);
-  let month = monthRaw;
-  let year = parseInt(yearRaw, 10);
+  const shiftedDay = String(base.getUTCDate()).padStart(2, '0');
+  const shiftedMonth = String(base.getUTCMonth() + 1).padStart(2, '0');
+  const shiftedYear = base.getUTCFullYear();
 
-  if (!Number.isFinite(day) || day < 1) day = 1;
-  if (!Number.isFinite(month) || month < 1 || month > 12) month = 1;
-  if (!Number.isFinite(year) || year < 1) year = 1446;
-
-  day += adjustment;
-
-  while (day < 1) {
-    month -= 1;
-    if (month < 1) {
-      month = 12;
-      year -= 1;
-    }
-
-    day += getHijriMonthMaxDays(month, year);
-  }
-
-  while (true) {
-    const maxDays = getHijriMonthMaxDays(month, year);
-    if (day <= maxDays) {
-      break;
-    }
-
-    day -= maxDays;
-    month += 1;
-    if (month > 12) {
-      month = 1;
-      year += 1;
-    }
-  }
-
-  return { day, month, year };
+  return `${shiftedDay}-${shiftedMonth}-${shiftedYear}`;
 };
 
 const parseHijriFromApi = (payload: AladhanGtoHResponse): {
@@ -167,58 +130,38 @@ const makeReadable = (day: number, month: number, year: number): string => {
   return `${day} ${monthName} ${year}`;
 };
 
-export const getGlobalHijriAdjustment = async (country?: string): Promise<HijriAdjustmentValue> => {
+// Default alignment for this deployment (India local moon-sighting) when no admin
+// value has been stored yet. Once an admin sets a value it always wins.
+const DEFAULT_HIJRI_ADJUSTMENT: HijriAdjustmentValue = -1;
+
+const clampHijriAdjustment = (value: number): HijriAdjustmentValue => {
+  if (!Number.isFinite(value)) return DEFAULT_HIJRI_ADJUSTMENT;
+  const rounded = Math.round(value);
+  const clamped = Math.max(-2, Math.min(2, rounded));
+  return clamped as HijriAdjustmentValue;
+};
+
+// The stored global adjustment is a single admin-controlled integer offset applied on
+// top of the astronomical (AlAdhan gToH) date. The stored value always wins; when no
+// value exists we fall back to the deployment default (-1). The optional `country`
+// parameter is retained for signature compatibility but no longer alters the result.
+export const getGlobalHijriAdjustment = async (_country?: string): Promise<HijriAdjustmentValue> => {
   const settings = await HijriAdjustmentModel.findOne({ key: 'global' }).lean();
-  const rawAdjustment = Number((settings as { adjustment?: number } | null)?.adjustment);
-  const normalizedCountry = String(country || '').trim().toLowerCase();
-  const isIndia = normalizedCountry.includes('india');
+  const rawAdjustment = (settings as { adjustment?: number } | null)?.adjustment;
 
-  if (settings && rawAdjustment === 1) {
-    await HijriAdjustmentModel.updateOne({ key: 'global' }, { $set: { adjustment: 0 } });
-    if (isIndia) {
-      await HijriAdjustmentModel.updateOne(
-        { key: 'global' },
-        { $set: { adjustment: -1 } }
-      );
-      return -1;
-    }
-
-    return 0;
+  if (rawAdjustment === undefined || rawAdjustment === null) {
+    return DEFAULT_HIJRI_ADJUSTMENT;
   }
 
-  if (isIndia) {
-    // India default must remain -1. If a legacy 0 exists without explicit admin actor,
-    // normalize it back to -1 so calendar display matches local observation.
-    const hasExplicitAdminOverride = Boolean((settings as { updatedBy?: unknown } | null)?.updatedBy);
-    if (rawAdjustment === 0 && !hasExplicitAdminOverride) {
-      await HijriAdjustmentModel.updateOne(
-        { key: 'global' },
-        { $set: { adjustment: -1 } },
-        { upsert: true }
-      );
-      return -1;
-    }
-
-    if (rawAdjustment === -1 || rawAdjustment === 0) {
-      return rawAdjustment;
-    }
-
-    return -1;
-  }
-
-  if (rawAdjustment === -1 || rawAdjustment === 0) {
-    return rawAdjustment;
-  }
-
-  // Safe default for this deployment: local moon-sighting alignment.
-  return -1;
+  return clampHijriAdjustment(Number(rawAdjustment));
 };
 
 export const setGlobalHijriAdjustment = async (
   adjustment: HijriAdjustmentValue,
   updatedBy?: string,
 ): Promise<HijriAdjustmentValue> => {
-  const updatePayload: { adjustment: HijriAdjustmentValue; updatedBy?: string } = { adjustment };
+  const normalized = clampHijriAdjustment(Number(adjustment));
+  const updatePayload: { adjustment: HijriAdjustmentValue; updatedBy?: string } = { adjustment: normalized };
   if (updatedBy) {
     updatePayload.updatedBy = updatedBy;
   }
@@ -229,8 +172,7 @@ export const setGlobalHijriAdjustment = async (
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
 
-  const normalized = updated?.adjustment === -1 ? -1 : 0;
-  return normalized as HijriAdjustmentValue;
+  return clampHijriAdjustment(Number(updated?.adjustment ?? normalized));
 };
 
 export const getCorrectedHijriDate = async (params: {
@@ -244,8 +186,10 @@ export const getCorrectedHijriDate = async (params: {
 
   const latKey = normalizeCoordinateForKey(latitude);
   const lonKey = normalizeCoordinateForKey(longitude);
-  const perDateCacheKey = `hijri:corrected:${latKey}:${lonKey}:${date}:${adjustment}`;
-  const lastKnownCacheKey = `hijri:last-known:${latKey}:${lonKey}`;
+  // Cache version bumped to v2 after fixing the Hijri offset (Gregorian-side shift),
+  // so previously cached, incorrectly-adjusted values are never served.
+  const perDateCacheKey = `hijri:corrected:v2:${latKey}:${lonKey}:${date}:${adjustment}`;
+  const lastKnownCacheKey = `hijri:last-known:v2:${latKey}:${lonKey}`;
 
   try {
     const cached = await redisClient.get(perDateCacheKey);
@@ -258,7 +202,13 @@ export const getCorrectedHijriDate = async (params: {
   }
 
   try {
-    const query = `date=${encodeURIComponent(date)}&latitude=${encodeURIComponent(String(latitude))}&longitude=${encodeURIComponent(String(longitude))}`;
+    // Apply the admin offset on the Gregorian side, then let AlAdhan return the exact
+    // Hijri date for that day. This avoids inventing non-existent days (e.g. rolling
+    // "1 Safar" back to "30 Muharram" when Muharram only has 29 days that year).
+    const requestGregorianDate = adjustment !== 0
+      ? shiftGregorianDDMMYYYY(date, adjustment)
+      : date;
+    const query = `date=${encodeURIComponent(requestGregorianDate)}&latitude=${encodeURIComponent(String(latitude))}&longitude=${encodeURIComponent(String(longitude))}`;
     const url = `${ALADHAN_GTOH_URL}?${query}`;
 
     const response = await fetchWithTimeout(url, 8000);
@@ -272,22 +222,20 @@ export const getCorrectedHijriDate = async (params: {
     }
 
     const parsed = parseHijriFromApi(payload);
-    const adjusted = applyHijriDayAdjustment(parsed.day, parsed.monthNumber, parsed.year, adjustment);
-
-    const monthEn = adjusted.month === parsed.monthNumber
-      ? (parsed.monthEn || HIJRI_MONTH_NAMES[adjusted.month] || String(adjusted.month))
-      : (HIJRI_MONTH_NAMES[adjusted.month] || String(adjusted.month));
+    const dayNum = parseInt(parsed.day, 10);
+    const yearNum = parseInt(parsed.year, 10);
+    const monthEn = parsed.monthEn || HIJRI_MONTH_NAMES[parsed.monthNumber] || String(parsed.monthNumber);
 
     const result: CorrectedHijriDate = {
-      day: String(adjusted.day),
+      day: String(dayNum),
       month: {
-        number: adjusted.month,
+        number: parsed.monthNumber,
         en: monthEn,
         ...(parsed.monthAr ? { ar: parsed.monthAr } : {}),
       },
-      year: String(adjusted.year),
-      date: makeDateString(adjusted.year, adjusted.month, adjusted.day),
-      readable: makeReadable(adjusted.day, adjusted.month, adjusted.year),
+      year: String(yearNum),
+      date: makeDateString(yearNum, parsed.monthNumber, dayNum),
+      readable: makeReadable(dayNum, parsed.monthNumber, yearNum),
       adjustmentApplied: adjustment,
       source: 'aladhan-gtoh',
       isFallback: false,

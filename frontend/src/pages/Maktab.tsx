@@ -1,13 +1,19 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { toast } from 'react-hot-toast';
 import {
   AcademicCapIcon,
+  BoltIcon,
   BookOpenIcon,
+  ChatBubbleLeftRightIcon,
+  GiftIcon,
   HeartIcon,
+  MapPinIcon,
   ShieldCheckIcon,
   SparklesIcon,
+  UserGroupIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import PageSEO from '../components/PageSEO';
 import { API_URL } from '../config';
@@ -142,6 +148,70 @@ const classifyContact = (value: string): 'email' | 'phone' | 'invalid' => {
   return phoneLike(trimmed) ? 'phone' : 'invalid';
 };
 
+// WhatsApp direct-chat helper — opens wa.me with a prefilled message in a new tab.
+const WHATSAPP_NUMBER = '918709318232';
+const WHATSAPP_DISPLAY = '+91 87093 18232';
+const WHATSAPP_DEFAULT_MESSAGE =
+  'Assalamu alaikum, I would like to know more about HikmahSphere Maktab.';
+const WHATSAPP_ADMISSION_MESSAGE =
+  'Assalamu alaikum, I would like to admit my child to HikmahSphere Maktab. Please share the details.';
+const buildWhatsAppLink = (message: string = WHATSAPP_DEFAULT_MESSAGE) =>
+  `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
+
+const MAKTAB_ADDRESS = {
+  name: 'Taiyeba Masjid',
+  lines: ['Chaknur Road, Dharampur', 'Samastipur – 848101, Bihar'],
+  landmark: 'Near Z K Memorial Hospital',
+};
+const MAKTAB_MAPS_URL =
+  'https://www.google.com/maps/search/?api=1&query=' +
+  encodeURIComponent('Taiyeba Masjid, Chaknur Road, Dharampur, Samastipur 848101, Bihar');
+
+const MAKTAB_FEATURES = [
+  {
+    id: 'teachers',
+    Icon: AcademicCapIcon,
+    title: 'Qualified Hafiz teachers',
+    body: 'Every class is led by a Hafiz-e-Quran with 5+ years of teaching experience in Quran recitation and Urdu Islamic studies.',
+  },
+  {
+    id: 'curriculum',
+    Icon: BookOpenIcon,
+    title: 'Quran, Hifz, Urdu & Deen',
+    body: 'A structured curriculum covering correct recitation with Tajweed, memorisation, Urdu, and Islamic values and manners.',
+  },
+  {
+    id: 'power',
+    Icon: BoltIcon,
+    title: 'Uninterrupted learning',
+    body: 'An inverter backup keeps the fans running during power cuts, so children can study calmly and in comfort.',
+  },
+  {
+    id: 'books',
+    Icon: GiftIcon,
+    title: 'Free books & copies',
+    body: 'Children whose families cannot afford them receive books and notebooks free — no child is left behind for lack of materials.',
+  },
+] as const;
+
+const ADMISSION_PROGRAMS = [
+  'Quran & Tajweed',
+  'Hifz (Memorisation)',
+  'Urdu & Islamic Studies',
+  'Deen, Hadith & Culture',
+] as const;
+
+type AdmissionForm = {
+  guardianName: string;
+  childName: string;
+  childAge: string;
+  contact: string;
+  program: string;
+  message: string;
+};
+
+type AdmissionErrors = Partial<Record<keyof AdmissionForm, string>>;
+
 const Maktab: React.FC = () => {
   const navigate = useNavigate();
   const sponsorRef = useRef<HTMLElement>(null);
@@ -158,19 +228,58 @@ const Maktab: React.FC = () => {
     message: '',
   });
 
+  const [isAdmitOpen, setIsAdmitOpen] = useState(false);
+  const [admitSubmitting, setAdmitSubmitting] = useState(false);
+  const [admitErrors, setAdmitErrors] = useState<AdmissionErrors>({});
+  const [admitTouched, setAdmitTouched] = useState<Partial<Record<keyof AdmissionForm, boolean>>>({});
+  const [admitForm, setAdmitForm] = useState<AdmissionForm>({
+    guardianName: '',
+    childName: '',
+    childAge: '',
+    contact: '',
+    program: ADMISSION_PROGRAMS[0],
+    message: '',
+  });
+
+  const openAdmitModal = () => setIsAdmitOpen(true);
+  const closeAdmitModal = useCallback(() => {
+    if (admitSubmitting) return;
+    setIsAdmitOpen(false);
+  }, [admitSubmitting]);
+
   useEffect(() => {
     const t = requestAnimationFrame(() => setHeroReady(true));
     return () => cancelAnimationFrame(t);
   }, []);
 
   useEffect(() => {
-    if (window.location.hash === '#sponsor') {
+    const hash = window.location.hash;
+    if (hash === '#sponsor') {
       const timer = setTimeout(() => {
         sponsorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 200);
       return () => clearTimeout(timer);
     }
+    if (hash === '#admit') {
+      const timer = setTimeout(() => setIsAdmitOpen(true), 200);
+      return () => clearTimeout(timer);
+    }
+    return undefined;
   }, []);
+
+  useEffect(() => {
+    if (!isAdmitOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeAdmitModal();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [isAdmitOpen, closeAdmitModal]);
 
   useEffect(() => {
     const nodes = document.querySelectorAll<HTMLElement>('[data-maktab-reveal]');
@@ -320,6 +429,140 @@ const Maktab: React.FC = () => {
     }
   };
 
+  const admitValidateField = (key: keyof AdmissionForm, value: string): string | undefined => {
+    if (key === 'guardianName') {
+      if (!value.trim()) return 'Please enter the guardian’s name.';
+      if (value.trim().length < 2) return 'Name must be at least 2 characters.';
+      return undefined;
+    }
+    if (key === 'childName') {
+      if (!value.trim()) return 'Please enter the child’s name.';
+      if (value.trim().length < 2) return 'Name must be at least 2 characters.';
+      return undefined;
+    }
+    if (key === 'childAge' && value.trim()) {
+      const n = Number(value);
+      if (!Number.isInteger(n) || n < 3 || n > 25) return 'Enter an age between 3 and 25.';
+      return undefined;
+    }
+    if (key === 'contact') {
+      if (!value.trim()) return 'Enter a valid phone number or email address.';
+      const kind = classifyContact(value);
+      if (kind === 'invalid') {
+        if (value.includes('@')) {
+          return 'Enter a complete email with a valid domain (e.g. name@gmail.com).';
+        }
+        return 'Enter a valid email (name@gmail.com) or phone (10–15 digits).';
+      }
+      return undefined;
+    }
+    return undefined;
+  };
+
+  const admitValidateForm = (next: AdmissionForm = admitForm): AdmissionErrors => {
+    const nextErrors: AdmissionErrors = {};
+    (['guardianName', 'childName', 'childAge', 'contact'] as const).forEach((key) => {
+      const err = admitValidateField(key, next[key]);
+      if (err) nextErrors[key] = err;
+    });
+    return nextErrors;
+  };
+
+  const admitUpdateField = (key: keyof AdmissionForm, value: string) => {
+    setAdmitForm((prev) => ({ ...prev, [key]: value }));
+    if (admitTouched[key] || key === 'contact') {
+      setAdmitErrors((prevErr) => {
+        const fieldErr = admitValidateField(key, value);
+        const copy = { ...prevErr };
+        if (fieldErr) copy[key] = fieldErr;
+        else delete copy[key];
+        return copy;
+      });
+    }
+  };
+
+  const admitMarkTouched = (key: keyof AdmissionForm) => {
+    setAdmitTouched((prev) => ({ ...prev, [key]: true }));
+    setAdmitErrors((prev) => {
+      const fieldErr = admitValidateField(key, admitForm[key]);
+      const copy = { ...prev };
+      if (fieldErr) copy[key] = fieldErr;
+      else delete copy[key];
+      return copy;
+    });
+  };
+
+  const onAdmitSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdmitTouched({ guardianName: true, childName: true, childAge: true, contact: true, program: true, message: true });
+    const nextErrors = admitValidateForm();
+    setAdmitErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) {
+      toast.error(
+        nextErrors.guardianName || nextErrors.childName || nextErrors.contact || 'Please fix the highlighted fields.'
+      );
+      return;
+    }
+
+    const contact = admitForm.contact.trim();
+    const kind = classifyContact(contact);
+    const isEmail = kind === 'email';
+    const email = isEmail ? contact : 'maktab-admission@hikmahsphere.site';
+    const phone = isEmail ? undefined : contact;
+    const messageBody = admitForm.message.trim() || 'Admission enquiry submitted via Maktab page.';
+
+    setAdmitSubmitting(true);
+    try {
+      const response = await fetch(`${API_URL}/support/contact`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: admitForm.guardianName.trim(),
+          email,
+          phone,
+          type: 'MaktabAdmission',
+          childName: admitForm.childName.trim(),
+          childAge: admitForm.childAge.trim() || undefined,
+          program: admitForm.program,
+          message: messageBody,
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (response.ok) {
+        toast.success('JazakAllah Khair — we received your admission enquiry.');
+        setAdmitForm({
+          guardianName: '',
+          childName: '',
+          childAge: '',
+          contact: '',
+          program: ADMISSION_PROGRAMS[0],
+          message: '',
+        });
+        setAdmitErrors({});
+        setAdmitTouched({});
+        setIsAdmitOpen(false);
+      } else {
+        toast.error(result.message || 'Could not send enquiry. Opening Contact…');
+        navigate(
+          `/contact?name=${encodeURIComponent(admitForm.guardianName)}&type=Other&message=${encodeURIComponent(
+            `[Maktab Admission Enquiry]\nChild: ${admitForm.childName}${
+              admitForm.childAge ? ` (age ${admitForm.childAge})` : ''
+            }\nPreferred program: ${admitForm.program}\nContact: ${contact}\n${
+              admitForm.message.trim() ? `Note: ${admitForm.message.trim()}` : ''
+            }`
+          )}`
+        );
+      }
+    } catch {
+      toast.error('Something went wrong. Opening Contact so you can reach us.');
+      navigate(
+        `/contact?name=${encodeURIComponent(admitForm.guardianName)}&message=${encodeURIComponent(messageBody)}`
+      );
+    } finally {
+      setAdmitSubmitting(false);
+    }
+  };
+
   const revealClass = (id: string) =>
     `transition-all duration-700 ease-out ${
       visible.has(id) ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
@@ -330,7 +573,13 @@ const Maktab: React.FC = () => {
       errors[key] ? 'border-red-400 bg-red-50/40' : 'border-slate-200 hover:border-indigo-300'
     }`;
 
+  const admitFieldClass = (key: keyof AdmissionForm) =>
+    `w-full px-4 py-3 rounded-xl border bg-white transition-colors focus:ring-2 focus:ring-emerald-500 focus:border-transparent ${
+      admitErrors[key] ? 'border-red-400 bg-red-50/40' : 'border-slate-200 hover:border-emerald-300'
+    }`;
+
   const contactKind = form.contact.trim() ? classifyContact(form.contact) : null;
+  const admitContactKind = admitForm.contact.trim() ? classifyContact(admitForm.contact) : null;
 
   return (
     <>
@@ -405,17 +654,29 @@ const Maktab: React.FC = () => {
             <div className="flex flex-wrap justify-center gap-3 maktab-hero-stage maktab-hero-stage-4">
               <button
                 type="button"
-                onClick={() => scrollToSponsor()}
-                className="inline-flex items-center justify-center px-7 py-3.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white font-semibold shadow-lg shadow-indigo-900/30 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl"
+                onClick={openAdmitModal}
+                className="inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white font-semibold shadow-lg shadow-emerald-900/30 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl"
               >
+                <UserGroupIcon className="w-5 h-5" />
+                Admit your child
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollToSponsor()}
+                className="inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white font-semibold shadow-lg shadow-indigo-900/30 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl"
+              >
+                <HeartIcon className="w-5 h-5" />
                 Donate / Sponsor
               </button>
-              <Link
-                to="/contact"
-                className="inline-flex items-center justify-center px-7 py-3.5 rounded-xl border border-white/35 bg-white/10 hover:bg-white/20 text-white font-semibold backdrop-blur-sm transition-all duration-300 hover:-translate-y-0.5"
+              <a
+                href={buildWhatsAppLink()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-xl border border-white/35 bg-white/10 hover:bg-white/20 text-white font-semibold backdrop-blur-sm transition-all duration-300 hover:-translate-y-0.5"
               >
-                Contact
-              </Link>
+                <ChatBubbleLeftRightIcon className="w-5 h-5" />
+                WhatsApp
+              </a>
             </div>
           </div>
         </section>
@@ -448,6 +709,55 @@ const Maktab: React.FC = () => {
               Quran, Tajweed, Hadith, Deen, Islamic culture, and Hifz pathways — so every child who wants to learn
               can sit in class with dignity.
             </p>
+          </div>
+        </section>
+
+        {/* What makes our Maktab special */}
+        <section
+          data-maktab-reveal="features"
+          className={`py-20 px-4 sm:px-6 lg:px-8 bg-white ${revealClass('features')}`}
+        >
+          <div className="max-w-6xl mx-auto">
+            <div className="text-center mb-12">
+              <div className="inline-flex items-center gap-2 text-emerald-700 mb-3">
+                <SparklesIcon className="w-5 h-5" />
+                <span className="text-sm font-semibold tracking-wide uppercase">Why our Maktab</span>
+              </div>
+              <h2
+                className="text-3xl sm:text-4xl text-slate-900 mb-3"
+                style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 700 }}
+              >
+                What makes our Maktab special
+              </h2>
+              <p className="text-slate-600 max-w-2xl mx-auto">
+                A calm, caring place where children learn the Quran and their Deen with experienced teachers — and
+                nothing stands in the way of a child who wants to learn.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {MAKTAB_FEATURES.map((feature, index) => (
+                <div
+                  key={feature.id}
+                  data-maktab-reveal={`feature-${feature.id}`}
+                  className={`group h-full rounded-2xl border border-slate-200/80 bg-gradient-to-b from-white to-slate-50/60 p-6 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 ${revealClass(
+                    `feature-${feature.id}`
+                  )}`}
+                  style={{ transitionDelay: visible.has(`feature-${feature.id}`) ? `${index * 80}ms` : '0ms' }}
+                >
+                  <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-indigo-600 text-white shadow-md shadow-indigo-900/20 mb-5 transition-transform group-hover:scale-105">
+                    <feature.Icon className="w-7 h-7" />
+                  </div>
+                  <h3
+                    className="text-lg text-slate-900 mb-2"
+                    style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 600 }}
+                  >
+                    {feature.title}
+                  </h3>
+                  <p className="text-slate-600 text-sm leading-relaxed">{feature.body}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 
@@ -758,6 +1068,74 @@ const Maktab: React.FC = () => {
           </div>
         </section>
 
+        {/* Visit our Maktab */}
+        <section
+          data-maktab-reveal="visit"
+          className={`py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-slate-900 via-emerald-950 to-indigo-950 text-white ${revealClass('visit')}`}
+        >
+          <div className="max-w-5xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
+              <div>
+                <div className="inline-flex items-center gap-2 text-emerald-200 mb-4">
+                  <MapPinIcon className="w-5 h-5" />
+                  <span className="text-sm font-semibold tracking-wide uppercase">Visit our Maktab</span>
+                </div>
+                <h2
+                  className="text-3xl sm:text-4xl mb-5"
+                  style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 700 }}
+                >
+                  Come and see us in Samastipur
+                </h2>
+                <p className="text-emerald-50/85 leading-relaxed mb-6">
+                  Our Maktab currently runs from {MAKTAB_ADDRESS.name}, welcoming children from the surrounding
+                  community for daily Islamic learning.
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  <a
+                    href={MAKTAB_MAPS_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-white text-indigo-900 font-semibold hover:bg-emerald-50 transition-colors"
+                  >
+                    <MapPinIcon className="w-5 h-5" />
+                    Get directions
+                  </a>
+                  <a
+                    href={buildWhatsAppLink()}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-green-600 hover:bg-green-500 text-white font-semibold transition-colors"
+                  >
+                    <ChatBubbleLeftRightIcon className="w-5 h-5" />
+                    Chat on WhatsApp
+                  </a>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/15 bg-white/5 backdrop-blur-sm p-7 shadow-xl shadow-black/20">
+                <div className="flex items-start gap-4">
+                  <div className="shrink-0 w-12 h-12 rounded-xl bg-emerald-500/25 border border-emerald-300/30 text-emerald-100 flex items-center justify-center">
+                    <MapPinIcon className="w-7 h-7" />
+                  </div>
+                  <address className="not-italic text-emerald-50/90 leading-relaxed">
+                    <p className="text-lg font-semibold text-white mb-1">{MAKTAB_ADDRESS.name}</p>
+                    {MAKTAB_ADDRESS.lines.map((line) => (
+                      <p key={line}>{line}</p>
+                    ))}
+                    <p className="mt-2 text-sm text-emerald-200/80">{MAKTAB_ADDRESS.landmark}</p>
+                  </address>
+                </div>
+                <div className="mt-6 pt-6 border-t border-white/10 flex items-center gap-3 text-emerald-50/90">
+                  <ChatBubbleLeftRightIcon className="w-5 h-5 text-emerald-200 shrink-0" />
+                  <span className="text-sm">
+                    WhatsApp: <span className="font-semibold text-white">{WHATSAPP_DISPLAY}</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Trust */}
         <section
           data-maktab-reveal="trust"
@@ -801,27 +1179,240 @@ const Maktab: React.FC = () => {
             <div className="flex flex-wrap justify-center gap-3">
               <button
                 type="button"
-                onClick={() => scrollToSponsor()}
-                className="inline-flex items-center justify-center px-7 py-3.5 rounded-xl bg-white text-indigo-900 font-semibold hover:bg-emerald-50 transition-colors"
+                onClick={openAdmitModal}
+                className="inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-xl bg-white text-emerald-900 font-semibold hover:bg-emerald-50 transition-colors"
               >
+                <UserGroupIcon className="w-5 h-5" />
+                Admit your child
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollToSponsor()}
+                className="inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white font-semibold transition-colors"
+              >
+                <HeartIcon className="w-5 h-5" />
                 Donate / Sponsor
               </button>
-              <Link
-                to="/contact"
-                className="inline-flex items-center justify-center px-7 py-3.5 rounded-xl border border-white/40 hover:bg-white/10 font-semibold transition-colors"
+              <a
+                href={buildWhatsAppLink()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-xl border border-white/40 hover:bg-white/10 font-semibold transition-colors"
               >
-                Contact
-              </Link>
+                <ChatBubbleLeftRightIcon className="w-5 h-5" />
+                WhatsApp
+              </a>
             </div>
             <p className="mt-10 text-sm text-emerald-100/70 inline-flex items-center gap-2 justify-center">
               <BookOpenIcon className="w-4 h-4" />
-              HikmahSphere Maktab — placeholder copy & imagery, ready to replace with your final content.
+              HikmahSphere Maktab — {MAKTAB_ADDRESS.name}, Samastipur, Bihar.
             </p>
           </div>
         </section>
       </div>
 
+      {/* Admission enquiry modal */}
+      {isAdmitOpen && (
+        <div
+          className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-0 sm:p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="admit-modal-title"
+        >
+          <button
+            type="button"
+            aria-label="Close admission form"
+            className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
+            onClick={closeAdmitModal}
+          />
+          <div className="relative z-10 w-full sm:max-w-xl max-h-[92svh] overflow-y-auto rounded-t-3xl sm:rounded-2xl bg-white shadow-2xl shadow-black/30 border border-emerald-100/80 maktab-admit-in">
+            <form onSubmit={onAdmitSubmit} noValidate>
+              <div className="sticky top-0 z-10 bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 px-5 sm:px-6 py-4 text-white">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs sm:text-sm text-emerald-100 font-medium mb-1 uppercase tracking-wide">
+                      Admit your child
+                    </p>
+                    <h2
+                      id="admit-modal-title"
+                      className="text-xl sm:text-2xl font-semibold leading-snug"
+                      style={{ fontFamily: "'Fraunces', Georgia, serif" }}
+                    >
+                      Enrol for Islamic studies
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeAdmitModal}
+                    disabled={admitSubmitting}
+                    className="shrink-0 rounded-xl bg-white/15 hover:bg-white/25 p-2 transition-colors disabled:opacity-50"
+                    aria-label="Close"
+                  >
+                    <XMarkIcon className="w-5 h-5" />
+                  </button>
+                </div>
+                <p className="mt-2 text-sm text-emerald-50/90">
+                  Share a few details and we’ll get in touch — or chat on WhatsApp.
+                </p>
+              </div>
+
+              <div className="p-5 sm:p-6 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="admit-guardian" className="block text-sm font-semibold text-slate-800 mb-1.5">
+                      Guardian name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="admit-guardian"
+                      type="text"
+                      autoComplete="name"
+                      autoFocus
+                      value={admitForm.guardianName}
+                      onChange={(e) => admitUpdateField('guardianName', e.target.value)}
+                      onBlur={() => admitMarkTouched('guardianName')}
+                      className={admitFieldClass('guardianName')}
+                      placeholder="e.g. Azmi Rahman"
+                      aria-invalid={Boolean(admitErrors.guardianName)}
+                    />
+                    {admitErrors.guardianName && (
+                      <p className="mt-1.5 text-xs text-red-600">{admitErrors.guardianName}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label htmlFor="admit-child" className="block text-sm font-semibold text-slate-800 mb-1.5">
+                      Child’s name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="admit-child"
+                      type="text"
+                      value={admitForm.childName}
+                      onChange={(e) => admitUpdateField('childName', e.target.value)}
+                      onBlur={() => admitMarkTouched('childName')}
+                      className={admitFieldClass('childName')}
+                      placeholder="e.g. Ahmad"
+                      aria-invalid={Boolean(admitErrors.childName)}
+                    />
+                    {admitErrors.childName && (
+                      <p className="mt-1.5 text-xs text-red-600">{admitErrors.childName}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="admit-age" className="block text-sm font-semibold text-slate-800 mb-1.5">
+                      Child’s age <span className="text-slate-400 font-normal">(optional)</span>
+                    </label>
+                    <input
+                      id="admit-age"
+                      type="number"
+                      min={3}
+                      max={25}
+                      value={admitForm.childAge}
+                      onChange={(e) => admitUpdateField('childAge', e.target.value)}
+                      onBlur={() => admitMarkTouched('childAge')}
+                      className={admitFieldClass('childAge')}
+                      placeholder="e.g. 8"
+                      aria-invalid={Boolean(admitErrors.childAge)}
+                    />
+                    {admitErrors.childAge && (
+                      <p className="mt-1.5 text-xs text-red-600">{admitErrors.childAge}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label htmlFor="admit-contact" className="block text-sm font-semibold text-slate-800 mb-1.5">
+                      Phone or email <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="admit-contact"
+                      type="text"
+                      autoComplete="email"
+                      inputMode="email"
+                      value={admitForm.contact}
+                      onChange={(e) => admitUpdateField('contact', e.target.value)}
+                      onBlur={() => admitMarkTouched('contact')}
+                      className={admitFieldClass('contact')}
+                      placeholder="name@email.com or +91 98765 43210"
+                      aria-invalid={Boolean(admitErrors.contact)}
+                    />
+                    {admitErrors.contact ? (
+                      <p className="mt-1.5 text-xs text-red-600">{admitErrors.contact}</p>
+                    ) : admitContactKind === 'email' ? (
+                      <p className="mt-1.5 text-xs text-emerald-700">Valid email detected</p>
+                    ) : admitContactKind === 'phone' ? (
+                      <p className="mt-1.5 text-xs text-emerald-700">Valid phone number detected</p>
+                    ) : (
+                      <p className="mt-1.5 text-xs text-slate-500">
+                        Full domain after @ (e.g. gmail.com), or 10–15 digit phone
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="admit-program" className="block text-sm font-semibold text-slate-800 mb-1.5">
+                    Preferred program
+                  </label>
+                  <select
+                    id="admit-program"
+                    value={admitForm.program}
+                    onChange={(e) => admitUpdateField('program', e.target.value)}
+                    className={`${admitFieldClass('program')} bg-white`}
+                  >
+                    {ADMISSION_PROGRAMS.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="admit-message" className="block text-sm font-semibold text-slate-800 mb-1.5">
+                    Message <span className="text-slate-400 font-normal">(recommended)</span>
+                  </label>
+                  <textarea
+                    id="admit-message"
+                    rows={3}
+                    value={admitForm.message}
+                    onChange={(e) => admitUpdateField('message', e.target.value)}
+                    className={`${admitFieldClass('message')} resize-y`}
+                    placeholder="Preferred timings, your child’s current level, or any questions…"
+                  />
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-3 pt-1 pb-1">
+                  <button
+                    type="submit"
+                    disabled={admitSubmitting}
+                    className="flex-1 inline-flex items-center justify-center px-6 py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-semibold shadow-md shadow-emerald-900/15 transition-colors"
+                  >
+                    {admitSubmitting ? 'Sending…' : 'Send admission enquiry'}
+                  </button>
+                  <a
+                    href={buildWhatsAppLink(WHATSAPP_ADMISSION_MESSAGE)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-green-600 hover:bg-green-500 text-white font-semibold shadow-md shadow-green-900/15 transition-colors"
+                  >
+                    <ChatBubbleLeftRightIcon className="w-5 h-5" />
+                    WhatsApp
+                  </a>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <style>{`
+        @keyframes maktabAdmitIn {
+          from { opacity: 0; transform: translateY(18px) scale(0.98); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .maktab-admit-in {
+          animation: maktabAdmitIn 0.28s ease-out;
+        }
         @keyframes maktab-cta-soft {
           0%, 100% { box-shadow: 0 4px 14px rgba(79, 70, 229, 0.25); }
           50% { box-shadow: 0 6px 22px rgba(79, 70, 229, 0.45); }
@@ -862,7 +1453,8 @@ const Maktab: React.FC = () => {
         @media (prefers-reduced-motion: reduce) {
           .maktab-cta-pulse,
           .maktab-hero-orb,
-          .maktab-hero-kenburns { animation: none; }
+          .maktab-hero-kenburns,
+          .maktab-admit-in { animation: none; }
           .maktab-hero-pending .maktab-hero-stage,
           .maktab-hero-ready .maktab-hero-stage {
             opacity: 1 !important;

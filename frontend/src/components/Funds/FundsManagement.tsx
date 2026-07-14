@@ -15,6 +15,7 @@ import { API_URL } from '../../config';
 import toast from 'react-hot-toast';
 import ZakatManagement from '../Zakat/ZakatManagement';
 import MaktabManagement from '../Maktab/MaktabManagement';
+import { useAuth } from '../../hooks/useAuth';
 
 interface CategoryTotals {
   collected: number;
@@ -138,6 +139,10 @@ const CategoryCard: React.FC<CategoryCardProps> = ({ title, subtitle, theme, ico
 };
 
 const FundsManagement: React.FC = () => {
+  const { hasRole } = useAuth();
+  // Deleting payments is restricted to Super Admin on the server, so only expose the
+  // delete UI to them (managers can view/edit/import but not delete).
+  const canDeletePayments = hasRole(['superadmin']);
   const [totals, setTotals] = useState<FundsTotals>({ zakat: EMPTY, sadaqah: EMPTY, maktab: EMPTY });
   const [loading, setLoading] = useState(true);
   const [section, setSection] = useState<'zakat' | 'maktab'>('zakat');
@@ -444,7 +449,7 @@ const FundsManagement: React.FC = () => {
           showHeader={false}
           showStats={false}
           showExport={false}
-          showDelete={true}
+          showDelete={canDeletePayments}
           showDonorSummary={true}
           showRecordButtons={false}
           showFilters={true}
@@ -456,7 +461,7 @@ const FundsManagement: React.FC = () => {
           showHeader={false}
           showStats={false}
           showExport={false}
-          showDelete={true}
+          showDelete={canDeletePayments}
           showContributorSummary={true}
           showRecordButtons={false}
           showFilters={true}

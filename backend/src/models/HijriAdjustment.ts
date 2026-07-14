@@ -1,6 +1,6 @@
 import mongoose, { Document, Schema, Model } from 'mongoose';
 
-export type HijriAdjustmentValue = -1 | 0;
+export type HijriAdjustmentValue = -2 | -1 | 0 | 1 | 2;
 
 export interface IHijriAdjustment extends Document {
   key: 'global';
@@ -21,7 +21,7 @@ const HijriAdjustmentSchema = new Schema<IHijriAdjustment>(
     adjustment: {
       type: Number,
       required: true,
-      enum: [-1, 0],
+      enum: [-2, -1, 0, 1, 2],
       default: -1,
     },
     updatedBy: {

@@ -130,6 +130,79 @@ const buildMaktabSponsorEmail = (payload: {
     `;
 };
 
+const buildMaktabAdmissionEmail = (payload: {
+    name: string;
+    email: string;
+    phone?: string;
+    childName?: string;
+    childAge?: string;
+    program?: string;
+    message?: string;
+}) => {
+    const guardian = escapeHtml(payload.name);
+    const email = escapeHtml(payload.email);
+    const phone = payload.phone ? escapeHtml(payload.phone) : '';
+    const childName = payload.childName ? escapeHtml(payload.childName) : 'Not specified';
+    const childAge = payload.childAge ? escapeHtml(payload.childAge) : 'Not specified';
+    const program = escapeHtml(payload.program || 'General Islamic studies');
+    const note = payload.message?.trim()
+        ? escapeHtml(payload.message.trim()).replace(/\n/g, '<br>')
+        : '<span style="color:#94a3b8;">No additional note</span>';
+    const hasRealEmail = payload.email && !payload.email.includes('maktab-admission@');
+    const contactEmailDisplay = hasRealEmail
+        ? `<a href="mailto:${email}" style="color:#4f46e5; text-decoration:none;">${email}</a>`
+        : '<span style="color:#94a3b8;">Not provided (phone enquiry)</span>';
+    const phoneDisplay = phone
+        ? `<a href="tel:${phone.replace(/\s/g, '')}" style="color:#4f46e5; text-decoration:none;">${phone}</a>`
+        : '<span style="color:#94a3b8;">Not provided</span>';
+
+    return `
+        <div style="margin:0; padding:24px; background:#f1f5f9; font-family: Georgia, 'Times New Roman', serif;">
+            <div style="max-width:640px; margin:0 auto; background:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 10px 30px rgba(15,23,42,0.08);">
+                <div style="background: linear-gradient(135deg, #065f46 0%, #0f766e 55%, #312e81 100%); padding:28px 24px; text-align:center;">
+                    <p style="margin:0 0 8px; font-family: Arial, sans-serif; font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:#a7f3d0;">HikmahSphere Maktab</p>
+                    <h1 style="margin:0; font-size:26px; line-height:1.25; color:#ffffff; font-weight:700;">New Admission Enquiry</h1>
+                    <p style="margin:10px 0 0; font-family: Arial, sans-serif; font-size:14px; color:#d1fae5;">A parent wants to enrol their child for Islamic education</p>
+                </div>
+
+                <div style="padding:24px;">
+                    <div style="background:linear-gradient(135deg,#ecfdf5,#eef2ff); border:1px solid #a7f3d0; border-radius:12px; padding:18px 20px; margin-bottom:20px;">
+                        <p style="margin:0 0 6px; font-family: Arial, sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:#059669; font-weight:700;">Child to be admitted</p>
+                        <p style="margin:0; font-size:28px; line-height:1.2; color:#064e3b; font-weight:700;">${childName}</p>
+                    </div>
+
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0; border-radius:12px; overflow:hidden; border-collapse:collapse; font-family: Arial, Helvetica, sans-serif;">
+                        ${detailRow('Child name', childName, true)}
+                        ${detailRow('Child age', childAge)}
+                        ${detailRow('Guardian name', guardian)}
+                        ${detailRow('Email', contactEmailDisplay)}
+                        ${detailRow('Phone', phoneDisplay)}
+                        ${detailRow('Preferred program', program)}
+                    </table>
+
+                    <div style="margin-top:20px; border:1px solid #e2e8f0; border-radius:12px; overflow:hidden;">
+                        <div style="background:#f8fafc; padding:12px 16px; border-bottom:1px solid #e2e8f0; font-family: Arial, sans-serif;">
+                            <span style="font-size:11px; letter-spacing:0.06em; text-transform:uppercase; color:#64748b; font-weight:700;">Message / note</span>
+                        </div>
+                        <div style="padding:16px; font-family: Arial, Helvetica, sans-serif; font-size:15px; color:#334155; line-height:1.6;">
+                            ${note}
+                        </div>
+                    </div>
+
+                    <p style="margin:20px 0 0; font-family: Arial, sans-serif; font-size:13px; color:#64748b; line-height:1.5;">
+                        Reply directly to this email to follow up with <strong style="color:#0f172a;">${guardian}</strong>
+                        ${hasRealEmail ? ` at ${contactEmailDisplay}` : phone ? ` on ${phoneDisplay}` : ''}.
+                    </p>
+                </div>
+
+                <div style="background:#0f172a; padding:14px 20px; text-align:center; font-family: Arial, sans-serif; font-size:12px; color:#94a3b8;">
+                    Sent from HikmahSphere Maktab admission form · hikmahsphere.site/maktab
+                </div>
+            </div>
+        </div>
+    `;
+};
+
 const TYPE_META: Record<string, { title: string; blurb: string; badge: string }> = {
     Support: {
         title: 'Support Request',
@@ -232,33 +305,55 @@ router.post('/contact', [
     requestLogger,
     body('name').notEmpty().withMessage('Name is required'),
     body('email').isEmail().withMessage('Valid email is required'),
-    body('type').isIn(['Support', 'Bug', 'Suggestion', 'Correction', 'Other', 'Maktab']).withMessage('Invalid inquiry type'),
+    body('type').isIn(['Support', 'Bug', 'Suggestion', 'Correction', 'Other', 'Maktab', 'MaktabAdmission']).withMessage('Invalid inquiry type'),
     body('message').optional({ checkFalsy: true }).isString(),
     body('phone').optional({ checkFalsy: true }).isString(),
     body('program').optional({ checkFalsy: true }).isString(),
     body('amount').optional({ checkFalsy: true }),
+    body('childName').optional({ checkFalsy: true }).isString(),
+    body('childAge').optional({ checkFalsy: true }).isString(),
 ], async (req: any, res: any) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
         return res.status(400).json({ status: 'error', errors: errors.array() });
     }
 
-    const { name, email, type, message = '', phone, program, amount } = req.body;
+    const { name, email, type, message = '', phone, program, amount, childName, childAge } = req.body;
     const isMaktab = type === 'Maktab';
+    const isMaktabAdmission = type === 'MaktabAdmission';
+    const isMaktabFlow = isMaktab || isMaktabAdmission;
 
-    if (!isMaktab && !String(message || '').trim()) {
+    if (!isMaktabFlow && !String(message || '').trim()) {
         return res.status(400).json({ status: 'error', message: 'Message is required' });
     }
 
-    const subject = isMaktab
-        ? `[HikmahSphere Maktab] Sponsorship enquiry from ${name}`
-        : `[HikmahSphere ${type}] ${name} — new contact message`;
+    let subject: string;
+    if (isMaktabAdmission) {
+        subject = `[HikmahSphere Maktab] Admission enquiry${childName ? ` for ${childName}` : ` from ${name}`}`;
+    } else if (isMaktab) {
+        subject = `[HikmahSphere Maktab] Sponsorship enquiry from ${name}`;
+    } else {
+        subject = `[HikmahSphere ${type}] ${name} — new contact message`;
+    }
 
-    const html = isMaktab
-        ? buildMaktabSponsorEmail({ name, email, phone, program, ...(amount != null ? { amount: String(amount) } : {}), message })
-        : buildGenericContactEmail(name, email, type, message);
+    let html: string;
+    if (isMaktabAdmission) {
+        html = buildMaktabAdmissionEmail({
+            name,
+            email,
+            phone,
+            ...(childName ? { childName: String(childName) } : {}),
+            ...(childAge != null && String(childAge).trim() ? { childAge: String(childAge) } : {}),
+            program,
+            message,
+        });
+    } else if (isMaktab) {
+        html = buildMaktabSponsorEmail({ name, email, phone, program, ...(amount != null ? { amount: String(amount) } : {}), message });
+    } else {
+        html = buildGenericContactEmail(name, email, type, message);
+    }
 
-    const replyToEmail = isMaktab && email.includes('maktab-sponsor@')
+    const replyToEmail = isMaktabFlow && (email.includes('maktab-sponsor@') || email.includes('maktab-admission@'))
         ? undefined
         : `"${name}" <${email}>`;
 

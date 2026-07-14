@@ -740,7 +740,7 @@ const QuranTafsirBayan: React.FC = () => {
           ayahNumber: tafsirAyah.ayah,
           arabicText: derivedArabicText,
           translationText: useTafheemApiTranslation
-            ? (tafsirAyah.translationPlain || stripHtml(tafsirAyah.translationHtml || '') || '')
+            ? (tafsirAyah.translationPlain || stripHtml(tafsirAyah.translationHtml || '') || translationMap.get(tafsirAyah.ayah) || '')
             : (translationMap.get(tafsirAyah.ayah) || tafsirAyah.translationPlain || stripHtml(tafsirAyah.translationHtml || '') || ''),
           translationHtml: useTafheemApiTranslation ? tafsirAyah.translationHtml : undefined,
           translationPlain: useTafheemApiTranslation ? tafsirAyah.translationPlain : undefined,
@@ -773,7 +773,7 @@ const QuranTafsirBayan: React.FC = () => {
         ayahNumber: ayah.ayah,
         arabicText: arabicMap.get(ayah.ayah) || '',
         translationText: useTafheemApiTranslation
-          ? (ayah.translationPlain || stripHtml(ayah.translationHtml || '') || '')
+          ? (ayah.translationPlain || stripHtml(ayah.translationHtml || '') || translationMap.get(ayah.ayah) || '')
           : (translationMap.get(ayah.ayah) || ayah.translationPlain || stripHtml(ayah.translationHtml || '') || ''),
         translationHtml: useTafheemApiTranslation ? ayah.translationHtml : undefined,
         translationPlain: useTafheemApiTranslation ? ayah.translationPlain : undefined,
@@ -823,8 +823,15 @@ const QuranTafsirBayan: React.FC = () => {
   );
 
   useEffect(() => {
+    // Wait until the active translation is aligned with the current tafsir edition's
+    // preferred translation. This prevents a Maududi tafsir from briefly rendering
+    // next to the previous edition's translation while the alignment effect catches up.
+    if (selectedTranslation !== preferredTafsirTranslation) {
+      setLoading(true);
+      return;
+    }
     void handleFetch();
-  }, [handleFetch]);
+  }, [handleFetch, selectedTranslation, preferredTafsirTranslation]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
