@@ -39,7 +39,7 @@ const TRANSLATION_AUDIO_SOURCES: Record<string, { baseUrl: string; label: string
 const LEGACY_QURAN_SETTINGS_KEY = 'quranSettings';
 const LEGACY_QURAN_BOOKMARKS_KEY = 'quranBookmarks';
 const LEGACY_QURAN_LAST_READ_KEY = 'quranLastRead';
-const QURAN_SETTINGS_MIGRATION_VERSION = 3; // v2: reset default translation to Urdu; v3: default tafsir edition to Maududi (Tafheem)
+const QURAN_SETTINGS_MIGRATION_VERSION = 4; // v2: reset default translation to Urdu; v3: (reverted) Maududi default; v4: restore Bayan default edition (Maududi source not reachable in production)
 const QURAN_SURAHS_CACHE_TTL_MS = 1000 * 60 * 30;
 const QURAN_EDITIONS_CACHE_TTL_MS = 1000 * 60 * 10;
 
@@ -477,8 +477,11 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
         migrated.selectedTranslations = [DEFAULT_URDU_TRANSLATION.identifier];
       }
 
-      // v3: Default tafsir edition to Maududi (Tafheem) once; later user changes still persist
-      if (storedVersion < 3) {
+      // v4: Restore the default (Bayan) tafsir edition. The Maududi (Tafheem) source
+      // is only reachable on the dev tailnet, so users stuck on it after the earlier
+      // deploy could not load any tafsir. Reset stale Maududi selections back to default.
+      // (Supersedes the earlier v3 Maududi-default migration.)
+      if (storedVersion < 4 && migrated.tafsirEdition === 'tafheem-ul-quran-syed-abu-ala-maududi') {
         migrated.tafsirEdition = DEFAULT_QURAN_SETTINGS.tafsirEdition;
       }
 
@@ -565,7 +568,13 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
 
         if (hasRemoteState) {
           if (remoteSettings && typeof remoteSettings === 'object') {
-            const mergedSettings = normalizeSettings(remoteSettings);
+            let mergedSettings = normalizeSettings(remoteSettings);
+            // Cloud state saved during the bad deploy may pin the unreachable Maududi
+            // (Tafheem) source. Reset it to the default so tafsir loads; the corrected
+            // value is re-synced to the backend by the debounced sync effect.
+            if (mergedSettings.tafsirEdition === 'tafheem-ul-quran-syed-abu-ala-maududi') {
+              mergedSettings = { ...mergedSettings, tafsirEdition: DEFAULT_QURAN_SETTINGS.tafsirEdition };
+            }
             setSettings(mergedSettings);
             saveSettingsToLocal(mergedSettings);
           }
