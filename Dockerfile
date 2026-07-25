@@ -13,15 +13,15 @@ COPY backend/package*.json ./backend/
 COPY frontend/package*.json ./frontend/
 
 # Install all dependencies (including devDependencies for build)
-RUN npm ci && \
-    cd backend && npm ci && \
+RUN cd backend && npm ci && \
     cd ../frontend && npm ci
 
 # Build stage for backend
 FROM base AS backend-build
 WORKDIR /app/backend
 COPY backend/ .
-RUN npm run build
+# Reinstall dependencies to ensure TypeScript and build tools are available
+RUN npm ci && npm run build
 
 # Backend production stage
 FROM node:20-alpine AS backend
@@ -35,8 +35,17 @@ CMD ["node", "dist/index.js"]
 # Build stage for frontend
 FROM base AS frontend-build
 WORKDIR /app/frontend
+
+# Accept build arguments for React environment variables
+ARG REACT_APP_API_URL
+ARG REACT_APP_ENVIRONMENT
+# Make them available as environment variables during build
+ENV REACT_APP_API_URL=$REACT_APP_API_URL
+ENV REACT_APP_ENVIRONMENT=$REACT_APP_ENVIRONMENT
+
 COPY frontend/ .
-RUN npm run build
+# Reinstall dependencies to ensure build tools are available
+RUN npm ci && npm run build
 
 # Frontend production stage
 FROM node:20-alpine AS frontend

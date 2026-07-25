@@ -1,8 +1,8 @@
-import mongoose, { Document, Schema } from 'mongoose';
+import mongoose, { Document, Schema, Types } from 'mongoose';
 import bcrypt from 'bcryptjs';
 
 export interface IUser extends Document {
-  _id: string;
+  _id: Types.ObjectId;
   username: string;
   email: string;
   password: string;
@@ -14,7 +14,45 @@ export interface IUser extends Document {
   isAdmin: boolean;
   role: 'superadmin' | 'manager' | 'user';
   isBlocked: boolean;
-  requiresPasswordChange: boolean; // New field
+  requiresPasswordChange: boolean;
+  fcmTokens?: string[]; // Added FCM Tokens field
+  notificationDevices?: Array<{
+    deviceId: string;
+    token: string;
+    userAgent?: string;
+    permission?: 'granted' | 'denied' | 'default' | 'unknown';
+    supportsWebPush?: boolean;
+    isIOS?: boolean;
+    isStandalone?: boolean;
+    lastSeenAt?: Date;
+    updatedAt: Date;
+  }>;
+  notificationPermission?: 'granted' | 'denied' | 'default' | 'unknown';
+  notificationPermissionUpdatedAt?: Date;
+  // Snapshot of the data the server needs to push prayer-time (Adhan) alerts
+  // even when the app is closed. Saved by the frontend Prayer Times page.
+  prayerPush?: {
+    enabled: boolean;
+    latitude: number;
+    longitude: number;
+    method: number; // calculation method id (matches the prayer-times API)
+    school: number; // 1 = Shafi/Standard, 2 = Hanafi
+    timezone?: string; // IANA timezone of the user's device (e.g. "Asia/Kolkata")
+    // The exact prayer times the Prayer Times page displayed, so the server
+    // fires the Adhan at precisely the shown start time. Valid only for the
+    // local day in `timesDate`; the scheduler recomputes for any other day.
+    times?: {
+      Fajr?: string;
+      Dhuhr?: string;
+      Asr?: string;
+      Maghrib?: string;
+      Isha?: string;
+    };
+    timesDate?: string; // local date "YYYY-MM-DD" the saved times apply to
+    city?: string;
+    country?: string;
+    updatedAt?: Date;
+  };
   location?: {
     city: string;
     country: string;
@@ -34,10 +72,18 @@ export interface IUser extends Document {
     language: string;
     prayerCalculationMethod: string;
     madhab: 'hanafi' | 'shafi' | 'maliki' | 'hanbali';
+    asrMethod?: 'standard' | 'hanafi';
+    darkMode?: boolean;
     notifications: {
       prayers: boolean;
       events: boolean;
       community: boolean;
+      meetings?: {
+        enabled: boolean;
+        channels: Array<'push' | 'email'>;
+        reminderMinutes: number[];
+      };
+      prayerAlerts?: any;
     };
   };
   profile: {
@@ -71,10 +117,49 @@ export interface IUser extends Document {
       lastRead: {
         surah: number;
         ayah: number;
+        surahName?: string;
         timestamp: Date;
       };
+      bookmarks: Array<{
+        id: string;
+        surah: number;
+        ayah: number;
+        surahName: string;
+        timestamp: Date;
+        note?: string;
+        color?: 'emerald' | 'blue' | 'purple' | 'amber' | 'rose';
+      }>;
+      settings?: Record<string, unknown>;
       completedSurahs: number[];
       totalRecitations: number;
+    };
+    dhikrDuaProgress?: {
+      bookmarks: string[];
+      lastViewedDuaId?: string;
+      tasbih?: {
+        presetId: string;
+        count: number;
+      };
+      dailyTracker?: {
+        date: string;
+        counts: Record<string, number>;
+      };
+      reminders?: {
+        enabled: boolean;
+        morning: boolean;
+        evening: boolean;
+        friday: boolean;
+        scheduleType: 'periodic' | 'specific';
+        periodicIntervalMinutes: number;
+        specificTime: string;
+        includeDhikr: boolean;
+        includeDua: boolean;
+      };
+      settings?: {
+        darkMode: boolean;
+        translationLanguage: 'english' | 'urdu';
+      };
+      updatedAt?: Date;
     };
   };
   community: {
@@ -95,6 +180,19 @@ export interface IUser extends Document {
     plan: 'free' | 'premium' | 'lifetime';
     expiresAt?: Date;
     features: string[];
+  };
+  profileAudit?: {
+    lastEditedAt?: Date;
+    history: Array<{
+      editedAt: Date;
+      editedByUserId?: Types.ObjectId;
+      actorName?: string;
+      changedFields: Array<{
+        field: string;
+        before?: string;
+        after?: string;
+      }>;
+    }>;
   };
   createdAt: Date;
   updatedAt: Date;
@@ -159,6 +257,75 @@ const UserSchema = new Schema<IUser>({
     type: Boolean,
     default: false,
   },
+  fcmTokens: [{ type: String }], // Array of FCM tokens for multi-device support
+  notificationDevices: [{
+    deviceId: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    token: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    userAgent: {
+      type: String,
+      trim: true,
+    },
+    permission: {
+      type: String,
+      enum: ['granted', 'denied', 'default', 'unknown'],
+      default: 'unknown',
+    },
+    supportsWebPush: {
+      type: Boolean,
+      default: false,
+    },
+    isIOS: {
+      type: Boolean,
+      default: false,
+    },
+    isStandalone: {
+      type: Boolean,
+      default: false,
+    },
+    lastSeenAt: {
+      type: Date,
+      default: Date.now,
+    },
+    updatedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  }],
+  notificationPermission: {
+    type: String,
+    enum: ['granted', 'denied', 'default', 'unknown'],
+    default: 'unknown',
+  },
+  notificationPermissionUpdatedAt: {
+    type: Date,
+  },
+  prayerPush: {
+    enabled: { type: Boolean, default: true },
+    latitude: { type: Number, min: -90, max: 90 },
+    longitude: { type: Number, min: -180, max: 180 },
+    method: { type: Number, default: 1 },
+    school: { type: Number, enum: [1, 2], default: 1 },
+    timezone: { type: String, trim: true },
+    times: {
+      Fajr: { type: String, trim: true },
+      Dhuhr: { type: String, trim: true },
+      Asr: { type: String, trim: true },
+      Maghrib: { type: String, trim: true },
+      Isha: { type: String, trim: true },
+    },
+    timesDate: { type: String, trim: true },
+    city: { type: String, trim: true },
+    country: { type: String, trim: true },
+    updatedAt: { type: Date },
+  },
   dateOfBirth: {
     type: Date,
     validate: {
@@ -199,10 +366,29 @@ const UserSchema = new Schema<IUser>({
       enum: ['hanafi', 'shafi', 'maliki', 'hanbali'],
       default: 'hanafi'
     },
+    asrMethod: { 
+      type: String, 
+      enum: ['standard', 'hanafi'],
+      default: 'standard'
+    },
+    darkMode: { type: Boolean, default: false },
     notifications: {
       prayers: { type: Boolean, default: true },
       events: { type: Boolean, default: true },
       community: { type: Boolean, default: true },
+      meetings: {
+        enabled: { type: Boolean, default: true },
+        channels: {
+          type: [String],
+          enum: ['push', 'email'],
+          default: ['push', 'email'],
+        },
+        reminderMinutes: {
+          type: [Number],
+          default: [1440, 60, 15],
+        },
+      },
+      prayerAlerts: { type: Schema.Types.Mixed },
     },
   },
   profile: {
@@ -236,10 +422,65 @@ const UserSchema = new Schema<IUser>({
       lastRead: {
         surah: { type: Number, min: 1, max: 114 },
         ayah: { type: Number, min: 1 },
+        surahName: { type: String, trim: true },
         timestamp: { type: Date, default: Date.now },
       },
+      bookmarks: [{
+        id: { type: String, required: true },
+        surah: { type: Number, min: 1, max: 114, required: true },
+        ayah: { type: Number, min: 1, required: true },
+        surahName: { type: String, required: true, trim: true },
+        timestamp: { type: Date, default: Date.now },
+        note: { type: String, trim: true, maxlength: 500 },
+        color: { type: String, enum: ['emerald', 'red', 'teal', 'indigo', 'blue', 'purple', 'amber', 'rose'] },
+      }],
+      settings: { type: Schema.Types.Mixed },
       completedSurahs: [{ type: Number, min: 1, max: 114 }],
       totalRecitations: { type: Number, default: 0 },
+    },
+    dhikrDuaProgress: {
+      bookmarks: [{ type: String, trim: true }],
+      lastViewedDuaId: { type: String, trim: true },
+      tasbih: {
+        presetId: { type: String, trim: true },
+        count: { type: Number, min: 0, default: 0 },
+      },
+      dailyTracker: {
+        date: { type: String, trim: true },
+        counts: { type: Schema.Types.Mixed },
+      },
+      reminders: {
+        enabled: { type: Boolean, default: false },
+        morning: { type: Boolean, default: true },
+        evening: { type: Boolean, default: true },
+        friday: { type: Boolean, default: true },
+        scheduleType: {
+          type: String,
+          enum: ['periodic', 'specific'],
+          default: 'periodic',
+        },
+        periodicIntervalMinutes: {
+          type: Number,
+          enum: [30, 60, 120, 180, 360],
+          default: 180,
+        },
+        specificTime: {
+          type: String,
+          default: '08:00',
+          match: [/^([01]\d|2[0-3]):([0-5]\d)$/, 'Reminder time must be HH:MM (24-hour).'],
+        },
+        includeDhikr: { type: Boolean, default: true },
+        includeDua: { type: Boolean, default: true },
+      },
+      settings: {
+        darkMode: { type: Boolean, default: false },
+        translationLanguage: {
+          type: String,
+          enum: ['english', 'urdu'],
+          default: 'english',
+        },
+      },
+      updatedAt: { type: Date, default: Date.now },
     },
   },
   community: {
@@ -264,6 +505,19 @@ const UserSchema = new Schema<IUser>({
     },
     expiresAt: { type: Date },
     features: [{ type: String }],
+  },
+  profileAudit: {
+    lastEditedAt: { type: Date },
+    history: [{
+      editedAt: { type: Date, default: Date.now },
+      editedByUserId: { type: Schema.Types.ObjectId, ref: 'User' },
+      actorName: { type: String, trim: true },
+      changedFields: [{
+        field: { type: String, required: true, trim: true },
+        before: { type: String, trim: true },
+        after: { type: String, trim: true },
+      }],
+    }],
   },
 }, {
   timestamps: true,
@@ -328,8 +582,10 @@ UserSchema.methods.incrementLoginAttempts = async function(): Promise<void> {
 UserSchema.methods.toJSON = function() {
   const userObject = this.toObject();
   delete userObject.password;
-  delete userObject.security.loginAttempts;
-  delete userObject.security.lockUntil;
+  if (userObject.security) {
+    delete userObject.security.loginAttempts;
+    delete userObject.security.lockUntil;
+  }
   return userObject;
 };
 

@@ -2,7 +2,43 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+/* Custom Animations */
+@keyframes bounce-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.3) translateY(-100px);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05) translateY(0);
+  }
+  70% {
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-bounce-in {
+  animation: bounce-in 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(100px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.4s ease-out forwards;
+}
 
 body {
   margin: 0;
@@ -18,8 +54,744 @@ code {
     monospace;
 }
 
+/* Arabic Font Classes */
+.font-arabic {
+  font-family: 'Amiri', serif;
+}
+
 .font-scheherazade {
   font-family: 'Scheherazade New', serif;
+}
+
+.font-noto-naskh {
+  font-family: 'Noto Naskh Arabic', serif;
+}
+
+.font-cairo {
+  font-family: 'Cairo', sans-serif;
+}
+
+.font-lateef {
+  font-family: 'Lateef', cursive;
+}
+
+.font-reem-kufi {
+  font-family: 'Reem Kufi', sans-serif;
+}
+
+/* Al Mushaf Font - Custom Quran Font */
+@font-face {
+  font-family: 'Al Mushaf Quran';
+  src: url('./data/Al Mushaf Quran.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+.font-al-mushaf {
+  font-family: 'Al Mushaf Quran', 'Noto Naskh Arabic', serif;
+  font-size: 1.35em;
+  line-height: 2.2;
+}
+
+/* Indopak Nastaleeq Font - Custom Quran Font with Comprehensive Unicode Support */
+@font-face {
+  font-family: 'Indopak Nastaleeq';
+  src: url('./data/Al Qalam Quran Majeed 1 Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0600-06FF, U+FB50-FDFF, U+FE70-FEFF, U+2E41, U+F500-F8FF;
+}
+
+/* Fajer Noori Nastaleeq as secondary font for better coverage */
+@font-face {
+  font-family: 'Fajer Noori Nastaleeq';
+  src: url('./data/Fajer-Noori-Nastalique.woff') format('woff'),
+       url('./data/Fajer-Noori-Nastalique.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0600-06FF, U+FB50-FDFF, U+FE70-FEFF, U+F500-F8FF;
+}
+
+.font-indopak-nastaleeq {
+  font-family: 'Indopak Nastaleeq', 'Fajer Noori Nastaleeq', 'Noto Naskh Arabic', 'Amiri', serif;
+  font-variant-ligatures: contextual common-ligatures;
+  font-feature-settings: "mark" 1, "mkmk" 1, "calt" 1, "liga" 1, "clig" 1, "rlig" 1, "init" 1, "medi" 1, "fina" 1, "isol" 1;
+  text-rendering: optimizeLegibility;
+  -webkit-text-stroke: 0.3px transparent;
+  line-height: 2.4;
+  letter-spacing: 0.02em;
+  word-spacing: 0.08em;
+}
+
+.font-indopak-nastaleeq * {
+  font-family: inherit;
+}
+
+/* ============================================================
+   INDO-PAK QURAN FONT SETUP - Complete Solution
+   Using Tarteel AI's IndoPak Nastaleeq Font
+   Source: https://static-cdn.tarteel.ai/qul/fonts/nastaleeq/Hanafi/normal-v4.2.2/with-waqf-lazmi/font.ttf
+   ============================================================ */
+
+/* Primary IndoPak Font - Tarteel AI's IndoPak Nastaleeq */
+@font-face {
+  font-family: 'Indopak Nastaleeq';
+  src: url('https://static-cdn.tarteel.ai/qul/fonts/nastaleeq/Hanafi/normal-v4.2.2/with-waqf-lazmi/font.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0600-06FF, U+FB50-FDFF, U+FE70-FEFF, U+FDF0-FDFF, U+2E41, U+F500-F8FF;
+}
+
+/* Fallback: Noto Naskh Arabic (Google Fonts) - for missing glyphs */
+@font-face {
+  font-family: 'Noto Naskh Arabic';
+  src: local('Noto Naskh Arabic'), local('NotoNaskhArabic');
+  font-display: swap;
+  unicode-range: U+0600-06FF, U+FB50-FDFF, U+FE70-FEFF;
+}
+
+/* Fallback: Amiri for additional coverage */
+@font-face {
+  font-family: 'Amiri';
+  src: local('Amiri'), local('Amiri-Regular');
+  font-display: swap;
+  unicode-range: U+0600-06FF, U+FB50-FDFF, U+FE70-FEFF;
+}
+
+/* ============================================================
+   INDO-PAK V3 - Word-by-Word Rendering
+   ============================================================ */
+.font-indopak-nastaleeq-v3 {
+  /* Font stack: Tarteel IndoPak first, then fallbacks for missing glyphs */
+  font-family: 'Indopak Nastaleeq', 'Noto Naskh Arabic', 'Amiri', serif;
+  
+  /* OpenType features for proper Arabic shaping */
+  font-variant-ligatures: contextual common-ligatures;
+  font-feature-settings: 
+    "calt" 1,  /* Contextual alternates - ESSENTIAL for Arabic letter joining */
+    "liga" 1,  /* Standard ligatures */
+    "clig" 1,  /* Contextual ligatures */
+    "rlig" 1,  /* Required ligatures */
+    "init" 1,  /* Initial forms */
+    "medi" 1,  /* Medial forms */
+    "fina" 1,  /* Final forms */
+    "isol" 1,  /* Isolated forms */
+    "ccmp" 1,  /* Composition/decomposition - prevents broken characters */
+    "mark" 1,  /* Mark positioning - for harakat/tajweed */
+    "mkmk" 1;  /* Mark-to-mark positioning */
+  
+  /* Text rendering - use 'auto' to match Quran reader behavior */
+  text-rendering: auto;
+  -webkit-font-smoothing: subpixel-antialiased;
+  -moz-osx-font-smoothing: auto;
+  
+  /* Spacing */
+  line-height: 2.2;
+  letter-spacing: 0 !important;
+  word-spacing: 0.05em;
+  
+  /* RTL support */
+  direction: rtl;
+  text-align: right;
+  unicode-bidi: embed;
+}
+
+.font-indopak-nastaleeq-v3 * {
+  font-family: inherit;
+  direction: rtl;
+  unicode-bidi: embed;
+}
+
+/* ============================================================
+   BISMILLAH - Dedicated Quran-style rendering for IndoPak modes
+   ============================================================ */
+.bismillah-text {
+  font-family: 'Al Mushaf Quran', 'Amiri', 'Scheherazade New', 'Noto Naskh Arabic', serif !important;
+  direction: rtl !important;
+  text-align: center !important;
+  unicode-bidi: plaintext !important;
+  display: inline-block !important;
+  white-space: nowrap !important;
+  font-size: 1.9rem !important;
+  line-height: 1.9 !important;
+  letter-spacing: 0 !important;
+  word-spacing: 0.02em !important;
+  font-variant-ligatures: common-ligatures contextual !important;
+  font-feature-settings: "rlig" 1, "liga" 1, "calt" 1, "ccmp" 1, "mark" 1, "mkmk" 1 !important;
+  text-rendering: optimizeLegibility !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+}
+
+.tasbih-arabic-text {
+  font-family: 'Indopak Nastaleeq', 'Noto Naskh Arabic', 'Amiri', serif !important;
+  direction: rtl !important;
+  text-align: center !important;
+  unicode-bidi: plaintext !important;
+  display: block !important;
+  white-space: normal !important;
+  word-break: keep-all !important;
+  overflow-wrap: break-word !important;
+  letter-spacing: 0 !important;
+  word-spacing: 0.08em !important;
+  line-height: 2.2 !important;
+  font-variant-ligatures: common-ligatures contextual !important;
+  font-feature-settings: "liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1 !important;
+  text-rendering: auto !important;
+  -webkit-font-smoothing: subpixel-antialiased !important;
+}
+
+.eid-arabic-text {
+  font-family: 'Indopak Nastaleeq', 'Fajer Noori Nastaleeq', 'Al Mushaf Quran', 'Amiri', 'Scheherazade New', 'Noto Naskh Arabic', serif !important;
+  direction: rtl !important;
+  text-align: center !important;
+  unicode-bidi: plaintext !important;
+  display: inline-block !important;
+  max-width: 100% !important;
+  white-space: normal !important;
+  word-break: keep-all !important;
+  overflow-wrap: break-word !important;
+  letter-spacing: 0 !important;
+  word-spacing: 0.04em !important;
+  line-height: 1.9 !important;
+  font-variant-ligatures: common-ligatures contextual !important;
+  font-feature-settings: "rlig" 1, "liga" 1, "calt" 1, "ccmp" 1, "mark" 1, "mkmk" 1 !important;
+  text-rendering: optimizeLegibility !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+}
+
+/* ============================================================
+   WORD CONTAINER - Prevents breaking Arabic shaping
+   ============================================================ */
+.indopak-v3-word-container {
+  display: inline-block !important;
+  vertical-align: baseline;
+  line-height: inherit;
+  direction: rtl;
+  unicode-bidi: embed;
+
+  /* Prevent word breaks - CRITICAL for Arabic shaping */
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  overflow-wrap: normal !important;
+  word-wrap: normal !important;
+  break-word: normal !important;
+  break-all: normal !important;
+  flex-wrap: nowrap !important;
+
+  /* Font shaping */
+  font-variant-ligatures: contextual common-ligatures;
+  font-feature-settings: "calt" 1, "liga" 1, "clig" 1, "rlig" 1, "ccmp" 1, "mark" 1, "mkmk" 1;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  
+  /* Remove any default margins/padding that could cause gaps */
+  margin: 0 !important;
+  padding: 0 !important;
+  min-height: auto !important;
+}
+
+/* ============================================================
+   AYAH CONTAINER - Continuous Arabic text flow
+   ============================================================ */
+.indopak-ayah-container {
+  display: block !important;
+  direction: rtl;
+  text-align: right;
+  unicode-bidi: embed;
+  
+  /* Critical for continuous text flow - no gaps between words */
+  line-height: 2.6;
+  letter-spacing: 0 !important;
+  word-spacing: 0 !important;
+  
+  /* Font shaping for entire ayah */
+  font-variant-ligatures: contextual common-ligatures;
+  font-feature-settings: 
+    "calt" 1,  /* Contextual alternates - ESSENTIAL */
+    "liga" 1,  /* Standard ligatures */
+    "clig" 1,  /* Contextual ligatures */
+    "rlig" 1,  /* Required ligatures */
+    "ccmp" 1,  /* Composition - prevents broken characters */
+    "mark" 1,  /* Mark positioning */
+    "mkmk" 1;  /* Mark-to-mark positioning */
+  
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+  
+  /* Prevent any breaking */
+  white-space: normal !important;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+}
+
+/* ============================================================
+   QURAN SYMBOLS - Proper Rendering
+   ============================================================ */
+
+/* Ayah marker (۝ U+06DD) */
+.quran-ayah-marker {
+  font-family: 'Indopak Nastaleeq', 'Noto Naskh Arabic', 'Amiri', serif;
+  font-feature-settings: "mark" 1, "mkmk" 1, "ccmp" 1;
+  display: inline-block;
+  margin-inline: 0.2em;
+}
+
+/* Rub el Hizb (۞ U+06DE) */
+.quran-rub-el-hizb {
+  font-family: 'Indopak Nastaleeq', 'Noto Naskh Arabic', 'Amiri', serif;
+  font-feature-settings: "mark" 1, "mkmk" 1;
+  display: inline-block;
+  margin-inline: 0.15em;
+}
+
+/* Basmala (﷽ U+FDFD) */
+.quran-basmala {
+  font-family: 'Indopak Nastaleeq', 'Noto Naskh Arabic', 'Amiri', serif;
+  font-feature-settings: "liga" 1, "calt" 1, "ccmp" 1;
+  display: inline-block;
+  white-space: nowrap;
+}
+
+/* Waqf symbols */
+.indopak-waqf-marker {
+  display: inline-block;
+  font-family: 'Indopak Nastaleeq', 'Noto Naskh Arabic', 'Amiri', serif;
+  font-feature-settings: "mark" 1, "mkmk" 1, "ccmp" 1;
+  line-height: 1;
+  vertical-align: middle;
+  unicode-bidi: isolate;
+  margin-inline: 0.18em;
+  font-size: 0.9em;
+  transform: translateY(-0.02em);
+}
+
+/* Tajweed marks */
+.tajweed-word {
+  display: inline-block;
+  line-height: 2.8;
+  margin: 0.03em 0.1em;
+  padding: 0.06em 0.12em;
+  white-space: nowrap;
+  font-feature-settings: "mark" 1, "mkmk" 1, "ccmp" 1;
+}
+
+/* ============================================================
+   TRANSLITERATION - LTR Support
+   ============================================================ */
+.transliteration-text {
+  direction: ltr !important;
+  text-align: left !important;
+  unicode-bidi: embed !important;
+  display: block !important;
+  width: 100% !important;
+}
+
+/* ============================================================
+   TRANSLATION - Prevent breaking on mobile/iOS
+   ============================================================ */
+.translation-container {
+  display: block !important;
+  width: 100% !important;
+  direction: ltr !important;
+  unicode-bidi: embed !important;
+}
+
+.translation-item {
+  display: block !important;
+  width: 100% !important;
+  direction: ltr !important;
+  text-align: left !important;
+  unicode-bidi: embed !important;
+  
+  /* Prevent unwanted breaks */
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+  hyphens: auto !important;
+  -webkit-hyphens: auto !important;
+  -moz-hyphens: auto !important;
+}
+
+.translation-item p {
+  display: block !important;
+  width: 100% !important;
+  margin: 0 !important;
+  line-height: 1.6 !important;
+}
+
+/* ============================================================
+   MOBILE OPTIMIZATIONS
+   ============================================================ */
+@media (max-width: 640px) {
+  .font-indopak-nastaleeq-v3 {
+    line-height: 2.4;
+    letter-spacing: 0 !important;
+    word-spacing: 0 !important;
+  }
+
+  .indopak-ayah-container {
+    line-height: 3.0;
+    letter-spacing: 0 !important;
+    word-spacing: 0 !important;
+  }
+
+  .indopak-v3-word-container {
+    min-height: auto !important;
+    line-height: inherit !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .indopak-waqf-marker {
+    font-size: 0.85em;
+    margin-inline: 0.15em;
+  }
+  
+  /* Mobile translation fixes */
+  .translation-item p {
+    font-size: 0.875rem !important;
+    line-height: 1.7 !important;
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+  }
+}
+
+/* V3 Continuous Text Mode (Arabic Only) */
+.indopak-v3-continuous {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-content: flex-start;
+  width: 100%;
+  line-height: 2.8;
+  text-align: right;
+  direction: rtl;
+  unicode-bidi: embed;
+}
+
+/* V3 Translation Mode (Line by Line) */
+.indopak-v3-translation-mode {
+  display: block;
+  margin-bottom: 1.5em;
+  padding-bottom: 1em;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  direction: rtl;
+  unicode-bidi: embed;
+}
+
+.indopak-v3-translation-mode:last-child {
+  border-bottom: none;
+}
+
+/* Tajweed word spacing fix for mobile */
+.tajweed-word {
+  display: inline-block;
+  line-height: 2.4;
+  margin: 0.03em 0.1em;
+  padding: 0.06em 0.12em;
+  white-space: nowrap;
+}
+
+/* Comprehensive Tajweed Marks Support */
+.tajweed-mark {
+  display: inline-block;
+  font-family: 'Indopak Nastaleeq', 'Fajer Noori Nastaleeq', 'Noto Naskh Arabic', 'Amiri', serif;
+  font-feature-settings: "mark" 1, "mkmk" 1;
+  line-height: 1;
+  vertical-align: middle;
+  transform: translateY(-0.1em);
+}
+
+/* Specific Tajweed Mark Styling */
+.tajweed-qalqalah {
+  color: #059669;
+  font-weight: bold;
+}
+
+.tajweed-ghunnah {
+  color: #0284c7;
+  font-weight: bold;
+}
+
+.tajweed-madd {
+  color: #dc2626;
+  font-weight: bold;
+}
+
+.tajweed-idgham {
+  color: #7c3aed;
+  font-weight: bold;
+}
+
+.tajweed-iqlab {
+  color: #ea580c;
+  font-weight: bold;
+}
+
+.tajweed-ikhfa {
+  color: #0891b2;
+  font-weight: bold;
+}
+
+/* Waqf (Pause) Marks Styling */
+.waqf-la {
+  /* لا - Prohibited stop */
+  color: #dc2626;
+  font-weight: bold;
+}
+
+.waqf-jaiz {
+  /* ج - Permissible stop */
+  color: #059669;
+  font-weight: bold;
+}
+
+.waqf-awla {
+  /* قلى - Stop is better */
+  color: #0284c7;
+  font-weight: bold;
+}
+
+.waqf-waqf {
+  /* وقف - Must stop */
+  color: #7c3aed;
+  font-weight: bold;
+}
+
+.waqf-muraqaba {
+  /* ص - Connection mark */
+  color: #ea580c;
+  font-weight: bold;
+}
+
+.waqf-kadha {
+  /* كذ - Similar stop */
+  color: #0891b2;
+  font-weight: bold;
+}
+
+.waqf-saktah {
+  /* س - Pause without breath */
+  color: #dc2626;
+  font-weight: bold;
+}
+
+.waqf-wasl {
+  /* صلي - Continue preferred */
+  color: #059669;
+  font-weight: bold;
+}
+
+/* IndoPak specific waqf markers with proper Unicode support */
+.indopak-waqf-marker {
+  display: inline-block;
+  font-family: 'Indopak Nastaleeq', 'Fajer Noori Nastaleeq', 'Noto Naskh Arabic', 'Amiri', serif;
+  font-feature-settings: "mark" 1, "mkmk" 1, "calt" 1;
+  line-height: 1;
+  vertical-align: middle;
+  unicode-bidi: isolate;
+  margin-inline: 0.18em;
+  font-size: 0.9em;
+  transform: translateY(-0.02em);
+  /* Support for all IndoPak waqf symbols */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@media (max-width: 640px) {
+  .tajweed-word {
+    margin: 0.06em 0.14em;
+    padding: 0.1em 0.16em;
+    line-height: 2.5;
+  }
+
+  .font-indopak-nastaleeq {
+    font-feature-settings: "mark" 1, "mkmk" 1, "calt" 1, "liga" 1;
+    letter-spacing: 0.04em;
+    word-spacing: 0.22em;
+    line-height: 2.6;
+  }
+
+  .indopak-word-container {
+    display: inline-flex;
+    align-items: baseline;
+    justify-content: center;
+    min-height: 1.8em;
+    vertical-align: baseline;
+  }
+  
+  .indopak-waqf-marker {
+    font-size: 0.85em;
+    margin-inline: 0.15em;
+  }
+}
+
+.indopak-waqf-marker {
+  display: inline-block;
+  font-family: 'Indopak Nastaleeq', 'Fajer Noori Nastaleeq', 'Noto Naskh Arabic', 'Amiri', serif;
+  font-feature-settings: "mark" 1, "mkmk" 1, "calt" 1;
+  line-height: 1;
+  vertical-align: middle;
+  unicode-bidi: isolate;
+  margin-inline: 0.18em;
+  font-size: 0.9em;
+  transform: translateY(-0.02em);
+}
+
+/* iOS Safari Arabic Text Rendering Fixes - AGGRESSIVE */
+@supports (-webkit-touch-callout: none) {
+  /* Force continuous Arabic text on iOS */
+  .font-indopak-nastaleeq-v3,
+  .indopak-ayah-container {
+    -webkit-font-smoothing: antialiased !important;
+    text-rendering: optimizeLegibility !important;
+    letter-spacing: 0 !important;
+    word-spacing: 0 !important;
+    font-variant-ligatures: common-ligatures contextual !important;
+    font-feature-settings: "liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1, "ccmp" 1, "rlig" 1 !important;
+    -webkit-text-size-adjust: 100% !important;
+    text-size-adjust: 100% !important;
+  }
+
+  /* iOS word container fix - CRITICAL: prevent gaps */
+  .indopak-v3-word-container {
+    display: inline-block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-font-smoothing: antialiased !important;
+    text-rendering: optimizeLegibility !important;
+    white-space: nowrap !important;
+    word-break: keep-all !important;
+    overflow-wrap: normal !important;
+    word-wrap: normal !important;
+    flex-wrap: nowrap !important;
+    min-height: auto !important;
+    vertical-align: baseline !important;
+    line-height: inherit !important;
+  }
+
+  /* Ensure continuous baseline alignment on iOS */
+  .indopak-ayah-container > .indopak-v3-word-container {
+    vertical-align: baseline !important;
+    line-height: inherit !important;
+    display: inline-block !important;
+  }
+
+  .font-indopak-nastaleeq-v3 > div,
+  .indopak-ayah-container {
+    line-height: 2.6 !important;
+  }
+
+  /* iOS-specific tajweed mark fixes */
+  .tajweed-mark,
+  .indopak-waqf-marker {
+    -webkit-font-smoothing: antialiased !important;
+    transform: translateY(-0.05em);
+  }
+  
+  /* iOS translation fixes - prevent breaking */
+  .translation-container,
+  .translation-item,
+  .translation-item p {
+    -webkit-text-size-adjust: 100% !important;
+    text-size-adjust: 100% !important;
+    word-break: normal !important;
+    overflow-wrap: break-word !important;
+    -webkit-hyphens: auto !important;
+    hyphens: auto !important;
+  }
+  
+  .translation-item p {
+    line-height: 1.65 !important;
+    -webkit-font-smoothing: antialiased !important;
+  }
+  
+  /* CRITICAL: Force no gaps in translation mode on iOS */
+  .font-indopak-nastaleeq-v3 .indopak-v3-word-container {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .indopak-waqf-marker {
+    font-family: 'Indopak Nastaleeq', 'Fajer Noori Nastaleeq', 'Noto Naskh Arabic', 'Amiri', serif;
+  }
+
+  @supports (-webkit-touch-callout: none) {
+    .font-indopak-nastaleeq {
+      letter-spacing: -0.03em;
+      word-spacing: 0.03em;
+    }
+    
+    .indopak-waqf-marker {
+      font-size: 0.8em;
+    }
+  }
+}
+
+/* Jameel Noori Nastaleeq - Urdu Translation Font */
+@font-face {
+  font-family: 'Jameel Noori Nastaleeq';
+  src: local('Jameel Noori Nastaleeq'), url('../public/Jameel Noori Nastaleeq Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+.font-jameel-noori {
+  font-family: 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif;
+}
+
+.quran-urdu-translation {
+  font-family: 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif;
+  direction: rtl;
+  text-align: right;
+  line-height: 2.2;
+  letter-spacing: 0.02em;
+}
+
+@font-face {
+  font-family: 'Alvi Nastaleeq';
+  src: local('Alvi Nastaleeq'), url('../public/Alvi Nastaleeq Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+.font-alvi-nastaleeq {
+  font-family: 'Alvi Nastaleeq', 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif;
+}
+
+.quran-urdu-tafsir {
+  font-family: 'Alvi Nastaleeq', 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif;
+  direction: rtl;
+  text-align: right;
+  line-height: 2.2;
+  letter-spacing: 0.01em;
+}
+
+/* Justified Arabic Text for Better Alignment */
+.arabic-justified {
+  text-align: justify;
+  text-justify: inter-word;
+  display: block;
+  width: 100%;
+}
+
+.arabic-justified::after {
+  content: '';
+  display: inline-block;
+  width: 100%;
 }
 
 /* Scroll Reveal Animations */
@@ -51,7 +823,6 @@ code {
   animation: fadeIn 0.8s ease-out forwards;
 }
 
-/* Stagger children animations */
 .scroll-reveal-stagger > * {
   animation: fadeInUp 0.8s ease-out forwards;
 }
@@ -106,5 +877,346 @@ code {
   animation: fadeInUpSmooth 1s ease-out forwards;
 }
 
+/* Enhanced Community Popup Animations */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
 
+.animate-fade-in {
+  animation: fade-in 0.5s ease-out forwards;
+}
 
+@keyframes scale-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-scale-in {
+  animation: scale-in 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes gradient {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient 3s ease infinite;
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.6s ease-out forwards;
+  animation-fill-mode: both;
+}
+
+@keyframes progress {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 100% 50%;
+  }
+}
+
+.animate-progress {
+  background-size: 200% 100%;
+  animation: progress 2s linear infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite;
+}
+
+/* Prayer Times: flip card behavior */
+.prayer-flip-container {
+  perspective: 1200px;
+  min-height: 320px;
+  /* Promote to its own compositing layer so the 3D flip stays on the GPU */
+  transform: translateZ(0);
+}
+
+.prayer-flip-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: inherit;
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
+  transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.prayer-flip-inner.is-flipped {
+  transform: rotateY(180deg);
+}
+
+.prayer-flip-face {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.prayer-flip-front {
+  z-index: 2;
+  transform: rotateY(0deg);
+}
+
+.prayer-flip-back {
+  transform: rotateY(180deg);
+}
+
+@media (max-width: 640px) {
+  .prayer-flip-container {
+    min-height: 300px;
+  }
+}
+
+/* ============================================
+   iPad-Specific Fixes (768px - 1024px)
+   ============================================ */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .hidden.lg\:flex.flex-1.items-center {
+    gap: 0.125rem !important;
+    margin-left: 0.25rem !important;
+    margin-right: 0.25rem !important;
+  }
+
+  .hidden.lg\:flex .px-2 {
+    padding-left: 0.375rem !important;
+    padding-right: 0.375rem !important;
+  }
+  .hidden.lg\:flex .lg\:px-2\.5 {
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+  }
+
+  .hidden.lg\:flex .text-xs {
+    font-size: 0.6875rem !important;
+  }
+  .hidden.lg\:flex .lg\:text-sm {
+    font-size: 0.75rem !important;
+  }
+
+  .hidden.lg\:flex .py-2 {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+  }
+
+  .max-w-\[90px\] {
+    max-width: 70px !important;
+  }
+  .lg\:max-w-\[120px\] {
+    max-width: 85px !important;
+  }
+
+  .hidden.lg\:flex.items-center.space-x-2 {
+    gap: 0.25rem !important;
+  }
+
+  .w-9.h-9 {
+    width: 1.75rem !important;
+    height: 1.75rem !important;
+  }
+
+  .hidden.lg\:inline-flex {
+    font-size: 0.625rem !important;
+    padding: 0.125rem 0.375rem !important;
+    margin-left: 0.25rem !important;
+  }
+
+  aside#tasbih-counter {
+    position: fixed !important;
+    right: 1rem !important;
+    top: 5rem !important;
+    width: 320px !important;
+    max-height: calc(100vh - 6rem) !important;
+    overflow-y: auto !important;
+    z-index: 40 !important;
+  }
+
+  aside#tasbih-counter .h-\[55vw\] {
+    height: 180px !important;
+    width: 180px !important;
+    min-height: 180px !important;
+    min-width: 180px !important;
+  }
+
+  aside#tasbih-counter .mt-3.inline-flex {
+    margin-top: 1rem !important;
+  }
+
+  .fixed.inset-0.z-50.lg\:hidden .relative.w-full {
+    max-width: 550px !important;
+    width: 90vw !important;
+    max-height: 85vh !important;
+  }
+
+  .fixed.inset-0.z-50.lg\:hidden button[class*="px-3"] {
+    padding: 0.625rem 0.875rem !important;
+    font-size: 0.8125rem !important;
+    min-height: 2.5rem !important;
+  }
+
+  .fixed.inset-0.z-50.lg\:hidden button .h-3\.5 {
+    height: 1.125rem !important;
+    width: 1.125rem !important;
+  }
+
+  .fixed.inset-0.z-50.lg\:hidden .overflow-y-auto {
+    padding: 1.25rem !important;
+  }
+
+  .fixed.inset-0.z-50.lg\:hidden label {
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+  }
+
+  .fixed.inset-0.z-50.lg\:hidden select,
+  .fixed.inset-0.z-50.lg\:hidden input[type="range"] {
+    height: 2.25rem !important;
+    font-size: 0.875rem !important;
+  }
+
+  .fixed.inset-0.z-50.lg\:hidden input[type="range"]::-webkit-slider-thumb {
+    width: 1.25rem !important;
+    height: 1.25rem !important;
+  }
+
+  .fixed.inset-0.z-50.lg\:hidden button[class*="py-2"] {
+    min-height: 2.5rem !important;
+    padding-top: 0.625rem !important;
+    padding-bottom: 0.625rem !important;
+  }
+
+  .fixed.inset-0.z-50.lg\:hidden button[class*="w-8"] {
+    width: 2rem !important;
+    height: 2rem !important;
+  }
+
+  .lg\:hidden.pt-4.px-2.sticky {
+    padding-top: 0.5rem !important;
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+
+  .lg\:hidden .p-2\.5 {
+    padding: 0.375rem !important;
+  }
+
+  .lg\:hidden .h-5.w-5 {
+    height: 1rem !important;
+    width: 1rem !important;
+  }
+
+  .lg\:hidden .flex.items-center.gap-2 {
+    gap: 0.375rem !important;
+  }
+
+  .lg\:hidden .w-full.appearance-none {
+    font-size: 0.8125rem !important;
+    padding-left: 0.625rem !important;
+    padding-right: 2rem !important;
+  }
+
+  .max-w-7xl.mx-auto {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+
+  .rounded-2xl.shadow-lg {
+    margin-left: 0.5rem !important;
+    margin-right: 0.5rem !important;
+  }
+
+  button[class*="px-4"] {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+}
+
+/* ============================================
+   iPad Pro (1024px - 1112px) - Additional Fixes
+   ============================================ */
+@media (min-width: 1024px) and (max-width: 1112px) {
+  .hidden.lg\:flex.flex-1.items-center {
+    gap: 0.25rem !important;
+  }
+
+  .max-w-\[90px\] {
+    max-width: 80px !important;
+  }
+  .lg\:max-w-\[120px\] {
+    max-width: 100px !important;
+  }
+
+  .hidden.lg\:flex .text-xs {
+    font-size: 0.75rem !important;
+  }
+  .hidden.lg\:flex .lg\:text-sm {
+    font-size: 0.8125rem !important;
+  }
+
+  aside#tasbih-counter {
+    width: 350px !important;
+  }
+
+  aside#tasbih-counter .h-\[55vw\] {
+    height: 200px !important;
+    width: 200px !important;
+  }
+}

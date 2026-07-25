@@ -40,9 +40,11 @@
   "dependencies": {
     "concurrently": "^9.2.0",
     "create-react-app": "^1.2.1",
+    "lucide-react": "^0.564.0",
     "typescript": "^5.8.3"
   },
   "devDependencies": {
+    "@types/html2canvas": "^0.5.35",
     "@types/three": "^0.182.0"
   }
 }

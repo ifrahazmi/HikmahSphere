@@ -3,42 +3,105 @@ import {
   TrashIcon,
   NoSymbolIcon,
   CheckCircleIcon,
-  CurrencyRupeeIcon,
   UserPlusIcon,
   XMarkIcon,
-  PencilIcon,
-  ArrowUpIcon,
-  ArrowDownIcon
+  BanknotesIcon,
+  ClockIcon,
+  UserCircleIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../hooks/useAuth';
 import { API_URL } from '../config';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
+import AdminNotificationPanel from '../components/Notifications/AdminNotificationPanel';
+import FundsManagement from '../components/Funds/FundsManagement';
+import PageSEO from '../components/PageSEO';
 
-interface ZakatTransaction {
-  _id: string;
-  type: 'Credit' | 'Debit';
-  donorName?: string;
-  donorType?: string;
-  recipientName?: string;
-  recipientType?: string;
-  amount: number;
-  paymentDate: string;
-  paymentMethod: string;
-  paymentId: string;
-  upiId?: string;
-  notes?: string;
-  createdAt: string;
+interface ProfileFieldChange {
+    field: string;
+    before?: string;
+    after?: string;
+}
+
+interface ProfileAuditEntry {
+    editedAt: string;
+    actorName?: string;
+    changedFields: ProfileFieldChange[];
+}
+
+interface DashboardUser {
+    _id: string;
+    username: string;
+    email: string;
+    role: 'superadmin' | 'manager' | 'user';
+    isAdmin?: boolean;
+    isBlocked: boolean;
+    createdAt?: string;
+    profileEdited?: boolean;
+    profileEditedAt?: string | null;
+    profileEditCount?: number;
+    notificationPermission?: 'granted' | 'denied' | 'default' | 'unknown';
+    hasValidNotificationDevice?: boolean;
+    isNotificationLive?: boolean;
+    notificationDeviceCount?: number;
+    notificationLastSeenAt?: string | null;
+    notificationPreference?: {
+        prayers: boolean;
+        events: boolean;
+        community: boolean;
+    };
+    profileAudit?: {
+        history?: ProfileAuditEntry[];
+    };
 }
 
 const Dashboard: React.FC = () => {
   const { user, hasRole } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
-  const [users, setUsers] = useState<any[]>([]);
+    const [users, setUsers] = useState<DashboardUser[]>([]);
+    const [selectedUserProfile, setSelectedUserProfile] = useState<DashboardUser | null>(null);
+    const [loadingProfile, setLoadingProfile] = useState(false);
 
   // Overview Stats
   const [totalUsers, setTotalUsers] = useState(0);
+  
+  // Activity Logs
+  const [activityLogs, setActivityLogs] = useState<any[]>([]);
+  const [activityStats, setActivityStats] = useState<any>(null);
+  const [loadingActivities, setLoadingActivities] = useState(false);
+
+    const formatPermissionLabel = (permission?: string) => {
+        if (permission === 'granted') return 'Permission Granted';
+        if (permission === 'denied') return 'Permission Denied';
+        if (permission === 'default') return 'Permission Default';
+        return 'Permission Unknown';
+    };
+
+    const formatLiveLabel = (isLive?: boolean) => (isLive ? 'Live' : 'Offline');
+
+    const formatDateTime = (value?: string | null) => {
+        if (!value) return 'N/A';
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) return 'N/A';
+        return parsed.toLocaleString('en-IN', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+        });
+    };
+
+    const formatProfileChangeSummary = (changed: ProfileFieldChange) => {
+        if (changed.field === 'profile.avatar') {
+            return 'Profile picture updated';
+        }
+
+        const beforeValue = changed.before?.trim() ? changed.before : 'Empty';
+        const afterValue = changed.after?.trim() ? changed.after : 'Empty';
+        return `"${beforeValue}" -> "${afterValue}"`;
+    };
 
   // User Creation State
   const [showCreateUserModal, setShowCreateUserModal] = useState(false);
@@ -50,12 +113,6 @@ const Dashboard: React.FC = () => {
       lastName: '',
       role: 'user'
   });
-
-  // Zakat Admin Stats & State
-  const [zakatStats, setZakatStats] = useState({ totalCollected: 0, totalSpent: 0, currentBalance: 0 });
-  const [zakatTransactions, setZakatTransactions] = useState<ZakatTransaction[]>([]);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editingTransaction, setEditingTransaction] = useState<ZakatTransaction | null>(null);
 
   // Admin: Fetch all users
   const fetchUsers = async () => {
@@ -82,24 +139,34 @@ const Dashboard: React.FC = () => {
       }
   };
 
-  const fetchZakatData = async () => {
-      try {
-          const token = localStorage.getItem('token');
-          const [statsRes, transRes] = await Promise.all([
-              fetch(`${API_URL}/zakat/stats`, { headers: { 'Authorization': `Bearer ${token}` } }),
-              fetch(`${API_URL}/zakat/payments`, { headers: { 'Authorization': `Bearer ${token}` } })
-          ]);
-
-          const statsData = await statsRes.json();
-          const transData = await transRes.json();
-
-          if (statsData.status === 'success') setZakatStats(statsData.data);
-          if (transData.status === 'success') setZakatTransactions(transData.data.payments);
-
-      } catch (error) {
-          console.error(error);
-          toast.error('Failed to load Zakat data');
+  // Fetch activity logs
+  const fetchActivityLogs = async () => {
+    try {
+      setLoadingActivities(true);
+      const token = localStorage.getItem('token');
+      const [logsRes, statsRes] = await Promise.all([
+        fetch(`${API_URL}/activity/recent?limit=15`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch(`${API_URL}/activity/stats?days=7`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+      ]);
+      
+      const logsData = await logsRes.json();
+      const statsData = await statsRes.json();
+      
+      if (logsData.status === 'success') {
+        setActivityLogs(logsData.data.activities);
       }
+      if (statsData.status === 'success') {
+        setActivityStats(statsData.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch activities', error);
+    } finally {
+      setLoadingActivities(false);
+    }
   };
 
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -108,9 +175,9 @@ const Dashboard: React.FC = () => {
           const token = localStorage.getItem('token');
           const response = await fetch(`${API_URL}/admin/users`, {
               method: 'POST',
-              headers: { 
+              headers: {
                   'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${token}` 
+                  'Authorization': `Bearer ${token}`
               },
               body: JSON.stringify(newUser)
           });
@@ -125,33 +192,6 @@ const Dashboard: React.FC = () => {
           }
       } catch (error) {
           toast.error('Error creating user');
-      }
-  };
-
-  const handleUpdateTransaction = async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!editingTransaction) return;
-
-      try {
-          const token = localStorage.getItem('token');
-          const response = await fetch(`${API_URL}/zakat/payment/${editingTransaction._id}`, {
-              method: 'PUT',
-              headers: { 
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${token}` 
-              },
-              body: JSON.stringify(editingTransaction)
-          });
-          const data = await response.json();
-          if (data.status === 'success') {
-              toast.success('Transaction updated');
-              setShowEditModal(false);
-              fetchZakatData();
-          } else {
-              toast.error(data.message || 'Update failed');
-          }
-      } catch (error) {
-          toast.error('Update failed');
       }
   };
 
@@ -190,7 +230,7 @@ const Dashboard: React.FC = () => {
       try {
           const token = localStorage.getItem('token');
           setUsers(users.filter(u => u._id !== userId));
-          
+
           await fetch(`${API_URL}/admin/users/${userId}`, {
               method: 'DELETE',
               headers: { 'Authorization': `Bearer ${token}` }
@@ -202,270 +242,287 @@ const Dashboard: React.FC = () => {
       }
   };
 
-  useEffect(() => {
-      if (hasRole(['superadmin'])) {
-          fetchUsers();
-          fetchZakatData();
+  const handleViewProfile = async (userId: string) => {
+      try {
+          setLoadingProfile(true);
+          const token = localStorage.getItem('token');
+          const response = await fetch(`${API_URL}/admin/users/${userId}/profile`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const data = await response.json();
+          if (data.status === 'success') {
+              setSelectedUserProfile(data.data.user);
+              return;
+          }
+          toast.error(data.message || 'Failed to load profile details');
+      } catch (error) {
+          toast.error('Failed to load profile details');
+      } finally {
+          setLoadingProfile(false);
       }
-  }, [user, hasRole]);
+  };
 
-  // Only Super Admin can access Dashboard
-  if (!hasRole(['superadmin'])) {
+  // Super Admin gets the full dashboard; Manager gets Fund Management only.
+  const isSuperAdmin = hasRole(['superadmin']);
+  const canManageFunds = hasRole(['superadmin', 'manager']);
+  const canAccessDashboard = isSuperAdmin || canManageFunds;
+
+  useEffect(() => {
+      if (isSuperAdmin) {
+          fetchUsers();
+          fetchActivityLogs();
+      }
+  }, [user, isSuperAdmin]);
+
+  // Managers can only see Fund Management, so land them on that tab.
+  useEffect(() => {
+      if (canAccessDashboard && !isSuperAdmin && activeTab !== 'zakat') {
+          setActiveTab('zakat');
+      }
+  }, [canAccessDashboard, isSuperAdmin, activeTab]);
+
+  if (!canAccessDashboard) {
       return (
-          <div className="min-h-screen pt-24 flex justify-center items-center flex-col">
-              <h2 className="text-2xl font-bold text-red-600 mb-2">Access Denied</h2>
-              <p className="text-gray-600">You do not have permission to view this dashboard.</p>
-              <button 
-                  onClick={() => navigate('/')}
-                  className="mt-4 text-emerald-600 hover:text-emerald-700 font-medium"
-              >
-                  Go Home
-              </button>
-          </div>
+          <>
+            <PageSEO
+                            title="Dashboard"
+                            description="Secure dashboard for authorized users to manage HikmahSphere data and activity."
+              path="/dashboard"
+              noIndex
+              noFollow
+            />
+            <div className="min-h-screen pt-24 flex justify-center items-center flex-col">
+                <h2 className="text-2xl font-bold text-red-600 mb-2">Access Denied</h2>
+                <p className="text-gray-600">You do not have permission to view this dashboard.</p>
+                <button
+                    onClick={() => navigate('/')}
+                    className="mt-4 text-emerald-600 hover:text-emerald-700 font-medium"
+                >
+                    Go Home
+                </button>
+            </div>
+          </>
       );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-16">
+    <>
+      <PageSEO
+                title="Dashboard"
+                description="Secure dashboard for authorized users to manage HikmahSphere data and activity."
+        path="/dashboard"
+        noIndex
+        noFollow
+      />
+      <div className="min-h-screen bg-gray-50 pt-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">Super Admin Dashboard</h1>
+        <div className="flex items-center mb-8">
+          <div className="w-12 h-12 flex items-center justify-center overflow-hidden rounded-full bg-white shadow-md mr-4">
+            <img src="/logo.png" alt="HikmahSphere Logo" className="w-full h-full object-cover" />
+          </div>
+          <h1 className="text-3xl font-bold text-gray-900">{isSuperAdmin ? 'Super Admin Dashboard' : 'Fund Management'}</h1>
+        </div>
         
         <div className="bg-white rounded-lg shadow mb-8">
-            <nav className="flex border-b border-gray-200">
-                <button
-                    onClick={() => setActiveTab('overview')}
-                    className={`px-6 py-4 text-sm font-medium ${activeTab === 'overview' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
-                >
-                    Overview
-                </button>
-                <button
-                    onClick={() => setActiveTab('users')}
-                    className={`px-6 py-4 text-sm font-medium ${activeTab === 'users' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
-                >
-                    User Management
-                </button>
-                <button
-                    onClick={() => setActiveTab('zakat')}
-                    className={`px-6 py-4 text-sm font-medium ${activeTab === 'zakat' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
-                >
-                    Zakat Management
-                </button>
+            {/* Desktop Tab Navigation */}
+            <nav className="hidden md:flex border-b border-gray-200 overflow-x-auto">
+                {/* Overview only for Super Admin */}
+                {isSuperAdmin && (
+                    <button
+                        onClick={() => setActiveTab('overview')}
+                        className={`px-6 py-4 text-sm font-medium whitespace-nowrap ${activeTab === 'overview' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                        Overview
+                    </button>
+                )}
+                {/* User Management only for Super Admin */}
+                {isSuperAdmin && (
+                    <button
+                        onClick={() => setActiveTab('users')}
+                        className={`px-6 py-4 text-sm font-medium whitespace-nowrap ${activeTab === 'users' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                        User Management
+                    </button>
+                )}
+                {/* Funds Management for Super Admin and Manager */}
+                {canManageFunds && (
+                    <button
+                        onClick={() => setActiveTab('zakat')}
+                        className={`px-6 py-4 text-sm font-medium whitespace-nowrap flex items-center gap-2 ${activeTab === 'zakat' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                        <BanknotesIcon className="w-5 h-5" />
+                        Funds Management
+                    </button>
+                )}
+                {/* Notifications only for Super Admin */}
+                {isSuperAdmin && (
+                    <button
+                        onClick={() => setActiveTab('notifications')}
+                        className={`px-6 py-4 text-sm font-medium whitespace-nowrap ${activeTab === 'notifications' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                        Notifications
+                    </button>
+                )}
             </nav>
+
+            {/* Mobile Tab Navigation - Non-scrollable */}
+            <div className="md:hidden p-3 border-b border-gray-200">
+                <div className="grid grid-cols-2 gap-2">
+                    {isSuperAdmin && (
+                        <button
+                            onClick={() => setActiveTab('overview')}
+                            className={`w-full px-3 py-2.5 text-xs sm:text-sm font-medium rounded-lg text-center leading-tight transition-colors ${
+                                activeTab === 'overview'
+                                    ? 'bg-emerald-500 text-white shadow-md'
+                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                        >
+                            Overview
+                        </button>
+                    )}
+                    {isSuperAdmin && (
+                        <button
+                            onClick={() => setActiveTab('users')}
+                            className={`w-full px-3 py-2.5 text-xs sm:text-sm font-medium rounded-lg text-center leading-tight transition-colors ${
+                                activeTab === 'users'
+                                    ? 'bg-emerald-500 text-white shadow-md'
+                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                        >
+                            User Management
+                        </button>
+                    )}
+                    {canManageFunds && (
+                        <button
+                            onClick={() => setActiveTab('zakat')}
+                            className={`w-full px-3 py-2.5 text-xs sm:text-sm font-medium rounded-lg text-center leading-tight transition-colors ${
+                                activeTab === 'zakat'
+                                    ? 'bg-emerald-500 text-white shadow-md'
+                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                        >
+                            Funds Management
+                        </button>
+                    )}
+                    {isSuperAdmin && (
+                        <button
+                            onClick={() => setActiveTab('notifications')}
+                            className={`w-full px-3 py-2.5 text-xs sm:text-sm font-medium rounded-lg text-center leading-tight transition-colors ${
+                                activeTab === 'notifications'
+                                    ? 'bg-emerald-500 text-white shadow-md'
+                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                        >
+                            Notifications
+                        </button>
+                    )}
+                </div>
+            </div>
         </div>
 
-        {activeTab === 'overview' && (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div className="bg-white p-6 rounded-lg shadow border-l-4 border-blue-500">
-                    <h3 className="text-gray-500 text-sm font-medium">Total Users</h3>
-                    <p className="text-3xl font-bold text-gray-900 mt-2">{totalUsers}</p>
-                </div>
-                {/* Zakat Quick Stats */}
-                <div className="bg-white p-6 rounded-lg shadow border-l-4 border-green-500">
-                    <h3 className="text-gray-500 text-sm font-medium">Zakat Collected</h3>
-                    <p className="text-2xl font-bold text-gray-900 mt-2">₹{zakatStats.totalCollected.toLocaleString('en-IN')}</p>
-                </div>
-                <div className="bg-white p-6 rounded-lg shadow border-l-4 border-purple-500">
-                    <h3 className="text-gray-500 text-sm font-medium">Current Balance</h3>
-                    <p className="text-2xl font-bold text-emerald-600 mt-2">₹{zakatStats.currentBalance.toLocaleString('en-IN')}</p>
-                </div>
-            </div>
-        )}
-
-        {/* Zakat Management Tab (Super Admin Control) */}
-        {activeTab === 'zakat' && (
-            <div className="space-y-8">
-                {/* Detailed Stats */}
+        {isSuperAdmin && activeTab === 'overview' && (
+            <div className="space-y-6">
+                {/* Stats Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="bg-white p-6 rounded-lg shadow border-t-4 border-green-500">
-                        <div className="flex justify-between items-center">
-                            <div>
-                                <p className="text-sm font-medium text-gray-500">Total Collected</p>
-                                <p className="text-3xl font-bold text-green-700 mt-1">₹{zakatStats.totalCollected.toLocaleString('en-IN')}</p>
-                            </div>
-                            <ArrowUpIcon className="h-10 w-10 text-green-100 bg-green-600 rounded-full p-2" />
-                        </div>
+                    <div className="bg-white p-6 rounded-lg shadow border-l-4 border-blue-500">
+                        <h3 className="text-gray-500 text-sm font-medium">Total Users</h3>
+                        <p className="text-3xl font-bold text-gray-900 mt-2">{totalUsers}</p>
                     </div>
-                    <div className="bg-white p-6 rounded-lg shadow border-t-4 border-red-500">
-                        <div className="flex justify-between items-center">
-                            <div>
-                                <p className="text-sm font-medium text-gray-500">Total Spent</p>
-                                <p className="text-3xl font-bold text-red-700 mt-1">₹{zakatStats.totalSpent.toLocaleString('en-IN')}</p>
+                    {activityStats && (
+                        <>
+                            <div className="bg-white p-6 rounded-lg shadow border-l-4 border-emerald-500">
+                                <h3 className="text-gray-500 text-sm font-medium">Total Activities (7 days)</h3>
+                                <p className="text-3xl font-bold text-emerald-700 mt-2">{activityStats.totalActivities}</p>
                             </div>
-                            <ArrowDownIcon className="h-10 w-10 text-red-100 bg-red-600 rounded-full p-2" />
-                        </div>
-                    </div>
-                    <div className="bg-white p-6 rounded-lg shadow border-t-4 border-blue-500">
-                        <div className="flex justify-between items-center">
-                            <div>
-                                <p className="text-sm font-medium text-gray-500">Current Balance</p>
-                                <p className="text-3xl font-bold text-blue-700 mt-1">₹{zakatStats.currentBalance.toLocaleString('en-IN')}</p>
+                            <div className="bg-white p-6 rounded-lg shadow border-l-4 border-purple-500">
+                                <h3 className="text-gray-500 text-sm font-medium">Active Users (7 days)</h3>
+                                <p className="text-3xl font-bold text-purple-700 mt-2">{activityStats.uniqueUsers}</p>
                             </div>
-                            <CurrencyRupeeIcon className="h-10 w-10 text-blue-100 bg-blue-600 rounded-full p-2" />
-                        </div>
-                    </div>
+                        </>
+                    )}
                 </div>
 
-                {/* All Transactions Table with Edit */}
-                <div className="bg-white shadow rounded-lg overflow-hidden">
+                {/* Activity Logs Section */}
+                <div className="bg-white rounded-lg shadow">
                     <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                        <h3 className="text-lg font-medium text-gray-900">All Transactions Database</h3>
-                        <span className="text-xs text-gray-500">Showing {zakatTransactions.length} records</span>
+                        <h3 className="text-lg font-semibold text-gray-900">Recent User Activity</h3>
+                        <span className="text-sm text-gray-500">Last 15 activities</span>
                     </div>
                     <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Party</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Method</th>
-                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Edit</th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                                {zakatTransactions.map((t) => (
-                                    <tr key={t._id} className="hover:bg-gray-50">
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            {new Date(t.paymentDate).toLocaleDateString()}
-                                            <div className="text-xs text-gray-400">Rec: {t.createdAt ? new Date(t.createdAt).toLocaleDateString() : '-'}</div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                                t.type === 'Credit' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                                            }`}>
-                                                {t.type === 'Credit' ? 'Collection' : 'Spending'}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                            {t.type === 'Credit' ? t.donorName : t.recipientName}
-                                            <div className="text-xs text-gray-500">
-                                                {t.type === 'Credit' ? t.donorType : t.recipientType}
-                                            </div>
-                                        </td>
-                                        <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold ${
-                                            t.type === 'Credit' ? 'text-green-600' : 'text-red-600'
-                                        }`}>
-                                            ₹{t.amount.toLocaleString('en-IN')}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            {t.paymentMethod}
-                                            {t.paymentMethod === 'UPI Transfer' && t.upiId && (
-                                                <div className="text-xs text-gray-400">UPI: {t.upiId}</div>
-                                            )}
-                                            <div className="text-xs text-gray-400">ID: {t.paymentId}</div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                            <button
-                                                onClick={() => { setEditingTransaction(t); setShowEditModal(true); }}
-                                                className="text-indigo-600 hover:text-indigo-900"
-                                            >
-                                                <PencilIcon className="h-5 w-5" />
-                                            </button>
-                                        </td>
+                        {loadingActivities ? (
+                            <div className="p-8 text-center text-gray-500">Loading activities...</div>
+                        ) : activityLogs.length === 0 ? (
+                            <div className="p-8 text-center text-gray-500">No activity logs found</div>
+                        ) : (
+                            <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                    {activityLogs.map((log, index) => (
+                                        <tr key={index} className="hover:bg-gray-50">
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <div className="flex items-center">
+                                                    <UserCircleIcon className="w-8 h-8 text-gray-400 mr-3" />
+                                                    <div>
+                                                        <div className="text-sm font-medium text-gray-900">{log.userName}</div>
+                                                        <div className="text-xs text-gray-500">{log.userEmail}</div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                                    log.action.includes('login') ? 'bg-green-100 text-green-800' :
+                                                    log.action.includes('register') ? 'bg-blue-100 text-blue-800' :
+                                                    log.action.includes('zakat') ? 'bg-yellow-100 text-yellow-800' :
+                                                    'bg-gray-100 text-gray-800'
+                                                }`}>
+                                                    {log.action.replace(/_/g, ' ')}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <span className="text-sm text-gray-600 capitalize">{log.category}</span>
+                                            </td>
+                                            <td className="px-6 py-4 text-sm text-gray-600 max-w-md truncate">
+                                                {log.description}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                <div className="flex items-center gap-1">
+                                                    <ClockIcon className="w-4 h-4" />
+                                                    {new Date(log.createdAt).toLocaleString('en-IN', {
+                                                        day: 'numeric',
+                                                        month: 'short',
+                                                        hour: '2-digit',
+                                                        minute: '2-digit'
+                                                    })}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
                     </div>
                 </div>
             </div>
         )}
 
-        {/* Edit Transaction Modal (Super Admin) */}
-        {showEditModal && editingTransaction && (
-            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
-                <div className="bg-white rounded-lg max-w-md w-full p-6">
-                    <h3 className="text-lg font-medium text-gray-900 mb-4">Edit Transaction (Super Admin)</h3>
-                    <form onSubmit={handleUpdateTransaction}>
-                        <div className="space-y-4">
-                            {editingTransaction.type === 'Credit' ? (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Donor Name</label>
-                                    <input
-                                        type="text"
-                                        className="mt-1 block w-full border rounded-md p-2"
-                                        value={editingTransaction.donorName}
-                                        onChange={e => setEditingTransaction({...editingTransaction, donorName: e.target.value})}
-                                    />
-                                </div>
-                            ) : (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Recipient Name</label>
-                                    <input
-                                        type="text"
-                                        className="mt-1 block w-full border rounded-md p-2"
-                                        value={editingTransaction.recipientName}
-                                        onChange={e => setEditingTransaction({...editingTransaction, recipientName: e.target.value})}
-                                    />
-                                </div>
-                            )}
-                            
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700">Amount</label>
-                                <input
-                                    type="number"
-                                    className="mt-1 block w-full border rounded-md p-2"
-                                    value={editingTransaction.amount}
-                                    onChange={e => setEditingTransaction({...editingTransaction, amount: parseFloat(e.target.value)})}
-                                    min="0"
-                                />
-                            </div>
+        {/* Funds Management Tab - Super Admin and Manager */}
+        {canManageFunds && activeTab === 'zakat' && (
+            <FundsManagement />
+        )}
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700">Payment Method</label>
-                                <select 
-                                    className="mt-1 block w-full border rounded-md p-2"
-                                    value={editingTransaction.paymentMethod}
-                                    onChange={e => setEditingTransaction({...editingTransaction, paymentMethod: e.target.value})}
-                                >
-                                    <option>Bank Transfer</option>
-                                    <option>UPI Transfer</option>
-                                    <option>Cash</option>
-                                    <option>Cheque</option>
-                                    <option>QR Scanner</option>
-                                    <option>Other</option>
-                                </select>
-                            </div>
-
-                            {editingTransaction.paymentMethod === 'UPI Transfer' && (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">UPI ID</label>
-                                    <input
-                                        type="text"
-                                        className="mt-1 block w-full border rounded-md p-2"
-                                        value={editingTransaction.upiId || ''}
-                                        onChange={e => setEditingTransaction({...editingTransaction, upiId: e.target.value})}
-                                    />
-                                </div>
-                            )}
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700">Transaction ID</label>
-                                <input
-                                    type="text"
-                                    className="mt-1 block w-full border rounded-md p-2"
-                                    value={editingTransaction.paymentId}
-                                    onChange={e => setEditingTransaction({...editingTransaction, paymentId: e.target.value})}
-                                />
-                            </div>
-                        </div>
-                        <div className="mt-6 flex justify-end gap-3">
-                            <button
-                                type="button"
-                                onClick={() => setShowEditModal(false)}
-                                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="submit"
-                                className="px-4 py-2 text-white bg-emerald-600 rounded-md hover:bg-emerald-700"
-                            >
-                                Save Changes
-                            </button>
-                        </div>
-                    </form>
+        {/* Notifications Tab - Super Admin Only */}
+        {isSuperAdmin && activeTab === 'notifications' && (
+            <div className="space-y-8">
+                <div className="max-w-4xl mx-auto">
+                    <AdminNotificationPanel />
                 </div>
             </div>
         )}
@@ -491,6 +548,8 @@ const Dashboard: React.FC = () => {
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Notification</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Capability</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
                                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                                 </tr>
@@ -518,10 +577,40 @@ const Dashboard: React.FC = () => {
                                                 {u.isBlocked ? 'Blocked' : 'Active'}
                                             </span>
                                         </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="flex flex-col gap-1">
+                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${u.notificationPermission === 'granted' ? 'bg-emerald-100 text-emerald-800' : u.notificationPermission === 'denied' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-700'}`}>
+                                                    {formatPermissionLabel(u.notificationPermission)}
+                                                </span>
+                                                <span className="text-xs text-gray-500">
+                                                    App Pref: {u.notificationPreference?.prayers || u.notificationPreference?.events || u.notificationPreference?.community ? 'Enabled' : 'Disabled'}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="flex flex-col gap-1">
+                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${u.hasValidNotificationDevice ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                                                    {u.hasValidNotificationDevice ? 'Can Receive' : 'No Valid Device'}
+                                                </span>
+                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${u.isNotificationLive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'}`}>
+                                                    {formatLiveLabel(u.isNotificationLive)}
+                                                </span>
+                                                <span className="text-xs text-gray-500">
+                                                    Devices: {u.notificationDeviceCount || 0} | Last Seen: {formatDateTime(u.notificationLastSeenAt)}
+                                                </span>
+                                            </div>
+                                        </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                             {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : 'N/A'}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                            <button
+                                                onClick={() => handleViewProfile(u._id)}
+                                                className="text-emerald-600 hover:text-emerald-800 mr-4"
+                                                title="View Profile Info"
+                                            >
+                                                View Profile
+                                            </button>
                                             {/* Hide delete/block for self OR if target is superadmin (optional policy) */}
                                             {u._id !== user?.id && (
                                                 <>
@@ -548,6 +637,67 @@ const Dashboard: React.FC = () => {
                         </table>
                     </div>
                 </div>
+            </div>
+        )}
+
+        {selectedUserProfile && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+                <div className="bg-white rounded-lg w-full max-w-3xl max-h-[85vh] overflow-y-auto p-6">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-semibold text-gray-900">User Profile Details</h3>
+                        <button
+                            onClick={() => setSelectedUserProfile(null)}
+                            className="text-gray-400 hover:text-gray-500"
+                        >
+                            <XMarkIcon className="h-6 w-6" />
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-6">
+                        <div><span className="font-medium text-gray-700">Username:</span> {selectedUserProfile.username}</div>
+                        <div><span className="font-medium text-gray-700">Email:</span> {selectedUserProfile.email}</div>
+                        <div><span className="font-medium text-gray-700">Role:</span> {selectedUserProfile.role}</div>
+                        <div><span className="font-medium text-gray-700">Permission:</span> {formatPermissionLabel(selectedUserProfile.notificationPermission)}</div>
+                        <div><span className="font-medium text-gray-700">Capability:</span> {selectedUserProfile.hasValidNotificationDevice ? 'Can Receive Notifications' : 'Cannot Receive Notifications'}</div>
+                        <div><span className="font-medium text-gray-700">Live:</span> {formatLiveLabel(selectedUserProfile.isNotificationLive)}</div>
+                        <div><span className="font-medium text-gray-700">Device Count:</span> {selectedUserProfile.notificationDeviceCount || 0}</div>
+                        <div><span className="font-medium text-gray-700">Last Seen:</span> {formatDateTime(selectedUserProfile.notificationLastSeenAt)}</div>
+                        <div><span className="font-medium text-gray-700">Profile Edited:</span> {selectedUserProfile.profileEdited ? 'Yes' : 'No'}</div>
+                        <div><span className="font-medium text-gray-700">Last Edit:</span> {formatDateTime(selectedUserProfile.profileEditedAt)}</div>
+                    </div>
+
+                    <div className="border rounded-lg">
+                        <div className="px-4 py-3 border-b bg-gray-50">
+                            <h4 className="font-medium text-gray-900">Profile Change History</h4>
+                        </div>
+                        <div className="p-4 space-y-4">
+                            {Array.isArray(selectedUserProfile.profileAudit?.history) && selectedUserProfile.profileAudit.history.length > 0 ? (
+                                selectedUserProfile.profileAudit.history.map((entry, index) => (
+                                    <div key={index} className="border rounded-md p-3">
+                                        <div className="text-xs text-gray-500 mb-2">
+                                            {formatDateTime(entry.editedAt)} by {entry.actorName || 'User'}
+                                        </div>
+                                        <div className="space-y-1">
+                                            {entry.changedFields.map((changed, changedIndex) => (
+                                                <div key={`${changed.field}-${changedIndex}`} className="text-sm text-gray-700">
+                                                    <span className="font-medium">{changed.field}</span>: {formatProfileChangeSummary(changed)}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="text-sm text-gray-500">No profile changes recorded yet.</div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {loadingProfile && (
+            <div className="fixed inset-0 z-40 bg-black/20 flex items-center justify-center">
+                <div className="bg-white px-4 py-3 rounded-lg shadow text-sm text-gray-700">Loading profile details...</div>
             </div>
         )}
 
@@ -613,7 +763,8 @@ const Dashboard: React.FC = () => {
             </div>
         )}
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 

@@ -80,13 +80,21 @@ export interface SearchResult {
   page: number;
 }
 
+export type TafsirEdition =
+  | 'bayan-ul-quran-dr-israr-ahmed'
+  | 'tafheem-ul-quran-syed-abu-ala-maududi';
+
+export type TafsirTranslationPreferences = Record<TafsirEdition, string>;
+
 export interface QuranSettings {
-  selectedTranslations: string[];  // Edition identifiers (up to 3)
+  selectedTranslations: string[];  // Single active translation identifier stored as a one-item array
   showTransliteration: boolean;
   arabicOnlyMode: boolean;         // Show only Arabic text
-  fontSize: number;                // 14-32px
+  fontSize: number;                // 14-38px
+  translationFontSize: number;     // 14-26px
+  transliterationFontSize: number; // 12-28px
   theme: 'light' | 'dark';
-  arabicFont: 'amiri' | 'scheherazade' | 'noto-naskh' | 'cairo' | 'lateef';
+  arabicFont: 'al-mushaf' | 'indopak-nastaleeq-v3' | 'amiri' | 'scheherazade' | 'noto-naskh' | 'cairo' | 'lateef' | 'reem-kufi';
   fontColor: 'default' | 'emerald' | 'blue' | 'amber' | 'rose';
   readerBackground: 'default' | 'white' | 'cream' | 'blue' | 'green';
   lineSpacing: number;             // 1.5-3.0
@@ -95,7 +103,39 @@ export interface QuranSettings {
   autoScroll: boolean;
   reciter: string;                 // Reciter identifier
   autoPlayNext: boolean;
+  audioEnabled: boolean;           // Enable audio playback feature
+  audioMode: 'ayah' | 'surah';     // 'ayah' for ayat-by-ayat, 'surah' for complete surah
+  translationAudioEnabled: boolean; // When enabled, translation audio follows the Arabic audio mode
+  tafsirEdition: TafsirEdition;
+  tafsirTranslationPreferences: TafsirTranslationPreferences;
+  tafsirFontSize: number;          // 14-38px
+  tafsirTextAreaBackground: string;
+  tafsirAreaBackground: string;
+  tafsirTextColor: string;
 }
+
+export const BOOKMARK_COLORS = [
+  'emerald',
+  'red',
+  'teal',
+  'indigo',
+  'blue',
+  'purple',
+  'amber',
+  'rose',
+] as const;
+
+export type BookmarkColor = (typeof BOOKMARK_COLORS)[number];
+
+export const BOOKMARK_COLOR_OPTIONS = [
+  'red',
+  'teal',
+  'indigo',
+  'blue',
+  'purple',
+  'amber',
+  'rose',
+] as const satisfies readonly BookmarkColor[];
 
 export interface Bookmark {
   id: string;
@@ -104,6 +144,7 @@ export interface Bookmark {
   surahName: string;
   timestamp: Date;
   note?: string;
+  color?: BookmarkColor;
 }
 
 export interface LastRead {
@@ -131,10 +172,10 @@ export interface QuranContextType {
   settings: QuranSettings;
   updateSettings: (settings: Partial<QuranSettings>) => void;
   
-  // Reading history  
+  // Reading history
   bookmarks: Bookmark[];
   lastRead: LastRead | null;
-  addBookmark: (surah: number, ayah: number, note?: string) => void;
+  addBookmark: (surah: number, ayah: number, note?: string, color?: BookmarkColor) => void;
   removeBookmark: (id: string) => void;
   updateLastRead: (surah: number, ayah: number) => void;
   
@@ -150,34 +191,87 @@ export interface QuranContextType {
   
   // Audio
   isPlaying: boolean;
+  isPaused: boolean;           // Audio is paused (not stopped)
+  isAudioLoading: boolean;       // Audio buffering state
   currentPlayingAyah: number | null;
-  playAyah: (ayahNumber: number) => void;
+  currentPlayingSurah: number | null;
+  currentPlaybackTrack: 'arabic' | 'translation' | 'bismillah' | null;
+  canSeekAudio: boolean;
+  audioProgress: number;           // 0-100 percentage
+  audioDuration: number;           // Duration in seconds (total for surah mode)
+  audioCurrentTime: number;        // Current time in seconds (cumulative for surah mode)
+  currentQueueIndex: number;       // Current ayah index in surah play queue
+  totalSurahDuration: number;      // Total estimated duration for complete surah
+  cumulativeTime: number;          // Cumulative time from previous ayahs
+  playAyah: (surahNumber: number, ayahNumber: number, isContinuing?: boolean) => void;
+  playTranslationAyah: (surahNumber: number, ayahNumber: number) => Promise<void>;
   pauseAyah: () => void;
+  resumeAyah: () => void;
   stopAyah: () => void;
+  playSurah: (surahNumber: number) => void;
+  togglePlayPause: () => void;
+  seekAudio: (time: number) => void;
 }
+
+export const DEFAULT_ENGLISH_TRANSLATION = {
+  identifier: 'en.sahih',
+  name: 'Saheeh International',
+  language: 'English',
+} as const;
+
+export const DEFAULT_URDU_TRANSLATION = {
+  identifier: 'ur.jalandhry',
+  name: 'Fateh Muhammad Jalandhury',
+  language: 'Urdu',
+} as const;
 
 // Default translations configuration
 export const DEFAULT_TRANSLATIONS = [
-  { identifier: 'en.sahih', name: 'Sahih International', language: 'English' },
+  DEFAULT_ENGLISH_TRANSLATION,
+  { identifier: 'en.itani', name: "Clear Qur'an - Talal Itani", language: 'English' },
+  { identifier: 'en.asad', name: 'Muhammad Asad', language: 'English' },
+  { identifier: 'en.arberry', name: 'A. J. Arberry', language: 'English' },
   { identifier: 'en.pickthall', name: 'Pickthall', language: 'English' },
   { identifier: 'en.yusufali', name: 'Yusuf Ali', language: 'English' },
-  { identifier: 'ar.alafasy', name: 'Arabic (Alafasy)', language: 'Arabic' },
-  { identifier: 'ur.jalandhry', name: 'Fateh Muhammad Jalandhry', language: 'Urdu' },
-  { identifier: 'hi.farooq', name: 'Muhammad Farooq Khan & Ahmed', language: 'Hindi' },
-  { identifier: 'fr.hamidullah', name: 'Muhammad Hamidullah', language: 'French' },
-  { identifier: 'es.cortes', name: 'Julio Cortes', language: 'Spanish' },
-  { identifier: 'id.indonesian', name: 'Bahasa Indonesia', language: 'Indonesian' },
-  { identifier: 'tr.diyanet', name: 'Diyanet İşleri', language: 'Turkish' },
+  { identifier: 'en.maududi', name: 'Abul Ala Maududi', language: 'English' },
+  { identifier: 'en.hilali', name: 'Hilali & Khan', language: 'English' },
+  { identifier: 'en.wahiduddin', name: 'Wahiduddin Khan', language: 'English' },
+  { identifier: 'en.ahmedali', name: 'Ahmed Ali', language: 'English' },
+  DEFAULT_URDU_TRANSLATION,
+  { identifier: 'ur.junagarhi', name: 'Muhammad Junagarhi', language: 'Urdu' },
+  { identifier: 'ur.maududi', name: "Abul A'ala Maududi", language: 'Urdu' },
+  { identifier: 'ur.ahmedali', name: 'Ahmed Ali', language: 'Urdu' },
+];
+
+export const DEFAULT_TAFSIR_TRANSLATION_PREFERENCES: TafsirTranslationPreferences = {
+  'bayan-ul-quran-dr-israr-ahmed': DEFAULT_URDU_TRANSLATION.identifier,
+  'tafheem-ul-quran-syed-abu-ala-maududi': 'ur.maududi',
+};
+
+// Available Reciters for Audio Playback
+export const AVAILABLE_RECITERS = [
+  { identifier: 'ar.alafasy', name: 'Mishary Rashid Alafasy' },
+  { identifier: 'ar.abdulbasitmurattal', name: 'Abdul Basit (Murattal)' },
+  { identifier: 'ar.abdulsamad', name: 'Abdul Samad' },
+  { identifier: 'ar.shaatree', name: 'Abu Bakr al-Shatri' },
+  { identifier: 'ar.husary', name: 'Mahmoud Khalil Al-Husary' },
+  { identifier: 'ar.minshawi', name: 'Mohamed Siddiq al-Minshawi' },
+  { identifier: 'ar.muhammadayyoub', name: 'Muhammad Ayyoub' },
+  { identifier: 'ar.muhammadjibreel', name: 'Muhammad Jibreel' },
+  { identifier: 'ar.saoodshuraym', name: 'Saood bin Ibraaheem Shuraym' },
+  { identifier: 'ar.abdullahbasfar', name: 'Abdullah Basfar' },
 ];
 
 // Default settings
 export const DEFAULT_QURAN_SETTINGS: QuranSettings = {
-  selectedTranslations: ['en.sahih'],
+  selectedTranslations: [DEFAULT_URDU_TRANSLATION.identifier],
   showTransliteration: false,
   arabicOnlyMode: false,
   fontSize: 20,
+  translationFontSize: 20,
+  transliterationFontSize: 16,
   theme: 'light',
-  arabicFont: 'amiri',
+  arabicFont: 'indopak-nastaleeq-v3',
   fontColor: 'default',
   readerBackground: 'default',
   lineSpacing: 2.0,
@@ -186,4 +280,13 @@ export const DEFAULT_QURAN_SETTINGS: QuranSettings = {
   autoScroll: false,
   reciter: 'ar.alafasy',
   autoPlayNext: false,
+  audioEnabled: false,
+  audioMode: 'ayah',
+  translationAudioEnabled: false,
+  tafsirEdition: 'bayan-ul-quran-dr-israr-ahmed',
+  tafsirTranslationPreferences: { ...DEFAULT_TAFSIR_TRANSLATION_PREFERENCES },
+  tafsirFontSize: 26,
+  tafsirTextAreaBackground: '#f8fffb',
+  tafsirAreaBackground: '#f0fdf4',
+  tafsirTextColor: '#1f2937',
 };

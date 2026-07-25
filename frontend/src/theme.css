@@ -1,0 +1,41 @@
+:root{
+  color-scheme: light;
+}
+
+html.dark{
+  color-scheme: dark;
+}
+
+/* Ensure body background/text switch with dark mode even if pages miss dark:* classes */
+body{
+  background: #ffffff;
+  color: #111827; /* gray-900 */
+}
+
+html.dark body{
+  background: #0b1220; /* close to tailwind gray-950 */
+  color: #e5e7eb; /* gray-200 */
+}
+
+/* Make common containers/borders readable in dark mode when components hardcode light classes */
+html.dark .bg-white,
+html.dark .bg-gray-50,
+html.dark .bg-gradient-to-br.from-emerald-50,
+html.dark .bg-gradient-to-br.from-emerald-50.via-white.to-teal-50{
+  background: #111827 !important;
+}
+
+html.dark .text-gray-900,
+html.dark .text-gray-800,
+html.dark .text-gray-700,
+html.dark .text-black{
+  color: #e5e7eb !important;
+}
+
+html.dark .border-gray-200,
+html.dark .border-gray-100,
+html.dark .border-gray-300,
+html.dark .border-gray-700{
+  border-color: rgba(55,65,81,0.6) !important; /* gray-700-ish */
+}
+

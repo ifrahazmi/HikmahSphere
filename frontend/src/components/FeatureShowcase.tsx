@@ -27,11 +27,19 @@ const FeatureShowcase: React.FC<FeatureShowcaseProps> = ({ features }) => {
             return (
               <div
                 key={index}
-                className="bg-white rounded-xl p-8 shadow-lg hover:shadow-xl transform hover:-translate-y-2 transition-all duration-300"
+                className={`bg-white rounded-xl p-8 shadow-lg hover:shadow-xl transform hover:-translate-y-2 transition-all duration-300 relative ${feature.disabled ? 'opacity-60' : ''}`}
               >
+                {feature.disabled && (
+                  <div className="absolute top-4 right-4 bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-xs font-semibold">
+                    Coming Soon
+                  </div>
+                )}
+
                 <div className="relative">
-                  <div className={`w-16 h-16 ${bgColorClass} rounded-lg flex items-center justify-center mb-6`}>
-                    {typeof Icon === 'string' ? (
+                  <div className={`w-16 h-16 ${bgColorClass} rounded-lg flex items-center justify-center mb-6 overflow-hidden`}>
+                    {typeof Icon === 'string' && (Icon.includes('.png') || Icon.includes('.jpg') || Icon.includes('.svg')) ? (
+                      <img src={Icon} alt={feature.title} className="w-14 h-14 object-contain" />
+                    ) : typeof Icon === 'string' ? (
                       <span className="text-3xl">{Icon}</span>
                     ) : (
                       <Icon className={`w-8 h-8 ${textColorClass}`} />

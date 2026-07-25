@@ -1,0 +1,55 @@
+{
+  "header": {
+    "prayerTimes": "Prayer Times",
+    "settings": "Settings",
+    "language": "Language",
+    "darkMode": "Dark Mode",
+    "home": "Home",
+    "about": "About",
+    "contact": "Contact"
+  },
+  "prayers": {
+    "fajr": "Fajr",
+    "dhuhr": "Dhuhr",
+    "asr": "Asr",
+    "maghrib": "Maghrib",
+    "isha": "Isha"
+  },
+  "settings": {
+    "asrMethod": "Asr Juristic Method",
+    "standard": "Standard (1x shadow length)",
+    "hanafi": "Hanafi (2x shadow length)",
+    "darkMode": "Dark Mode",
+    "language": "Language",
+    "notifications": "Notifications",
+    "enable": "Enable",
+    "disable": "Disable",
+    "sound": "Sound",
+    "save": "Save Changes",
+    "cancel": "Cancel",
+    "close": "Close"
+  },
+  "notifications": {
+    "prayerTime": "Time for {{prayer}}",
+    "enableNotification": "Notification enabled",
+    "disableNotification": "Notification disabled",
+    "soundEnabled": "Sound enabled",
+    "soundDisabled": "Sound disabled",
+    "hint": "Enable notifications for prayer time alerts"
+  },
+  "mosque": {
+    "nearbyMosques": "Nearby Mosques",
+    "distance": "{{distance}} km away",
+    "jamaatTimes": "Jama'at Times",
+    "addMosque": "Add Mosque",
+    "viewMap": "View Map",
+    "rating": "Rating",
+    "noMosques": "No mosques found nearby"
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "tryAgain": "Try Again"
+  }
+}

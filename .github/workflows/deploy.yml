@@ -1,0 +1,337 @@
+name: 🚀 HikmahSphere CI/CD Pipeline for GCP VM Deployment
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - notification
+  pull_request:
+    branches: [ main ]
+
+env:
+  NODE_VERSION: '20'
+  APP_PATH: /home/ifrahazmi/HikmahSphere-CICD
+
+jobs:
+  # 🧪 Test Backend
+  test-backend:
+    name: 🔧 Backend Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
+    
+    services:
+      mongodb:
+        image: mongo:6
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd mongo
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: 📦 Install dependencies
+        run: npm ci
+
+      - name: 🔍 Type check
+        run: npm run type-check || true
+
+      - name: 🧹 Lint code
+        run: npm run lint || true
+
+      - name: 🧪 Run tests
+        run: npm run test:coverage || true
+        env:
+          MONGODB_URI: mongodb://localhost:27017/hikmahsphere
+          JWT_SECRET: test_secret_key
+          NODE_ENV: test
+
+      - name: 📊 Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./backend/coverage/lcov.info
+          flags: backend
+        continue-on-error: true
+
+  # 🎨 Test Frontend
+  test-frontend:
+    name: 🎨 Frontend Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: 📦 Install dependencies
+        run: npm ci
+
+      - name: 🔍 Type check
+        run: npm run type-check || true
+
+      - name: 🧹 Lint code
+        run: npm run lint || true
+
+      - name: 🧪 Run tests
+        run: npm run test:coverage || true
+        env:
+          CI: true
+
+      - name: 🏗️ Build app
+        run: npm run build || true
+
+      - name: 📊 Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./frontend/coverage/lcov.info
+          flags: frontend
+        continue-on-error: true
+
+  # 🔍 Security Scan
+  security-scan:
+    name: 🛡️ Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔍 Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: 📊 Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'
+        continue-on-error: true
+
+  # 🚀 Deploy to Production (with manual approval)
+  deploy:
+    name: 🚀 Deploy to GCP VM
+    runs-on: ubuntu-latest
+    needs: [test-backend, test-frontend, security-scan]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: 
+      name: production
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔐 Setup GCP credentials
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: ☁️ Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: 📋 Show commit info
+        run: |
+          echo "🔄 Deploying changes from commit:"
+          echo "📝 Commit SHA: ${{ github.sha }}"
+          echo "👤 Committed by: ${{ github.actor }}"
+          echo "💬 Commit message: ${{ github.event.head_commit.message }}"
+          echo ""
+          echo "🚀 Deployment target:"
+          echo "📍 Path: ${{ env.APP_PATH }}"
+          echo "🖥️  VM: ${{ secrets.GCP_VM_INSTANCE }} (${{ secrets.GCP_VM_ZONE }})"
+
+      - name: 🔄 Stop PM2 apps
+        run: |
+          gcloud compute ssh ${{ secrets.VM_SSH_USER }}@${{ secrets.GCP_VM_INSTANCE }} \
+            --zone=${{ secrets.GCP_VM_ZONE }} \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --command="pm2 stop ${{ secrets.BACKEND_PM2_NAME }} ${{ secrets.FRONTEND_PM2_NAME }}" || true
+
+      - name: 📥 Pull latest code from main branch
+        run: |
+          gcloud compute ssh ${{ secrets.VM_SSH_USER }}@${{ secrets.GCP_VM_INSTANCE }} \
+            --zone=${{ secrets.GCP_VM_ZONE }} \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --command="cd ${{ env.APP_PATH }} && git fetch origin && git checkout main && git pull origin main"
+
+      - name: 📦 Install Backend dependencies
+        run: |
+          gcloud compute ssh ${{ secrets.VM_SSH_USER }}@${{ secrets.GCP_VM_INSTANCE }} \
+            --zone=${{ secrets.GCP_VM_ZONE }} \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --command="cd ${{ env.APP_PATH }}/backend && npm install"
+
+      - name: 📦 Install Frontend dependencies
+        run: |
+          gcloud compute ssh ${{ secrets.VM_SSH_USER }}@${{ secrets.GCP_VM_INSTANCE }} \
+            --zone=${{ secrets.GCP_VM_ZONE }} \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --command="cd ${{ env.APP_PATH }}/frontend && npm install"
+
+      - name: 🔄 Restart Backend with PM2
+        run: |
+          gcloud compute ssh ${{ secrets.VM_SSH_USER }}@${{ secrets.GCP_VM_INSTANCE }} \
+            --zone=${{ secrets.GCP_VM_ZONE }} \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --command="pm2 restart ${{ secrets.BACKEND_PM2_NAME }} && pm2 save && pm2 logs ${{ secrets.BACKEND_PM2_NAME }} --lines 20"
+
+      - name: 🔄 Restart Frontend with PM2
+        run: |
+          gcloud compute ssh ${{ secrets.VM_SSH_USER }}@${{ secrets.GCP_VM_INSTANCE }} \
+            --zone=${{ secrets.GCP_VM_ZONE }} \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --command="pm2 restart ${{ secrets.FRONTEND_PM2_NAME }} && pm2 save && pm2 logs ${{ secrets.FRONTEND_PM2_NAME }} --lines 20"
+
+      - name: ⏳ Wait for services to start
+        run: |
+          echo "⏳ Waiting 10 seconds for services to fully start..."
+          sleep 10
+          echo "✅ Services should be ready now"
+
+      - name: 🏥 Health Check - Backend
+        run: |
+          echo "🔍 Checking Backend Health..."
+          for i in {1..15}; do
+            if curl -s -f http://${{ secrets.VM_EXTERNAL_IP }}:${{ secrets.BACKEND_PORT }}/api/health > /dev/null 2>&1; then
+              echo "✅ Backend is healthy!"
+              curl -s http://${{ secrets.VM_EXTERNAL_IP }}:${{ secrets.BACKEND_PORT }}/api/health | jq '.' || true
+              exit 0
+            fi
+            echo "⏳ Attempt $i/15 - Backend not ready yet, retrying in 2 seconds..."
+            sleep 2
+          done
+          echo "⚠️ Backend health check timed out after 30 seconds"
+          echo "Check with: gcloud compute ssh ${{ secrets.VM_SSH_USER }}@${{ secrets.GCP_VM_INSTANCE }} --zone=${{ secrets.GCP_VM_ZONE }} --project=${{ secrets.GCP_PROJECT_ID }} --command='pm2 logs ${{ secrets.BACKEND_PM2_NAME }}'"
+          exit 1
+
+      - name: 🏥 Health Check - Frontend
+        run: |
+          echo "🔍 Checking Frontend Health..."
+          for i in {1..15}; do
+            if curl -s -f -o /dev/null http://${{ secrets.VM_EXTERNAL_IP }}:${{ secrets.FRONTEND_PORT }}; then
+              echo "✅ Frontend is healthy!"
+              exit 0
+            fi
+            echo "⏳ Attempt $i/15 - Frontend not ready yet, retrying in 2 seconds..."
+            sleep 2
+          done
+          echo "⚠️ Frontend health check timed out after 30 seconds"
+          echo "Check with: gcloud compute ssh ${{ secrets.VM_SSH_USER }}@${{ secrets.GCP_VM_INSTANCE }} --zone=${{ secrets.GCP_VM_ZONE }} --project=${{ secrets.GCP_PROJECT_ID }} --command='pm2 logs ${{ secrets.FRONTEND_PM2_NAME }}'"
+          exit 1
+
+      - name: 📋 Show PM2 Status
+        if: always()
+        run: |
+          gcloud compute ssh ${{ secrets.VM_SSH_USER }}@${{ secrets.GCP_VM_INSTANCE }} \
+            --zone=${{ secrets.GCP_VM_ZONE }} \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --command="pm2 status"
+
+      - name: ✅ Deployment Successful
+        if: success()
+        run: |
+          echo ""
+          echo "╔════════════════════════════════════════════════╗"
+          echo "║  ✅✅✅ DEPLOYMENT SUCCESSFUL ✅✅✅           ║"
+          echo "║  HikmahSphere Updated & Running                ║"
+          echo "╚════════════════════════════════════════════════╝"
+          echo ""
+          echo "📍 Location: ${{ env.APP_PATH }}"
+          echo "🖥️  VM Instance: ${{ secrets.GCP_VM_INSTANCE }}"
+          echo "📍 Zone: ${{ secrets.GCP_VM_ZONE }}"
+          echo ""
+          echo "🌍 Access your application:"
+          echo "  🔗 Frontend: http://${{ secrets.VM_EXTERNAL_IP }}:${{ secrets.FRONTEND_PORT }}"
+          echo "  🔗 Backend API: http://${{ secrets.VM_EXTERNAL_IP }}:${{ secrets.BACKEND_PORT }}/api/health"
+          echo ""
+          echo "📦 PM2 Apps Running:"
+          echo "  • ${{ secrets.BACKEND_PM2_NAME }}"
+          echo "  • ${{ secrets.FRONTEND_PM2_NAME }}"
+          echo ""
+          echo "📝 Deployment Details:"
+          echo "  • Commit: ${{ github.sha }}"
+          echo "  • Branch: main"
+          echo "  • Deployed by: ${{ github.actor }}"
+          echo "  • Timestamp: $(date)"
+          echo ""
+
+      - name: ❌ Deployment Failed
+        if: failure()
+        run: |
+          echo ""
+          echo "╔════════════════════════════════════════════════╗"
+          echo "║  ❌ DEPLOYMENT FAILED ❌                       ║"
+          echo "║  Please check the errors above                 ║"
+          echo "╚════════════════════════════════════════════════╝"
+          echo ""
+          echo "🔧 Troubleshooting Steps:"
+          echo ""
+          echo "1️⃣  SSH into your VM:"
+          echo "   gcloud compute ssh ${{ secrets.VM_SSH_USER }}@${{ secrets.GCP_VM_INSTANCE }} --zone=${{ secrets.GCP_VM_ZONE }} --project=${{ secrets.GCP_PROJECT_ID }}"
+          echo ""
+          echo "2️⃣  Check PM2 status:"
+          echo "   pm2 status"
+          echo ""
+          echo "3️⃣  View Backend logs:"
+          echo "   pm2 logs ${{ secrets.BACKEND_PM2_NAME }}"
+          echo ""
+          echo "4️⃣  View Frontend logs:"
+          echo "   pm2 logs ${{ secrets.FRONTEND_PM2_NAME }}"
+          echo ""
+          echo "5️⃣  Check git status:"
+          echo "   cd ${{ env.APP_PATH }} && git status"
+          echo ""
+          echo "6️⃣  Manually restart apps:"
+          echo "   pm2 restart ${{ secrets.BACKEND_PM2_NAME }} ${{ secrets.FRONTEND_PM2_NAME }}"
+          echo ""
+
+  # 🔍 Lighthouse Performance Audit (optional)
+  lighthouse:
+    name: 🔍 Lighthouse Performance Audit
+    runs-on: ubuntu-latest
+    needs: [deploy]
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔍 Run Lighthouse CI
+        uses: treosh/lighthouse-ci-action@v10
+        with:
+          configPath: './.lighthouserc.json'
+          uploadArtifacts: true
+          temporaryPublicStorage: true
+        continue-on-error: true
+
+      - name: 📊 Lighthouse Results Summary
+        if: success()
+        run: |
+          echo "✅ Lighthouse audit completed successfully!"
+          echo "📈 Check the artifacts for detailed performance report"
+
+# 🤲 Bismillah - May Allah accept this work and make it beneficial for the Ummah

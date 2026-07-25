@@ -6,21 +6,155 @@ import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import path from 'path';
+import fs from 'fs';
 import User from './models/User';
 import { authMiddleware, superAdminMiddleware } from './middleware/auth';
+import { requestLogger, errorLogger, logStartup, logDatabaseConnection } from './middleware/logger';
+import redisClient from './config/redis'; // Import Redis client
+import { startMeetingNotificationScheduler, stopMeetingNotificationScheduler } from './services/meetingNotificationScheduler';
+import { startPrayerNotificationScheduler, stopPrayerNotificationScheduler } from './services/prayerNotificationScheduler';
+import { startPrayerTimesCacheScheduler, stopPrayerTimesCacheScheduler } from './services/prayerTimesCacheScheduler';
 
 // Import routes
 import authRoutes from './routes/auth';
 import prayerRoutes from './routes/prayers';
 import quranRoutes from './routes/quran';
+import dhikrRoutes from './routes/dhikr';
 import zakatRoutes from './routes/zakat';
+import maktabRoutes from './routes/maktab';
 import communityRoutes from './routes/community';
+import notificationRoutes from './routes/notifications'; // Import notification routes
+import supportRoutes from './routes/support'; // Import support routes
+import activityRoutes from './routes/activity'; // Import activity log routes
+import salahTrackerRoutes from './routes/salahTracker';
+import hajjGuideRoutes from './routes/hajjGuide';
+import gamesRoutes from './routes/games';
+import userRoutes from './routes/users';
 
 // Load environment variables
-dotenv.config();
+// Use __dirname to resolve paths correctly regardless of whether running from src/ or dist/
+const rootDir = path.resolve(__dirname, '..');
+const envPaths = [
+  path.join(rootDir, '.env'),           // Root .env (for both dev and production)
+  path.join(process.cwd(), '.env'),     // Fallback to current directory
+];
+
+console.log('📝 Attempting to load .env from:', envPaths);
+
+for (const envPath of envPaths) {
+  dotenv.config({ path: envPath, override: false });
+}
+
+// Log loaded Islamic API Key (masked)
+const apiKey = process.env.ISLAMIC_API_KEY;
+if (apiKey) {
+    console.log(`🔑 ISLAMIC_API_KEY loaded successfully: ${apiKey.substring(0, 5)}...`);
+} else {
+    console.warn('⚠️ ISLAMIC_API_KEY is missing from environment variables!');
+}
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '5000', 10);
+const NOTIFICATION_LIVE_WINDOW_MS = 5 * 60 * 1000;
+
+type NotificationPermissionState = 'granted' | 'denied' | 'default' | 'unknown';
+
+type NotificationDeviceStatus = {
+  deviceId: string;
+  token: string;
+  permission: NotificationPermissionState;
+  supportsWebPush: boolean;
+  isIOS: boolean;
+  isStandalone: boolean;
+  lastSeenAt: Date | null;
+  updatedAt: Date | null;
+  isLive: boolean;
+  canReceiveNotification: boolean;
+};
+
+const normalizePermission = (value: unknown): NotificationPermissionState => {
+  if (value === 'granted' || value === 'denied' || value === 'default') {
+    return value;
+  }
+  return 'unknown';
+};
+
+const toDateOrNull = (value: unknown): Date | null => {
+  const parsed = new Date(value as string | number | Date);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return parsed;
+};
+
+const normalizeDeviceStatus = (rawDevice: any): NotificationDeviceStatus | null => {
+  const deviceId = typeof rawDevice?.deviceId === 'string' ? rawDevice.deviceId.trim() : '';
+  const token = typeof rawDevice?.token === 'string' ? rawDevice.token.trim() : '';
+  if (!deviceId || !token) {
+    return null;
+  }
+
+  const permission = normalizePermission(rawDevice?.permission);
+  const supportsWebPush = rawDevice?.supportsWebPush === true;
+  const isIOS = rawDevice?.isIOS === true;
+  const isStandalone = rawDevice?.isStandalone === true;
+  const lastSeenAt = toDateOrNull(rawDevice?.lastSeenAt);
+  const updatedAt = toDateOrNull(rawDevice?.updatedAt);
+  const referenceTime = lastSeenAt || updatedAt;
+  const isLive = Boolean(referenceTime && (Date.now() - referenceTime.getTime()) <= NOTIFICATION_LIVE_WINDOW_MS);
+  const iosBlocked = isIOS && !isStandalone;
+  const canReceiveNotification = permission === 'granted' && supportsWebPush && !iosBlocked;
+
+  return {
+    deviceId,
+    token,
+    permission,
+    supportsWebPush,
+    isIOS,
+    isStandalone,
+    lastSeenAt,
+    updatedAt,
+    isLive,
+    canReceiveNotification,
+  };
+};
+
+const deriveUserNotificationStatus = (rawUser: any) => {
+  const devices = Array.isArray(rawUser?.notificationDevices)
+    ? rawUser.notificationDevices.map(normalizeDeviceStatus).filter(Boolean) as NotificationDeviceStatus[]
+    : [];
+
+  const lastSeenAt = devices.reduce<Date | null>((latest, device) => {
+    const candidate = device.lastSeenAt || device.updatedAt;
+    if (!candidate) return latest;
+    if (!latest || candidate.getTime() > latest.getTime()) {
+      return candidate;
+    }
+    return latest;
+  }, null);
+
+  const hasValidNotificationDevice = devices.some((device) => device.canReceiveNotification);
+  const isNotificationLive = devices.some((device) => device.isLive);
+  const topLevelPermission = normalizePermission(rawUser?.notificationPermission);
+  const effectivePermission = topLevelPermission !== 'unknown'
+    ? topLevelPermission
+    : (devices[0]?.permission || 'unknown');
+
+  return {
+    notificationPermission: effectivePermission,
+    notificationPermissionUpdatedAt: rawUser?.notificationPermissionUpdatedAt || null,
+    notificationPreference: {
+      prayers: rawUser?.preferences?.notifications?.prayers !== false,
+      events: rawUser?.preferences?.notifications?.events !== false,
+      community: rawUser?.preferences?.notifications?.community !== false,
+    },
+    hasValidNotificationDevice,
+    isNotificationLive,
+    notificationDeviceCount: devices.length,
+    notificationLastSeenAt: lastSeenAt,
+    notificationDevices: devices,
+  };
+};
 
 // Trust Proxy for IDX/Cloud environments
 app.set('trust proxy', 1);
@@ -32,16 +166,23 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "https:"],
+      imgSrc: ["'self'", "data:", "https:", "blob:"], // Added blob: for image previews
       scriptSrc: ["'self'"],
     },
   },
+  crossOriginResourcePolicy: { policy: "cross-origin" }, // Allow cross-origin resource sharing
 }));
 
 // Rate limiting
+const isQuranApiRequest = (req: express.Request) => req.path.startsWith('/api/quran');
+const isRateLimitSkippedRequest = (req: express.Request) => (
+  req.path.startsWith('/api/hajj-guide/images')
+  || isQuranApiRequest(req)
+);
+
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  max: 1000, // limit each IP to 1000 requests per windowMs (dashboards/SPAs poll many endpoints)
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
   message: {
@@ -49,10 +190,25 @@ const limiter = rateLimit({
   },
   validate: {
       xForwardedForHeader: false, // Disable validation if we trust proxy logic is complex
-  }
+  },
+  skip: isRateLimitSkippedRequest,
 });
 
 app.use(limiter);
+
+const quranLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    status: 'error',
+    message: 'Quran content is receiving too many requests right now. Please wait a moment and try again.',
+  },
+  validate: {
+    xForwardedForHeader: false,
+  },
+});
 
 // CORS configuration
 app.use(cors({
@@ -63,6 +219,18 @@ app.use(cors({
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Serve static files for uploads from one shared base path.
+const uploadsPath = (process.env.NODE_ENV === 'production' || fs.existsSync('/var/www/hikmah/uploads'))
+  ? '/var/www/hikmah/uploads'
+  : path.resolve(process.cwd(), 'src', 'uploads');
+app.use('/uploads', express.static(uploadsPath));
+
+// Also serve from src/uploads for backwards compatibility
+app.use('/src/uploads', express.static(uploadsPath));
+
+// Request logging middleware
+app.use(requestLogger);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -75,22 +243,98 @@ app.get('/', (req, res) => {
       auth: '/api/auth',
       prayers: '/api/prayers',
       quran: '/api/quran',
+      dhikr: '/api/dhikr',
       zakat: '/api/zakat',
-      community: '/api/community'
+      maktab: '/api/maktab',
+      community: '/api/community',
+      salahTracker: '/api/salah-tracker',
+      hajjGuide: '/api/hajj-guide',
     },
     documentation: `http://localhost:${process.env.PORT || 5000}/docs`
   });
 });
 
-// Health check endpoint
-app.get('/health', (req, res) => {
+// API base endpoint (supports both /api and /api/)
+app.get(['/api', '/api/'], (req, res) => {
+  res.status(200).json({
+    status: 'success',
+    message: '🕌 HikmahSphere API base endpoint',
+    version: '1.0.0',
+    basePath: '/api',
+    endpoints: {
+      health: '/health',
+      auth: '/api/auth',
+      prayers: '/api/prayers',
+      quran: '/api/quran',
+      dhikr: '/api/dhikr',
+      zakat: '/api/zakat',
+      maktab: '/api/maktab',
+      community: '/api/community',
+      notifications: '/api/notifications',
+      support: '/api/support',
+      activity: '/api/activity',
+      salahTracker: '/api/salah-tracker',
+      hajjGuide: '/api/hajj-guide',
+    },
+  });
+});
+
+// Health check endpoint (supports both /health and /api/health)
+app.get(['/health', '/api/health'], async (req, res) => {
+  let redisStatus = 'disconnected';
+  try {
+      if (redisClient.isOpen) {
+          await redisClient.ping();
+          redisStatus = 'connected';
+      }
+  } catch (error) {
+      redisStatus = 'error';
+  }
+
   res.status(200).json({
     status: 'success',
     message: 'HikmahSphere API is running! 🕌',
     timestamp: new Date().toISOString(),
     version: '1.0.0',
+    services: {
+        database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+        redis: redisStatus
+    }
   });
 });
+
+// --- REDIS TEST ROUTE START ---
+app.get('/api/test/redis', async (req, res) => {
+    try {
+        if (!redisClient.isOpen) {
+            res.status(503).json({ status: 'error', message: 'Redis not connected' });
+            return;
+        }
+
+        // Increment a simple counter
+        const count = await redisClient.incr('test_counter');
+        
+        // Store a test object
+        await redisClient.hSet('test_hash', {
+            last_visit: new Date().toISOString(),
+            status: 'working'
+        });
+
+        const hash = await redisClient.hGetAll('test_hash');
+
+        res.json({
+            status: 'success',
+            message: 'Redis is working perfectly! 🚀',
+            data: {
+                visit_count: count,
+                stored_data: hash
+            }
+        });
+    } catch (error: any) {
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+});
+// --- REDIS TEST ROUTE END ---
 
 // Helper tool to view users in database
 app.get('/api/tools/users', async (req, res) => {
@@ -113,22 +357,76 @@ app.get('/api/tools/users', async (req, res) => {
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/prayers', prayerRoutes);
-app.use('/api/quran', quranRoutes);
+app.use('/api/quran', quranLimiter, quranRoutes);
+app.use('/api/dhikr', dhikrRoutes);
 app.use('/api/zakat', zakatRoutes);
+app.use('/api/maktab', maktabRoutes);
 app.use('/api/community', communityRoutes);
+app.use('/api/notifications', notificationRoutes); // Use notification routes
+app.use('/api/support', supportRoutes); // Use support routes
+app.use('/api/activity', activityRoutes); // Use activity log routes
+app.use('/api/salah-tracker', salahTrackerRoutes);
+app.use('/api/hajj-guide', hajjGuideRoutes);
+app.use('/api/games', gamesRoutes);
+app.use('/api/users', userRoutes);
 
 // Admin Routes for User Management (Restricted to Super Admin)
 // Get All Users
 app.get('/api/admin/users', authMiddleware, superAdminMiddleware, async (req: any, res: any) => {
     try {
-        const users = await User.find({}, '-password'); // Exclude passwords
+    const users = await User.find({}, '-password'); // Exclude passwords
+    const enrichedUsers = users.map((user) => {
+      const rawUser = user.toObject();
+      const notificationStatus = deriveUserNotificationStatus(rawUser);
+      const profileHistory = Array.isArray(rawUser.profileAudit?.history) ? rawUser.profileAudit.history : [];
+      const hasProfileEdits = profileHistory.length > 0;
+
+      return {
+        ...rawUser,
+        ...notificationStatus,
+        profileEdited: hasProfileEdits,
+        profileEditedAt: rawUser.profileAudit?.lastEditedAt || (hasProfileEdits ? profileHistory[0]?.editedAt : null),
+        profileEditCount: profileHistory.length,
+      };
+    });
+
         res.json({
             status: 'success',
-            data: { users }
+      data: { users: enrichedUsers }
         });
     } catch (error: any) {
         res.status(500).json({ status: 'error', message: error.message });
     }
+});
+
+// Get detailed user profile + profile edit history
+app.get('/api/admin/users/:id/profile', authMiddleware, superAdminMiddleware, async (req: any, res: any) => {
+  try {
+    const user = await User.findById(req.params.id, '-password');
+    if (!user) {
+      return res.status(404).json({ status: 'error', message: 'User not found' });
+    }
+
+    const rawUser = user.toObject();
+    const notificationStatus = deriveUserNotificationStatus(rawUser);
+    const profileHistory = Array.isArray(rawUser.profileAudit?.history) ? rawUser.profileAudit.history : [];
+    const hasProfileEdits = profileHistory.length > 0;
+
+    return res.json({
+      status: 'success',
+      data: {
+        user: {
+          ...rawUser,
+          ...notificationStatus,
+          profileEdited: hasProfileEdits,
+          profileEditedAt: rawUser.profileAudit?.lastEditedAt || (hasProfileEdits ? profileHistory[0]?.editedAt : null),
+          profileEditCount: profileHistory.length,
+        },
+      },
+    });
+  } catch (error: any) {
+    return res.status(500).json({ status: 'error', message: error.message });
+  }
 });
 
 // Create User (Manager/User)
@@ -204,10 +502,13 @@ app.use((req, res) => {
   });
 });
 
+// Error logging middleware
+app.use(errorLogger);
+
 // Global error handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error(err.stack);
-  
+
   res.status(err.status || 500).json({
     status: 'error',
     message: err.message || 'Internal Server Error',
@@ -256,16 +557,23 @@ const seedAdminUser = async () => {
 // MongoDB connection
 const connectDB = async () => {
   try {
-    // Use Docker MongoDB or provided URI
-    const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/hikmahsphere';
-    
-    console.log('Connecting to MongoDB at:', mongoURI.replace(/\/\/([^:]+):([^@]+)@/, '//$1:****@'));
-    
-    await mongoose.connect(mongoURI, {
-      // Modern MongoDB connection options
-    });
-    
-    console.log('🚀 MongoDB connected successfully!');
+    // Use MONGODB_URI_LOCAL for local dev, MONGODB_URI for Docker, or default
+    const mongoURI = process.env.MONGODB_URI_LOCAL || process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/hikmahsphere';
+
+    const connectOptions: mongoose.ConnectOptions = {
+      serverSelectionTimeoutMS: 10000,
+      connectTimeoutMS: 10000,
+    };
+
+    if (process.env.MONGO_USER) {
+      connectOptions.user = process.env.MONGO_USER;
+      connectOptions.authSource = 'admin';
+    }
+    if (process.env.MONGO_PASS) connectOptions.pass = process.env.MONGO_PASS;
+
+    await mongoose.connect(mongoURI, connectOptions);
+
+    logDatabaseConnection(mongoURI);
     await seedAdminUser();
 
   } catch (error) {
@@ -277,12 +585,26 @@ const connectDB = async () => {
 // Start server
 const startServer = async () => {
   try {
+    // Check Redis connection
+    if (redisClient.isOpen) {
+        console.log('✅ Redis connection confirmed.');
+    } else {
+        console.log('⚠️ Redis not yet connected, attempting...');
+        try {
+            await redisClient.connect();
+        } catch (e) {
+            console.error('⚠️ Could not connect to Redis at startup (non-fatal for now)');
+        }
+    }
+
     await connectDB();
-    
+
+    // Listen on 0.0.0.0 to allow access from other interfaces (required for VMs/external access)
     app.listen(PORT, '0.0.0.0', () => {
-      console.log(`🚀 HikmahSphere API Server running on port ${PORT}`);
-      console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`📚 API Documentation: http://localhost:${PORT}/docs`);
+      logStartup(PORT);
+      startMeetingNotificationScheduler();
+      startPrayerNotificationScheduler();
+      startPrayerTimesCacheScheduler();
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
@@ -305,8 +627,14 @@ process.on('uncaughtException', (err: Error) => {
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   console.log('👋 SIGTERM received. Shutting down gracefully...');
+  stopMeetingNotificationScheduler();
+  stopPrayerNotificationScheduler();
+  stopPrayerTimesCacheScheduler();
   await mongoose.connection.close();
-  console.log('🔒 MongoDB connection closed.');
+  if (redisClient.isOpen) {
+      await redisClient.quit();
+  }
+  console.log('🔒 MongoDB and Redis connections closed.');
   process.exit(0);
 });
 

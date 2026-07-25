@@ -1,5 +1,6 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { API_URL } from '../config';
+import { getPushDeviceId, getStoredPushToken, storePushToken } from '../firebase';
 
 interface User {
   id: string;
@@ -25,12 +26,61 @@ interface User {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<{ passwordChangeRequired: boolean }>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
   hasRole: (roles: string[]) => boolean; // Add role check helper definition
 }
+
+const AUTH_FETCH_TIMEOUT_MS = 15000;
+
+const fetchWithTimeout = async (input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = AUTH_FETCH_TIMEOUT_MS): Promise<Response> => {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('Request timed out. Please try again.');
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+};
+
+const getJwtExpiryMs = (token: string): number | null => {
+  try {
+    const [, payload] = token.split('.');
+    if (!payload) {
+      return null;
+    }
+
+    const normalizedPayload = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const paddedPayload = normalizedPayload.padEnd(Math.ceil(normalizedPayload.length / 4) * 4, '=');
+    const decodedPayload = JSON.parse(window.atob(paddedPayload)) as { exp?: number };
+
+    return typeof decodedPayload.exp === 'number'
+      ? decodedPayload.exp * 1000
+      : null;
+  } catch {
+    return null;
+  }
+};
+
+const isJwtExpired = (token: string, clockSkewMs = 30_000): boolean => {
+  const expiryMs = getJwtExpiryMs(token);
+  if (!expiryMs) {
+    return false;
+  }
+
+  return Date.now() >= expiryMs - clockSkewMs;
+};
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -44,9 +94,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const mapUser = (apiUser: any): User => {
+      const firstName = typeof apiUser.firstName === 'string' ? apiUser.firstName.trim() : '';
+      const lastName = typeof apiUser.lastName === 'string' ? apiUser.lastName.trim() : '';
+      const composedName = `${firstName} ${lastName}`.trim();
+      const fallbackName =
+        typeof apiUser.name === 'string' && apiUser.name.trim().length > 0
+          ? apiUser.name.trim()
+          : typeof apiUser.username === 'string' && apiUser.username.trim().length > 0
+            ? apiUser.username.trim()
+            : 'User';
+
       return {
-        id: apiUser._id,
-        name: `${apiUser.firstName} ${apiUser.lastName}`,
+        id: apiUser._id || apiUser.id,
+        name: composedName || fallbackName,
         email: apiUser.email,
         isAdmin: apiUser.isAdmin,
         role: apiUser.role || (apiUser.isAdmin ? 'superadmin' : 'user'), // Map role
@@ -63,9 +123,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const checkAuthStatus = async () => {
     try {
       const token = localStorage.getItem('token');
+      const storedUser = localStorage.getItem('user');
+
+      if (token && isJwtExpired(token)) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        setUser(null);
+        return;
+      }
+
+      // Only set user from localStorage if we have a token
+      // Otherwise wait for API validation
+      if (token && storedUser) {
+        try {
+          const parsedUser = JSON.parse(storedUser);
+          setUser(mapUser(parsedUser));
+        } catch (e) {
+          localStorage.removeItem('user');
+        }
+      }
+
       if (token) {
         try {
-            const response = await fetch(`${API_URL}/auth/profile`, {
+            const response = await fetchWithTimeout(`${API_URL}/auth/profile`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -74,72 +154,68 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                  const data = await response.json();
                  if (data && data.data && data.data.user) {
                      setUser(mapUser(data.data.user));
+                     // Update stored user data
+                     localStorage.setItem('user', JSON.stringify(data.data.user));
                  } else {
                      localStorage.removeItem('token');
+                     localStorage.removeItem('user');
                      setUser(null);
                  }
             } else {
                  localStorage.removeItem('token');
+                 localStorage.removeItem('user');
                  setUser(null);
             }
         } catch (err) {
             console.error("Failed to fetch profile", err);
             localStorage.removeItem('token');
+            localStorage.removeItem('user');
             setUser(null);
         }
+      } else {
+        // No token - clear any stored user data
+        localStorage.removeItem('user');
+        setUser(null);
       }
     } catch (error) {
       console.error('Auth check failed:', error);
       localStorage.removeItem('token');
+      localStorage.removeItem('user');
     } finally {
       setLoading(false);
     }
   };
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string): Promise<{ passwordChangeRequired: boolean }> => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_URL}/auth/login`, {
+      const normalizedEmail = email.trim().toLowerCase();
+      const response = await fetchWithTimeout(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: normalizedEmail, password }),
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        localStorage.setItem('token', data.token);
-         try {
-            const profileResponse = await fetch(`${API_URL}/auth/profile`, {
-                headers: {
-                    'Authorization': `Bearer ${data.token}`
-                }
-            });
-            const profileData = await profileResponse.json();
-            if (profileData && profileData.data && profileData.data.user) {
-                 setUser(mapUser(profileData.data.user));
-            } else if (data.user) {
-                 setUser({
-                    id: data.user.id,
-                    name: `${data.user.firstName} ${data.user.lastName}`,
-                    email: data.user.email,
-                    role: 'user' // Default fallback
-                 });
-            }
-         } catch(e) {
-             console.error("Failed to fetch full profile after login", e);
-             if (data.user) {
-                 setUser({
-                    id: data.user.id,
-                    name: `${data.user.firstName} ${data.user.lastName}`,
-                    email: data.user.email,
-                    role: 'user'
-                 });
-             }
-         }
+        if (data.passwordChangeRequired) {
+          if (data.token) {
+            localStorage.setItem('token', data.token);
+          }
+          return { passwordChangeRequired: true };
+        }
 
+        localStorage.setItem('token', data.token);
+        if (data.user) {
+          localStorage.setItem('user', JSON.stringify(data.user));
+          setUser(mapUser(data.user));
+        } else {
+          await checkAuthStatus();
+        }
+        return { passwordChangeRequired: false };
       } else {
         throw new Error(data.message || 'Login failed');
       }
@@ -154,10 +230,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const register = async (name: string, email: string, password: string) => {
     try {
       setLoading(true);
+      const normalizedEmail = email.trim().toLowerCase();
       const [firstName, ...lastNameParts] = name.split(' ');
       const lastName = lastNameParts.join(' ') || 'User';
 
-      const response = await fetch(`${API_URL}/auth/register`, {
+      const response = await fetchWithTimeout(`${API_URL}/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -165,9 +242,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         body: JSON.stringify({ 
             firstName, 
             lastName, 
-            email, 
+            email: normalizedEmail, 
             password,
-            username: email.split('@')[0] + Math.floor(Math.random() * 1000) 
+            username: normalizedEmail.split('@')[0] + Math.floor(Math.random() * 1000) 
         }),
       });
 
@@ -188,7 +265,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const logout = () => {
+    const authToken = localStorage.getItem('token');
+    const pushToken = getStoredPushToken();
+    const deviceId = getPushDeviceId();
+
+    if (authToken && (pushToken || deviceId)) {
+      void fetch(`${API_URL}/notifications/token`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({
+          token: pushToken,
+          deviceId,
+        }),
+      }).catch((error) => {
+        console.error('Failed to remove FCM token during logout:', error);
+      });
+    }
+
+    storePushToken(null);
     localStorage.removeItem('token');
+    localStorage.removeItem('user');
     setUser(null);
   };
 
