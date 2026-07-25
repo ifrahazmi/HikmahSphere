@@ -15,12 +15,6 @@
     "noFallthroughCasesInSwitch": true,
     "module": "esnext",
     "moduleResolution": "node",
-    "typeRoots": [
-      "./node_modules/@types"
-    ],
-    "types": [
-      "google.maps"
-    ],
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,

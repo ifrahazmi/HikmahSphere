@@ -21,7 +21,7 @@ import {
 import { useAuth } from '../hooks/useAuth';
 import { useUserPreferences } from '../hooks/useUserPreferences';
 import LoadingSpinner from '../components/LoadingSpinner';
-import IslamicCalendar from '../components/PrayerTimesIslamicCalendar';
+import IslamicCalendar from '../components/IslamicCalendar';
 import PageSEO from '../components/PageSEO';
 import MosqueFinder from '../components/mosques/MosqueFinder';
 import { API_URL } from '../config';
