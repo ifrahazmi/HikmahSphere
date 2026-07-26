@@ -32,6 +32,7 @@ interface DhikrReminderState {
   specificTime: string;
   includeDhikr: boolean;
   includeDua: boolean;
+  timezone?: string;
 }
 
 interface DhikrSettingsState {
@@ -157,6 +158,19 @@ const sanitizeReminderPatch = (value: unknown): Partial<DhikrReminderState> | nu
     const time = raw.specificTime.trim();
     if (!REMINDER_TIME_PATTERN.test(time)) return null;
     patch.specificTime = time;
+  }
+
+  if (typeof raw.timezone !== 'undefined') {
+    if (typeof raw.timezone !== 'string') return null;
+    const timezone = raw.timezone.trim();
+    if (!timezone || timezone.length > 80) return null;
+    try {
+      // Throws for invalid IANA identifiers.
+      new Intl.DateTimeFormat('en-US', { timeZone: timezone });
+    } catch {
+      return null;
+    }
+    patch.timezone = timezone;
   }
 
   return patch;

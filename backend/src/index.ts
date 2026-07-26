@@ -14,6 +14,7 @@ import redisClient from './config/redis'; // Import Redis client
 import { startMeetingNotificationScheduler, stopMeetingNotificationScheduler } from './services/meetingNotificationScheduler';
 import { startPrayerNotificationScheduler, stopPrayerNotificationScheduler } from './services/prayerNotificationScheduler';
 import { startPrayerTimesCacheScheduler, stopPrayerTimesCacheScheduler } from './services/prayerTimesCacheScheduler';
+import { startDhikrReminderScheduler, stopDhikrReminderScheduler } from './services/dhikrReminderScheduler';
 
 // Import routes
 import authRoutes from './routes/auth';
@@ -605,6 +606,7 @@ const startServer = async () => {
       startMeetingNotificationScheduler();
       startPrayerNotificationScheduler();
       startPrayerTimesCacheScheduler();
+      startDhikrReminderScheduler();
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
@@ -630,6 +632,7 @@ process.on('SIGTERM', async () => {
   stopMeetingNotificationScheduler();
   stopPrayerNotificationScheduler();
   stopPrayerTimesCacheScheduler();
+  stopDhikrReminderScheduler();
   await mongoose.connection.close();
   if (redisClient.isOpen) {
       await redisClient.quit();

@@ -45,6 +45,43 @@ interface UserStateLastRead {
   timestamp: Date;
 }
 
+interface UserStateTafsirLastRead {
+  surah: number;
+  ayah: number;
+  readerMode?: 'ayah' | 'surah';
+  timestamp: Date;
+}
+
+// Keep at most this many per-device records per user; oldest are dropped.
+const MAX_DEVICE_RECORDS = 20;
+
+const sanitizeDeviceId = (value: unknown): string | null => {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim();
+  if (!/^[A-Za-z0-9_-]{6,80}$/.test(normalized)) return null;
+  return normalized;
+};
+
+const findDeviceRecord = <T extends { deviceId?: string }>(
+  records: unknown,
+  deviceId: string | null
+): T | null => {
+  if (!deviceId || !Array.isArray(records)) return null;
+  const match = (records as T[]).find((record) => record?.deviceId === deviceId);
+  return match || null;
+};
+
+const upsertDeviceRecord = <T extends { deviceId: string; timestamp: Date }>(
+  records: unknown,
+  entry: T
+): T[] => {
+  const existing = Array.isArray(records) ? (records as T[]) : [];
+  const others = existing.filter((record) => record?.deviceId && record.deviceId !== entry.deviceId);
+  const next = [...others, entry];
+  next.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  return next.slice(-MAX_DEVICE_RECORDS);
+};
+
 const isBookmarkColor = (value: unknown): value is BookmarkColor => {
   return typeof value === 'string'
     && ['emerald', 'red', 'teal', 'indigo', 'blue', 'purple', 'amber', 'rose'].includes(value);
@@ -128,6 +165,49 @@ const sanitizeLastRead = (value: unknown): UserStateLastRead | null | 'invalid' 
   return result;
 };
 
+const sanitizeTafsirLastRead = (value: unknown): UserStateTafsirLastRead | null | 'invalid' => {
+  if (value === null) return null;
+  if (!value || typeof value !== 'object') return 'invalid';
+
+  const raw = value as Record<string, unknown>;
+  const surah = Number(raw.surahNumber);
+  const ayah = Number(raw.ayahNumber);
+
+  if (!Number.isInteger(surah) || surah < 1 || surah > 114) return 'invalid';
+  if (!Number.isInteger(ayah) || ayah < 1) return 'invalid';
+
+  const result: UserStateTafsirLastRead = {
+    surah,
+    ayah,
+    timestamp: new Date(),
+  };
+  if (raw.readerMode === 'ayah' || raw.readerMode === 'surah') {
+    result.readerMode = raw.readerMode;
+  }
+
+  return result;
+};
+
+const mapLastReadResponse = (record: any) =>
+  record?.surah && record?.ayah
+    ? {
+        surahNumber: record.surah,
+        ayahNumber: record.ayah,
+        surahName: record.surahName,
+        timestamp: record.timestamp,
+      }
+    : null;
+
+const mapTafsirLastReadResponse = (record: any) =>
+  record?.surah && record?.ayah
+    ? {
+        surahNumber: record.surah,
+        ayahNumber: record.ayah,
+        readerMode: record.readerMode === 'surah' ? 'surah' : 'ayah',
+        timestamp: record.timestamp,
+      }
+    : null;
+
 /**
  * @route   GET /api/quran/user-state
  * @desc    Get logged-in user's Quran reader state (settings, bookmarks, last read)
@@ -143,6 +223,15 @@ router.get('/user-state', authMiddleware, async (req: any, res: any) => {
     const progress = user.religious?.quranProgress;
     const bookmarks = Array.isArray(progress?.bookmarks) ? progress.bookmarks : [];
 
+    // Per-device reading position: prefer the record matching the requesting
+    // device, falling back to the legacy shared record for older clients.
+    const deviceId = sanitizeDeviceId(req.query.deviceId);
+    const deviceLastRead = findDeviceRecord<any>((progress as any)?.lastReadByDevice, deviceId);
+    const deviceTafsirLastRead = findDeviceRecord<any>(
+      (progress as any)?.lastTafsirReadByDevice,
+      deviceId
+    );
+
     const payload = {
       settings: progress?.settings || null,
       bookmarks: bookmarks.map((b: UserStateBookmark) => ({
@@ -154,14 +243,8 @@ router.get('/user-state', authMiddleware, async (req: any, res: any) => {
         note: b.note,
         color: b.color,
       })),
-      lastRead: progress?.lastRead?.surah && progress?.lastRead?.ayah
-        ? {
-            surahNumber: progress.lastRead.surah,
-            ayahNumber: progress.lastRead.ayah,
-            surahName: progress.lastRead.surahName,
-            timestamp: progress.lastRead.timestamp,
-          }
-        : null,
+      lastRead: mapLastReadResponse(deviceLastRead || progress?.lastRead),
+      lastTafsirRead: mapTafsirLastReadResponse(deviceTafsirLastRead),
     };
 
     return res.json({ status: 'success', data: payload });
@@ -178,11 +261,15 @@ router.get('/user-state', authMiddleware, async (req: any, res: any) => {
  */
 router.put('/user-state', authMiddleware, async (req: any, res: any) => {
   try {
-    const { settings, bookmarks, lastRead } = req.body as {
+    const { settings, bookmarks, lastRead, lastTafsirRead, deviceId: rawDeviceId } = req.body as {
       settings?: Record<string, unknown>;
       bookmarks?: unknown;
       lastRead?: unknown;
+      lastTafsirRead?: unknown;
+      deviceId?: unknown;
     };
+
+    const deviceId = sanitizeDeviceId(rawDeviceId);
 
     const setData: Record<string, unknown> = {};
     const unsetData: Record<string, unknown> = {};
@@ -202,6 +289,18 @@ router.put('/user-state', authMiddleware, async (req: any, res: any) => {
       setData['religious.quranProgress.bookmarks'] = sanitizedBookmarks;
     }
 
+    // The device-keyed arrays need the current document to upsert into.
+    let existingProgress: any = null;
+    const needsExistingProgress =
+      (typeof lastRead !== 'undefined' || typeof lastTafsirRead !== 'undefined') && deviceId;
+    if (needsExistingProgress) {
+      const existingUser = await User.findById(req.user.userId).select('religious.quranProgress');
+      if (!existingUser) {
+        return res.status(404).json({ status: 'error', message: 'User not found' });
+      }
+      existingProgress = existingUser.religious?.quranProgress;
+    }
+
     if (typeof lastRead !== 'undefined') {
       const sanitizedLastRead = sanitizeLastRead(lastRead);
       if (sanitizedLastRead === 'invalid') {
@@ -211,14 +310,35 @@ router.put('/user-state', authMiddleware, async (req: any, res: any) => {
       if (sanitizedLastRead === null) {
         unsetData['religious.quranProgress.lastRead'] = 1;
       } else {
+        // Legacy shared record still updated so older clients keep working.
         setData['religious.quranProgress.lastRead'] = sanitizedLastRead;
+        if (deviceId) {
+          setData['religious.quranProgress.lastReadByDevice'] = upsertDeviceRecord(
+            existingProgress?.lastReadByDevice,
+            { ...sanitizedLastRead, deviceId }
+          );
+        }
+      }
+    }
+
+    if (typeof lastTafsirRead !== 'undefined') {
+      const sanitizedTafsirLastRead = sanitizeTafsirLastRead(lastTafsirRead);
+      if (sanitizedTafsirLastRead === 'invalid') {
+        return res.status(400).json({ status: 'error', message: 'lastTafsirRead is invalid' });
+      }
+
+      if (sanitizedTafsirLastRead && deviceId) {
+        setData['religious.quranProgress.lastTafsirReadByDevice'] = upsertDeviceRecord(
+          existingProgress?.lastTafsirReadByDevice,
+          { ...sanitizedTafsirLastRead, deviceId }
+        );
       }
     }
 
     if (!Object.keys(setData).length && !Object.keys(unsetData).length) {
       return res.status(400).json({
         status: 'error',
-        message: 'No valid fields to update. Provide settings, bookmarks, or lastRead.',
+        message: 'No valid fields to update. Provide settings, bookmarks, lastRead, or lastTafsirRead.',
       });
     }
 
@@ -237,6 +357,11 @@ router.put('/user-state', authMiddleware, async (req: any, res: any) => {
 
     const progress = user.religious?.quranProgress;
     const responseBookmarks = Array.isArray(progress?.bookmarks) ? progress.bookmarks : [];
+    const deviceLastRead = findDeviceRecord<any>((progress as any)?.lastReadByDevice, deviceId);
+    const deviceTafsirLastRead = findDeviceRecord<any>(
+      (progress as any)?.lastTafsirReadByDevice,
+      deviceId
+    );
 
     return res.json({
       status: 'success',
@@ -252,14 +377,8 @@ router.put('/user-state', authMiddleware, async (req: any, res: any) => {
           note: b.note,
           color: b.color,
         })),
-        lastRead: progress?.lastRead?.surah && progress?.lastRead?.ayah
-          ? {
-              surahNumber: progress.lastRead.surah,
-              ayahNumber: progress.lastRead.ayah,
-              surahName: progress.lastRead.surahName,
-              timestamp: progress.lastRead.timestamp,
-            }
-          : null,
+        lastRead: mapLastReadResponse(deviceLastRead || progress?.lastRead),
+        lastTafsirRead: mapTafsirLastReadResponse(deviceTafsirLastRead),
       },
     });
   } catch (error: any) {
