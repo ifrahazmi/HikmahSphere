@@ -377,6 +377,34 @@ const Profile: React.FC = () => {
                 </div>
               </div>
 
+              <div className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm sm:p-6">
+                <h3 className="mb-4 text-lg font-semibold text-gray-900">Daily Reflection</h3>
+                <div className="rounded-xl bg-emerald-50 p-4 text-center sm:p-5">
+                  <p className="font-arabic text-lg text-gray-700 sm:text-xl">
+                    "رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الْآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ"
+                  </p>
+                  <p className="mt-3 text-sm italic text-gray-600">
+                    "Our Lord, give us good in this world and good in the next world, and save us from the punishment of the Fire."
+                  </p>
+                  <p className="mt-2 text-xs text-gray-500">- Quran 2:201</p>
+
+                  <div className="mt-4 overflow-hidden rounded-xl border border-emerald-100 bg-white shadow-sm">
+                    <div className="relative">
+                      <img
+                        src={PROFILE_REFLECTION_IMAGE_SRC}
+                        alt="Daily reflection visual"
+                        className="h-52 w-full object-cover sm:h-60"
+                      />
+                      <div className="pointer-events-none absolute inset-x-0 top-2 flex justify-center px-3">
+                        <p className="max-w-full truncate px-1 py-1 text-sm font-semibold text-white [text-shadow:0_2px_6px_rgba(0,0,0,0.75)]">
+                          {authUser.name || 'User'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm sm:p-6 lg:col-span-2">
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
                   <div>
@@ -408,34 +436,6 @@ const Profile: React.FC = () => {
                       </div>
                     );
                   })}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm sm:p-6">
-                <h3 className="mb-4 text-lg font-semibold text-gray-900">Daily Reflection</h3>
-                <div className="rounded-xl bg-emerald-50 p-4 text-center sm:p-5">
-                  <p className="font-arabic text-lg text-gray-700 sm:text-xl">
-                    "رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الْآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ"
-                  </p>
-                  <p className="mt-3 text-sm italic text-gray-600">
-                    "Our Lord, give us good in this world and good in the next world, and save us from the punishment of the Fire."
-                  </p>
-                  <p className="mt-2 text-xs text-gray-500">- Quran 2:201</p>
-
-                  <div className="mt-4 overflow-hidden rounded-xl border border-emerald-100 bg-white shadow-sm">
-                    <div className="relative">
-                      <img
-                        src={PROFILE_REFLECTION_IMAGE_SRC}
-                        alt="Daily reflection visual"
-                        className="h-52 w-full object-cover sm:h-60"
-                      />
-                      <div className="pointer-events-none absolute inset-x-0 top-2 flex justify-center px-3">
-                        <p className="max-w-full truncate px-1 py-1 text-sm font-semibold text-white [text-shadow:0_2px_6px_rgba(0,0,0,0.75)]">
-                          {authUser.name || 'User'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
                 </div>
               </div>
             </section>

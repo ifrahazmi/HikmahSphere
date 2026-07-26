@@ -24,6 +24,11 @@ import IslamicGames from '../components/IslamicGames';
 import { useAuth } from '../hooks/useAuth';
 import { generateGoogleMapsDirectionsUrl } from '../utils/maps';
 
+// Matches the backend multer limit (MAX_COMMUNITY_UPLOAD_BYTES) so oversized
+// files are caught before upload instead of failing server-side.
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+const formatFileSize = (bytes: number): string => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+
 type Forum = {
   id: string;
   title: string;
@@ -911,6 +916,14 @@ const Community: React.FC = () => {
       return;
     }
 
+    if (adminMeetingForm.attachment && adminMeetingForm.attachment.size > MAX_ATTACHMENT_BYTES) {
+      const message = `Attachment is ${formatFileSize(adminMeetingForm.attachment.size)}. Maximum allowed is 10 MB.`;
+      setMeetingFieldErrors({ attachment: message });
+      setMeetingFormErrorSummary([message]);
+      toast.error(message);
+      return;
+    }
+
     setCreatingMeeting(true);
     try {
       const payload = new FormData();
@@ -963,6 +976,17 @@ const Community: React.FC = () => {
       });
       await refreshMeetings();
     } catch (err: any) {
+      // nginx/server rejected the body as too large (or a proxy 413 with no JSON
+      // body). Surface a clear attachment-specific message instead of a generic error.
+      const status = err?.response?.status;
+      if (status === 413 || /too large|entity too large|file too large/i.test(String(err?.response?.data?.message || ''))) {
+        const message = 'Attachment is too large. Please upload a file up to 10 MB.';
+        setMeetingFieldErrors({ attachment: message });
+        setMeetingFormErrorSummary([message]);
+        toast.error(message);
+        return;
+      }
+
       const responseErrors = Array.isArray(err?.response?.data?.errors) ? err.response.data.errors : [];
       const nextFieldErrors: MeetingFieldErrors = {};
       const nextSummary: string[] = [];
