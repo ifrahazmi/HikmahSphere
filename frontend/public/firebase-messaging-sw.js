@@ -122,6 +122,7 @@ self.addEventListener('fetch', (event) => {
   // Cross-origin (Quran CDNs, etc.): do not touch — let the browser stream natively.
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/api/')) return;
+  if (url.pathname.startsWith('/uploads/')) return;
 
   // Let the browser handle PDF and worker files natively to avoid
   // corruption or "Failed to fetch" errors inside pdfjs / web workers.
@@ -360,6 +361,18 @@ self.addEventListener('notificationclick', function(event) {
         }
         if (playMessage) {
           client.postMessage(playMessage);
+        }
+
+        if (targetUrl && 'navigate' in client && typeof client.navigate === 'function') {
+          try {
+            const currentPath = new URL(client.url).pathname + new URL(client.url).search;
+            const nextPath = targetUrl.startsWith('http') ? new URL(targetUrl).pathname + new URL(targetUrl).search : targetUrl;
+            if (currentPath !== nextPath) {
+              return client.navigate(targetUrl).then((navigated) => (navigated && 'focus' in navigated ? navigated.focus() : client.focus()));
+            }
+          } catch (_err) {
+            // Fall through to focus.
+          }
         }
 
         if ('focus' in client) {

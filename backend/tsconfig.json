@@ -2,8 +2,8 @@
   "compilerOptions": {
     "target": "ES2020",
     "lib": ["ES2020"],
-    "module": "commonjs",
-    "moduleResolution": "node",
+    "module": "Node16",
+    "moduleResolution": "node16",
     "rootDir": "./src",
     "outDir": "./dist",
     "strict": true,
@@ -22,7 +22,6 @@
     "exactOptionalPropertyTypes": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "ignoreDeprecations": "5.0",
     "types": ["node"],
     "typeRoots": ["./node_modules/@types"]
   },

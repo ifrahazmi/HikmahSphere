@@ -124,13 +124,19 @@ const normalizeNotificationData = (data?: Record<string, unknown>): Record<strin
     }, {});
 };
 
+type MulticastSendResult = {
+    successCount: number;
+    failureCount: number;
+    responses: Array<{ success: boolean; error?: { code?: string; message?: string } }>;
+};
+
 export const sendMulticastNotification = async (
     tokens: string[],
     title: string,
     body: string,
     data?: any,
     options?: { dataOnly?: boolean },
-) => {
+): Promise<MulticastSendResult> => {
     if (!admin.apps.length) {
          throw new Error("Firebase Admin not initialized. Check server logs.");
     }
@@ -150,17 +156,22 @@ export const sendMulticastNotification = async (
             ...(data || {}),
         });
 
+        const clickLink = typeof data?.url === 'string' && data.url
+            ? data.url
+            : '/prayers';
+        const webpush = {
+            headers: {
+                Urgency: 'high' as const,
+            },
+            fcmOptions: {
+                link: clickLink,
+            },
+        };
+
         const message: admin.messaging.MulticastMessage = useDataOnly
             ? {
                 data: normalizedData,
-                webpush: {
-                    headers: {
-                        Urgency: 'high',
-                    },
-                    fcmOptions: {
-                        link: typeof data?.url === 'string' ? data.url : '/prayers',
-                    },
-                },
+                webpush,
                 android: {
                     priority: 'high',
                 },
@@ -169,6 +180,7 @@ export const sendMulticastNotification = async (
             : {
                 notification: { title, body },
                 data: normalizeNotificationData(data),
+                webpush,
                 tokens,
             };
 

@@ -6,6 +6,7 @@ import {
   AcademicCapIcon,
   BoltIcon,
   BookOpenIcon,
+  CalendarDaysIcon,
   ChatBubbleLeftRightIcon,
   GiftIcon,
   HeartIcon,
@@ -16,6 +17,8 @@ import {
   XMarkIcon,
 } from '@heroicons/react/24/outline';
 import PageSEO from '../components/PageSEO';
+import MaktabLifeGallery from '../components/Maktab/MaktabLifeGallery';
+import MaktabWeeklyProgress from '../components/Maktab/MaktabWeeklyProgress';
 import { API_URL } from '../config';
 
 const PROGRAMS = [
@@ -24,7 +27,7 @@ const PROGRAMS = [
     title: 'Free Quran & Tajweed',
     description:
       'Sponsor a child’s place in Quran class — Arabic letters, correct recitation, and daily practice with a caring teacher.',
-    image: '/maktab/quran-tajweed.jpg',
+    image: '/maktab/class-in-session-1.jpg',
   },
   {
     id: 'hifz',
@@ -38,14 +41,14 @@ const PROGRAMS = [
     title: 'Deen, Hadith & Islamic Culture',
     description:
       'Fund lessons in Aqeedah, Hadith, Seerah, and Islamic manners so children grow with knowledge and character.',
-    image: '/maktab/deen-culture.jpg',
+    image: '/maktab/students-salah-girls.jpg',
   },
   {
     id: 'classroom',
-    title: 'Books, Uniform & Classroom Support',
+    title: 'Books & Classroom Support',
     description:
-      'Cover notebooks, Qurans, uniforms, and basic classroom needs so no child is left behind for lack of materials.',
-    image: '/maktab/classroom-support.jpg',
+      'Cover notebooks, Qurans, and basic classroom needs so no child is left behind for lack of materials.',
+    image: '/maktab/program-classroom.jpg',
   },
 ] as const;
 
@@ -172,7 +175,7 @@ const MAKTAB_FEATURES = [
     id: 'teachers',
     Icon: AcademicCapIcon,
     title: 'Qualified Hafiz teachers',
-    body: 'Every class is led by a Hafiz-e-Quran with 5+ years of teaching experience in Quran recitation and Urdu Islamic studies.',
+    body: 'Every class is led by a Hafiz-e-Quran with 10+ years of teaching experience in Quran recitation and Urdu Islamic studies.',
   },
   {
     id: 'curriculum',
@@ -215,6 +218,7 @@ type AdmissionErrors = Partial<Record<keyof AdmissionForm, string>>;
 const Maktab: React.FC = () => {
   const navigate = useNavigate();
   const sponsorRef = useRef<HTMLElement>(null);
+  const progressRef = useRef<HTMLElement>(null);
   const [heroReady, setHeroReady] = useState(false);
   const [visible, setVisible] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
@@ -257,6 +261,18 @@ const Maktab: React.FC = () => {
     if (hash === '#sponsor') {
       const timer = setTimeout(() => {
         sponsorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+    if (hash === '#progress') {
+      const timer = setTimeout(() => {
+        progressRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+    if (hash === '#life') {
+      const timer = setTimeout(() => {
+        document.getElementById('life')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 200);
       return () => clearTimeout(timer);
     }
@@ -303,6 +319,10 @@ const Maktab: React.FC = () => {
       setForm((prev) => ({ ...prev, program: programTitle }));
     }
     sponsorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const scrollToProgress = () => {
+    progressRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const validateField = (key: keyof SponsorForm, value: string): string | undefined => {
@@ -595,7 +615,7 @@ const Maktab: React.FC = () => {
         title="Maktab — Free Islamic Education for Children"
         description="Sponsor free Quran, Tajweed, Hifz, and Deen education for children who need it most through HikmahSphere Maktab."
         path="/maktab"
-        image="https://hikmahsphere.site/maktab/hero.jpg"
+        image="https://hikmahsphere.site/maktab/students-hero.jpg"
         keywords={[
           'maktab sponsorship',
           'free islamic education',
@@ -612,9 +632,9 @@ const Maktab: React.FC = () => {
         {/* Hero — centered like home header */}
         <section className="relative min-h-[100svh] flex items-center justify-center overflow-hidden text-white">
           <img
-            src="/maktab/hero.jpg"
-            alt=""
-            className="absolute inset-0 h-full w-full object-cover scale-105 maktab-hero-kenburns"
+            src="/maktab/students-hero.jpg"
+            alt="Children and their teacher in HikmahSphere Maktab class"
+            className="absolute inset-0 h-full w-full object-cover object-[center_28%] scale-105 maktab-hero-kenburns"
           />
           <div className="absolute inset-0 bg-gradient-to-br from-slate-950/85 via-emerald-950/70 to-indigo-950/75" />
           <div
@@ -678,6 +698,22 @@ const Maktab: React.FC = () => {
                 WhatsApp
               </a>
             </div>
+            <div className="mt-6 flex flex-wrap justify-center gap-x-5 gap-y-2 maktab-hero-stage maktab-hero-stage-4">
+              <button
+                type="button"
+                onClick={scrollToProgress}
+                className="inline-flex items-center gap-2 text-sm text-emerald-100/90 hover:text-white transition-colors"
+              >
+                <CalendarDaysIcon className="w-4 h-4" />
+                View this week’s classroom register
+              </button>
+              <a
+                href="#life"
+                className="inline-flex items-center gap-2 text-sm text-emerald-100/90 hover:text-white transition-colors"
+              >
+                Meet our students
+              </a>
+            </div>
           </div>
         </section>
 
@@ -712,10 +748,35 @@ const Maktab: React.FC = () => {
           </div>
         </section>
 
+        <section
+          id="life"
+          data-maktab-reveal="life"
+          className={`scroll-mt-24 py-20 px-4 sm:px-6 lg:px-8 bg-white ${revealClass('life')}`}
+        >
+          <div className="max-w-6xl mx-auto">
+            <div className="text-center mb-12">
+              <p className="text-sm font-semibold uppercase tracking-wider text-emerald-700 mb-3">
+                Life at our Maktab
+              </p>
+              <h2
+                className="text-3xl sm:text-4xl text-slate-900 mb-3"
+                style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 700 }}
+              >
+                Our students, our classroom
+              </h2>
+              <p className="text-slate-600 max-w-2xl mx-auto">
+                Real photos from Taiyeba Masjid Maktab — boys and girls learning Quran, salah, and Deen with their
+                teacher. Tap any photo to open and zoom.
+              </p>
+            </div>
+            <MaktabLifeGallery />
+          </div>
+        </section>
+
         {/* What makes our Maktab special */}
         <section
           data-maktab-reveal="features"
-          className={`py-20 px-4 sm:px-6 lg:px-8 bg-white ${revealClass('features')}`}
+          className={`py-20 px-4 sm:px-6 lg:px-8 bg-slate-50 ${revealClass('features')}`}
         >
           <div className="max-w-6xl mx-auto">
             <div className="text-center mb-12">
@@ -762,7 +823,7 @@ const Maktab: React.FC = () => {
         </section>
 
         {/* Program cards */}
-        <section className="py-20 px-4 sm:px-6 lg:px-8 bg-slate-50">
+        <section className="py-20 px-4 sm:px-6 lg:px-8 bg-white">
           <div className="max-w-6xl mx-auto">
             <div
               data-maktab-reveal="programs-head"
@@ -888,6 +949,15 @@ const Maktab: React.FC = () => {
               the program matures.
             </p>
           </div>
+        </section>
+
+        <section
+          id="progress"
+          ref={progressRef}
+          data-maktab-reveal="progress"
+          className={`scroll-mt-24 py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-emerald-50 via-white to-teal-50/50 ${revealClass('progress')}`}
+        >
+          <MaktabWeeklyProgress />
         </section>
 
         {/* Sponsor panel */}

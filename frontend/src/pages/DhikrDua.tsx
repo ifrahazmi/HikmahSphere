@@ -333,6 +333,7 @@ const DhikrDua: React.FC = () => {
   const arabicSectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const isHydratingCloudStateRef = useRef(false);
   const hasLoadedCloudStateRef = useRef(false);
+  const localMutatedDuringHydrationRef = useRef(false);
 
   const normalizeBookmarkedIds = (value: unknown): string[] => {
     if (!Array.isArray(value)) return [];
@@ -592,6 +593,7 @@ const DhikrDua: React.FC = () => {
 
     const loadUserDhikrState = async () => {
       isHydratingCloudStateRef.current = true;
+      localMutatedDuringHydrationRef.current = false;
 
       try {
         const response = await fetch(`${API_URL}/dhikr/user-state`, {
@@ -668,12 +670,14 @@ const DhikrDua: React.FC = () => {
         if (hasRemoteState) {
           setBookmarkedIds(remoteBookmarks);
           setLastViewedDuaId(remoteLastViewed);
-          if (remoteTasbih) {
-            setSelectedPresetId(remoteTasbih.presetId);
-            setTasbihCount(remoteTasbih.count);
-          }
-          if (remoteDailyTracker) {
-            setDailyTracker(remoteDailyTracker);
+          if (!localMutatedDuringHydrationRef.current) {
+            if (remoteTasbih) {
+              setSelectedPresetId(remoteTasbih.presetId);
+              setTasbihCount(remoteTasbih.count);
+            }
+            if (remoteDailyTracker) {
+              setDailyTracker(remoteDailyTracker);
+            }
           }
           setReminders(remoteReminders);
           setIsDarkMode(remoteDarkMode);
@@ -1162,6 +1166,7 @@ const DhikrDua: React.FC = () => {
   };
 
   const incrementTasbih = () => {
+    localMutatedDuringHydrationRef.current = true;
     setTasbihCount((previous) => previous + 1);
     setDailyTracker((previous) => ({
       date: getTodayKey(),
@@ -1177,6 +1182,7 @@ const DhikrDua: React.FC = () => {
   };
 
   const decrementTasbih = () => {
+    localMutatedDuringHydrationRef.current = true;
     setTasbihCount((previous) => Math.max(0, previous - 1));
     setDailyTracker((previous) => ({
       date: getTodayKey(),
@@ -1188,7 +1194,16 @@ const DhikrDua: React.FC = () => {
   };
 
   const resetTasbih = () => {
+    localMutatedDuringHydrationRef.current = true;
+    const presetId = selectedPreset.id;
     setTasbihCount(0);
+    setDailyTracker((previous) => ({
+      date: getTodayKey(),
+      counts: {
+        ...previous.counts,
+        [presetId]: 0,
+      },
+    }));
   };
 
   const focusDuaCard = (duaId: string, fromMobileProfile = false) => {

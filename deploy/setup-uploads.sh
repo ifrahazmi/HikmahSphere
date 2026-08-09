@@ -13,6 +13,7 @@ sudo mkdir -p /var/www/hikmah/uploads/zakat
 sudo mkdir -p /var/www/hikmah/uploads/profiles
 sudo mkdir -p /var/www/hikmah/uploads/notifications
 sudo mkdir -p /var/www/hikmah/uploads/community
+sudo mkdir -p /var/www/hikmah/uploads/maktab/weekly
 
 # Set ownership
 sudo chown -R www-data:www-data /var/www/hikmah/uploads
@@ -42,7 +43,8 @@ echo "  ├── proofs/        (Proof of payment images)"
 echo "  ├── zakat/         (Zakat-related documents)"
 echo "  ├── profiles/      (User profile pictures)"
 echo "  ├── notifications/ (Notification attachments)"
-echo "  └── community/     (Community posts images)"
+echo "  ├── community/     (Community posts images)"
+echo "  └── maktab/weekly/ (Public weekly register photos)"
 echo ""
 echo "🌐 Files will be accessible at:"
 echo "  https://hikmahsphere.site/uploads/proofs/[filename]"

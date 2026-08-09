@@ -22,45 +22,45 @@ export type HomeFeature = {
 
 export const MAKTAB_SLIDES = [
   {
-    src: '/maktab/maktab-children-slide.jpg',
-    alt: 'Hopeful scene representing children ready for Islamic education',
+    src: '/maktab/students-hero.jpg',
+    alt: 'Boys and girls seated with their teacher during Maktab class',
     caption: 'Every child deserves a place to learn',
     eyebrow: 'For the next generation',
   },
   {
-    src: '/maktab/maktab-classroom-slide.jpg',
-    alt: 'Modest Islamic classroom prepared for free Maktab lessons',
+    src: '/maktab/students-boys-line.jpg',
+    alt: 'Maktab boys standing in line for assembly',
     caption: 'Classrooms kept open by your sponsorship',
     eyebrow: 'Growing campaign',
   },
   {
-    src: '/maktab/quran-tajweed.jpg',
-    alt: 'Open Quran on a stand for Tajweed study',
+    src: '/maktab/students-girls-line.jpg',
+    alt: 'Maktab girls lined up in the prayer hall',
     caption: 'Free seats for Quran & Tajweed',
     eyebrow: 'Quran first',
   },
   {
     src: '/maktab/hifz.jpg',
-    alt: 'Qurans arranged for Hifz memorization support',
+    alt: 'Open Qurans on wooden stands for Hifz memorisation',
     caption: 'Support a child’s Hifz journey',
     eyebrow: 'Hifz pathway',
   },
   {
-    src: '/maktab/deen-culture.jpg',
-    alt: 'Classroom materials for Deen and Islamic culture lessons',
+    src: '/maktab/students-salah-girls.jpg',
+    alt: 'Girls practising salah with their teacher',
     caption: 'Deen, Hadith & Islamic culture',
     eyebrow: 'Character & knowledge',
   },
   {
-    src: '/maktab/classroom-support.jpg',
-    alt: 'Books and school supplies for underprivileged students',
-    caption: 'Books, uniform & classroom needs',
+    src: '/maktab/program-classroom.jpg',
+    alt: 'Notebooks and stationery for Maktab classroom support',
+    caption: 'Books & classroom needs',
     eyebrow: 'Practical support',
   },
 ] as const;
 
 export const MAKTAB_HIGHLIGHTS = [
-  'Hafiz teachers with 5+ years experience',
+  'Hafiz teachers with 10+ years experience',
   'Quran, Hifz, Urdu & Deen curriculum',
   'Inverter backup for calm study',
   'Free books & copies when needed',

@@ -9,6 +9,7 @@ import MaktabPayment from '../models/MaktabPayment';
 import MaktabContributor, { IMaktabContributor } from '../models/MaktabContributor';
 import User from '../models/User';
 import { logUserActivity } from '../middleware/activityLogger';
+import maktabWeeklyRoutes from './maktabWeekly';
 
 // Type assertions for static methods
 const MaktabPaymentModel = MaktabPayment as typeof MaktabPayment & {
@@ -34,6 +35,8 @@ const MaktabContributorModel = MaktabContributor as typeof MaktabContributor & {
 };
 
 const router = express.Router();
+
+router.use(maktabWeeklyRoutes);
 
 // Ensure upload directory exists - Use absolute path for production
 // In production, save to /var/www/hikmah/uploads/maktab

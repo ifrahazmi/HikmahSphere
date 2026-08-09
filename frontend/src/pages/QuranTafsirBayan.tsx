@@ -210,27 +210,33 @@ const QuranTafsirBayan: React.FC = () => {
     if (typeof window === 'undefined') return;
 
     let ticking = false;
-    const scrollState = { lastScrollY: window.scrollY };
+    let lastScrollY = window.scrollY;
+    let accum = 0;
 
     const handleScroll = () => {
-      const currentScrollY = window.scrollY;
+      if (ticking) return;
+      ticking = true;
 
-      if (!ticking) {
-        window.requestAnimationFrame(() => {
-          const scrollThreshold = 50;
+      window.requestAnimationFrame(() => {
+        ticking = false;
+        const y = window.scrollY;
+        const delta = y - lastScrollY;
+        lastScrollY = y;
 
-          if (currentScrollY > scrollState.lastScrollY && currentScrollY > scrollThreshold) {
-            setShowHeader(false);
-          } else if (currentScrollY < scrollState.lastScrollY - scrollThreshold || currentScrollY < scrollThreshold) {
-            setShowHeader(true);
-          }
+        if (y < 80) {
+          setShowHeader(true);
+          accum = 0;
+          return;
+        }
 
-          scrollState.lastScrollY = currentScrollY;
-          ticking = false;
-        });
-
-        ticking = true;
-      }
+        if (delta > 0) {
+          accum = Math.max(0, accum) + delta;
+          if (accum > 10) setShowHeader(false);
+        } else if (delta < 0) {
+          accum = Math.min(0, accum) + delta;
+          if (accum < -12) setShowHeader(true);
+        }
+      });
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
@@ -1432,8 +1438,8 @@ const QuranTafsirBayan: React.FC = () => {
             </p>
           </div>
 
-          <div className={`lg:hidden px-2 sticky z-40 transition-all duration-500 ease-out ${
-            showHeader ? 'top-16 pt-2 opacity-100 scale-100' : '-top-40 pt-1 opacity-0 scale-95 pointer-events-none'
+          <div className={`lg:hidden fixed inset-x-0 top-16 z-40 px-2 pt-2 transition-transform duration-300 ease-out ${
+            showHeader ? 'translate-y-0 opacity-100' : '-translate-y-[120%] opacity-0 pointer-events-none'
           }`}>
             <div className={`${settings.theme === 'dark' ? 'bg-gray-800/95 border-gray-700' : 'bg-white/95 border-gray-100'} rounded-xl border p-2 shadow-lg backdrop-blur-md`}>
               <div className="grid grid-cols-[auto_1fr_auto] items-center gap-1 mb-2">
@@ -1606,6 +1612,7 @@ const QuranTafsirBayan: React.FC = () => {
               )}
             </div>
           </div>
+          <div className="lg:hidden h-28" aria-hidden="true" />
 
           <div className="px-2 sm:px-3 lg:px-4 pb-10 mt-3">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">

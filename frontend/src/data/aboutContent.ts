@@ -251,7 +251,7 @@ export const maktabSection = {
     "Free Quran & Tajweed classes",
     "Hifz pathway support",
     "Deen, Hadith & Islamic culture",
-    "Books, uniform & classroom needs"
+    "Books & classroom needs"
   ],
   primaryCta: { label: "Donate / Sponsor", path: "/maktab#sponsor" },
   secondaryCta: { label: "Learn about Maktab", path: "/maktab" }
