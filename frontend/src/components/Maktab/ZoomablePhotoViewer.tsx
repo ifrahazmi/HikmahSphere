@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ArrowsPointingInIcon,
   ChevronLeftIcon,
@@ -276,7 +277,9 @@ export const ZoomablePhotoLightbox: React.FC<ZoomablePhotoLightboxProps> = ({
     };
   }, [onClose, onPrev, onNext]);
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <div
       className="fixed inset-0 z-[90] flex items-center justify-center p-0 sm:p-6"
       role="dialog"
@@ -286,7 +289,7 @@ export const ZoomablePhotoLightbox: React.FC<ZoomablePhotoLightboxProps> = ({
       <button
         type="button"
         aria-label="Close photo"
-        className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
+        className="absolute inset-0 bg-slate-950/85 backdrop-blur-sm"
         onClick={onClose}
       />
       <div className="relative z-10 w-full max-w-5xl max-h-[96svh] flex flex-col px-3 sm:px-0">
@@ -325,6 +328,7 @@ export const ZoomablePhotoLightbox: React.FC<ZoomablePhotoLightboxProps> = ({
         </div>
         <ZoomablePhotoViewer key={src} src={src} alt={alt} />
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   CalendarDaysIcon,
   ChevronDownIcon,
@@ -608,7 +609,9 @@ const PublishWeeklyModal: React.FC<PublishWeeklyModalProps> = ({
 
   const teacherName = MAKTAB_TEACHERS.find((item) => item.slug === teacher)?.name ?? teacher;
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <div
       className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center p-0 sm:p-4"
       role="dialog"
@@ -766,7 +769,8 @@ const PublishWeeklyModal: React.FC<PublishWeeklyModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

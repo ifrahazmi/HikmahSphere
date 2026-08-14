@@ -48,9 +48,4 @@ export const MAKTAB_LIFE_PHOTOS: MaktabLifePhoto[] = [
     alt: 'Girls lined up in the Maktab hall at Taiyeba Masjid',
     caption: 'Our students',
   },
-  {
-    src: '/maktab/students-boys-row.jpg',
-    alt: 'Boys standing in a row on the musalla ready for lesson',
-    caption: 'Ready to learn',
-  },
 ];
