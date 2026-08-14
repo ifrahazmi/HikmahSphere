@@ -2,6 +2,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 
 type QuranStatus = 'none' | 'read' | 'translation' | 'tafseer';
 type PrayerExemptionReason = 'none' | 'menstruation';
+type FastingStatus = 'none' | 'sunnah' | 'fard' | 'missed';
 
 export interface ISalahTrackerActivity {
   dateKey: string;
@@ -12,6 +13,8 @@ export interface ISalahTrackerActivity {
   prayerScore: number;
   quranScore: number;
   quranStatus: QuranStatus;
+  fastingStatus?: FastingStatus;
+  dhikrStatus?: boolean;
   isPrayerExempt: boolean;
   prayerExemptionReason: PrayerExemptionReason;
   note: string;
@@ -76,6 +79,15 @@ const SalahTrackerActivitySchema = new Schema<ISalahTrackerActivity>(
       type: String,
       enum: ['none', 'read', 'translation', 'tafseer'],
       default: 'none',
+    },
+    fastingStatus: {
+      type: String,
+      enum: ['none', 'sunnah', 'fard', 'missed'],
+      default: 'none',
+    },
+    dhikrStatus: {
+      type: Boolean,
+      default: false,
     },
     isPrayerExempt: {
       type: Boolean,

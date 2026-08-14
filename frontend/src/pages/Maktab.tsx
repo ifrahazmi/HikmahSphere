@@ -612,8 +612,8 @@ const Maktab: React.FC = () => {
         />
       </Helmet>
       <PageSEO
-        title="Maktab — Free Islamic Education for Children"
-        description="Sponsor free Quran, Tajweed, Hifz, and Deen education for children who need it most through HikmahSphere Maktab."
+        title="HikmahSphere Maktab: Sponsor Free Islamic Education"
+        description="Sponsor and support free Quran, Tajweed, Hifz, and foundational Islamic education for underprivileged children worldwide through the HikmahSphere Maktab program."
         path="/maktab"
         image="https://hikmahsphere.site/maktab/students-hero.jpg"
         keywords={[

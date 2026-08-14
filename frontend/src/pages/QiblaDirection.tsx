@@ -42,8 +42,8 @@ const QiblaDirection: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="Qibla Compass Finder"
-        description="Find accurate Qibla direction with live compass guidance, GPS support, and map fallback for travel."
+        title="Online Qibla Compass & Mecca Direction Finder"
+        description="Find the 100% accurate Qibla direction online from anywhere in the world. Features live Mecca compass guidance, GPS location support, and interactive map fallback for travelers."
         path="/prayers/qibla"
         keywords={['qibla direction', 'qibla compass', 'kaaba direction', 'muslim compass']}
       />

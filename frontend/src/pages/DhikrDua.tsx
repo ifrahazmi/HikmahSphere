@@ -1634,8 +1634,8 @@ const DhikrDua: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="Dhikr and Dua"
-        description="Explore authentic daily duas and adhkar with Arabic text, transliteration, translation, references, and tasbih counter."
+        title="Hisn al-Muslim: Authentic Islamic Duas & Daily Dhikr"
+        description="Read authentic Islamic Duas and daily Dhikr from Hisn al-Muslim (Fortress of the Muslim). Includes Arabic text, transliteration, English translation, audio, and a digital Tasbih counter."
         path="/dhikr-dua"
         keywords={[
           'dhikr and dua',

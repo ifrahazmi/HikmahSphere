@@ -425,8 +425,8 @@ const HajjGuide: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="Hajj Guide"
-        description="Follow a step-by-step Hajj guide with rituals, duas, Ihram rules, Tawaf, Sa'i, Arafat, and Mina guidance."
+        title="Complete Step-by-Step Hajj & Umrah Guide"
+        description="Follow our comprehensive step-by-step Hajj and Umrah guide. Learn the rituals, essential Duas, rules of Ihram, Tawaf, Sa'i, standing at Arafat, and guidance for Mina and Muzdalifah."
         path="/hajj-guide"
         keywords={[
           'Hajj guide',

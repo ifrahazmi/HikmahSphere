@@ -2085,18 +2085,10 @@ const PrayerTimes: React.FC = () => {
     if (!prayerData?.times) return;
 
     const now = new Date();
-    const maghribTimeToday = prayerData?.times?.Maghrib
-      ? parsePrayerTime(prayerData.times.Maghrib, now)
-      : null;
-    const shouldUseNextDay = Boolean(maghribTimeToday && now >= maghribTimeToday && nextDayPrayerData?.times);
-    const activeTimesSource = shouldUseNextDay ? nextDayPrayerData : prayerData;
-    if (!activeTimesSource?.times) return;
-
+    const activeTimesSource = prayerData;
     const prayerNames = ['Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
-    // After Maghrib the displayed times are tomorrow's schedule — parse them onto
-    // tomorrow so Fajr is not treated as already passed.
-    const timesBaseDate = shouldUseNextDay ? new Date(now.getTime() + 86400000) : now;
-    const prayerTimes = prayerNames.map(name => parsePrayerTime(activeTimesSource.times[name] || '00:00', timesBaseDate));
+    
+    const prayerTimes = prayerNames.map(name => parsePrayerTime(activeTimesSource.times[name] || '00:00', now));
     
     // Find current and next prayer
     let currentIdx = -1;
@@ -2126,9 +2118,13 @@ const PrayerTimes: React.FC = () => {
     setIsNextDay(isNext);
 
     // Calculate countdown
-    let targetTime = isNext 
-      ? parsePrayerTime(activeTimesSource.times[prayerNames[0]], new Date(now.getTime() + 86400000)) // Tomorrow
-      : parsePrayerTime(activeTimesSource.times[prayerNames[nextIdx]], now);
+    let targetTime: Date;
+    if (isNext) {
+      const tomorrowFajrStr = nextDayPrayerData?.times?.Fajr || activeTimesSource.times.Fajr;
+      targetTime = parsePrayerTime(tomorrowFajrStr, new Date(now.getTime() + 86400000));
+    } else {
+      targetTime = parsePrayerTime(activeTimesSource.times[prayerNames[nextIdx]], now);
+    }
     
     let diffMs = targetTime.getTime() - now.getTime();
     if (diffMs < 0) diffMs = 0;
@@ -2599,8 +2595,8 @@ const PrayerTimes: React.FC = () => {
     return (
       <>
         <PageSEO
-          title="Prayer Times"
-          description="Get accurate daily Salah times with Ramadan schedule support, multiple calculation methods, and Hijri date tools."
+          title="Accurate Islamic Prayer Times, Qibla & Ramadan Calendar"
+          description="Get highly accurate Islamic prayer times worldwide. Features include local Namaz and Salah timings, Adhan audio alarms, Qibla compass, Hijri date converter, and full Ramadan fasting schedules (Sehri & Iftar)."
           path="/prayers"
           keywords={[
             'prayer times',
@@ -2637,8 +2633,8 @@ const PrayerTimes: React.FC = () => {
     return (
       <>
         <PageSEO
-          title="Prayer Times"
-          description="Get accurate daily Salah times with Ramadan schedule support, multiple calculation methods, and Hijri date tools."
+          title="Accurate Islamic Prayer Times, Qibla & Ramadan Calendar"
+          description="Get highly accurate Islamic prayer times worldwide. Features include local Namaz and Salah timings, Adhan audio alarms, Qibla compass, Hijri date converter, and full Ramadan fasting schedules (Sehri & Iftar)."
           path="/prayers"
         />
         <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 pt-16 pb-8">
@@ -2709,8 +2705,8 @@ const PrayerTimes: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="Prayer Times"
-        description="Get accurate daily Salah times with Ramadan schedule support, multiple calculation methods, and Hijri date tools."
+        title="Accurate Islamic Prayer Times, Qibla & Ramadan Calendar"
+        description="Get highly accurate Islamic prayer times worldwide. Features include local Namaz and Salah timings, Adhan audio alarms, Qibla compass, Hijri date converter, and full Ramadan fasting schedules (Sehri & Iftar)."
         path="/prayers"
         keywords={[
           'prayer times',

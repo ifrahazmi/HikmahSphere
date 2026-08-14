@@ -236,9 +236,9 @@ export const HOME_TESTIMONIALS: HomeTestimonial[] = [
 ];
 
 export const HOME_SEO = {
-  title: 'HikmahSphere: A Unified Islamic Platform',
+  title: 'HikmahSphere: Unified Islamic Platform for Quran, Prayer Times & Community',
   description:
-    'HikmahSphere is a free, privacy-first islamic app for prayer times, Qibla & mosque finder, Quran with Tafsir, Dhikr & Dua, Zakat tools, community learning, Hajj guidance, and Maktab sponsorship for children’s Islamic education.',
+    'HikmahSphere is a comprehensive, free, and privacy-focused Islamic app. Get accurate prayer times worldwide, read the Quran with Tafsir & audio, calculate Zakat, find Qibla direction, learn authentic Duas, and connect with a global Muslim community.',
   keywords: [
     'islamic app',
     'muslim app',
@@ -388,6 +388,16 @@ export const getHomeFeatures = (hasManagementAccess: boolean): HomeFeature[] => 
     color: 'text-orange-600',
     bgColor: 'bg-orange-50',
     gradient: 'from-orange-500 to-amber-500',
+  },
+  {
+    icon: '/salah.png',
+    title: 'Muhasabah Tracker',
+    path: '/salah-tracker',
+    description:
+      'A comprehensive daily Islamic habit tracker for your Prayers, Fasting, Quran reading, and daily Dhikr',
+    color: 'text-rose-600',
+    bgColor: 'bg-rose-50',
+    gradient: 'from-rose-500 to-pink-500',
   },
   {
     icon: '/AI-Scholar-Assistant.png',

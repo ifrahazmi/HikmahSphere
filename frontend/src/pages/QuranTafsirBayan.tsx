@@ -1398,8 +1398,8 @@ const QuranTafsirBayan: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="Quran Tafsir"
-        description="Read Quran with Tafsir and Urdu translation in a focused reader with bookmarks and footnotes."
+        title="Quran with Tafsir, Meaning & Detailed Explanation"
+        description="Deepen your understanding of the Holy Quran with comprehensive Tafsir, detailed meaning, context (Asbab al-Nuzul), and authentic Urdu/English translations in a focused reading experience."
         path="/quran/tafsir"
         keywords={['urdu tafsir', 'tafheem ul quran', 'bayan ul quran', 'quran tafsir']}
       />

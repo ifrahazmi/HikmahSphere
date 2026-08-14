@@ -104,8 +104,8 @@ const Contact: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="Contact Support"
-        description="Contact HikmahSphere support for help, bug reports, feature suggestions, and Islamic content corrections."
+        title="Contact HikmahSphere Support & Feedback"
+        description="Contact the HikmahSphere team for app support, bug reports, feature requests, or to report Islamic content corrections. We value your feedback in improving our free Islamic platform."
         path="/contact"
         keywords={[
           'hikmahsphere contact',

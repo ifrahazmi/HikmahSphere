@@ -300,6 +300,10 @@ messaging.onBackgroundMessage((payload) => {
     }).catch((error) => {
       console.error('[firebase-messaging-sw.js] Failed to send message to clients:', error);
     });
+    
+    if (isAdhan) {
+      broadcastToOpenClients({ type: 'HIKMAH_PLAY_ADHAN', payload: normalizedPayload });
+    }
     return;
   }
 
@@ -310,6 +314,10 @@ messaging.onBackgroundMessage((payload) => {
     console.error('[firebase-messaging-sw.js] Failed to send message to clients:', error);
   });
 
+  if (isAdhan) {
+    broadcastToOpenClients({ type: 'HIKMAH_PLAY_ADHAN', payload: normalizedPayload });
+  }
+
   const notificationOptions = {
     body: normalizedPayload.body,
     icon: '/small_logo.jpeg',
@@ -317,6 +325,7 @@ messaging.onBackgroundMessage((payload) => {
     tag: normalizedPayload.id,
     renotify: false,
     vibrate: [200, 100, 200],
+    sound: isAdhan ? '/sounds/adhan.mp3' : undefined,
     data: {
       url: targetUrl,
       playAdhan: isAdhan ? '1' : '0',
@@ -437,6 +446,12 @@ self.addEventListener('push', (event) => {
     return;
   }
 
+  const isAdhan = (payload?.data?.type || normalizedPayload.type) === 'adhan' || payload?.data?.playAdhan === '1';
+
+  if (isAdhan) {
+    broadcastToOpenClients({ type: 'HIKMAH_PLAY_ADHAN', payload: normalizedPayload }).catch(() => {});
+  }
+
   event.waitUntil(
     Promise.all([
       broadcastToOpenClients({ type: APP_MESSAGE_TYPE, payload: normalizedPayload }).catch(() => {}),
@@ -447,7 +462,8 @@ self.addEventListener('push', (event) => {
         tag: normalizedPayload.id,
         renotify: false,
         vibrate: [200, 100, 200],
-        data: { url: payload?.data?.url || '/', notificationPayload: normalizedPayload },
+        sound: isAdhan ? '/sounds/adhan.mp3' : undefined,
+        data: { url: payload?.data?.url || '/', playAdhan: isAdhan ? '1' : '0', notificationPayload: normalizedPayload },
       }),
     ])
   );

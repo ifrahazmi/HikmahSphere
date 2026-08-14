@@ -244,8 +244,8 @@ const Profile: React.FC = () => {
       return (
           <>
             <PageSEO
-              title="My Profile"
-              description="Manage your profile details, preferences, and account settings."
+              title="My Profile - HikmahSphere"
+              description="Manage your HikmahSphere profile, update your account settings, customize your prayer calculation methods, and set your app preferences."
               path="/profile"
               noIndex
               noFollow
@@ -282,8 +282,8 @@ const Profile: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="My Profile"
-        description="Manage your profile details, preferences, and account settings."
+        title="My Profile - HikmahSphere"
+        description="Manage your HikmahSphere profile, update your account settings, customize your prayer calculation methods, and set your app preferences."
         path="/profile"
         noIndex
         noFollow

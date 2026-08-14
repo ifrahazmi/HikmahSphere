@@ -396,7 +396,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                         onClick={() => setIsProfileOpen(false)}
                       >
                         <CalendarDaysIcon className="h-4 w-4 mr-2" />
-                        Salah Tracker
+                        Muhasabah Tracker
                       </Link>
                       
                       {/* Dashboard for Super Admin (full) and Manager (funds only) */}
@@ -670,7 +670,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                     }`}
                     onClick={() => setIsOpen(false)}
                   >
-                    Salah Tracker
+                    Muhasabah Tracker
                   </Link>
                   {canAccessDashboard && (
                     <Link

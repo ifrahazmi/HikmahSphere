@@ -1644,8 +1644,8 @@ const Community: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="Muslim Community"
-        description="Join Islamic forums, community discussions, events, and learning games with Muslims worldwide."
+        title="Global Muslim Community Forums & Islamic Discussions"
+        description="Join the HikmahSphere global Muslim community. Participate in Islamic forums, ask questions, share knowledge, join community discussions, and connect with Muslims worldwide."
         path="/community"
         keywords={[
           'muslim community app',
