@@ -679,7 +679,8 @@ const PrayerTimes: React.FC = () => {
 
   // Refs for prayer cards to enable auto-scroll
   const prayerCardRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const hasScrolledRef = useRef(false);
+  const hasScrolledToPrayerRef = useRef(false);
+  const hasScrolledToRamadanRef = useRef(false);
   const prayersContainerRef = useRef<HTMLDivElement>(null);
   const hijriFetchRequestIdRef = useRef(0);
   const hasRefreshedAtMaghribRef = useRef(false);
@@ -2084,14 +2085,9 @@ const PrayerTimes: React.FC = () => {
     if (!prayerData?.times) return;
 
     const now = new Date();
-    const maghribTimeToday = prayerData?.times?.Maghrib
-      ? parsePrayerTime(prayerData.times.Maghrib, now)
-      : null;
-    const shouldUseNextDay = Boolean(maghribTimeToday && now >= maghribTimeToday && nextDayPrayerData?.times);
-    const activeTimesSource = shouldUseNextDay ? nextDayPrayerData : prayerData;
-    if (!activeTimesSource?.times) return;
-
+    const activeTimesSource = prayerData;
     const prayerNames = ['Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+    
     const prayerTimes = prayerNames.map(name => parsePrayerTime(activeTimesSource.times[name] || '00:00', now));
     
     // Find current and next prayer
@@ -2122,9 +2118,13 @@ const PrayerTimes: React.FC = () => {
     setIsNextDay(isNext);
 
     // Calculate countdown
-    let targetTime = isNext 
-      ? parsePrayerTime(activeTimesSource.times[prayerNames[0]], new Date(now.getTime() + 86400000)) // Tomorrow
-      : parsePrayerTime(activeTimesSource.times[prayerNames[nextIdx]], now);
+    let targetTime: Date;
+    if (isNext) {
+      const tomorrowFajrStr = nextDayPrayerData?.times?.Fajr || activeTimesSource.times.Fajr;
+      targetTime = parsePrayerTime(tomorrowFajrStr, new Date(now.getTime() + 86400000));
+    } else {
+      targetTime = parsePrayerTime(activeTimesSource.times[prayerNames[nextIdx]], now);
+    }
     
     let diffMs = targetTime.getTime() - now.getTime();
     if (diffMs < 0) diffMs = 0;
@@ -2257,117 +2257,60 @@ const PrayerTimes: React.FC = () => {
 
   // Auto-scroll to current day's card when Ramadan tab is opened
   useEffect(() => {
-    // Only scroll in Ramadan view
     if (viewMode !== 'ramadan') {
+      hasScrolledToRamadanRef.current = false;
       return;
     }
+    if (loading || !ramadanData?.fasting) return;
+    if (hasScrolledToRamadanRef.current) return;
 
-    // Wait for Ramadan data to load
-    if (!ramadanData?.fasting) {
-      console.log('Ramadan auto-scroll: Waiting for data');
-      return;
-    }
+    let attempts = 0;
+    let timeoutId: number;
 
-    // Prevent multiple scrolls
-    if (hasScrolledRef.current) {
-      console.log('Ramadan auto-scroll: Already scrolled');
-      return;
-    }
-
-    console.log('Ramadan auto-scroll: Scrolling to current day');
-
-    // Wait for DOM to render
-    setTimeout(() => {
-      const todayCard = document.querySelector('[class*="border-emerald-500"]');
-      if (todayCard) {
-        todayCard.scrollIntoView({
-          behavior: 'smooth',
-          block: 'center',
-        });
-        hasScrolledRef.current = true;
-        console.log('Ramadan auto-scroll: Scrolled to current day card');
-      } else {
-        console.log('Ramadan auto-scroll: Today card not found');
+    const tryScroll = () => {
+      const todayCard = document.querySelector<HTMLElement>('[data-ramadan-today="true"]');
+      if (!todayCard) {
+        if (attempts++ < 10) timeoutId = window.setTimeout(tryScroll, 150);
+        return;
       }
-    }, 500);
-  }, [viewMode, ramadanData]);
+      todayCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      hasScrolledToRamadanRef.current = true;
+    };
 
-  // Auto-scroll to current prayer on mobile after data loads
+    timeoutId = window.setTimeout(tryScroll, 50);
+    return () => window.clearTimeout(timeoutId);
+  }, [viewMode, ramadanData, loading]);
+
+  // Auto-scroll to current (or next, before Fajr) prayer after cards mount
   useEffect(() => {
-    // Wait for prayer data and current prayer to be determined
-    if (!prayerData?.times || currentPrayerIndex === -1) {
-      console.log('Auto-scroll: Waiting for data - prayerData:', !!prayerData?.times, 'currentPrayerIndex:', currentPrayerIndex);
+    if (loading || !prayerData?.times || viewMode !== 'daily') {
+      if (viewMode !== 'daily') hasScrolledToPrayerRef.current = false;
       return;
     }
-    
-    // Only scroll in daily view
-    if (viewMode !== 'daily') {
-      console.log('Auto-scroll: Not in daily view - viewMode:', viewMode);
-      return;
-    }
-    
-    // Only scroll on mobile devices (screen width < 1024px)
-    if (window.innerWidth >= 1024) {
-      console.log('Auto-scroll: Desktop detected - width:', window.innerWidth);
-      return;
-    }
-    
-    // Prevent multiple scrolls
-    if (hasScrolledRef.current) {
-      console.log('Auto-scroll: Already scrolled');
-      return;
-    }
+    if (typeof window !== 'undefined' && window.innerWidth >= 1024) return;
+    if (hasScrolledToPrayerRef.current) return;
 
-    console.log('Auto-scroll: Scheduling scroll for prayer index:', currentPrayerIndex);
+    const targetIndex = currentPrayerIndex >= 0 ? currentPrayerIndex : nextPrayerIndex;
+    if (targetIndex < 0) return;
 
-    // Wait for refs to be populated and DOM to render (including images and fonts)
-    const scrollTimeout = setTimeout(() => {
-      const currentCard = prayerCardRefs.current[currentPrayerIndex];
-      
-      console.log('Auto-scroll attempt:', {
-        currentPrayerIndex,
-        hasCard: !!currentCard,
-        refsCount: prayerCardRefs.current.filter(Boolean).length,
-        allRefs: prayerCardRefs.current.map((ref, i) => ref ? `Card ${i}: OK` : `Card ${i}: null`)
-      });
+    let attempts = 0;
+    let timeoutId: number;
 
-      if (currentCard) {
-        // Ensure element is in DOM and visible
-        if (!document.contains(currentCard)) {
-          console.warn('Card not in DOM');
-          return;
-        }
-
-        const viewportHeight = window.innerHeight;
-        
-        // Get the card's position relative to document
-        const rect = currentCard.getBoundingClientRect();
-        const absoluteTop = window.scrollY + rect.top;
-        
-        // Scroll to position current card at about 15% from top of viewport
-        // This ensures both current and next prayer cards are visible
-        const scrollTop = Math.max(0, absoluteTop - (viewportHeight * 0.15));
-        
-        console.log('Scrolling to:', scrollTop, 'absoluteTop:', absoluteTop, 'viewport:', viewportHeight, 'rect.top:', rect.top);
-
-        window.scrollTo({
-          top: scrollTop,
-          behavior: 'smooth'
-        });
-        
-        // Verify scroll happened
-        setTimeout(() => {
-          console.log('Scroll completed - window.scrollY:', window.scrollY);
-        }, 1000);
-        
-        hasScrolledRef.current = true;
-      } else {
-        console.warn('Current prayer card ref not found at index:', currentPrayerIndex, 'refs:', prayerCardRefs.current);
+    const tryScroll = () => {
+      const card = prayerCardRefs.current[targetIndex];
+      if (!card || !document.contains(card)) {
+        if (attempts++ < 10) timeoutId = window.setTimeout(tryScroll, 150);
+        return;
       }
-    }, 2000);
+      const headerOffset = 96;
+      const top = window.scrollY + card.getBoundingClientRect().top - headerOffset;
+      window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+      hasScrolledToPrayerRef.current = true;
+    };
 
-    return () => clearTimeout(scrollTimeout);
-  }, [prayerData, currentPrayerIndex, viewMode]);
+    timeoutId = window.setTimeout(tryScroll, 50);
+    return () => window.clearTimeout(timeoutId);
+  }, [loading, prayerData, currentPrayerIndex, nextPrayerIndex, viewMode]);
 
   const prayerSourceHijriDate = currentHijriDate || buildHijriDateFromPrayerSource(prayerData?.date?.hijri);
   const baseFastingEntry = fastingData?.fasting?.[0];
@@ -2652,8 +2595,8 @@ const PrayerTimes: React.FC = () => {
     return (
       <>
         <PageSEO
-          title="Prayer Times"
-          description="Get accurate daily Salah times with Ramadan schedule support, multiple calculation methods, and Hijri date tools."
+          title="Accurate Islamic Prayer Times, Qibla & Ramadan Calendar"
+          description="Get highly accurate Islamic prayer times worldwide. Features include local Namaz and Salah timings, Adhan audio alarms, Qibla compass, Hijri date converter, and full Ramadan fasting schedules (Sehri & Iftar)."
           path="/prayers"
           keywords={[
             'prayer times',
@@ -2690,8 +2633,8 @@ const PrayerTimes: React.FC = () => {
     return (
       <>
         <PageSEO
-          title="Prayer Times"
-          description="Get accurate daily Salah times with Ramadan schedule support, multiple calculation methods, and Hijri date tools."
+          title="Accurate Islamic Prayer Times, Qibla & Ramadan Calendar"
+          description="Get highly accurate Islamic prayer times worldwide. Features include local Namaz and Salah timings, Adhan audio alarms, Qibla compass, Hijri date converter, and full Ramadan fasting schedules (Sehri & Iftar)."
           path="/prayers"
         />
         <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 pt-16 pb-8">
@@ -2762,8 +2705,8 @@ const PrayerTimes: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="Prayer Times"
-        description="Get accurate daily Salah times with Ramadan schedule support, multiple calculation methods, and Hijri date tools."
+        title="Accurate Islamic Prayer Times, Qibla & Ramadan Calendar"
+        description="Get highly accurate Islamic prayer times worldwide. Features include local Namaz and Salah timings, Adhan audio alarms, Qibla compass, Hijri date converter, and full Ramadan fasting schedules (Sehri & Iftar)."
         path="/prayers"
         keywords={[
           'prayer times',
@@ -2918,8 +2861,8 @@ const PrayerTimes: React.FC = () => {
             {process.env.NODE_ENV === 'development' && (
               <button
                 onClick={() => {
-                  hasScrolledRef.current = false;
-                  const currentCard = prayerCardRefs.current[currentPrayerIndex];
+                  hasScrolledToPrayerRef.current = false;
+                  const currentCard = prayerCardRefs.current[currentPrayerIndex >= 0 ? currentPrayerIndex : nextPrayerIndex];
                   if (currentCard) {
                     const rect = currentCard.getBoundingClientRect();
                     const absoluteTop = window.scrollY + rect.top;
@@ -4547,6 +4490,7 @@ const PrayerTimes: React.FC = () => {
                   return (
                     <div
                       key={idx}
+                      data-ramadan-today={isToday ? 'true' : undefined}
                       className={`bg-white rounded-xl sm:rounded-2xl shadow-md sm:shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 overflow-hidden border-2 ${
                         isToday
                           ? 'border-emerald-500 bg-gradient-to-br from-emerald-50 to-teal-50'

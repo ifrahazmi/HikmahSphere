@@ -122,6 +122,7 @@ self.addEventListener('fetch', (event) => {
   // Cross-origin (Quran CDNs, etc.): do not touch — let the browser stream natively.
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/api/')) return;
+  if (url.pathname.startsWith('/uploads/')) return;
 
   // Let the browser handle PDF and worker files natively to avoid
   // corruption or "Failed to fetch" errors inside pdfjs / web workers.
@@ -299,6 +300,10 @@ messaging.onBackgroundMessage((payload) => {
     }).catch((error) => {
       console.error('[firebase-messaging-sw.js] Failed to send message to clients:', error);
     });
+    
+    if (isAdhan) {
+      broadcastToOpenClients({ type: 'HIKMAH_PLAY_ADHAN', payload: normalizedPayload });
+    }
     return;
   }
 
@@ -309,6 +314,10 @@ messaging.onBackgroundMessage((payload) => {
     console.error('[firebase-messaging-sw.js] Failed to send message to clients:', error);
   });
 
+  if (isAdhan) {
+    broadcastToOpenClients({ type: 'HIKMAH_PLAY_ADHAN', payload: normalizedPayload });
+  }
+
   const notificationOptions = {
     body: normalizedPayload.body,
     icon: '/small_logo.jpeg',
@@ -316,6 +325,7 @@ messaging.onBackgroundMessage((payload) => {
     tag: normalizedPayload.id,
     renotify: false,
     vibrate: [200, 100, 200],
+    sound: isAdhan ? '/sounds/adhan.mp3' : undefined,
     data: {
       url: targetUrl,
       playAdhan: isAdhan ? '1' : '0',
@@ -360,6 +370,18 @@ self.addEventListener('notificationclick', function(event) {
         }
         if (playMessage) {
           client.postMessage(playMessage);
+        }
+
+        if (targetUrl && 'navigate' in client && typeof client.navigate === 'function') {
+          try {
+            const currentPath = new URL(client.url).pathname + new URL(client.url).search;
+            const nextPath = targetUrl.startsWith('http') ? new URL(targetUrl).pathname + new URL(targetUrl).search : targetUrl;
+            if (currentPath !== nextPath) {
+              return client.navigate(targetUrl).then((navigated) => (navigated && 'focus' in navigated ? navigated.focus() : client.focus()));
+            }
+          } catch (_err) {
+            // Fall through to focus.
+          }
         }
 
         if ('focus' in client) {
@@ -424,6 +446,12 @@ self.addEventListener('push', (event) => {
     return;
   }
 
+  const isAdhan = (payload?.data?.type || normalizedPayload.type) === 'adhan' || payload?.data?.playAdhan === '1';
+
+  if (isAdhan) {
+    broadcastToOpenClients({ type: 'HIKMAH_PLAY_ADHAN', payload: normalizedPayload }).catch(() => {});
+  }
+
   event.waitUntil(
     Promise.all([
       broadcastToOpenClients({ type: APP_MESSAGE_TYPE, payload: normalizedPayload }).catch(() => {}),
@@ -434,7 +462,8 @@ self.addEventListener('push', (event) => {
         tag: normalizedPayload.id,
         renotify: false,
         vibrate: [200, 100, 200],
-        data: { url: payload?.data?.url || '/', notificationPayload: normalizedPayload },
+        sound: isAdhan ? '/sounds/adhan.mp3' : undefined,
+        data: { url: payload?.data?.url || '/', playAdhan: isAdhan ? '1' : '0', notificationPayload: normalizedPayload },
       }),
     ])
   );

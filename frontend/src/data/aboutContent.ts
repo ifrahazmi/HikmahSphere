@@ -233,6 +233,12 @@ export const spiritualFeatures: SpiritualFeature[] = [
     description: "Prepare for pilgrimage with practical, step-by-step Hajj guidance to help you review essential rituals and sequence with confidence."
   },
   {
+    icon: "/salah.png",
+    title: "Muhasabah Tracker",
+    path: "/salah-tracker",
+    description: "A comprehensive daily Islamic habit tracker to keep yourself accountable for your Prayers, Fasting, Quran reading, and daily Dhikr."
+  },
+  {
     icon: "/AI-Scholar-Assistant.png",
     title: "AI Assistant",
     description: "Islamic AI assistant for religious questions and guidance",
@@ -251,7 +257,7 @@ export const maktabSection = {
     "Free Quran & Tajweed classes",
     "Hifz pathway support",
     "Deen, Hadith & Islamic culture",
-    "Books, uniform & classroom needs"
+    "Books & classroom needs"
   ],
   primaryCta: { label: "Donate / Sponsor", path: "/maktab#sponsor" },
   secondaryCta: { label: "Learn about Maktab", path: "/maktab" }

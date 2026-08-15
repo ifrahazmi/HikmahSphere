@@ -29,6 +29,20 @@ import {
   TrackerRecords,
   readTrackerFromStorage,
 } from '../utils/salahTracker';
+import { TASBIH_PRESETS } from '../data/dhikrDuaLibrary';
+
+interface DhikrDailyTracker {
+  date: string;
+  counts: Record<string, number>;
+}
+
+const getTodayDhikrKey = (): string => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 const PROFILE_REFLECTION_IMAGE_SRC = '/Gemini_Generated_Image_b40rclb40rclb40r.png';
 const ADMIN_SINCE_LABEL = 'Feb 1st 2026';
@@ -84,6 +98,54 @@ const Profile: React.FC = () => {
 
     setTrackerRecords(readTrackerFromStorage(trackerStorageKey));
   }, [authUser, trackerStorageKey]);
+
+  // Today's tasbih counts from the Dhikr & Dua page (synced to the backend).
+  const [dhikrTracker, setDhikrTracker] = useState<DhikrDailyTracker | null>(null);
+
+  useEffect(() => {
+    if (!authUser) {
+      setDhikrTracker(null);
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await fetch(`${API_URL}/dhikr/user-state`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!response.ok) return;
+        const json = await response.json();
+        if (cancelled) return;
+        const tracker = json?.data?.dailyTracker;
+        if (
+          tracker &&
+          typeof tracker === 'object' &&
+          typeof tracker.date === 'string' &&
+          tracker.counts &&
+          typeof tracker.counts === 'object'
+        ) {
+          setDhikrTracker({ date: tracker.date, counts: tracker.counts });
+        }
+      } catch (error) {
+        console.error('Failed to load dhikr tasbih counts:', error);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser]);
+
+  const tasbihCounts: Record<string, number> =
+    dhikrTracker && dhikrTracker.date === getTodayDhikrKey() ? dhikrTracker.counts : {};
+  const tasbihTotalToday = TASBIH_PRESETS.reduce(
+    (sum, preset) => sum + (tasbihCounts[preset.id] || 0),
+    0
+  );
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
       const { name, value } = e.target;
@@ -182,8 +244,8 @@ const Profile: React.FC = () => {
       return (
           <>
             <PageSEO
-              title="My Profile"
-              description="Manage your profile details, preferences, and account settings."
+              title="My Profile - HikmahSphere"
+              description="Manage your HikmahSphere profile, update your account settings, customize your prayer calculation methods, and set your app preferences."
               path="/profile"
               noIndex
               noFollow
@@ -220,8 +282,8 @@ const Profile: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="My Profile"
-        description="Manage your profile details, preferences, and account settings."
+        title="My Profile - HikmahSphere"
+        description="Manage your HikmahSphere profile, update your account settings, customize your prayer calculation methods, and set your app preferences."
         path="/profile"
         noIndex
         noFollow
@@ -340,6 +402,40 @@ const Profile: React.FC = () => {
                       </div>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm sm:p-6 lg:col-span-2">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">Dhikr &amp; Tasbih Today</h3>
+                    <p className="text-sm text-gray-600">Counts from the Tasbih counter on the Dhikr &amp; Dua page.</p>
+                  </div>
+                  <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-semibold text-emerald-700">
+                    Total today: {tasbihTotalToday.toLocaleString()}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {TASBIH_PRESETS.map((preset) => {
+                    const count = tasbihCounts[preset.id] || 0;
+                    const pct = Math.min(100, Math.round((count / preset.target) * 100));
+                    return (
+                      <div key={preset.id} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="min-w-0 truncate text-sm font-medium text-gray-700">{preset.label}</p>
+                          <p className={`shrink-0 text-sm font-bold tabular-nums ${pct >= 100 ? 'text-emerald-600' : 'text-gray-900'}`}>
+                            {count}/{preset.target} {pct >= 100 ? '✓' : ''}
+                          </p>
+                        </div>
+                        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-200">
+                          <div
+                            className={`h-1.5 rounded-full transition-all ${pct >= 100 ? 'bg-emerald-500' : 'bg-emerald-300'}`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </section>

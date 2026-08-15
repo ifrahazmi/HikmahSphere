@@ -1,0 +1,190 @@
+name: HikmahSphere CI Checks
+
+on:
+  push:
+    branches:
+      - notification
+  workflow_dispatch:
+
+concurrency:
+  group: ci-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  security-events: write
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  backend-checks:
+    name: Backend Checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run type-check
+
+      - name: Build
+        run: npm run build
+
+      - name: Lint (report only)
+        continue-on-error: true
+        run: npm run lint
+
+      - name: npm audit (report only)
+        continue-on-error: true
+        run: npm audit --audit-level=high
+
+      - name: Tests with coverage (report only)
+        continue-on-error: true
+        run: npx jest --coverage --passWithNoTests
+        env:
+          MONGODB_URI: mongodb://localhost:27017/hikmahsphere
+          JWT_SECRET: test_secret_key
+          NODE_ENV: test
+
+      - name: Upload backend coverage
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/coverage
+          if-no-files-found: ignore
+          retention-days: 14
+
+  frontend-checks:
+    name: Frontend Checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Production build
+        run: npm run build
+        env:
+          # CRA treats warnings as errors when CI=true; keep build as a hard gate
+          # without failing on leftover lint warnings.
+          CI: false
+
+      - name: Tests with coverage (report only)
+        continue-on-error: true
+        run: npx react-scripts test --watchAll=false --passWithNoTests --coverage
+        env:
+          CI: true
+
+      - name: Upload frontend coverage
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage
+          if-no-files-found: ignore
+          retention-days: 14
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Trivy filesystem scan (report only)
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: '.'
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+
+      - name: Upload Trivy SARIF
+        if: always()
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+
+      - name: Gitleaks secret scan (report only)
+        continue-on-error: true
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  report:
+    name: CI Report
+    runs-on: ubuntu-latest
+    needs: [backend-checks, frontend-checks, security-scan]
+    if: always()
+
+    steps:
+      - name: Write job summary
+        run: |
+          {
+            echo "# HikmahSphere CI Checks Report"
+            echo ""
+            echo "| Job | Result |"
+            echo "|-----|--------|"
+            echo "| Backend Checks | ${{ needs.backend-checks.result }} |"
+            echo "| Frontend Checks | ${{ needs.frontend-checks.result }} |"
+            echo "| Security Scan | ${{ needs.security-scan.result }} |"
+            echo ""
+            echo "## Hard gates"
+            echo "- Install, TypeScript type-check, and production build must pass."
+            echo "- Lint, unit tests, npm audit, Trivy, and Gitleaks are report-only and never block the run."
+            echo ""
+            echo "## Artifacts"
+            echo "- Download \`backend-coverage\` and \`frontend-coverage\` from this workflow run when present."
+            echo ""
+            echo "- Branch: \`${{ github.ref_name }}\`"
+            echo "- Commit: \`${{ github.sha }}\`"
+            echo "- Actor: \`${{ github.actor }}\`"
+            echo "- Event: \`${{ github.event_name }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${{ needs.backend-checks.result }}" != "success" ] || [ "${{ needs.frontend-checks.result }}" != "success" ]; then
+            echo "One or more hard-gate jobs failed." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          echo "All hard-gate jobs passed." >> "$GITHUB_STEP_SUMMARY"

@@ -227,8 +227,8 @@ const Auth: React.FC = () => {
     return (
       <>
         <PageSEO
-          title="Sign In"
-          description="Sign in or create your account to access prayer tools, Quran features, and personalized Islamic resources."
+          title="Sign In to HikmahSphere: Your Islamic Dashboard"
+          description="Sign in or create a free account on HikmahSphere to unlock personalized Islamic features, save your Salah tracker progress, sync Quran bookmarks, and join community forums."
           path="/auth"
           noIndex
           noFollow
@@ -241,8 +241,8 @@ const Auth: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="Sign In"
-        description="Sign in or create your account to access prayer tools, Quran features, and personalized Islamic resources."
+        title="Sign In to HikmahSphere: Your Islamic Dashboard"
+        description="Sign in or create a free account on HikmahSphere to unlock personalized Islamic features, save your Salah tracker progress, sync Quran bookmarks, and join community forums."
         path="/auth"
         noIndex
         noFollow

@@ -24,6 +24,54 @@ import IslamicGames from '../components/IslamicGames';
 import { useAuth } from '../hooks/useAuth';
 import { generateGoogleMapsDirectionsUrl } from '../utils/maps';
 
+// Matches the backend multer limit (MAX_COMMUNITY_UPLOAD_BYTES) so oversized
+// files are caught before upload instead of failing server-side.
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+const formatFileSize = (bytes: number): string => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+
+const wallTimeToUtcIso = (dateTimeLocal: string, timeZone: string): string => {
+  const [datePart, timePart = '00:00'] = dateTimeLocal.split('T');
+  const [year, month, day] = datePart.split('-').map(Number);
+  const [hour, minute] = timePart.split(':').map(Number);
+  const utcGuess = Date.UTC(year, (month || 1) - 1, day || 1, hour || 0, minute || 0, 0);
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timeZone || 'UTC',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  });
+  const parts = formatter.formatToParts(new Date(utcGuess));
+  const read = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((part) => part.type === type)?.value || 0);
+  const asIfInZone = Date.UTC(read('year'), read('month') - 1, read('day'), read('hour') % 24, read('minute'), read('second'));
+  return new Date(utcGuess - (asIfInZone - utcGuess)).toISOString();
+};
+
+const utcToDatetimeLocal = (iso: string, timeZone: string): string => {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timeZone || 'UTC',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  });
+  const parts = formatter.formatToParts(new Date(iso));
+  const read = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value || '00';
+  return `${read('year')}-${read('month')}-${read('day')}T${read('hour')}:${read('minute')}`;
+};
+
+const formatMeetingWhen = (iso: string, timeZone?: string): string =>
+  new Date(iso).toLocaleString(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: timeZone || undefined,
+  });
+
 type Forum = {
   id: string;
   title: string;
@@ -310,7 +358,7 @@ const ALLOWED_COMMUNITY_TABS = ['forums', 'posts', 'events', 'meetings', 'games'
 
 const Community: React.FC = () => {
   const navigate = useNavigate();
-  const { hasRole } = useAuth();
+  const { hasRole, user } = useAuth();
   const [searchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
   const initialTab = ALLOWED_COMMUNITY_TABS.includes(tabParam || '') ? (tabParam as string) : 'forums';
@@ -409,7 +457,7 @@ const Community: React.FC = () => {
     scheduledAt: '',
     durationMinutes: '60',
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-    recurrence: 'weekly',
+    recurrence: 'none',
     maxCapacity: '',
     tags: '',
     notesLinks: '',
@@ -516,10 +564,10 @@ const Community: React.FC = () => {
     void fetchPosts();
     void fetchEvents();
     void fetchMeetings();
-  }, []);
+  }, [user?.id]);
 
-  const isAdminOrManager = hasRole(['superadmin', 'manager']);
-  const isSuperAdmin = hasRole(['superadmin']);
+  const isAdminOrManager = hasRole(['superadmin', 'manager']) || Boolean(user?.isAdmin);
+  const isSuperAdmin = hasRole(['superadmin']) || Boolean(user?.isAdmin && user?.role === 'superadmin');
 
   useEffect(() => {
     if (isAdminOrManager) {
@@ -687,7 +735,37 @@ const Community: React.FC = () => {
   };
 
   const openAuthForCommunityAction = (tab: 'forums' | 'posts' | 'events' | 'meetings') => {
-    navigate(`/auth?redirect=/community?tab=${tab}`);
+    navigate(`/auth?redirect=${encodeURIComponent(`/community?tab=${tab}`)}`);
+  };
+
+  const downloadMeetingAttachment = async (meeting: Meeting) => {
+    const headers = getAuthHeaders();
+    if (!headers) {
+      toast.error('Please login to download meeting material');
+      openAuthForCommunityAction('meetings');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/community/meetings/${meeting.id}/attachment`, {
+        headers,
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.message || 'Failed to download attachment');
+      }
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = meeting.attachment?.name || 'meeting-material';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to download attachment');
+    }
   };
 
   const handleCreateForum = async (event: React.FormEvent) => {
@@ -911,6 +989,14 @@ const Community: React.FC = () => {
       return;
     }
 
+    if (adminMeetingForm.attachment && adminMeetingForm.attachment.size > MAX_ATTACHMENT_BYTES) {
+      const message = `Attachment is ${formatFileSize(adminMeetingForm.attachment.size)}. Maximum allowed is 10 MB.`;
+      setMeetingFieldErrors({ attachment: message });
+      setMeetingFormErrorSummary([message]);
+      toast.error(message);
+      return;
+    }
+
     setCreatingMeeting(true);
     try {
       const payload = new FormData();
@@ -922,7 +1008,7 @@ const Community: React.FC = () => {
       payload.append('meetingUrl', adminMeetingForm.meetingUrl.trim());
       payload.append('meetingId', adminMeetingForm.meetingId.trim());
       payload.append('passcode', adminMeetingForm.passcode.trim());
-      payload.append('scheduledAt', new Date(normalizedDate).toISOString());
+      payload.append('scheduledAt', wallTimeToUtcIso(normalizedDate, adminMeetingForm.timezone));
       payload.append('durationMinutes', String(parsedDuration));
       payload.append('timezone', adminMeetingForm.timezone);
       payload.append('recurrence', adminMeetingForm.recurrence);
@@ -955,7 +1041,7 @@ const Community: React.FC = () => {
         scheduledAt: '',
         durationMinutes: '60',
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-        recurrence: 'weekly',
+        recurrence: 'none',
         maxCapacity: '',
         tags: '',
         notesLinks: '',
@@ -963,6 +1049,17 @@ const Community: React.FC = () => {
       });
       await refreshMeetings();
     } catch (err: any) {
+      // nginx/server rejected the body as too large (or a proxy 413 with no JSON
+      // body). Surface a clear attachment-specific message instead of a generic error.
+      const status = err?.response?.status;
+      if (status === 413 || /too large|entity too large|file too large/i.test(String(err?.response?.data?.message || ''))) {
+        const message = 'Attachment is too large. Please upload a file up to 10 MB.';
+        setMeetingFieldErrors({ attachment: message });
+        setMeetingFormErrorSummary([message]);
+        toast.error(message);
+        return;
+      }
+
       const responseErrors = Array.isArray(err?.response?.data?.errors) ? err.response.data.errors : [];
       const nextFieldErrors: MeetingFieldErrors = {};
       const nextSummary: string[] = [];
@@ -1041,7 +1138,7 @@ const Community: React.FC = () => {
       meetingUrl: meeting.meetingUrl || '',
       meetingId: meeting.meetingId || '',
       passcode: meeting.passcode || '',
-      scheduledAt: new Date(meeting.scheduledAt).toISOString().slice(0, 16),
+      scheduledAt: utcToDatetimeLocal(meeting.scheduledAt, meeting.timezone || 'UTC'),
       durationMinutes: String(meeting.durationMinutes || 60),
       timezone: meeting.timezone || (Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'),
       recurrence: meeting.recurrence || 'none',
@@ -1162,9 +1259,19 @@ const Community: React.FC = () => {
 
     setRsvpLoadingMeetingId(meeting.id);
     try {
-      const response = await axios.post(`${API_URL}/community/meetings/${meeting.id}/rsvp`, {}, { headers });
-      setMeetings((prev) => prev.map((item) => (item.id === meeting.id ? response.data?.data?.meeting : item)));
-      toast.success('RSVP confirmed');
+      const endpoint = meeting.isJoined || meeting.responseStatus === 'joined'
+        ? `${API_URL}/community/meetings/${meeting.id}/leave`
+        : `${API_URL}/community/meetings/${meeting.id}/rsvp`;
+      const response = await axios.post(endpoint, {}, { headers });
+      const updatedMeeting = response.data?.data?.meeting;
+      if (updatedMeeting) {
+        setMeetings((prev) => prev.map((item) => (item.id === meeting.id ? updatedMeeting : item)));
+      }
+      toast.success(
+        meeting.isJoined || meeting.responseStatus === 'joined'
+          ? 'RSVP removed'
+          : 'RSVP confirmed'
+      );
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Unable to update RSVP');
     } finally {
@@ -1344,7 +1451,13 @@ const Community: React.FC = () => {
       );
 
       const summary = response.data?.data?.summary;
-      toast.success(`Sent now: push ${summary?.pushSent || 0}, email ${summary?.emailSent || 0}`);
+      const pushSent = summary?.pushSent || 0;
+      const emailSent = summary?.emailSent || 0;
+      if (pushSent === 0 && emailSent === 0) {
+        toast.error(response.data?.message || 'No notifications were delivered');
+      } else {
+        toast.success(`Sent now: push ${pushSent}, email ${emailSent}`);
+      }
       await refreshMeetings();
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Failed to send notifications now');
@@ -1531,8 +1644,8 @@ const Community: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="Muslim Community"
-        description="Join Islamic forums, community discussions, events, and learning games with Muslims worldwide."
+        title="Global Muslim Community Forums & Islamic Discussions"
+        description="Join the HikmahSphere global Muslim community. Participate in Islamic forums, ask questions, share knowledge, join community discussions, and connect with Muslims worldwide."
         path="/community"
         keywords={[
           'muslim community app',
@@ -1669,7 +1782,7 @@ const Community: React.FC = () => {
                         scheduledAt: '',
                         durationMinutes: '60',
                         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-                        recurrence: 'weekly',
+                        recurrence: 'none',
                         maxCapacity: '',
                         tags: '',
                         notesLinks: '',
@@ -2027,7 +2140,7 @@ const Community: React.FC = () => {
                     <div className="flex flex-wrap gap-3 text-sm text-cyan-100">
                       <span className="inline-flex items-center gap-1">
                         <ClockIcon className="h-4 w-4" />
-                        {new Date(nextMeeting.scheduledAt).toLocaleString()} ({nextMeeting.timezone})
+                        {formatMeetingWhen(nextMeeting.scheduledAt, nextMeeting.timezone)} ({nextMeeting.timezone})
                       </span>
                       <span className="inline-flex items-center gap-1">
                         <UserGroupIcon className="h-4 w-4" />
@@ -2082,7 +2195,7 @@ const Community: React.FC = () => {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-gray-600">
                           <p><span className="font-semibold">Topic:</span> {meeting.topic}</p>
                           <p><span className="font-semibold">Speaker:</span> {meeting.speakerName}</p>
-                          <p><span className="font-semibold">When:</span> {new Date(meeting.scheduledAt).toLocaleString()}</p>
+                          <p><span className="font-semibold">When:</span> {formatMeetingWhen(meeting.scheduledAt, meeting.timezone)} ({meeting.timezone})</p>
                           <p><span className="font-semibold">Duration:</span> {meeting.durationMinutes} min</p>
                           <p><span className="font-semibold">RSVP:</span> {meeting.attendees}{meeting.maxCapacity ? ` / ${meeting.maxCapacity}` : ''}</p>
                         </div>
@@ -2118,14 +2231,14 @@ const Community: React.FC = () => {
 
                         {meeting.attachment?.url && (
                           <div className="mt-3">
-                            <a
-                              href={meeting.attachment.url}
-                              download={meeting.attachment.name || 'meeting-material'}
+                            <button
+                              type="button"
+                              onClick={() => void downloadMeetingAttachment(meeting)}
                               className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-100 rounded-full px-3 py-1 hover:bg-blue-100"
                             >
                               Download Material
                               <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" />
-                            </a>
+                            </button>
                           </div>
                         )}
                       </div>
@@ -2141,13 +2254,11 @@ const Community: React.FC = () => {
                             Join Meeting
                           </button>
                         ) : (
-                          <button
-                            type="button"
-                            disabled
-                            className="rounded-md bg-gray-200 text-gray-500 px-3 py-2"
-                          >
-                            Link not added
-                          </button>
+                          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                            {meeting.meetingId
+                              ? `Meeting ID: ${meeting.meetingId}${meeting.passcode ? ` · Passcode: ${meeting.passcode}` : ''}`
+                              : 'Join link not added yet'}
+                          </div>
                         )}
 
                         <button
@@ -2182,7 +2293,11 @@ const Community: React.FC = () => {
                           onClick={() => handleMeetingRsvpJoin(meeting)}
                           className={`rounded-md px-3 py-2 text-white ${meeting.responseStatus === 'joined' ? 'bg-emerald-700' : 'bg-emerald-600 hover:bg-emerald-700'} disabled:opacity-60`}
                         >
-                          {rsvpLoadingMeetingId === meeting.id ? 'Updating...' : 'RSVP Join'}
+                          {rsvpLoadingMeetingId === meeting.id
+                            ? 'Updating...'
+                            : meeting.responseStatus === 'joined'
+                              ? 'Leave RSVP'
+                              : 'RSVP Join'}
                         </button>
 
                         <button
@@ -2261,7 +2376,16 @@ const Community: React.FC = () => {
                     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                       <div>
                         <p className="font-semibold text-gray-900">{meeting.title}</p>
-                        <p className="text-sm text-gray-600">{meeting.topic} • {new Date(meeting.scheduledAt).toLocaleString()}</p>
+                        <p className="text-sm text-gray-600">{meeting.topic} • {formatMeetingWhen(meeting.scheduledAt, meeting.timezone)}</p>
+                        {meeting.attachment?.url && (
+                          <button
+                            type="button"
+                            onClick={() => void downloadMeetingAttachment(meeting)}
+                            className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-100 rounded-full px-3 py-1 hover:bg-blue-100"
+                          >
+                            Download Material
+                          </button>
+                        )}
                         <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
                           <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-emerald-700">Attending {meeting.attendees}</span>
                           <span className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-rose-700">Not Attending {meeting.declinedCount || 0}</span>

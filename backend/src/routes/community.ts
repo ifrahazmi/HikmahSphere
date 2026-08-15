@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import express, { NextFunction, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
 import mongoose from 'mongoose';
@@ -6,17 +6,17 @@ import multer from 'multer';
 import { body, query, validationResult } from 'express-validator';
 import { authMiddleware, adminMiddleware, optionalAuthMiddleware, superAdminMiddleware } from '../middleware/auth';
 import { logUserActivity } from '../middleware/activityLogger';
-import { sendMulticastNotification } from '../config/firebaseAdmin';
 import CommunityForum from '../models/CommunityForum';
 import CommunityPost from '../models/CommunityPost';
 import CommunityEvent from '../models/CommunityEvent';
 import CommunityMeeting from '../models/CommunityMeeting';
-import MeetingNotificationSettings from '../models/MeetingNotificationSettings';
 import CommunityForumMember from '../models/CommunityForumMember';
 import CommunityComment from '../models/CommunityComment';
 import User from '../models/User';
-import UserNotification from '../models/UserNotification';
-import { sendMeetingEmails } from '../services/meetingEmailService';
+import {
+  getGlobalMeetingNotificationSettings,
+  sendMeetingNotifications,
+} from '../services/meetingNotificationSender';
 
 const router = express.Router();
 
@@ -80,6 +80,43 @@ const communityUpload = multer({
     cb(new Error('Only jpg, jpeg, png, webp, pdf, doc, docx, ppt, and pptx files are allowed'));
   },
 });
+
+const wrapCommunityUpload = (middleware: ReturnType<typeof communityUpload.fields>) =>
+  (req: Request, res: Response, next: NextFunction) => {
+    middleware(req, res, (err: unknown) => {
+      if (!err) {
+        next();
+        return;
+      }
+      const multerErr = err as { code?: string; message?: string };
+      const message =
+        multerErr.code === 'LIMIT_FILE_SIZE'
+          ? 'Attachment is too large. Maximum allowed is 10 MB.'
+          : multerErr.message || 'Invalid attachment';
+      res.status(400).json({
+        status: 'error',
+        message,
+        errors: [{ field: 'attachment', message }],
+      });
+    });
+  };
+
+const resolveAttachmentDiskPath = (storedUrl?: string): string | null => {
+  if (!storedUrl) return null;
+  const filename = path.basename(storedUrl);
+  if (!filename || filename === '.' || filename === '..') return null;
+  return path.join(communityUploadsDir, filename);
+};
+
+const unlinkAttachmentFile = (storedUrl?: string) => {
+  const diskPath = resolveAttachmentDiskPath(storedUrl);
+  if (!diskPath) return;
+  fs.unlink(diskPath, (unlinkError) => {
+    if (unlinkError && (unlinkError as NodeJS.ErrnoException).code !== 'ENOENT') {
+      console.warn('Failed to remove meeting attachment:', unlinkError.message);
+    }
+  });
+};
 
 const DEFAULT_FORUMS = [
   {
@@ -283,140 +320,6 @@ const buildMeetingUserDisplayMap = async (meetings: any[]): Promise<Map<string, 
 const isForumMember = async (forumId: string, userId: string): Promise<boolean> => {
   const membership = await CommunityForumMember.findOne({ forumId, userId }).lean();
   return Boolean(membership);
-};
-
-const getGlobalMeetingNotificationSettings = async () => {
-  let settings = await MeetingNotificationSettings.findOne({ key: 'global' });
-  if (!settings) {
-    settings = await MeetingNotificationSettings.create({ key: 'global' });
-  }
-  return settings;
-};
-
-const createMeetingNotificationId = () => `meeting-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-
-const getMeetingRecipients = async (meeting: any, audience: 'all_registered' | 'rsvped_only') => {
-  if (audience === 'rsvped_only') {
-    const rsvpUserIds = (meeting.attendeeIds || []).map((id: mongoose.Types.ObjectId | string) => id.toString());
-    if (rsvpUserIds.length === 0) {
-      return [];
-    }
-    return User.find({
-      _id: { $in: rsvpUserIds },
-      isBlocked: { $ne: true },
-    }).select('_id email username fcmTokens notificationDevices preferences.notifications').lean();
-  }
-
-  return User.find({ isBlocked: { $ne: true } })
-    .select('_id email username fcmTokens notificationDevices preferences.notifications')
-    .lean();
-};
-
-const sendMeetingNotifications = async ({
-  meeting,
-  channels,
-  audience,
-  trigger,
-  note,
-}: {
-  meeting: any;
-  channels: Array<'push' | 'email'>;
-  audience: 'all_registered' | 'rsvped_only';
-  trigger: 'manual' | 'scheduled';
-  note: string;
-}) => {
-  const recipients = await getMeetingRecipients(meeting, audience);
-  const globalSettings = await getGlobalMeetingNotificationSettings();
-  const summary = {
-    pushSent: 0,
-    emailSent: 0,
-    attemptedRecipients: recipients.length,
-  };
-
-  const meetingPageUrl = `${process.env.FRONTEND_URL || 'https://hikmahsphere.site'}/community?tab=meetings&meetingId=${meeting._id.toString()}`;
-  const notificationId = createMeetingNotificationId();
-
-  if (channels.includes('push')) {
-    const tokens = recipients.flatMap((user: any) => {
-      const tokenSet = new Set<string>();
-      if (Array.isArray(user.fcmTokens)) {
-        user.fcmTokens.forEach((token: unknown) => {
-          if (typeof token === 'string' && token.trim()) tokenSet.add(token.trim());
-        });
-      }
-      if (Array.isArray(user.notificationDevices)) {
-        user.notificationDevices.forEach((device: any) => {
-          if (typeof device?.token === 'string' && device.token.trim()) tokenSet.add(device.token.trim());
-        });
-      }
-      return Array.from(tokenSet);
-    });
-
-    const uniqueTokens = Array.from(new Set(tokens));
-    if (uniqueTokens.length > 0) {
-      const result = await sendMulticastNotification(
-        uniqueTokens,
-        `Upcoming Meeting: ${meeting.title}`,
-        `${meeting.topic} by ${meeting.speakerName}. ${note}`,
-        {
-          type: 'meeting_reminder',
-          meetingId: meeting._id.toString(),
-          url: meetingPageUrl,
-          notificationId,
-        }
-      );
-      summary.pushSent = result.successCount;
-    }
-
-    const userNotificationRows = recipients.map((user: any) => ({
-      userId: user._id.toString(),
-      title: `Upcoming Meeting: ${meeting.title}`,
-      body: `${meeting.topic} by ${meeting.speakerName}. ${note}`,
-      data: { type: 'meeting_reminder', meetingId: meeting._id.toString(), url: meetingPageUrl, notificationId },
-      source: 'admin-broadcast',
-      read: false,
-    }));
-    if (userNotificationRows.length > 0) {
-      await UserNotification.insertMany(userNotificationRows, { ordered: false });
-    }
-  }
-
-  if (channels.includes('email')) {
-    const emails = recipients
-      .map((user: any) => (typeof user.email === 'string' ? user.email.trim().toLowerCase() : ''))
-      .filter(Boolean);
-
-    const emailResult = await sendMeetingEmails({
-      recipients: emails,
-      meeting,
-      settings: globalSettings,
-      reminderLabel: note,
-    });
-    summary.emailSent = emailResult.sentCount;
-  }
-
-  meeting.notificationConfig = meeting.notificationConfig || {};
-  meeting.notificationConfig.sendHistory = Array.isArray(meeting.notificationConfig.sendHistory)
-    ? meeting.notificationConfig.sendHistory
-    : [];
-
-  channels.forEach((channel) => {
-    meeting.notificationConfig.sendHistory.push({
-      sentAt: new Date(),
-      channel,
-      audience,
-      recipientCount: summary.attemptedRecipients,
-      trigger,
-      note,
-    });
-  });
-
-  if (meeting.notificationConfig.sendHistory.length > 100) {
-    meeting.notificationConfig.sendHistory = meeting.notificationConfig.sendHistory.slice(-100);
-  }
-
-  await meeting.save();
-  return summary;
 };
 
 const normalizeMeetingResponse = (
@@ -678,10 +581,10 @@ router.post(
   '/forums',
   authMiddleware,
   adminMiddleware,
-  communityUpload.fields([
+  wrapCommunityUpload(communityUpload.fields([
     { name: 'image', maxCount: 1 },
     { name: 'attachment', maxCount: 1 },
-  ]),
+  ])),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
@@ -785,10 +688,10 @@ router.put(
   '/forums/:forumId',
   authMiddleware,
   adminMiddleware,
-  communityUpload.fields([
+  wrapCommunityUpload(communityUpload.fields([
     { name: 'image', maxCount: 1 },
     { name: 'attachment', maxCount: 1 },
-  ]),
+  ])),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const forumId = getSingleParam(req.params.forumId);
@@ -1087,10 +990,10 @@ router.get('/events', [
 router.post('/posts', [
   authMiddleware,
   adminMiddleware,
-  communityUpload.fields([
+  wrapCommunityUpload(communityUpload.fields([
     { name: 'image', maxCount: 1 },
     { name: 'attachment', maxCount: 1 },
-  ]),
+  ])),
   body('title')
     .isLength({ min: 5, max: 200 })
     .withMessage('Title must be 5-200 characters'),
@@ -1236,10 +1139,10 @@ router.post('/posts', [
 router.put('/posts/:postId', [
   authMiddleware,
   adminMiddleware,
-  communityUpload.fields([
+  wrapCommunityUpload(communityUpload.fields([
     { name: 'image', maxCount: 1 },
     { name: 'attachment', maxCount: 1 },
-  ]),
+  ])),
 ], async (req: AuthenticatedRequest, res: Response) => {
   try {
     const postId = getSingleParam(req.params.postId);
@@ -2230,6 +2133,21 @@ router.get('/meetings', [
       return;
     }
 
+    const now = new Date();
+    const possiblyEnded = await CommunityMeeting.find({
+      status: 'scheduled',
+      scheduledAt: { $lte: now },
+    }).select('_id scheduledAt durationMinutes');
+    const completedIds = possiblyEnded
+      .filter((meeting) => {
+        const endMs = new Date(meeting.scheduledAt).getTime() + (Number(meeting.durationMinutes) || 60) * 60000;
+        return endMs <= now.getTime();
+      })
+      .map((meeting) => meeting._id);
+    if (completedIds.length > 0) {
+      await CommunityMeeting.updateMany({ _id: { $in: completedIds } }, { $set: { status: 'completed' } });
+    }
+
     const status = typeof req.query.status === 'string' ? req.query.status : undefined;
     const filter: Record<string, unknown> = {};
     if (status) {
@@ -2275,6 +2193,41 @@ router.get('/meetings', [
 });
 
 /**
+ * @route   GET /api/community/meetings/:meetingId/attachment
+ * @desc    Download a meeting attachment (authenticated)
+ * @access  Private
+ */
+router.get('/meetings/:meetingId/attachment', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const meetingId = getSingleParam(req.params.meetingId);
+    if (!meetingId || !mongoose.Types.ObjectId.isValid(meetingId)) {
+      res.status(400).json({ status: 'error', message: 'Invalid meeting id' });
+      return;
+    }
+
+    const meeting = await CommunityMeeting.findById(meetingId).lean();
+    if (!meeting?.attachment?.url) {
+      res.status(404).json({ status: 'error', message: 'Attachment not found' });
+      return;
+    }
+
+    const diskPath = resolveAttachmentDiskPath(meeting.attachment.url);
+    if (!diskPath || !fs.existsSync(diskPath)) {
+      res.status(404).json({ status: 'error', message: 'Attachment file is missing' });
+      return;
+    }
+
+    const downloadName = meeting.attachment.name || path.basename(diskPath);
+    res.setHeader('Content-Type', meeting.attachment.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${downloadName.replace(/"/g, '')}"`);
+    res.sendFile(path.resolve(diskPath));
+  } catch (error) {
+    console.error('Download meeting attachment error:', error);
+    res.status(500).json({ status: 'error', message: 'Failed to download attachment' });
+  }
+});
+
+/**
  * @route   POST /api/community/meetings
  * @desc    Create a community meeting
  * @access  Private (Admin/Manager)
@@ -2282,9 +2235,9 @@ router.get('/meetings', [
 router.post('/meetings', [
   authMiddleware,
   adminMiddleware,
-  communityUpload.fields([
+  wrapCommunityUpload(communityUpload.fields([
     { name: 'attachment', maxCount: 1 },
-  ]),
+  ])),
   body('title')
     .isLength({ min: 5, max: 200 })
     .withMessage('Title must be 5-200 characters'),
@@ -2464,9 +2417,9 @@ router.post('/meetings', [
 router.put('/meetings/:meetingId', [
   authMiddleware,
   adminMiddleware,
-  communityUpload.fields([
+  wrapCommunityUpload(communityUpload.fields([
     { name: 'attachment', maxCount: 1 },
-  ]),
+  ])),
   body('title')
     .optional()
     .isLength({ min: 5, max: 200 })
@@ -2617,6 +2570,7 @@ router.put('/meetings/:meetingId', [
         });
         return;
       }
+      unlinkAttachmentFile(meeting.attachment?.url);
       meeting.attachment = {
         url: mapUploadFileToUrl(attachment) || '',
         name: attachment.originalname,
@@ -2715,6 +2669,7 @@ router.delete('/meetings/:meetingId/permanent', [
       return;
     }
 
+    unlinkAttachmentFile(meeting.attachment?.url);
     await CommunityMeeting.deleteOne({ _id: meetingId });
 
     await logCommunityActivity(req, 'community_meeting_deleted', `Meeting deleted permanently: ${meeting.title}`, {
@@ -2796,6 +2751,19 @@ router.put('/meeting-notification-settings', [
     if (typeof emailTemplate.advertisementText === 'string') settings.emailTemplate.advertisementText = cleanText(emailTemplate.advertisementText);
 
     await settings.save();
+
+    await CommunityMeeting.updateMany(
+      { status: 'scheduled' },
+      {
+        $set: {
+          'notificationConfig.enabled': settings.defaults.enabled,
+          'notificationConfig.channels': settings.defaults.channels,
+          'notificationConfig.reminderMinutes': settings.defaults.reminderMinutes,
+          'notificationConfig.mode': settings.defaults.mode,
+          'notificationConfig.audience': settings.defaults.audience,
+        },
+      }
+    );
 
     res.json({
       status: 'success',
@@ -2887,6 +2855,11 @@ router.post('/meetings/:meetingId/send-notification', [authMiddleware, adminMidd
     const audience = req.body?.audience === 'rsvped_only' ? 'rsvped_only' : (req.body?.audience === 'all_registered' ? 'all_registered' : (meeting.notificationConfig?.audience || 'all_registered'));
     const note = cleanText(req.body?.note) || 'Join from HikmahSphere';
 
+    if (audience === 'all_registered' && meeting.notificationConfig?.allowManualSendToAll === false) {
+      res.status(403).json({ status: 'error', message: 'Sending to all registered users is disabled for this meeting' });
+      return;
+    }
+
     const summary = await sendMeetingNotifications({
       meeting,
       channels,
@@ -2903,14 +2876,24 @@ router.post('/meetings/:meetingId/send-notification', [authMiddleware, adminMidd
       summary,
     });
 
-    res.json({
-      status: 'success',
-      message: 'Meeting notifications sent',
+    const nothingSent = summary.pushSent === 0 && summary.emailSent === 0;
+    res.status(nothingSent ? 400 : 200).json({
+      status: nothingSent ? 'error' : 'success',
+      message: nothingSent
+        ? (summary.reason === 'no_recipients'
+          ? 'No recipients found for this audience'
+          : summary.reason === 'no_fcm_tokens'
+            ? 'No push tokens available. Email may also have failed.'
+            : 'No notifications were delivered. Check push tokens and SMTP settings.')
+        : 'Meeting notifications sent',
       data: { summary, meeting: await normalizeMeetingForRequest(meeting, req) },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Send meeting notification error:', error);
-    res.status(500).json({ status: 'error', message: 'Failed to send meeting notifications' });
+    res.status(500).json({
+      status: 'error',
+      message: error?.message || 'Failed to send meeting notifications',
+    });
   }
 });
 

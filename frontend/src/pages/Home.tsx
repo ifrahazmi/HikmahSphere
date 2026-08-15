@@ -636,7 +636,11 @@ const Home: React.FC = () => {
         {/* Lower Maktab advertise band */}
         <section className="relative overflow-hidden" aria-labelledby="home-maktab-band-heading" data-home-reveal="maktab-band">
           <div className="absolute inset-0">
-            <img src="/maktab/hero.jpg" alt="" className="h-full w-full object-cover" />
+            <img
+              src="/maktab/students-hero.jpg"
+              alt="Children and their teacher in HikmahSphere Maktab class"
+              className="h-full w-full object-cover object-[center_30%]"
+            />
             <div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-indigo-950/75 to-emerald-950/55" />
           </div>
           <div className={`relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-24 ${reveal('maktab-band')}`}>

@@ -53,7 +53,7 @@ const MeetingNotificationSettingsSchema = new Schema<IMeetingNotificationSetting
     },
     emailTemplate: {
       subjectPrefix: { type: String, default: 'HikmahSphere Meeting' },
-      logoUrl: { type: String, default: '/logo.png' },
+      logoUrl: { type: String, default: 'https://hikmahsphere.site/logo.png' },
       headerTitle: { type: String, default: 'You are invited to a community meeting' },
       footerText: { type: String, default: 'You received this because you have a HikmahSphere account.' },
       includeAdvertisement: { type: Boolean, default: false },

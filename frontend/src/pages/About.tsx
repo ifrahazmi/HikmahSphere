@@ -573,7 +573,11 @@ const About: React.FC = () => {
         className="relative overflow-hidden"
       >
         <div className="absolute inset-0">
-          <img src="/maktab/hero.jpg" alt="" className="h-full w-full object-cover" />
+          <img
+            src="/maktab/students-hero.jpg"
+            alt="Children and their teacher in HikmahSphere Maktab class"
+            className="h-full w-full object-cover object-[center_30%]"
+          />
           <div className="absolute inset-0 bg-gradient-to-r from-slate-950/92 via-indigo-950/80 to-emerald-950/60"></div>
         </div>
         <div

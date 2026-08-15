@@ -1,6 +1,7 @@
 export type PrayerName = 'fajr' | 'dhuhr' | 'asr' | 'maghrib' | 'isha';
 export type PrayerStatus = 'pending' | 'prayed' | 'qada' | 'missed';
 export type QuranStatus = 'none' | 'read' | 'translation' | 'tafseer';
+export type FastingStatus = 'none' | 'sunnah' | 'fard' | 'missed';
 export type PrayerExemptionReason = 'none' | 'menstruation';
 
 export interface PrayerEntry {
@@ -14,9 +15,21 @@ export interface QuranEntry {
   updatedAt: string;
 }
 
+export interface FastingEntry {
+  status: FastingStatus;
+  updatedAt: string;
+}
+
+export interface DhikrEntry {
+  completed: boolean;
+  updatedAt: string;
+}
+
 export interface DayRecord {
   prayers: Record<PrayerName, PrayerEntry>;
   quran: QuranEntry;
+  fasting: FastingEntry;
+  dhikr: DhikrEntry;
   prayerExemptionReason: PrayerExemptionReason;
   dailyNote: string;
   updatedAt: string;
@@ -49,6 +62,8 @@ export interface TrackerAggregate {
   quranTranslationDays: number;
   quranTafseerDays: number;
   averageQuranScore: number;
+  fastingDays: number;
+  dhikrDays: number;
 }
 
 export interface DailyActivityItem {
@@ -60,6 +75,8 @@ export interface DailyActivityItem {
   prayerScore: number | null;
   quranScore: number;
   quranStatus: QuranStatus;
+  fastingStatus: FastingStatus;
+  dhikrStatus: boolean;
   isPrayerExempt: boolean;
   prayerExemptionReason: PrayerExemptionReason;
   hasAnyActivity: boolean;
@@ -161,6 +178,10 @@ const isQuranStatus = (value: unknown): value is QuranStatus => {
   return value === 'none' || value === 'read' || value === 'translation' || value === 'tafseer';
 };
 
+const isFastingStatus = (value: unknown): value is FastingStatus => {
+  return value === 'none' || value === 'sunnah' || value === 'fard' || value === 'missed';
+};
+
 const isPrayerExemptionReason = (value: unknown): value is PrayerExemptionReason => {
   return value === 'none' || value === 'menstruation';
 };
@@ -184,6 +205,14 @@ export const createDefaultDayRecord = (): DayRecord => {
       status: 'none',
       updatedAt: nowIso(),
     },
+    fasting: {
+      status: 'none',
+      updatedAt: nowIso(),
+    },
+    dhikr: {
+      completed: false,
+      updatedAt: nowIso(),
+    },
     prayerExemptionReason: 'none',
     dailyNote: '',
     updatedAt: nowIso(),
@@ -200,6 +229,8 @@ export const normalizeDayRecord = (value: unknown): DayRecord => {
   const unsafeValue = value as {
     prayers?: Record<string, any>;
     quran?: { status?: unknown; updatedAt?: unknown };
+    fasting?: { status?: unknown; updatedAt?: unknown };
+    dhikr?: { completed?: unknown; updatedAt?: unknown };
     prayerExemptionReason?: unknown;
     dailyNote?: unknown;
     updatedAt?: unknown;
@@ -218,12 +249,22 @@ export const normalizeDayRecord = (value: unknown): DayRecord => {
   });
 
   const quranStatus = unsafeValue.quran?.status;
+  const fastingStatus = unsafeValue.fasting?.status;
+  const dhikrCompleted = unsafeValue.dhikr?.completed;
 
   return {
     prayers,
     quran: {
       status: isQuranStatus(quranStatus) ? quranStatus : 'none',
       updatedAt: typeof unsafeValue.quran?.updatedAt === 'string' ? unsafeValue.quran.updatedAt : nowIso(),
+    },
+    fasting: {
+      status: isFastingStatus(fastingStatus) ? fastingStatus : 'none',
+      updatedAt: typeof unsafeValue.fasting?.updatedAt === 'string' ? unsafeValue.fasting.updatedAt : nowIso(),
+    },
+    dhikr: {
+      completed: Boolean(dhikrCompleted),
+      updatedAt: typeof unsafeValue.dhikr?.updatedAt === 'string' ? unsafeValue.dhikr.updatedAt : nowIso(),
     },
     prayerExemptionReason: isPrayerExemptionReason(unsafeValue.prayerExemptionReason)
       ? unsafeValue.prayerExemptionReason
@@ -440,6 +481,8 @@ export const getAggregatedStats = (records: TrackerRecords): TrackerAggregate =>
       quranTranslationDays: 0,
       quranTafseerDays: 0,
       averageQuranScore: 0,
+      fastingDays: 0,
+      dhikrDays: 0,
     };
   }
 
@@ -455,6 +498,8 @@ export const getAggregatedStats = (records: TrackerRecords): TrackerAggregate =>
   let quranTranslationDays = 0;
   let quranTafseerDays = 0;
   let quranScoreTotal = 0;
+  let fastingDays = 0;
+  let dhikrDays = 0;
 
   dateKeys.forEach((dateKey) => {
     const day = normalizeDayRecord(records[dateKey]);
@@ -488,6 +533,14 @@ export const getAggregatedStats = (records: TrackerRecords): TrackerAggregate =>
     }
 
     quranScoreTotal += getQuranScore(day);
+
+    if (day.fasting.status === 'sunnah' || day.fasting.status === 'fard') {
+      fastingDays += 1;
+    }
+
+    if (day.dhikr.completed) {
+      dhikrDays += 1;
+    }
   });
 
   const eligiblePrayerDays = dateKeys.length - prayerExemptDays;
@@ -507,6 +560,8 @@ export const getAggregatedStats = (records: TrackerRecords): TrackerAggregate =>
     quranTranslationDays,
     quranTafseerDays,
     averageQuranScore: Math.round(quranScoreTotal / dateKeys.length),
+    fastingDays,
+    dhikrDays,
   };
 };
 
@@ -525,6 +580,8 @@ export const getDailyActivity = (records: TrackerRecords, limit = 30): DailyActi
         isPrayerExempt ||
         prayed + qada + missed > 0 ||
         day.quran.status !== 'none' ||
+        day.fasting.status !== 'none' ||
+        day.dhikr.completed ||
         day.dailyNote.trim().length > 0;
 
       return {
@@ -536,6 +593,8 @@ export const getDailyActivity = (records: TrackerRecords, limit = 30): DailyActi
         prayerScore,
         quranScore,
         quranStatus: day.quran.status,
+        fastingStatus: day.fasting.status,
+        dhikrStatus: day.dhikr.completed,
         isPrayerExempt,
         prayerExemptionReason: day.prayerExemptionReason,
         hasAnyActivity,

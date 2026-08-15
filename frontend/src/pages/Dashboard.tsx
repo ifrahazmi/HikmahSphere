@@ -285,8 +285,8 @@ const Dashboard: React.FC = () => {
       return (
           <>
             <PageSEO
-                            title="Dashboard"
-                            description="Secure dashboard for authorized users to manage HikmahSphere data and activity."
+                            title="My Islamic Dashboard & Personalized Hub"
+                            description="Access your personalized HikmahSphere dashboard. Manage your Islamic activities, track your daily Salah, view recent Quran reading history, and monitor your community engagement."
               path="/dashboard"
               noIndex
               noFollow
@@ -308,8 +308,8 @@ const Dashboard: React.FC = () => {
   return (
     <>
       <PageSEO
-                title="Dashboard"
-                description="Secure dashboard for authorized users to manage HikmahSphere data and activity."
+                title="My Islamic Dashboard & Personalized Hub"
+                description="Access your personalized HikmahSphere dashboard. Manage your Islamic activities, track your daily Salah, view recent Quran reading history, and monitor your community engagement."
         path="/dashboard"
         noIndex
         noFollow

@@ -51,6 +51,7 @@ import {
   parseDateKey,
   readTrackerFromStorage,
   writeTrackerToStorage,
+  FastingStatus,
 } from '../utils/salahTracker';
 
 interface PrayerConfig {
@@ -804,6 +805,26 @@ const SalahTracker: React.FC = () => {
     }));
   };
 
+  const handleFastingStatusChange = (status: FastingStatus) => {
+    updateSelectedRecord((current) => ({
+      ...current,
+      fasting: {
+        status,
+        updatedAt: nowIso(),
+      },
+    }));
+  };
+
+  const handleDhikrToggle = () => {
+    updateSelectedRecord((current) => ({
+      ...current,
+      dhikr: {
+        completed: !current.dhikr.completed,
+        updatedAt: nowIso(),
+      },
+    }));
+  };
+
   const handleDailyNoteChange = (note: string) => {
     updateSelectedRecord((current) => ({
       ...current,
@@ -908,8 +929,9 @@ const SalahTracker: React.FC = () => {
       });
 
       const school = authUser?.madhab === 'hanafi' ? '2' : '1';
+      const calculationMethod = parseInt(localStorage.getItem('prayerCalculationMethod') || '2', 10);
       const response = await fetch(
-        `${API_URL}/prayers/times?latitude=${position.coords.latitude}&longitude=${position.coords.longitude}&method=3&school=${school}`,
+        `${API_URL}/prayers/times?latitude=${position.coords.latitude}&longitude=${position.coords.longitude}&method=${calculationMethod}&school=${school}`,
       );
       const payload = await response.json();
 
@@ -939,8 +961,8 @@ const SalahTracker: React.FC = () => {
     return (
       <>
         <PageSEO
-          title="Salah Tracker"
-          description="Track daily Salah consistency, worship streaks, and prayer progress in one place."
+          title="Daily Salah Tracker & Islamic Habit Builder"
+          description="Track your daily Namaz and Salah consistency with our interactive Islamic habit tracker. Build worship streaks, monitor your progress, and stay accountable to your prayers."
           path="/salah-tracker"
           noIndex
           noFollow
@@ -969,8 +991,8 @@ const SalahTracker: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="Salah Tracker"
-        description="Track daily Salah consistency, worship streaks, and prayer progress in one place."
+        title="Daily Salah Tracker & Islamic Habit Builder"
+        description="Track your daily Namaz and Salah consistency with our interactive Islamic habit tracker. Build worship streaks, monitor your progress, and stay accountable to your prayers."
         path="/salah-tracker"
         noIndex
         noFollow
@@ -1345,6 +1367,56 @@ const SalahTracker: React.FC = () => {
                       </button>
                     );
                   })}
+                </div>
+              </div>
+
+              {/* Fasting Activity */}
+              <div className="mt-8">
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="text-base font-semibold text-gray-900">Fasting (Once Daily)</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {[
+                    { status: 'none', label: 'Not Fasting', activeClass: 'bg-gray-700 text-white border-gray-700' },
+                    { status: 'sunnah', label: 'Sunnah', activeClass: 'bg-emerald-600 text-white border-emerald-600' },
+                    { status: 'fard', label: 'Fard (Ramadan)', activeClass: 'bg-amber-600 text-white border-amber-600' },
+                    { status: 'missed', label: 'Missed Fard', activeClass: 'bg-rose-600 text-white border-rose-600' },
+                  ].map((option) => {
+                    const isActive = selectedRecord.fasting.status === option.status;
+                    return (
+                      <button
+                        key={option.status}
+                        onClick={() => handleFastingStatusChange(option.status as FastingStatus)}
+                        className={`rounded-xl border px-3 py-2 text-center text-sm transition ${
+                          isActive
+                            ? option.activeClass
+                            : 'border-blue-100 bg-white text-gray-700 hover:border-sky-300 hover:text-sky-700'
+                        }`}
+                      >
+                        <p className="font-semibold">{option.label}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Dhikr Activity */}
+              <div className="mt-8">
+                <div className="flex items-center justify-between rounded-xl border border-blue-100 bg-blue-50/50 p-4">
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-900">Morning/Evening Dhikr</h3>
+                    <p className="text-sm text-gray-600">Did you complete your daily adhkar today?</p>
+                  </div>
+                  <button
+                    onClick={handleDhikrToggle}
+                    className={`flex h-12 w-12 items-center justify-center rounded-full transition ${
+                      selectedRecord.dhikr.completed
+                        ? 'bg-emerald-500 text-white'
+                        : 'bg-white text-gray-300 border-2 border-gray-200'
+                    }`}
+                  >
+                    <CheckCircleIcon className="h-8 w-8" />
+                  </button>
                 </div>
               </div>
 

@@ -1190,6 +1190,15 @@ code {
 }
 
 /* ============================================
+   Mosque Finder place search (gmpx-place-picker)
+   Keep the shadow-DOM input at >=16px so iOS Safari
+   does not auto-zoom the page when it gains focus.
+   ============================================ */
+gmpx-place-picker {
+  --gmpx-font-size-base: 1rem;
+}
+
+/* ============================================
    iPad Pro (1024px - 1112px) - Additional Fixes
    ============================================ */
 @media (min-width: 1024px) and (max-width: 1112px) {

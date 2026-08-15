@@ -120,6 +120,22 @@ export interface IUser extends Document {
         surahName?: string;
         timestamp: Date;
       };
+      // Device-keyed reading positions so each browser/device restores its
+      // own spot. `lastRead` above is kept as a fallback for older clients.
+      lastReadByDevice?: Array<{
+        deviceId: string;
+        surah: number;
+        ayah: number;
+        surahName?: string;
+        timestamp: Date;
+      }>;
+      lastTafsirReadByDevice?: Array<{
+        deviceId: string;
+        surah: number;
+        ayah: number;
+        readerMode?: 'ayah' | 'surah';
+        timestamp: Date;
+      }>;
       bookmarks: Array<{
         id: string;
         surah: number;
@@ -154,6 +170,9 @@ export interface IUser extends Document {
         specificTime: string;
         includeDhikr: boolean;
         includeDua: boolean;
+        timezone?: string; // IANA timezone the reminder times refer to (e.g. "Asia/Kolkata")
+        lastSentAt?: Date; // Server bookkeeping: last periodic push time
+        lastSentDate?: string; // Server bookkeeping: local date (YYYY-MM-DD) of last specific-time push
       };
       settings?: {
         darkMode: boolean;
@@ -425,6 +444,22 @@ const UserSchema = new Schema<IUser>({
         surahName: { type: String, trim: true },
         timestamp: { type: Date, default: Date.now },
       },
+      lastReadByDevice: [{
+        _id: false,
+        deviceId: { type: String, required: true, trim: true },
+        surah: { type: Number, min: 1, max: 114, required: true },
+        ayah: { type: Number, min: 1, required: true },
+        surahName: { type: String, trim: true },
+        timestamp: { type: Date, default: Date.now },
+      }],
+      lastTafsirReadByDevice: [{
+        _id: false,
+        deviceId: { type: String, required: true, trim: true },
+        surah: { type: Number, min: 1, max: 114, required: true },
+        ayah: { type: Number, min: 1, required: true },
+        readerMode: { type: String, enum: ['ayah', 'surah'] },
+        timestamp: { type: Date, default: Date.now },
+      }],
       bookmarks: [{
         id: { type: String, required: true },
         surah: { type: Number, min: 1, max: 114, required: true },
@@ -471,6 +506,9 @@ const UserSchema = new Schema<IUser>({
         },
         includeDhikr: { type: Boolean, default: true },
         includeDua: { type: Boolean, default: true },
+        timezone: { type: String, trim: true },
+        lastSentAt: { type: Date },
+        lastSentDate: { type: String, trim: true },
       },
       settings: {
         darkMode: { type: Boolean, default: false },

@@ -945,6 +945,10 @@ http {
     keepalive_timeout 65;
     types_hash_max_size 2048;
 
+    # Global upload cap; must be >= backend multer limit (10 MB) so attachment
+    # uploads are not rejected by nginx with a 413 (default is only 1 MB).
+    client_max_body_size 12M;
+
     include /etc/nginx/mime.types;
     default_type application/octet-stream;
 

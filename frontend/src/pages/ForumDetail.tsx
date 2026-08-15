@@ -140,8 +140,8 @@ const ForumDetail: React.FC = () => {
   return (
     <>
       <PageSEO
-        title={forum?.title ? `${forum.title}` : 'Forum'}
-        description={forum?.description || 'Forum discussions and community threads.'}
+        title={forum?.title ? `${forum.title} - Islamic Forum` : 'Islamic Forum Discussion'}
+        description={forum?.description ? `${forum.description} Join the discussion on HikmahSphere.` : 'Join this Islamic forum discussion and connect with the global Muslim community on HikmahSphere.'}
         path={`/community/forums/${forumId}`}
       />
       <div className="min-h-screen bg-gradient-to-b from-slate-100 to-slate-50 pt-16">

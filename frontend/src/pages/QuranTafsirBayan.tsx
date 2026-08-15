@@ -22,6 +22,7 @@ import { useQuran } from '../contexts/QuranContext';
 import { useAuth } from '../hooks/useAuth';
 import { API_URL } from '../config';
 import { fetchIndopakV3Ayah, fetchIndopakV3Surah } from '../utils/indopakV3Quran';
+import { getPushDeviceId } from '../firebase';
 import { fetchJsonWithRecovery, isRateLimitError } from '../utils/fetchWithRecovery';
 import { fetchTafsirAyah, fetchTafsirSurah, getTafsirRuntimeIssue } from '../utils/tafsirBayanApi';
 import type { TafsirAyah } from '../types/tafsir';
@@ -134,7 +135,7 @@ const QuranTafsirBayan: React.FC = () => {
     : 2000;
 
   const { surahs, settings, updateSettings, bookmarks, addBookmark, removeBookmark, currentSurah, translations } = useQuran();
-  const { isAuthenticated, loading: authLoading } = useAuth();
+  const { isAuthenticated, loading: authLoading, user } = useAuth();
   const [readerMode, setReaderMode] = useState<ReaderMode>('ayah');
   const [selectedSurah, setSelectedSurah] = useState<number>(1);
   const [selectedAyah, setSelectedAyah] = useState<number>(1);
@@ -186,6 +187,20 @@ const QuranTafsirBayan: React.FC = () => {
     startAt: 0,
   });
 
+  // Tafsir position is saved per device/browser (same stable id as the Quran
+  // Reader) so phone and desktop each restore their own spot and reader mode.
+  const tafsirStorageScope = user?.id || user?.email || 'guest';
+  const tafsirDeviceId = getPushDeviceId();
+  const tafsirLastReadStorageKey = `quranTafsirLastRead:${tafsirStorageScope}:${tafsirDeviceId}`;
+  const hasRestoredTafsirReadRef = useRef(false);
+  const restoredSurahModeAyahRef = useRef<number | null>(null);
+  const [surahModeCenterAyah, setSurahModeCenterAyah] = useState<number>(1);
+  const pendingBookmarkTargetRef = useRef(pendingBookmarkTarget);
+
+  useEffect(() => {
+    pendingBookmarkTargetRef.current = pendingBookmarkTarget;
+  }, [pendingBookmarkTarget]);
+
   const getScrollBehavior = useCallback((): ScrollBehavior => {
     if (typeof window === 'undefined') return 'auto';
     return window.matchMedia('(max-width: 1023px)').matches ? 'auto' : 'smooth';
@@ -195,27 +210,33 @@ const QuranTafsirBayan: React.FC = () => {
     if (typeof window === 'undefined') return;
 
     let ticking = false;
-    const scrollState = { lastScrollY: window.scrollY };
+    let lastScrollY = window.scrollY;
+    let accum = 0;
 
     const handleScroll = () => {
-      const currentScrollY = window.scrollY;
+      if (ticking) return;
+      ticking = true;
 
-      if (!ticking) {
-        window.requestAnimationFrame(() => {
-          const scrollThreshold = 50;
+      window.requestAnimationFrame(() => {
+        ticking = false;
+        const y = window.scrollY;
+        const delta = y - lastScrollY;
+        lastScrollY = y;
 
-          if (currentScrollY > scrollState.lastScrollY && currentScrollY > scrollThreshold) {
-            setShowHeader(false);
-          } else if (currentScrollY < scrollState.lastScrollY - scrollThreshold || currentScrollY < scrollThreshold) {
-            setShowHeader(true);
-          }
+        if (y < 80) {
+          setShowHeader(true);
+          accum = 0;
+          return;
+        }
 
-          scrollState.lastScrollY = currentScrollY;
-          ticking = false;
-        });
-
-        ticking = true;
-      }
+        if (delta > 0) {
+          accum = Math.max(0, accum) + delta;
+          if (accum > 10) setShowHeader(false);
+        } else if (delta < 0) {
+          accum = Math.min(0, accum) + delta;
+          if (accum < -12) setShowHeader(true);
+        }
+      });
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
@@ -933,6 +954,182 @@ const QuranTafsirBayan: React.FC = () => {
     return () => window.clearTimeout(timeoutId);
   }, [ayahList, getScrollBehavior, loading, pendingBookmarkTarget, readerMode, selectedSurah]);
 
+  // One-time restore of this device's last tafsir position and reader mode:
+  // local copy first, then the backend record for signed-in users.
+  useEffect(() => {
+    if (hasRestoredTafsirReadRef.current) return;
+    if (authLoading) return;
+    // Wait for surah metadata so the restored ayah is not clamped back to 1.
+    if (!surahs.length) return;
+
+    hasRestoredTafsirReadRef.current = true;
+
+    const applyRecord = (record: any): boolean => {
+      if (!record || typeof record !== 'object') return false;
+      const surahNumber = Number(record.surahNumber);
+      const ayahNumber = Number(record.ayahNumber);
+      if (!Number.isInteger(surahNumber) || surahNumber < 1 || surahNumber > 114) return false;
+      if (!Number.isInteger(ayahNumber) || ayahNumber < 1) return false;
+
+      const mode: ReaderMode = record.readerMode === 'surah' ? 'surah' : 'ayah';
+      setReaderMode(mode);
+      setSelectedSurah(surahNumber);
+      if (mode === 'ayah') {
+        setSelectedAyah(ayahNumber);
+      } else {
+        setSelectedAyah(1);
+        setSurahModeCenterAyah(ayahNumber);
+        restoredSurahModeAyahRef.current = surahNumber;
+        if (ayahNumber > 1) {
+          setPendingBookmarkTarget({ surahNumber, ayahNumber });
+        }
+      }
+      return true;
+    };
+
+    try {
+      const raw = localStorage.getItem(tafsirLastReadStorageKey);
+      if (raw && applyRecord(JSON.parse(raw))) return;
+    } catch {
+      // Corrupted local data: fall through to the backend record.
+    }
+
+    if (!isAuthenticated) return;
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch(
+          `${API_URL}/quran/user-state?deviceId=${encodeURIComponent(tafsirDeviceId)}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (!response.ok || cancelled) return;
+        const json = await response.json();
+        if (!cancelled) applyRecord(json?.data?.lastTafsirRead);
+      } catch {
+        // Network failure: keep the default view.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, isAuthenticated, surahs.length, tafsirDeviceId, tafsirLastReadStorageKey]);
+
+  // Reset the tracked centre ayah when the surah changes, except right after a
+  // restore (which already seeded it for the restored surah).
+  useEffect(() => {
+    if (restoredSurahModeAyahRef.current === selectedSurah) {
+      restoredSurahModeAyahRef.current = null;
+      return;
+    }
+    setSurahModeCenterAyah(1);
+  }, [selectedSurah]);
+
+  // While reading in surah mode, track the ayah nearest the viewport centre so
+  // the saved position follows the reader's scroll.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (readerMode !== 'surah') return;
+    if (loading || ayahList.length === 0) return;
+
+    let debounceId: number | null = null;
+    let cancelled = false;
+
+    const reportCentermostAyah = () => {
+      if (cancelled) return;
+      if (pendingBookmarkTargetRef.current) return;
+
+      const elements = document.querySelectorAll<HTMLElement>('[id^="bayan-ayah-"]');
+      if (!elements.length) return;
+
+      const viewportCenter = window.innerHeight / 2;
+      let bestAyah = 0;
+      let bestDistance = Number.POSITIVE_INFINITY;
+
+      elements.forEach((element) => {
+        const rect = element.getBoundingClientRect();
+        if (rect.bottom < 0 || rect.top > window.innerHeight) return;
+        const distance = Math.abs(rect.top + rect.height / 2 - viewportCenter);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestAyah = Number(element.id.replace('bayan-ayah-', ''));
+        }
+      });
+
+      if (Number.isInteger(bestAyah) && bestAyah >= 1) {
+        setSurahModeCenterAyah(bestAyah);
+      }
+    };
+
+    const scheduleReport = () => {
+      if (debounceId !== null) window.clearTimeout(debounceId);
+      debounceId = window.setTimeout(reportCentermostAyah, 700);
+    };
+
+    window.addEventListener('scroll', scheduleReport, { passive: true });
+    scheduleReport();
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('scroll', scheduleReport);
+      if (debounceId !== null) window.clearTimeout(debounceId);
+    };
+  }, [readerMode, loading, ayahList.length]);
+
+  // Persist the current tafsir position and reader mode, device-scoped, to
+  // localStorage and (for signed-in users) the backend.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!hasRestoredTafsirReadRef.current) return;
+
+    const ayahNumber = readerMode === 'ayah' ? selectedAyah : surahModeCenterAyah;
+    if (!Number.isInteger(selectedSurah) || selectedSurah < 1 || selectedSurah > 114) return;
+    if (!Number.isInteger(ayahNumber) || ayahNumber < 1) return;
+
+    const record = {
+      surahNumber: selectedSurah,
+      ayahNumber,
+      readerMode,
+      timestamp: new Date().toISOString(),
+    };
+
+    const timeoutId = window.setTimeout(() => {
+      try {
+        localStorage.setItem(tafsirLastReadStorageKey, JSON.stringify(record));
+      } catch {
+        // Storage may be unavailable (private mode); backend sync still applies.
+      }
+
+      if (!isAuthenticated) return;
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      void fetch(`${API_URL}/quran/user-state`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ deviceId: tafsirDeviceId, lastTafsirRead: record }),
+      }).catch(() => {
+        // Best-effort sync; the local copy still restores this device.
+      });
+    }, 800);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    readerMode,
+    selectedSurah,
+    selectedAyah,
+    surahModeCenterAyah,
+    isAuthenticated,
+    tafsirDeviceId,
+    tafsirLastReadStorageKey,
+  ]);
+
   const renderedAyahCards = useMemo(
     () =>
       ayahList.map((ayah) => (
@@ -1201,8 +1398,8 @@ const QuranTafsirBayan: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="Quran Tafsir"
-        description="Read Quran with Tafsir and Urdu translation in a focused reader with bookmarks and footnotes."
+        title="Quran with Tafsir, Meaning & Detailed Explanation"
+        description="Deepen your understanding of the Holy Quran with comprehensive Tafsir, detailed meaning, context (Asbab al-Nuzul), and authentic Urdu/English translations in a focused reading experience."
         path="/quran/tafsir"
         keywords={['urdu tafsir', 'tafheem ul quran', 'bayan ul quran', 'quran tafsir']}
       />
@@ -1241,8 +1438,8 @@ const QuranTafsirBayan: React.FC = () => {
             </p>
           </div>
 
-          <div className={`lg:hidden px-2 sticky z-40 transition-all duration-500 ease-out ${
-            showHeader ? 'top-16 pt-2 opacity-100 scale-100' : '-top-40 pt-1 opacity-0 scale-95 pointer-events-none'
+          <div className={`lg:hidden fixed inset-x-0 top-16 z-40 px-2 pt-2 transition-transform duration-300 ease-out ${
+            showHeader ? 'translate-y-0 opacity-100' : '-translate-y-[120%] opacity-0 pointer-events-none'
           }`}>
             <div className={`${settings.theme === 'dark' ? 'bg-gray-800/95 border-gray-700' : 'bg-white/95 border-gray-100'} rounded-xl border p-2 shadow-lg backdrop-blur-md`}>
               <div className="grid grid-cols-[auto_1fr_auto] items-center gap-1 mb-2">
@@ -1415,6 +1612,7 @@ const QuranTafsirBayan: React.FC = () => {
               )}
             </div>
           </div>
+          <div className="lg:hidden h-28" aria-hidden="true" />
 
           <div className="px-2 sm:px-3 lg:px-4 pb-10 mt-3">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">

@@ -4,6 +4,7 @@ import { API_URL } from '../config';
 import { useAuth } from '../hooks/useAuth';
 import { fetchJsonWithRecovery, isRateLimitError } from '../utils/fetchWithRecovery';
 import { resolveQuranAudioUrl } from '../utils/quranAudioUrl';
+import { getPushDeviceId } from '../firebase';
 import {
   Surah,
   SurahData,
@@ -116,7 +117,11 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
   const userStorageScope = user?.id || user?.email || 'guest';
   const userSettingsStorageKey = `quranSettings:${userStorageScope}`;
   const userBookmarksStorageKey = `quranBookmarks:${userStorageScope}`;
-  const userLastReadStorageKey = `quranLastRead:${userStorageScope}`;
+  // Reading position is scoped per device/browser (stable id shared with push
+  // registration) so phone and desktop each restore their own spot.
+  const deviceId = getPushDeviceId();
+  const userLastReadStorageKey = `quranLastRead:${userStorageScope}:${deviceId}`;
+  const preDeviceLastReadStorageKey = `quranLastRead:${userStorageScope}`;
 
   const [settings, setSettings] = useState<QuranSettings>(DEFAULT_QURAN_SETTINGS);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
@@ -498,13 +503,17 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     setBookmarks(normalizeBookmarks(bookmarksPayload));
 
     const userLastReadRaw = localStorage.getItem(userLastReadStorageKey);
+    // Fall back to the pre-device-scoped key (older clients), then the legacy guest key.
+    const preDeviceLastReadRaw = localStorage.getItem(preDeviceLastReadStorageKey);
     const fallbackLastReadRaw = isGuestScope ? localStorage.getItem(LEGACY_QURAN_LAST_READ_KEY) : null;
-    const lastReadPayload = parseJson(userLastReadRaw) ?? parseJson(fallbackLastReadRaw);
+    const lastReadPayload =
+      parseJson(userLastReadRaw) ?? parseJson(preDeviceLastReadRaw) ?? parseJson(fallbackLastReadRaw);
     setLastRead(normalizeLastRead(lastReadPayload));
   }, [
     userSettingsStorageKey,
     userBookmarksStorageKey,
     userLastReadStorageKey,
+    preDeviceLastReadStorageKey,
     userStorageScope,
     normalizeBookmarks,
     normalizeLastRead,
@@ -524,13 +533,13 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({ ...payload, deviceId }),
         });
       } catch (err) {
         console.error('Failed to sync Quran state to backend:', err);
       }
     },
-    [isAuthenticated]
+    [isAuthenticated, deviceId]
   );
 
   useEffect(() => {
@@ -548,11 +557,14 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       isHydratingCloudStateRef.current = true;
 
       try {
-        const response = await fetch(`${API_URL}/quran/user-state`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const response = await fetch(
+          `${API_URL}/quran/user-state?deviceId=${encodeURIComponent(deviceId)}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
 
         if (!response.ok) {
           throw new Error(`Failed to fetch user state (${response.status})`);

@@ -4,6 +4,7 @@ import { XMarkIcon, BellIcon } from '@heroicons/react/24/outline';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useNotificationPreferences } from '../hooks/useNotificationPreferences';
 import { useNotification } from '../contexts/NotificationContext';
+import { useAuth } from '../hooks/useAuth';
 import { useUserPreferences } from '../hooks/useUserPreferences';
 import { playAdhanAudio } from '../utils/adhanAudio';
 import toast from 'react-hot-toast';
@@ -19,6 +20,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
   const { preferences: notifPrefs, updatePreference: updateNotif } = useNotificationPreferences();
   const { addSystemNotification } = useNotification();
   const { preferences: userPrefs, updatePreference: updateUserPref } = useUserPreferences();
+  const { hasRole } = useAuth();
   const [saving, setSaving] = useState(false);
 
   if (!isOpen) return null;
@@ -148,46 +150,48 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
               ))}
             </div>
             
-            <div className="mt-4">
-              <button
-                onClick={() => {
-                  const anyEnabled = Object.values(notifPrefs).some(p => p.enabled);
-                  const anySound = Object.values(notifPrefs).some(p => p.sound);
-                  
-                  if (anyEnabled) {
-                    // Request notification permission if needed
-                    if ('Notification' in window && Notification.permission === 'default') {
-                      Notification.requestPermission();
-                    }
-
-                    // Add to in-app bell and show system push
-                    addSystemNotification(
-                      'Test Adhan Notification',
-                      'This is a test to verify your notification settings.',
-                      'info',
-                      { type: 'adhan-test' }
-                    );
-
-                    toast.success('Test successful: Notification displayed!');
-                    if (anySound) {
-                      try {
-                        playAdhanAudio();
-                        toast.success('Test successful: Audio playing for 20s!');
-                      } catch (err) {
-                        console.error('Audio playback error', err);
+            {hasRole(['admin']) && (
+              <div className="mt-4">
+                <button
+                  onClick={() => {
+                    const anyEnabled = Object.values(notifPrefs).some(p => p.enabled);
+                    const anySound = Object.values(notifPrefs).some(p => p.sound);
+                    
+                    if (anyEnabled) {
+                      // Request notification permission if needed
+                      if ('Notification' in window && Notification.permission === 'default') {
+                        Notification.requestPermission();
+                      }
+  
+                      // Add to in-app bell and show system push
+                      addSystemNotification(
+                        'Test Adhan Notification',
+                        'This is a test to verify your notification settings.',
+                        'info',
+                        { type: 'adhan-test' }
+                      );
+  
+                      toast.success('Test successful: Notification displayed!');
+                      if (anySound) {
+                        try {
+                          playAdhanAudio();
+                          toast.success('Test successful: Audio playing for 20s!');
+                        } catch (err) {
+                          console.error('Audio playback error', err);
+                        }
+                      } else {
+                        toast('Audio is muted in settings', { icon: '🔇' });
                       }
                     } else {
-                      toast('Audio is muted in settings', { icon: '🔇' });
+                      toast.error('All notifications are disabled. Enable one to test.');
                     }
-                  } else {
-                    toast.error('All notifications are disabled. Enable one to test.');
-                  }
-                }}
-                className="w-full flex items-center justify-center gap-2 rounded-lg border-2 border-blue-500 bg-blue-50 px-4 py-2 font-semibold text-blue-700 hover:bg-blue-100 transition dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
-              >
-                <BellIcon className="h-5 w-5" /> Test Notifications & Sound
-              </button>
-            </div>
+                  }}
+                  className="w-full flex items-center justify-center gap-2 rounded-lg border-2 border-blue-500 bg-blue-50 px-4 py-2 font-semibold text-blue-700 hover:bg-blue-100 transition dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
+                >
+                  <BellIcon className="h-5 w-5" /> Test Notifications & Sound
+                </button>
+              </div>
+            )}
             
             <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">
               💡 {t('notifications.hint') || 'Enable notifications for prayer time alerts'}

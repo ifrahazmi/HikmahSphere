@@ -999,3 +999,133 @@ export const getCategoryTitle = (categoryId: DuaCategoryId): string => {
 export const quickAccessToSituationTag = (label: string): SituationFilterId | null => {
   return QUICK_ACCESS_TOPICS[label] || null;
 };
+
+// ---------------------------------------------------------------------------
+// Tasbih counter presets (shared by the Dhikr page and the profile pages)
+// ---------------------------------------------------------------------------
+
+export interface DhikrPreset {
+  id: string;
+  label: string;
+  arabic: string;
+  transliteration?: string;
+  compact?: boolean;
+  target: number;
+}
+
+export const TASBIH_PRESETS: DhikrPreset[] = [
+  { id: 'subhanallah', label: 'SubhanAllah', arabic: 'سُبْحَانَ ٱللَّٰهِ', target: 33 },
+  { id: 'alhamdulillah', label: 'Alhamdulillah', arabic: 'ٱلْحَمْدُ لِلَّٰهِ', target: 33 },
+  { id: 'allahu-akbar', label: 'Allahu Akbar', arabic: 'ٱللَّٰهُ أَكْبَر', target: 34 },
+  { id: 'astaghfirullah', label: 'Astaghfirullah', arabic: 'أَسْتَغْفِرُ ٱللَّٰهَ', target: 100 },
+  { id: 'la-ilaha-illa-allah', label: 'La ilaha illa Allah', arabic: 'لَا إِلَٰهَ إِلَّا ٱللَّٰهُ', target: 100 },
+  {
+    id: 'allahumma-innaka-afuwwun',
+    label: "Allahumma innaka 'afuwwun",
+    arabic: 'اللَّهُمَّ إِنَّكَ عَفُوٌّ تُحِبُّ الْعَفْوَ فَاعْفُ عَنِّي',
+    transliteration: "Allahumma innaka 'afuwwun tuhibbul 'afwa fa'fu 'anni.",
+    compact: true,
+    target: 100,
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Time-of-day dua suggestions
+// ---------------------------------------------------------------------------
+
+export type TimeOfDaySlot =
+  | 'early-morning'
+  | 'morning'
+  | 'afternoon'
+  | 'evening'
+  | 'night'
+  | 'late-night';
+
+export interface TimeOfDaySlotMeta {
+  title: string;
+  emoji: string;
+  description: string;
+}
+
+export const TIME_OF_DAY_SLOT_META: Record<TimeOfDaySlot, TimeOfDaySlotMeta> = {
+  'early-morning': {
+    title: 'Early Morning Adhkar',
+    emoji: '🌄',
+    description: 'Start your day with the morning remembrance and waking duas.',
+  },
+  morning: {
+    title: 'Morning Adhkar',
+    emoji: '🌅',
+    description: 'Morning remembrance to carry protection and barakah through the day.',
+  },
+  afternoon: {
+    title: 'Daily Life Duas',
+    emoji: '☀️',
+    description: 'Supplications for everyday moments and routines.',
+  },
+  evening: {
+    title: 'Evening Adhkar',
+    emoji: '🌇',
+    description: 'Evening remembrance for peace and protection until nightfall.',
+  },
+  night: {
+    title: 'Before Sleep',
+    emoji: '🌙',
+    description: 'Duas to close your day and sleep with remembrance.',
+  },
+  'late-night': {
+    title: 'Night & Forgiveness',
+    emoji: '✨',
+    description: 'Night duas and istighfar for the quiet hours.',
+  },
+};
+
+export const getTimeOfDaySlot = (date: Date = new Date()): TimeOfDaySlot => {
+  const hour = date.getHours();
+  if (hour >= 4 && hour < 7) return 'early-morning';
+  if (hour >= 7 && hour < 12) return 'morning';
+  if (hour >= 12 && hour < 16) return 'afternoon';
+  if (hour >= 16 && hour < 19) return 'evening';
+  if (hour >= 19 && hour < 23) return 'night';
+  return 'late-night';
+};
+
+const pickByTags = (primary: SituationFilterId[], secondary: SituationFilterId[] = []): DuaEntry[] => {
+  const primaryMatches = DUA_LIBRARY.filter((dua) =>
+    primary.some((tag) => dua.situationTags.includes(tag))
+  );
+  const secondaryMatches = secondary.length
+    ? DUA_LIBRARY.filter(
+        (dua) =>
+          !primaryMatches.includes(dua) &&
+          secondary.some((tag) => dua.situationTags.includes(tag))
+      )
+    : [];
+  return [...primaryMatches, ...secondaryMatches];
+};
+
+export const getSuggestedDuas = (slot: TimeOfDaySlot, limit = 6): DuaEntry[] => {
+  let matches: DuaEntry[];
+
+  switch (slot) {
+    case 'early-morning':
+    case 'morning':
+      matches = pickByTags(['morning', 'after-waking']);
+      break;
+    case 'afternoon':
+      matches = DUA_LIBRARY.filter((dua) => dua.categoryId === 'daily-life');
+      break;
+    case 'evening':
+      matches = pickByTags(['evening']);
+      break;
+    case 'night':
+      matches = pickByTags(['before-sleep']);
+      break;
+    case 'late-night':
+    default:
+      matches = pickByTags(['before-sleep', 'forgiveness']);
+      break;
+  }
+
+  return matches.slice(0, limit);
+};

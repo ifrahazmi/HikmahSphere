@@ -284,8 +284,8 @@ const PostDetail: React.FC = () => {
   return (
     <>
       <PageSEO
-        title={post?.title ? `${post.title}` : 'Discussion'}
-        description={post?.content ? post.content.slice(0, 160) : 'Threaded forum discussion'}
+        title={post?.title ? `${post.title} | Islamic Community` : 'Community Discussion'}
+        description={post?.content ? `${post.content.slice(0, 150)}...` : 'Read and participate in this threaded Islamic forum discussion on HikmahSphere.'}
         path={`/community/forums/${forumId}/posts/${postId}`}
       />
 

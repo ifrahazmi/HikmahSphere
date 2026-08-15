@@ -115,6 +115,7 @@ const QuranReader: React.FC = () => {
     bookmarks,
     addBookmark,
     removeBookmark,
+    lastRead,
     updateLastRead,
     isPlaying,
     isPaused,
@@ -289,62 +290,66 @@ const QuranReader: React.FC = () => {
     setTempSettings(settings);
   }, [settings]);
 
-  // Auto-hide header on scroll - Mobile only
+  // Auto-hide header on scroll — accumulate small deltas so a slow upward
+  // flick still brings the chrome back (per-frame 50px never fired).
+  const headerScrollPausedRef = useRef(false);
+  const headerLastScrollYRef = useRef(typeof window === 'undefined' ? 0 : window.scrollY);
+  const headerAccumRef = useRef(0);
+
   useEffect(() => {
+    headerScrollPausedRef.current = showMobileSettings || showSurahSearch;
+  }, [showMobileSettings, showSurahSearch]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
     let ticking = false;
-    const scrollState = { lastScrollY: 0 };
+    headerLastScrollYRef.current = window.scrollY;
+    headerAccumRef.current = 0;
 
     const handleScroll = () => {
-      const currentScrollY = window.scrollY;
-      
-      // Use requestAnimationFrame for smoother updates
-      if (!ticking) {
-        window.requestAnimationFrame(() => {
-          // Add a threshold to prevent rapid toggling
-          const scrollThreshold = 50;
-          
-          if (currentScrollY > scrollState.lastScrollY && currentScrollY > scrollThreshold) {
-            // Scrolling down - hide header
-            setShowHeader(false);
-          } else if (currentScrollY < scrollState.lastScrollY - scrollThreshold || currentScrollY < scrollThreshold) {
-            // Scrolling up or at top - show header
-            setShowHeader(true);
-          }
-          
-          scrollState.lastScrollY = currentScrollY;
-          ticking = false;
-        });
-        
-        ticking = true;
-      }
+      if (headerScrollPausedRef.current) return;
+      if (ticking) return;
+      ticking = true;
+
+      window.requestAnimationFrame(() => {
+        ticking = false;
+        if (headerScrollPausedRef.current) return;
+
+        const y = window.scrollY;
+        const delta = y - headerLastScrollYRef.current;
+        headerLastScrollYRef.current = y;
+
+        if (y < 80) {
+          setShowHeader(true);
+          headerAccumRef.current = 0;
+          return;
+        }
+
+        if (delta > 0) {
+          headerAccumRef.current = Math.max(0, headerAccumRef.current) + delta;
+          if (headerAccumRef.current > 10) setShowHeader(false);
+        } else if (delta < 0) {
+          headerAccumRef.current = Math.min(0, headerAccumRef.current) + delta;
+          if (headerAccumRef.current < -12) setShowHeader(true);
+        }
+      });
     };
 
-    // Add scroll listener with passive option for better performance
     window.addEventListener('scroll', handleScroll, { passive: true });
-
-    return () => {
-      window.removeEventListener('scroll', handleScroll);
-    };
+    return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Lock background scroll while any front overlay/modal is open.
-  // NOTE: bookmarkConfirm is intentionally excluded — locking the body (position:fixed)
-  // breaks Android PWA keyboard positioning for the bookmark modal's note input.
-  // The full-screen backdrop already prevents accidental background interaction.
+  // Lock background scroll only for the settings sheet. Surah search uses a
+  // fixed overlay and must not shift the body (that paints the panel off-screen
+  // after the user has scrolled mid-surah). Bookmark modal is also excluded.
   useEffect(() => {
-    const shouldLockBody =
-      showMobileSettings ||
-      showSurahSearch;
+    const shouldLockBody = showMobileSettings;
 
     if (shouldLockBody) {
       if (lockedScrollYRef.current !== null) return;
 
       lockedScrollYRef.current = window.scrollY;
-      document.body.style.position = 'fixed';
-      document.body.style.top = `-${lockedScrollYRef.current}px`;
-      document.body.style.left = '0';
-      document.body.style.right = '0';
-      document.body.style.width = '100%';
       document.body.style.overflow = 'hidden';
       return;
     }
@@ -352,26 +357,18 @@ const QuranReader: React.FC = () => {
     if (lockedScrollYRef.current !== null) {
       const restoreScrollY = lockedScrollYRef.current;
       lockedScrollYRef.current = null;
-      document.body.style.position = '';
-      document.body.style.top = '';
-      document.body.style.left = '';
-      document.body.style.right = '';
-      document.body.style.width = '';
       document.body.style.overflow = '';
       window.scrollTo(0, restoreScrollY);
+      headerLastScrollYRef.current = restoreScrollY;
+      headerAccumRef.current = 0;
     }
-  }, [showMobileSettings, showSurahSearch]);
+  }, [showMobileSettings]);
 
   useEffect(() => {
     return () => {
       if (lockedScrollYRef.current !== null) {
         const restoreScrollY = lockedScrollYRef.current;
         lockedScrollYRef.current = null;
-        document.body.style.position = '';
-        document.body.style.top = '';
-        document.body.style.left = '';
-        document.body.style.right = '';
-        document.body.style.width = '';
         document.body.style.overflow = '';
         window.scrollTo(0, restoreScrollY);
       }
@@ -443,6 +440,9 @@ const QuranReader: React.FC = () => {
   useEffect(() => {
     if (!pendingBookmarkTarget) return;
     if (currentSurah !== pendingBookmarkTarget.surahNumber) return;
+    // Wait until the target surah's data is actually rendered (surahData can
+    // briefly hold the previous surah while the next one loads).
+    if (loading || !surahData || surahData.number !== pendingBookmarkTarget.surahNumber) return;
 
     const isIndoPak = settings.arabicFont === 'indopak-nastaleeq-v3';
     if (isIndoPak && (indopakV3Loading || !indopakV3Surah)) {
@@ -458,6 +458,8 @@ const QuranReader: React.FC = () => {
   }, [
     pendingBookmarkTarget,
     currentSurah,
+    loading,
+    surahData,
     settings.arabicFont,
     indopakV3Loading,
     indopakV3Surah,
@@ -492,12 +494,91 @@ const QuranReader: React.FC = () => {
       surah.number.toString().includes(searchTerm)
   );
 
-  // Update last read position when ayah is viewed
+  // One-time restore of the saved reading position for this device. Reuses the
+  // bookmark scroll path (pendingBookmarkTarget) so the ayah is centred with
+  // the loading overlay held up until it renders (incl. IndoPak delays).
+  const hasRestoredLastReadRef = useRef(false);
   useEffect(() => {
-    if (currentSurah && surahData) {
-      updateLastRead(currentSurah, 1);
+    if (hasRestoredLastReadRef.current) return;
+    if (!lastRead || !currentSurah) return;
+    if (lastRead.surahNumber !== currentSurah) return;
+
+    hasRestoredLastReadRef.current = true;
+    if (lastRead.ayahNumber > 1) {
+      setPendingBookmarkTarget({
+        surahNumber: lastRead.surahNumber,
+        ayahNumber: lastRead.ayahNumber,
+      });
     }
-  }, [currentSurah, surahData, updateLastRead]);
+  }, [lastRead, currentSurah]);
+
+  // Track the ayah nearest the viewport centre and persist it (debounced) as
+  // the last-read position for this device.
+  const pendingBookmarkTargetRef = useRef(pendingBookmarkTarget);
+  pendingBookmarkTargetRef.current = pendingBookmarkTarget;
+
+  useEffect(() => {
+    if (!currentSurah || !surahData || loading) return;
+    if (surahData.number !== currentSurah) return;
+    if (settings.arabicFont === 'indopak-nastaleeq-v3' && indopakV3Loading) return;
+
+    const trackedSurah = currentSurah;
+    let debounceTimer: number | null = null;
+    let cancelled = false;
+
+    const reportCentermostAyah = () => {
+      if (cancelled) return;
+      // Do not record while a bookmark/restore jump is still settling.
+      if (pendingBookmarkTargetRef.current) return;
+
+      const elements = Array.from(
+        document.querySelectorAll<HTMLElement>('[id^="ayah-"]')
+      );
+      if (!elements.length) return;
+
+      const viewportCentre = window.innerHeight / 2;
+      let bestAyah: number | null = null;
+      let bestDistance = Number.POSITIVE_INFINITY;
+
+      for (const element of elements) {
+        const ayahNumber = Number(element.id.slice('ayah-'.length));
+        if (!Number.isInteger(ayahNumber) || ayahNumber < 1) continue;
+        const rect = element.getBoundingClientRect();
+        if (rect.bottom <= 0 || rect.top >= window.innerHeight) continue;
+        const distance = Math.abs((rect.top + rect.bottom) / 2 - viewportCentre);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestAyah = ayahNumber;
+        }
+      }
+
+      if (bestAyah !== null) {
+        updateLastRead(trackedSurah, bestAyah);
+      }
+    };
+
+    const scheduleReport = () => {
+      if (debounceTimer !== null) window.clearTimeout(debounceTimer);
+      debounceTimer = window.setTimeout(reportCentermostAyah, 800);
+    };
+
+    window.addEventListener('scroll', scheduleReport, { passive: true });
+    // Record the initial position too (e.g. surah opened without scrolling).
+    scheduleReport();
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('scroll', scheduleReport);
+      if (debounceTimer !== null) window.clearTimeout(debounceTimer);
+    };
+  }, [
+    currentSurah,
+    surahData,
+    loading,
+    settings.arabicFont,
+    indopakV3Loading,
+    updateLastRead,
+  ]);
 
   // Check if current surah is bookmarked
   const isBookmarked = (surahNum: number, ayahNum: number) => {
@@ -1086,8 +1167,8 @@ const QuranReader: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="Quran Reader"
-        description="Read the Holy Quran with Arabic text, translations, recitation audio, bookmarks, and easy navigation tools."
+        title="Read Quran Online: Full Arabic, Audio & 10+ Translations"
+        description="Read and listen to the Holy Quran online. Features full Arabic text, transliteration, audio recitations by famous Qaris, and 10+ translations including English, Urdu, French, and Spanish."
         path="/quran"
         keywords={[
           'quran',
@@ -1117,10 +1198,23 @@ const QuranReader: React.FC = () => {
         ]}
       />
       <div className={`min-h-screen ${settings.theme === 'dark' ? 'bg-gray-900' : 'bg-gradient-to-br from-emerald-50 via-white to-teal-50'}`}>
-      {/* Full-screen loading spinner overlay */}
-      {loading && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/30 backdrop-blur-sm">
-          <LoadingSpinner size="xl" color="white" text="Loading Surah..." />
+      {/* Single full-screen loading overlay. Opaque so nothing shows through,
+          and held up through the whole bookmark journey (surah fetch, IndoPak
+          font load, and the pending scroll target) so it only clears once the
+          target ayah is rendered and centred. */}
+      {(loading ||
+        (settings.arabicFont === 'indopak-nastaleeq-v3' && indopakV3Loading) ||
+        pendingBookmarkTarget !== null) && (
+        <div
+          className={`fixed inset-0 z-50 flex items-center justify-center ${
+            settings.theme === 'dark' ? 'bg-gray-900' : 'bg-white'
+          }`}
+        >
+          <LoadingSpinner
+            size="xl"
+            color={settings.theme === 'dark' ? 'white' : 'emerald'}
+            text="Loading Surah..."
+          />
         </div>
       )}
       <div className="w-full">
@@ -1138,8 +1232,8 @@ const QuranReader: React.FC = () => {
         </div>
 
         {/* Mobile Header - Enhanced with Smooth Auto-Hide */}
-        <div className={`lg:hidden pt-4 px-2 sticky z-40 transition-all duration-500 ease-out ${
-          showHeader ? 'top-16 opacity-100 scale-100' : '-top-40 opacity-0 scale-95'
+        <div className={`lg:hidden fixed inset-x-0 top-16 z-40 px-2 pt-2 transition-transform duration-300 ease-out ${
+          showHeader ? 'translate-y-0 opacity-100' : '-translate-y-[120%] opacity-0 pointer-events-none'
         }`}>
           <div className={`${settings.theme === 'dark' ? 'bg-gray-800/95' : 'bg-white/95'} backdrop-blur-md rounded-xl shadow-lg p-2.5 border ${settings.theme === 'dark' ? 'border-gray-700' : 'border-gray-100'} transition-shadow duration-300`}>
             {/* Top Bar - Quick Actions */}
@@ -1294,23 +1388,25 @@ const QuranReader: React.FC = () => {
             )}
           </div>
         </div>
+        {/* Spacer so ayahs are not hidden under the fixed mobile header */}
+        <div className="lg:hidden h-36" aria-hidden="true" />
           
         {/* Enhanced Mobile Surah Search Panel - Fixed Overlay */}
         {showSurahSearch && (
           <>
             {/* Backdrop */}
             <div 
-              className="fixed inset-0 bg-black/50 z-40"
+              className="fixed inset-0 bg-black/50 z-[60]"
               onClick={() => {
                 setShowSurahSearch(false);
                 setSearchTerm('');
               }}
             />
             
-            {/* Search Panel - Fixed at top */}
+            {/* Search Panel — sits under the site navbar, not at layout top:0 */}
             <div 
-              className={`fixed top-0 left-0 right-0 z-50 ${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'} shadow-2xl`}
-              style={{ maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}
+              className={`fixed left-0 right-0 z-[60] flex flex-col ${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'} shadow-2xl`}
+              style={{ top: '4rem', maxHeight: 'calc(100dvh - 4rem)' }}
             >
               {/* Header Bar */}
               <div className={`flex items-center gap-3 p-4 border-b ${settings.theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
@@ -1348,12 +1444,12 @@ const QuranReader: React.FC = () => {
                         addToRecentSearches(searchTerm);
                       }
                     }}
-                    className={`w-full px-4 py-4 text-base border-2 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+                    className={`w-full px-4 py-4 border-2 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
                       settings.theme === 'dark'
                         ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
                         : 'bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-500'
                     }`}
-                    autoFocus
+                    style={{ fontSize: '16px' }}
                   />
                 </div>
 
@@ -1960,10 +2056,10 @@ const QuranReader: React.FC = () => {
 
           {/* Middle - Quran Content */}
           <div className="lg:col-span-8">
-            {loading ? (
-              <div className="flex justify-center items-center py-12">
-                <LoadingSpinner />
-              </div>
+            {loading && !surahData ? (
+              // The full-screen overlay is the only visible spinner; this
+              // spacer just keeps the column height while the first surah loads.
+              <div className="py-12" aria-hidden="true" />
             ) : surahData ? (
               <div className={`${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow-md p-4`}>
                 {/* Bismillah (except for Surah 9) - Uses currently selected Arabic font */}
@@ -2103,13 +2199,9 @@ const QuranReader: React.FC = () => {
 
                 {/* Ayahs - IndoPak V3 */}
                 {settings.arabicFont === 'indopak-nastaleeq-v3' && indopakV3Loading ? (
-                  // IndoPak V3 - Loading State
-                  <div className="flex items-center justify-center py-12">
-                    <LoadingSpinner size="lg" />
-                    <span className={`ml-3 text-sm ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
-                      Loading IndoPak v3 Surah...
-                    </span>
-                  </div>
+                  // IndoPak V3 - loading: covered by the full-screen overlay;
+                  // keep a spacer so the content column holds its height.
+                  <div className="py-12" aria-hidden="true" />
                 ) : settings.arabicFont === 'indopak-nastaleeq-v3' && indopakV3Error ? (
                   // IndoPak V3 - Error State
                   <div className="text-center py-8">

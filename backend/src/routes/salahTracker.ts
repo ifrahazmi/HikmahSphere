@@ -10,6 +10,7 @@ const MAX_ACTIVITY_ITEMS = 365;
 const DATE_KEY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const ALLOWED_QURAN_STATUS = new Set(['none', 'read', 'translation', 'tafseer']);
 const ALLOWED_PRAYER_EXEMPTION_REASONS = new Set(['none', 'menstruation']);
+const ALLOWED_FASTING_STATUS = new Set(['none', 'sunnah', 'fard', 'missed']);
 
 interface TrackerActivityInput {
   dateKey: string;
@@ -20,6 +21,8 @@ interface TrackerActivityInput {
   prayerScore: number;
   quranScore: number;
   quranStatus: 'none' | 'read' | 'translation' | 'tafseer';
+  fastingStatus: 'none' | 'sunnah' | 'fard' | 'missed';
+  dhikrStatus: boolean;
   isPrayerExempt: boolean;
   prayerExemptionReason: 'none' | 'menstruation';
   note: string;
@@ -82,6 +85,10 @@ const normalizeActivity = (value: unknown): TrackerActivityInput[] => {
     const prayerExemptionReason = ALLOWED_PRAYER_EXEMPTION_REASONS.has(prayerExemptionReasonRaw)
       ? (prayerExemptionReasonRaw as TrackerActivityInput['prayerExemptionReason'])
       : 'none';
+    const fastingStatusRaw = String(raw.fastingStatus || 'none');
+    const fastingStatus = ALLOWED_FASTING_STATUS.has(fastingStatusRaw)
+      ? (fastingStatusRaw as TrackerActivityInput['fastingStatus'])
+      : 'none';
 
     normalized.push({
       dateKey,
@@ -92,6 +99,8 @@ const normalizeActivity = (value: unknown): TrackerActivityInput[] => {
       prayerScore: clamp(Math.round(toFiniteNumber(raw.prayerScore, 0)), 0, 100),
       quranScore: clamp(Math.round(toFiniteNumber(raw.quranScore, 0)), 0, 100),
       quranStatus,
+      fastingStatus,
+      dhikrStatus: Boolean(raw.dhikrStatus),
       isPrayerExempt: Boolean(raw.isPrayerExempt),
       prayerExemptionReason,
       note: typeof raw.note === 'string' ? raw.note.slice(0, 3000) : '',

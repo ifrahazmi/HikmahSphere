@@ -18,25 +18,22 @@ import { toast } from 'react-hot-toast';
 import PageSEO from '../components/PageSEO';
 import { API_URL } from '../config';
 import { useAuth } from '../hooks/useAuth';
+import { requestForToken, storePushToken, getPushDeviceId } from '../firebase';
 import {
   DUA_CATEGORIES,
   DUA_LIBRARY,
   DUA_LIBRARY_META,
   QUICK_ACCESS_ITEMS,
   SITUATION_FILTERS,
+  TASBIH_PRESETS,
+  TIME_OF_DAY_SLOT_META,
+  getTimeOfDaySlot,
+  getSuggestedDuas,
   type DuaCategoryId,
   type DuaEntry,
   type SituationFilterId,
+  type TimeOfDaySlot,
 } from '../data/dhikrDuaLibrary';
-
-interface DhikrPreset {
-  id: string;
-  label: string;
-  arabic: string;
-  transliteration?: string;
-  compact?: boolean;
-  target: number;
-}
 
 type ReminderScheduleType = 'periodic' | 'specific';
 
@@ -50,6 +47,7 @@ interface ReminderSettings {
   specificTime: string;
   includeDhikr: boolean;
   includeDua: boolean;
+  timezone?: string;
 }
 
 interface ReminderSupportState {
@@ -97,6 +95,14 @@ const DEFAULT_TRANSLIT_FONT_SCALE = 1;
 const MIN_FONT_SCALE = 0.8;
 const MAX_FONT_SCALE = 1.6;
 const FONT_SCALE_STEP = 0.1;
+const getDeviceTimezone = (): string | undefined => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 const DEFAULT_REMINDER_SETTINGS: ReminderSettings = {
   enabled: false,
   morning: true,
@@ -108,22 +114,6 @@ const DEFAULT_REMINDER_SETTINGS: ReminderSettings = {
   includeDhikr: true,
   includeDua: true,
 };
-
-const TASBIH_PRESETS: DhikrPreset[] = [
-  { id: 'subhanallah', label: 'SubhanAllah', arabic: 'سُبْحَانَ ٱللَّٰهِ', target: 33 },
-  { id: 'alhamdulillah', label: 'Alhamdulillah', arabic: 'ٱلْحَمْدُ لِلَّٰهِ', target: 33 },
-  { id: 'allahu-akbar', label: 'Allahu Akbar', arabic: 'ٱللَّٰهُ أَكْبَر', target: 34 },
-  { id: 'astaghfirullah', label: 'Astaghfirullah', arabic: 'أَسْتَغْفِرُ ٱللَّٰهَ', target: 100 },
-  { id: 'la-ilaha-illa-allah', label: 'La ilaha illa Allah', arabic: 'لَا إِلَٰهَ إِلَّا ٱللَّٰهُ', target: 100 },
-  {
-    id: 'allahumma-innaka-afuwwun',
-    label: "Allahumma innaka 'afuwwun",
-    arabic: 'اللَّهُمَّ إِنَّكَ عَفُوٌّ تُحِبُّ الْعَفْوَ فَاعْفُ عَنِّي',
-    transliteration: "Allahumma innaka 'afuwwun tuhibbul 'afwa fa'fu 'anni.",
-    compact: true,
-    target: 100,
-  },
-];
 
 const createEmptyDailyCounts = (): Record<string, number> => {
   return TASBIH_PRESETS.reduce<Record<string, number>>((accumulator, preset) => {
@@ -315,6 +305,19 @@ const DhikrDua: React.FC = () => {
     [selectedPresetId]
   );
 
+  // Classic trio (33/33/34): show all three progress rows together.
+  // Any other dhikr: show only the selected preset's counter.
+  const CORE_TASBIH_IDS = useMemo(
+    () => new Set(['subhanallah', 'alhamdulillah', 'allahu-akbar']),
+    []
+  );
+  const progressPresets = useMemo(() => {
+    if (CORE_TASBIH_IDS.has(selectedPreset.id)) {
+      return TASBIH_PRESETS.filter((preset) => CORE_TASBIH_IDS.has(preset.id));
+    }
+    return [selectedPreset];
+  }, [CORE_TASBIH_IDS, selectedPreset]);
+
   const progressPercent = Math.min(100, Math.round((tasbihCount / selectedPreset.target) * 100));
   const completedCycles = Math.floor(tasbihCount / selectedPreset.target);
 
@@ -330,6 +333,7 @@ const DhikrDua: React.FC = () => {
   const arabicSectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const isHydratingCloudStateRef = useRef(false);
   const hasLoadedCloudStateRef = useRef(false);
+  const localMutatedDuringHydrationRef = useRef(false);
 
   const normalizeBookmarkedIds = (value: unknown): string[] => {
     if (!Array.isArray(value)) return [];
@@ -397,6 +401,10 @@ const DhikrDua: React.FC = () => {
           : DEFAULT_REMINDER_SETTINGS.includeDhikr,
       includeDua:
         typeof raw.includeDua === 'boolean' ? raw.includeDua : DEFAULT_REMINDER_SETTINGS.includeDua,
+      timezone:
+        typeof raw.timezone === 'string' && raw.timezone.trim()
+          ? raw.timezone.trim()
+          : getDeviceTimezone(),
     };
   };
 
@@ -585,6 +593,7 @@ const DhikrDua: React.FC = () => {
 
     const loadUserDhikrState = async () => {
       isHydratingCloudStateRef.current = true;
+      localMutatedDuringHydrationRef.current = false;
 
       try {
         const response = await fetch(`${API_URL}/dhikr/user-state`, {
@@ -661,12 +670,14 @@ const DhikrDua: React.FC = () => {
         if (hasRemoteState) {
           setBookmarkedIds(remoteBookmarks);
           setLastViewedDuaId(remoteLastViewed);
-          if (remoteTasbih) {
-            setSelectedPresetId(remoteTasbih.presetId);
-            setTasbihCount(remoteTasbih.count);
-          }
-          if (remoteDailyTracker) {
-            setDailyTracker(remoteDailyTracker);
+          if (!localMutatedDuringHydrationRef.current) {
+            if (remoteTasbih) {
+              setSelectedPresetId(remoteTasbih.presetId);
+              setTasbihCount(remoteTasbih.count);
+            }
+            if (remoteDailyTracker) {
+              setDailyTracker(remoteDailyTracker);
+            }
           }
           setReminders(remoteReminders);
           setIsDarkMode(remoteDarkMode);
@@ -767,7 +778,10 @@ const DhikrDua: React.FC = () => {
         count: tasbihCount,
       },
       dailyTracker,
-      reminders,
+      reminders: {
+        ...reminders,
+        timezone: getDeviceTimezone() || reminders.timezone,
+      },
       settings: {
         darkMode: isDarkMode,
         translationLanguage,
@@ -823,6 +837,10 @@ const DhikrDua: React.FC = () => {
     if (!reminders.enabled) return;
     if (!reminderSupport.supported) return;
     if (reminderSupport.permission !== 'granted') return;
+    // Signed-in users receive reminders from the server through FCM (works in
+    // the background too), so the page-scoped interval would cause duplicates.
+    // Keep it only as a foreground fallback for signed-out visitors.
+    if (authLoading || isAuthenticated) return;
 
     const topicLabel = (() => {
       if (reminders.includeDhikr && reminders.includeDua) return 'dhikr and dua';
@@ -922,7 +940,7 @@ const DhikrDua: React.FC = () => {
     scheduleCheck();
     const intervalId = window.setInterval(scheduleCheck, 60000);
     return () => window.clearInterval(intervalId);
-  }, [reminders, reminderSupport.permission, reminderSupport.supported]);
+  }, [reminders, reminderSupport.permission, reminderSupport.supported, authLoading, isAuthenticated]);
 
   useEffect(() => {
     if (dailyTracker.date !== getTodayKey()) {
@@ -976,6 +994,41 @@ const DhikrDua: React.FC = () => {
       return haystack.includes(query);
     });
   }, [searchQuery, activeCategory, activeSituation, bookmarksOnly, bookmarkedIds]);
+
+  // Time-of-day suggestions: only surfaced when the user has not applied any
+  // explicit filter, so they never fight an active search or category choice.
+  const [timeSlot, setTimeSlot] = useState<TimeOfDaySlot>(() => getTimeOfDaySlot());
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setTimeSlot((previous) => {
+        const next = getTimeOfDaySlot();
+        return next === previous ? previous : next;
+      });
+    }, 60000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  const suggestionsActive =
+    !normalize(searchQuery) &&
+    activeCategory === 'all' &&
+    activeSituation === 'all' &&
+    !bookmarksOnly;
+
+  const suggestedDuas = useMemo(
+    () => (suggestionsActive ? getSuggestedDuas(timeSlot, 6) : []),
+    [suggestionsActive, timeSlot]
+  );
+
+  // With suggestions active, hoist the suggested duas to the top of the list
+  // so the first screen matches the current time of day.
+  const orderedDuas = useMemo(() => {
+    if (!suggestedDuas.length) return filteredDuas;
+    const suggestedIds = new Set(suggestedDuas.map((dua) => dua.id));
+    return [...suggestedDuas, ...filteredDuas.filter((dua) => !suggestedIds.has(dua.id))];
+  }, [filteredDuas, suggestedDuas]);
+
+  const timeSlotMeta = TIME_OF_DAY_SLOT_META[timeSlot];
 
   const lastViewedDua = useMemo(
     () => DUA_LIBRARY.find((dua) => dua.id === lastViewedDuaId) || null,
@@ -1113,6 +1166,7 @@ const DhikrDua: React.FC = () => {
   };
 
   const incrementTasbih = () => {
+    localMutatedDuringHydrationRef.current = true;
     setTasbihCount((previous) => previous + 1);
     setDailyTracker((previous) => ({
       date: getTodayKey(),
@@ -1128,6 +1182,7 @@ const DhikrDua: React.FC = () => {
   };
 
   const decrementTasbih = () => {
+    localMutatedDuringHydrationRef.current = true;
     setTasbihCount((previous) => Math.max(0, previous - 1));
     setDailyTracker((previous) => ({
       date: getTodayKey(),
@@ -1139,7 +1194,16 @@ const DhikrDua: React.FC = () => {
   };
 
   const resetTasbih = () => {
+    localMutatedDuringHydrationRef.current = true;
+    const presetId = selectedPreset.id;
     setTasbihCount(0);
+    setDailyTracker((previous) => ({
+      date: getTodayKey(),
+      counts: {
+        ...previous.counts,
+        [presetId]: 0,
+      },
+    }));
   };
 
   const focusDuaCard = (duaId: string, fromMobileProfile = false) => {
@@ -1177,6 +1241,23 @@ const DhikrDua: React.FC = () => {
     if (typeof window === 'undefined') return false;
     return window.innerWidth < 768;
   };
+
+  // On mobile the tasbih view is a fixed, viewport-height panel: freeze the
+  // page scroll behind it so the counter never drifts while tapping.
+  useEffect(() => {
+    if (activeMobileSection !== 'tasbih') return;
+
+    const applyLock = () => {
+      document.body.style.overflow = window.innerWidth < 768 ? 'hidden' : '';
+    };
+
+    applyLock();
+    window.addEventListener('resize', applyLock);
+    return () => {
+      window.removeEventListener('resize', applyLock);
+      document.body.style.overflow = '';
+    };
+  }, [activeMobileSection]);
 
   const scrollToLibrary = (
     behavior: ScrollBehavior = isMobileView() ? 'auto' : 'smooth',
@@ -1282,22 +1363,22 @@ const DhikrDua: React.FC = () => {
   };
 
   const moveFocusBySwipe = (direction: 'next' | 'previous') => {
-    if (!filteredDuas.length) return;
+    if (!orderedDuas.length) return;
 
-    const activeId = focusedDuaId || lastViewedDuaId || filteredDuas[0].id;
-    const currentIndex = filteredDuas.findIndex((dua) => dua.id === activeId);
+    const activeId = focusedDuaId || lastViewedDuaId || orderedDuas[0].id;
+    const currentIndex = orderedDuas.findIndex((dua) => dua.id === activeId);
 
     if (currentIndex < 0) {
-      const first = filteredDuas[0];
+      const first = orderedDuas[0];
       focusDuaCard(first.id);
       return;
     }
 
     const targetIndex = direction === 'next'
-      ? Math.min(filteredDuas.length - 1, currentIndex + 1)
+      ? Math.min(orderedDuas.length - 1, currentIndex + 1)
       : Math.max(0, currentIndex - 1);
 
-    const target = filteredDuas[targetIndex];
+    const target = orderedDuas[targetIndex];
     focusDuaCard(target.id);
   };
 
@@ -1324,6 +1405,37 @@ const DhikrDua: React.FC = () => {
     }
   };
 
+  // Server-side reminders are delivered over FCM, so a signed-in user needs a
+  // registered push token. App.tsx registers one on load, but if permission was
+  // granted just now (from this page) that pass will have been skipped.
+  const registerPushTokenForReminders = async () => {
+    if (!isAuthenticated) return;
+    const authToken = localStorage.getItem('token');
+    if (!authToken) return;
+
+    try {
+      const token = await requestForToken();
+      if (!token) return;
+      storePushToken(token);
+      await fetch(`${API_URL}/notifications/token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({
+          token,
+          deviceId: getPushDeviceId(),
+          userAgent: navigator.userAgent,
+          permission: typeof Notification !== 'undefined' ? Notification.permission : 'unknown',
+          heartbeatAt: new Date().toISOString(),
+        }),
+      });
+    } catch (error) {
+      console.error('Failed to register push token for dhikr reminders:', error);
+    }
+  };
+
   const requestReminderPermission = async (): Promise<boolean> => {
     const supportSnapshot = getReminderSupportSnapshot();
     setReminderSupport(supportSnapshot);
@@ -1345,6 +1457,7 @@ const DhikrDua: React.FC = () => {
 
     if (supportSnapshot.permission === 'granted') {
       setReminders((previous) => ({ ...previous, enabled: true }));
+      void registerPushTokenForReminders();
       toast.success('Reminder notifications enabled.');
       return true;
     }
@@ -1355,6 +1468,7 @@ const DhikrDua: React.FC = () => {
 
     if (result === 'granted') {
       setReminders((previous) => ({ ...previous, enabled: true }));
+      void registerPushTokenForReminders();
       toast.success('Reminders enabled. Choose periodic or specific time below.');
       return true;
     }
@@ -1520,8 +1634,8 @@ const DhikrDua: React.FC = () => {
   return (
     <>
       <PageSEO
-        title="Dhikr and Dua"
-        description="Explore authentic daily duas and adhkar with Arabic text, transliteration, translation, references, and tasbih counter."
+        title="Hisn al-Muslim: Authentic Islamic Duas & Daily Dhikr"
+        description="Read authentic Islamic Duas and daily Dhikr from Hisn al-Muslim (Fortress of the Muslim). Includes Arabic text, transliteration, English translation, audio, and a digital Tasbih counter."
         path="/dhikr-dua"
         keywords={[
           'dhikr and dua',
@@ -1605,7 +1719,11 @@ const DhikrDua: React.FC = () => {
           </div>
         </section>
 
-        <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <section
+          className={`mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 ${
+            activeMobileSection === 'tasbih' ? 'py-0 md:py-8' : 'py-8'
+          }`}
+        >
           {lastViewedDua && (
             <div className={`mb-6 rounded-2xl border p-4 shadow-sm ${cardBg} ${
               activeMobileSection === 'search' ? 'block' : 'hidden md:block'
@@ -2024,14 +2142,34 @@ const DhikrDua: React.FC = () => {
                   </p>
                 </div>
 
-                {filteredDuas.length === 0 ? (
+                {suggestedDuas.length > 0 && (
+                  <div
+                    className={`mb-4 flex items-start gap-3 rounded-2xl border p-4 ${
+                      isDarkMode
+                        ? 'border-emerald-800 bg-emerald-950/40'
+                        : 'border-emerald-200 bg-emerald-50'
+                    }`}
+                  >
+                    <span className="text-2xl leading-none" aria-hidden="true">{timeSlotMeta.emoji}</span>
+                    <div>
+                      <p className={`text-sm font-bold ${isDarkMode ? 'text-emerald-300' : 'text-emerald-800'}`}>
+                        Suggested right now · {timeSlotMeta.title}
+                      </p>
+                      <p className={`mt-0.5 text-xs ${mutedText}`}>
+                        {timeSlotMeta.description} The first {suggestedDuas.length} duas below are picked for this time of day.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {orderedDuas.length === 0 ? (
                   <div className={`rounded-xl border border-dashed p-8 text-center ${isDarkMode ? 'border-slate-600 bg-slate-900' : 'border-emerald-200 bg-emerald-50/40'}`}>
                     <p className={`text-base font-semibold ${headingText}`}>No duas matched your filters.</p>
                     <p className={`mt-1 text-sm ${mutedText}`}>Try another keyword or clear situation/category filters.</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {filteredDuas.map((dua) => {
+                    {orderedDuas.map((dua) => {
                       const isExpanded = expandedDuaId === dua.id;
                       const isBookmarked = bookmarkedIds.includes(dua.id);
                       const isPlaying = playingDuaId === dua.id;
@@ -2294,122 +2432,162 @@ const DhikrDua: React.FC = () => {
             </div>
 
             <aside className={`space-y-6 lg:col-span-4 ${activeMobileSection === 'tasbih' ? 'block' : 'hidden lg:block'}`}>
-              <div id="tasbih-counter" ref={tasbihSectionRef} className={`scroll-mt-24 rounded-2xl border p-4 sm:p-5 shadow-sm lg:sticky lg:top-24 ${cardBg}`}>
-                <div className="mx-auto w-full max-w-md">
-                  {/* Header */}
-                  <div className="flex items-center justify-center gap-2 mb-4">
-                    <span className="text-2xl">📿</span>
-                    <h2 className={`text-lg font-bold ${headingText}`}>Tasbih Counter</h2>
-                  </div>
-
-                  {/* Dhikr Selector - Compact */}
-                  <div className="relative mx-auto max-w-[200px]">
-                    <select
-                      value={selectedPreset.id}
-                      onChange={(event) => updatePreset(event.target.value)}
-                      className={`w-full appearance-none rounded-full border px-4 py-2 text-sm font-medium outline-none transition focus:ring-2 focus:ring-emerald-400/50 cursor-pointer text-center ${
-                        isDarkMode
-                          ? 'border-slate-600 bg-slate-800 text-slate-100 hover:bg-slate-700'
-                          : 'border-emerald-200 bg-white text-emerald-900 hover:bg-emerald-50'
-                      }`}
-                    >
-                      {TASBIH_PRESETS.map((preset) => (
-                        <option key={preset.id} value={preset.id} className="text-center">
-                          {preset.label}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center px-2">
-                      <svg className={`h-4 w-4 ${isDarkMode ? 'text-slate-400' : 'text-emerald-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+              <div
+                id="tasbih-counter"
+                ref={tasbihSectionRef}
+                className={`scroll-mt-24 rounded-2xl border p-4 shadow-sm sm:p-5 lg:sticky lg:top-24 max-md:fixed max-md:inset-x-0 max-md:top-16 max-md:bottom-[4.25rem] max-md:z-30 max-md:flex max-md:flex-col max-md:overflow-hidden max-md:rounded-none max-md:border-0 max-md:px-4 max-md:py-3 ${cardBg}`}
+              >
+                <div className="mx-auto flex h-full min-h-0 w-full max-w-md flex-col">
+                  {/* Compact header + dhikr picker */}
+                  <div className="flex shrink-0 items-center gap-2">
+                    <div className="relative min-w-0 flex-1">
+                      <select
+                        value={selectedPreset.id}
+                        onChange={(event) => updatePreset(event.target.value)}
+                        aria-label="Select dhikr"
+                        className={`w-full appearance-none rounded-full border py-2 pl-4 pr-9 text-sm font-semibold outline-none transition focus:ring-2 focus:ring-emerald-400/40 ${
+                          isDarkMode
+                            ? 'border-slate-600/80 bg-slate-800/80 text-slate-100'
+                            : 'border-emerald-100 bg-white text-emerald-900 shadow-sm'
+                        }`}
+                      >
+                        {TASBIH_PRESETS.map((preset) => (
+                          <option key={preset.id} value={preset.id}>
+                            {preset.label}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+                        <svg className={`h-4 w-4 ${isDarkMode ? 'text-slate-400' : 'text-emerald-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Current Dhikr Display */}
-                  <div className={`mt-5 rounded-2xl border p-4 sm:p-5 shadow-sm transition-colors ${isDarkMode ? 'border-slate-700/60 bg-slate-800/40' : 'border-emerald-100 bg-gradient-to-br from-emerald-50/50 to-teal-50/30'}`}>
-                    <p className={`text-center text-[10px] font-bold uppercase tracking-[0.2em] opacity-70 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-700'}`}>Current Dhikr</p>
-                    <p className={`mt-1.5 text-center font-semibold tracking-wide ${selectedPreset.compact ? 'text-xs' : 'text-sm'} ${headingText}`}>{selectedPreset.label}</p>
-                    
+                  {/* Arabic / current dhikr — compact, never overflows */}
+                  <div className="mt-3 shrink-0 text-center max-md:mt-2">
+                    <p className={`text-[11px] font-semibold tracking-wide ${mutedText}`}>{selectedPreset.label}</p>
                     <div
-                      className={`mt-3 flex flex-wrap items-baseline justify-center gap-[0.08em] sm:gap-[0.12em] font-indopak-nastaleeq-v3 ${
+                      className={`mt-1 flex flex-wrap items-baseline justify-center gap-x-[0.1em] font-indopak-nastaleeq-v3 ${
                         isDarkMode ? 'text-emerald-100' : 'text-emerald-900'
                       }`}
                       dir="rtl"
                       lang="ar"
                       style={{
-                        fontSize: `${(selectedPreset.compact ? 1.25 : 2) * arabicFontScale}rem`,
-                        lineHeight: 2.1,
+                        fontSize: `min(${(selectedPreset.compact ? 1.15 : 1.7) * arabicFontScale}rem, 6.8vw)`,
+                        lineHeight: 1.85,
                       }}
                     >
                       {selectedPreset.arabic.split(/\s+/).filter(Boolean).map((word, idx) => (
                         <span
                           key={idx}
-                          className="inline-block indopak-v3-word-container px-[0.06em] sm:px-[0.12em] my-[0.04em]"
+                          className="inline-block indopak-v3-word-container px-[0.05em]"
                           style={{
                             textRendering: 'auto',
                             WebkitFontSmoothing: 'subpixel-antialiased',
                             fontVariantLigatures: 'common-ligatures contextual',
                             fontFeatureSettings: '"liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1',
                             letterSpacing: 0,
-                            wordSpacing: '0.08em'
+                            wordSpacing: '0.06em',
                           }}
                         >
                           {word}
                         </span>
                       ))}
                     </div>
-                    
                     {selectedPreset.transliteration && (
                       <p
-                        className={`mt-3 text-center font-medium italic leading-relaxed tracking-wide ${mutedText}`}
-                        style={{ fontSize: `${0.72 * transliterationFontScale}rem` }}
+                        className={`mt-1 line-clamp-2 px-1 text-center font-medium italic leading-snug ${mutedText}`}
+                        style={{ fontSize: `${0.68 * transliterationFontScale}rem` }}
                       >
                         {selectedPreset.transliteration}
                       </p>
                     )}
                   </div>
 
-                  {/* Tap Counter Button */}
-                  <button
-                    type="button"
-                    onPointerDown={(event) => {
-                      if (event.pointerType === 'mouse' && event.button !== 0) return;
-                      incrementTasbih();
-                    }}
-                    onContextMenu={(event) => event.preventDefault()}
-                    className="mx-auto mt-4 flex h-40 w-40 select-none touch-manipulation items-center justify-center rounded-full bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-600 text-center text-white shadow-lg ring-4 ring-emerald-200/30 transition-all duration-150 active:scale-95 active:shadow-md hover:shadow-xl hover:ring-emerald-300/50"
-                  >
-                    <div>
-                      <p className="text-5xl font-bold tabular-nums">{tasbihCount}</p>
-                      <p className="mt-0.5 text-xs font-medium opacity-80">Tap to Count</p>
-                    </div>
-                  </button>
-
-                  {/* Progress Bar */}
-                  <div className="mt-4">
-                    <div className="mb-1 flex justify-between text-[11px] font-medium">
-                      <span className={mutedText}>{tasbihCount} / {selectedPreset.target}</span>
-                      <span className={`font-bold ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>{progressPercent}%</span>
-                    </div>
-                    <div className={`h-2 w-full overflow-hidden rounded-full ${isDarkMode ? 'bg-slate-700' : 'bg-emerald-100'}`}>
-                      <div
-                        className="h-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all duration-300 ease-out"
-                        style={{ width: `${progressPercent}%` }}
+                  {/* Soft tap circle — fills remaining space, never clipped */}
+                  <div className="flex min-h-0 flex-1 flex-col items-center justify-center py-2 max-md:py-1">
+                    <button
+                      type="button"
+                      onPointerDown={(event) => {
+                        if (event.pointerType === 'mouse' && event.button !== 0) return;
+                        incrementTasbih();
+                      }}
+                      onContextMenu={(event) => event.preventDefault()}
+                      aria-label="Tap to count"
+                      className="group relative flex aspect-square w-[min(52vw,13.5rem)] shrink-0 select-none touch-manipulation items-center justify-center rounded-full transition-transform duration-150 active:scale-[0.96] sm:w-44"
+                    >
+                      {/* Soft outer glow */}
+                      <span
+                        aria-hidden="true"
+                        className={`absolute inset-[-10%] rounded-full blur-xl transition-opacity ${
+                          isDarkMode ? 'bg-emerald-400/20' : 'bg-emerald-300/40'
+                        }`}
                       />
-                    </div>
-                    <p className={`mt-1.5 text-center text-[11px] ${mutedText}`}>
-                      {completedCycles > 0 ? `${completedCycles} cycle${completedCycles > 1 ? 's' : ''} completed ✓` : `Target: ${selectedPreset.target}`}
+                      {/* Progress ring track */}
+                      <svg
+                        aria-hidden="true"
+                        className="absolute inset-0 h-full w-full -rotate-90"
+                        viewBox="0 0 100 100"
+                      >
+                        <circle
+                          cx="50"
+                          cy="50"
+                          r="46"
+                          fill="none"
+                          strokeWidth="3.5"
+                          className={isDarkMode ? 'stroke-slate-700' : 'stroke-emerald-100'}
+                        />
+                        <circle
+                          cx="50"
+                          cy="50"
+                          r="46"
+                          fill="none"
+                          strokeWidth="3.5"
+                          strokeLinecap="round"
+                          strokeDasharray={`${2 * Math.PI * 46}`}
+                          strokeDashoffset={`${2 * Math.PI * 46 * (1 - progressPercent / 100)}`}
+                          className="stroke-emerald-400 transition-[stroke-dashoffset] duration-300 ease-out"
+                        />
+                      </svg>
+                      {/* Light inner disc */}
+                      <span
+                        className={`relative z-[1] flex h-[78%] w-[78%] flex-col items-center justify-center rounded-full shadow-[0_8px_28px_rgba(16,185,129,0.18)] ring-1 transition-shadow group-active:shadow-md ${
+                          isDarkMode
+                            ? 'bg-gradient-to-b from-slate-700 to-slate-800 ring-slate-600/60 text-emerald-50'
+                            : 'bg-gradient-to-b from-white to-emerald-50 ring-emerald-100 text-emerald-800'
+                        }`}
+                      >
+                        <span className="text-[2.6rem] font-bold leading-none tabular-nums tracking-tight max-md:text-[2.35rem]">
+                          {tasbihCount}
+                        </span>
+                        <span className={`mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${mutedText}`}>
+                          Tap
+                        </span>
+                      </span>
+                    </button>
+
+                    <p className={`mt-3 text-center text-xs font-medium tabular-nums max-md:mt-2 ${mutedText}`}>
+                      {tasbihCount} / {selectedPreset.target}
+                      <span className={`mx-1.5 ${isDarkMode ? 'text-slate-600' : 'text-emerald-200'}`}>·</span>
+                      {progressPercent}%
+                      {completedCycles > 0 && (
+                        <>
+                          <span className={`mx-1.5 ${isDarkMode ? 'text-slate-600' : 'text-emerald-200'}`}>·</span>
+                          {completedCycles} cycle{completedCycles > 1 ? 's' : ''}
+                        </>
+                      )}
                     </p>
                   </div>
 
-                  {/* Action Buttons */}
-                  <div className="mt-3 grid grid-cols-2 gap-2">
+                  {/* Undo / Reset */}
+                  <div className="mt-1 grid shrink-0 grid-cols-2 gap-2 max-md:mt-0">
                     <button
                       type="button"
                       onClick={decrementTasbih}
-                      className={`inline-flex w-full items-center justify-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+                      className={`inline-flex w-full items-center justify-center gap-1 rounded-full border px-3 py-2 text-xs font-semibold transition ${
                         isDarkMode
-                          ? 'border-slate-600 text-slate-300 hover:border-slate-500 hover:text-slate-100'
-                          : 'border-emerald-200 text-emerald-700 hover:border-emerald-400 hover:bg-emerald-50'
+                          ? 'border-slate-600/80 text-slate-300 active:bg-slate-800'
+                          : 'border-emerald-100 bg-white text-emerald-700 active:bg-emerald-50'
                       }`}
                     >
                       ← Undo
@@ -2417,10 +2595,10 @@ const DhikrDua: React.FC = () => {
                     <button
                       type="button"
                       onClick={resetTasbih}
-                      className={`inline-flex w-full items-center justify-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+                      className={`inline-flex w-full items-center justify-center gap-1 rounded-full border px-3 py-2 text-xs font-semibold transition ${
                         isDarkMode
-                          ? 'border-slate-600 text-slate-300 hover:border-red-500 hover:text-red-400'
-                          : 'border-emerald-200 text-emerald-700 hover:border-red-300 hover:text-red-600 hover:bg-red-50'
+                          ? 'border-slate-600/80 text-slate-300 active:bg-slate-800'
+                          : 'border-emerald-100 bg-white text-emerald-700 active:bg-emerald-50'
                       }`}
                     >
                       <ArrowPathIcon className="h-3.5 w-3.5" />
@@ -2428,28 +2606,61 @@ const DhikrDua: React.FC = () => {
                     </button>
                   </div>
 
-                  {/* Today's Dhikr Tracker */}
-                  <div className={`mt-4 rounded-xl border p-3 ${isDarkMode ? 'border-slate-700 bg-slate-800/80' : 'border-emerald-100 bg-white'}`}>
-                    <h3 className={`text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>Today's Progress</h3>
-                    <div className="mt-2 space-y-2">
-                      {TASBIH_PRESETS.slice(0, 3).map((preset) => {
+                  {/* Today's progress — trio when classic dhikr, else only selected */}
+                  <div
+                    className={`mt-3 shrink-0 rounded-2xl border px-3 py-2.5 max-md:mt-2 max-md:py-2 ${
+                      isDarkMode ? 'border-slate-700/70 bg-slate-800/50' : 'border-emerald-100/80 bg-white/80'
+                    }`}
+                  >
+                    <div className="mb-1.5 flex items-center justify-between gap-2">
+                      <h3 className={`text-[10px] font-bold uppercase tracking-wider ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                        Today
+                      </h3>
+                      <span className={`text-[10px] font-medium ${mutedText}`}>
+                        {progressPresets.length === 3 ? '33 · 33 · 34' : `Target ${selectedPreset.target}`}
+                      </span>
+                    </div>
+                    <div className={`gap-2 ${progressPresets.length > 1 ? 'grid grid-cols-3' : 'grid grid-cols-1'}`}>
+                      {progressPresets.map((preset) => {
                         const count = dailyTracker.counts[preset.id] || 0;
                         const pct = Math.min(100, Math.round((count / preset.target) * 100));
+                        const isActive = preset.id === selectedPreset.id;
+                        const shortLabel =
+                          progressPresets.length === 3
+                            ? (
+                                {
+                                  subhanallah: 'Subhan',
+                                  alhamdulillah: 'Alhamd',
+                                  'allahu-akbar': 'Akbar',
+                                } as Record<string, string>
+                              )[preset.id] || preset.label
+                            : preset.label;
                         return (
-                          <div key={preset.id}>
-                            <div className="flex items-center justify-between mb-0.5">
-                              <span className={`text-[11px] font-medium ${mutedText}`}>{preset.label}</span>
-                              <span className={`text-[11px] font-bold tabular-nums ${pct >= 100 ? (isDarkMode ? 'text-emerald-400' : 'text-emerald-600') : headingText}`}>
-                                {count}/{preset.target} {pct >= 100 ? '✓' : ''}
-                              </span>
-                            </div>
-                            <div className={`h-1.5 w-full overflow-hidden rounded-full ${isDarkMode ? 'bg-slate-700' : 'bg-gray-100'}`}>
+                          <button
+                            key={preset.id}
+                            type="button"
+                            onClick={() => updatePreset(preset.id)}
+                            className={`rounded-xl px-1.5 py-1.5 text-left transition ${
+                              isActive
+                                ? isDarkMode
+                                  ? 'bg-emerald-500/15 ring-1 ring-emerald-400/40'
+                                  : 'bg-emerald-50 ring-1 ring-emerald-200'
+                                : ''
+                            }`}
+                          >
+                            <p className={`truncate text-[10px] font-semibold leading-tight ${isActive ? headingText : mutedText}`}>
+                              {shortLabel}
+                            </p>
+                            <p className={`mt-0.5 text-xs font-bold tabular-nums ${pct >= 100 ? (isDarkMode ? 'text-emerald-400' : 'text-emerald-600') : headingText}`}>
+                              {count}/{preset.target}{pct >= 100 ? ' ✓' : ''}
+                            </p>
+                            <div className={`mt-1 h-1 w-full overflow-hidden rounded-full ${isDarkMode ? 'bg-slate-700' : 'bg-emerald-100'}`}>
                               <div
-                                className={`h-1.5 rounded-full transition-all duration-300 ${pct >= 100 ? 'bg-emerald-500' : 'bg-emerald-300'}`}
+                                className={`h-1 rounded-full transition-all duration-300 ${pct >= 100 ? 'bg-emerald-500' : 'bg-emerald-400'}`}
                                 style={{ width: `${pct}%` }}
                               />
                             </div>
-                          </div>
+                          </button>
                         );
                       })}
                     </div>
@@ -2497,7 +2708,7 @@ const DhikrDua: React.FC = () => {
             <div className={`rounded-2xl border p-4 shadow-sm ${cardBg}`}>
               <h3 className={`text-base font-bold ${headingText}`}>Today&apos;s Dhikr Tracker</h3>
               <div className="mt-3 space-y-2 text-sm">
-                {TASBIH_PRESETS.slice(0, 3).map((preset) => (
+                {TASBIH_PRESETS.map((preset) => (
                   <div key={preset.id} className="flex items-center justify-between gap-3">
                     <span className={mutedText}>{preset.label}</span>
                     <span className={`font-semibold ${headingText}`}>{dailyTracker.counts[preset.id] || 0}/{preset.target}</span>
