@@ -86,6 +86,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  // Tracks the initial session check only. AppContent swaps the whole router for a
+  // spinner while this is true, so sign-in requests must not toggle it.
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -120,15 +122,53 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       };
   };
 
+  const persistUser = (apiUser: any) => {
+    setUser(mapUser(apiUser));
+    try {
+      localStorage.setItem('user', JSON.stringify(apiUser));
+    } catch {
+      // Avatars are data URLs, so this cache can exceed the storage quota. The
+      // in-memory user stays authoritative; the cache is only a warm-start hint.
+      localStorage.removeItem('user');
+    }
+  };
+
+  const clearSession = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setUser(null);
+  };
+
+  const fetchProfile = async (): Promise<boolean> => {
+    const token = localStorage.getItem('token');
+    if (!token) return false;
+
+    const response = await fetchWithTimeout(`${API_URL}/auth/profile`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Profile request failed (${response.status})`);
+    }
+
+    const data = await response.json();
+    if (!data?.data?.user) {
+      throw new Error('Profile response missing user');
+    }
+
+    persistUser(data.data.user);
+    return true;
+  };
+
   const checkAuthStatus = async () => {
     try {
       const token = localStorage.getItem('token');
       const storedUser = localStorage.getItem('user');
 
       if (token && isJwtExpired(token)) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        setUser(null);
+        clearSession();
         return;
       }
 
@@ -145,32 +185,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       if (token) {
         try {
-            const response = await fetchWithTimeout(`${API_URL}/auth/profile`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-            if (response.ok) {
-                 const data = await response.json();
-                 if (data && data.data && data.data.user) {
-                     setUser(mapUser(data.data.user));
-                     // Update stored user data
-                     localStorage.setItem('user', JSON.stringify(data.data.user));
-                 } else {
-                     localStorage.removeItem('token');
-                     localStorage.removeItem('user');
-                     setUser(null);
-                 }
-            } else {
-                 localStorage.removeItem('token');
-                 localStorage.removeItem('user');
-                 setUser(null);
-            }
+            await fetchProfile();
         } catch (err) {
             console.error("Failed to fetch profile", err);
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            setUser(null);
+            clearSession();
         }
       } else {
         // No token - clear any stored user data
@@ -188,7 +206,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const login = async (email: string, password: string): Promise<{ passwordChangeRequired: boolean }> => {
     try {
-      setLoading(true);
       const normalizedEmail = email.trim().toLowerCase();
       const response = await fetchWithTimeout(`${API_URL}/auth/login`, {
         method: 'POST',
@@ -209,10 +226,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
 
         localStorage.setItem('token', data.token);
-        // The login response intentionally contains only identity fields.
-        // Hydrate from /auth/profile before navigating so profile details and
-        // the avatar are available immediately instead of only after refresh.
-        await checkAuthStatus();
+
+        if (data.user) {
+          persistUser(data.user);
+          // Older backends return identity fields only, so top the profile up in
+          // the background rather than making the caller wait for a second call.
+          void fetchProfile().catch((err) => {
+            console.error('Failed to refresh profile after login', err);
+          });
+        } else {
+          await fetchProfile();
+        }
+
         return { passwordChangeRequired: false };
       } else {
         throw new Error(data.message || 'Login failed');
@@ -220,14 +245,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } catch (error) {
       console.error('Login error:', error);
       throw error;
-    } finally {
-      setLoading(false);
     }
   };
 
   const register = async (name: string, email: string, password: string) => {
     try {
-      setLoading(true);
       const normalizedEmail = email.trim().toLowerCase();
       const [firstName, ...lastNameParts] = name.split(' ');
       const lastName = lastNameParts.join(' ') || 'User';
@@ -250,15 +272,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       if (response.ok) {
         localStorage.setItem('token', data.token);
-        await checkAuthStatus();
+        if (data.user) {
+          persistUser(data.user);
+        } else {
+          await fetchProfile();
+        }
       } else {
         throw new Error(data.message || 'Registration failed');
       }
     } catch (error) {
       console.error('Registration error:', error);
       throw error;
-    } finally {
-      setLoading(false);
     }
   };
 

@@ -1,5 +1,12 @@
 import fs from 'fs';
-import { normalizeTafsirAyah, normalizeTafsirSurah } from './tafsirBayanApi';
+import {
+  normalizeRandomTafsir,
+  normalizeTafsirAyah,
+  normalizeTafsirSearchHits,
+  normalizeTafsirSurah,
+  normalizeUnifiedAyah,
+  normalizeUnifiedSurah,
+} from './tafsirBayanApi';
 
 describe('Tafheem fixture normalization', () => {
   const ayatByAyatFixturePath = '/home/ifrahazmi/HikmahSphere/tmp/Ayat-by-Ayat.json';
@@ -69,5 +76,77 @@ describe('Tafheem fixture normalization', () => {
     expect(normalized.ayah).toBe(2);
     expect(normalized.translationHtml).toContain('foot_note="182955"');
     expect(normalized.footnotes?.['182955']).toBe('Sample footnote text');
+  });
+});
+
+describe('new tafsir API normalizers', () => {
+  it('normalizes unified ayah payloads', () => {
+    const normalized = normalizeUnifiedAyah({
+      surah_number: 1,
+      ayah_number: 1,
+      dr_israr: {
+        text: 'سورة الفاتحہ اگرچہ قرآن حکیم کی مختصر سورتوں میں سے ہے...',
+        ayah: 1,
+        surah: 1,
+      },
+      maududi: {
+        t: 'تعریف اللہ ہی کے لیے ہے',
+        f: { '182955': 'Sample footnote' },
+      },
+    });
+
+    expect(normalized.surah).toBe(1);
+    expect(normalized.ayah).toBe(1);
+    expect(normalized.bayan.text).toContain('سورة الفاتحہ');
+    expect(normalized.maududi.translationHtml).toContain('تعریف اللہ');
+    expect(normalized.maududi.footnotes?.['182955']).toBe('Sample footnote');
+  });
+
+  it('normalizes unified surah arrays', () => {
+    const normalized = normalizeUnifiedSurah({
+      surah_number: 1,
+      ayahs: [
+        {
+          ayah_number: 2,
+          dr_israr: { text: 'second', ayah: 2, surah: 1 },
+          maududi: { t: 'دو' },
+        },
+        {
+          ayah_number: 1,
+          dr_israr: { text: 'first', ayah: 1, surah: 1 },
+          maududi: { t: 'ایک' },
+        },
+      ],
+    });
+
+    expect(normalized.surah_number).toBe(1);
+    expect(normalized.ayahs.map((ayah) => ayah.ayah)).toEqual([1, 2]);
+    expect(normalized.ayahs[0].bayan.text).toBe('first');
+  });
+
+  it('normalizes search hits from mixed shapes', () => {
+    const hits = normalizeTafsirSearchHits({
+      results: [
+        { surah: 2, ayah: 255, snippet: 'آیت الکرسی', source: 'dr_israr' },
+        { key: '1:1', text: 'بسم اللہ', edition: 'tafheem' },
+      ],
+    });
+
+    expect(hits).toHaveLength(2);
+    expect(hits[0]).toEqual({ surah: 2, ayah: 255, snippet: 'آیت الکرسی', source: 'bayan' });
+    expect(hits[1].surah).toBe(1);
+    expect(hits[1].ayah).toBe(1);
+    expect(hits[1].source).toBe('maududi');
+  });
+
+  it('normalizes random tafsir payloads', () => {
+    expect(normalizeRandomTafsir({ surah_number: 18, ayah_number: 10 })).toEqual({
+      surah: 18,
+      ayah: 10,
+    });
+    expect(normalizeRandomTafsir({ key: '36:1', dr_israr: { text: 'يس' } })).toEqual({
+      surah: 36,
+      ayah: 1,
+    });
   });
 });

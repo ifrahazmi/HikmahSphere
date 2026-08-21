@@ -82,7 +82,8 @@ export interface SearchResult {
 
 export type TafsirEdition =
   | 'bayan-ul-quran-dr-israr-ahmed'
-  | 'tafheem-ul-quran-syed-abu-ala-maududi';
+  | 'tafheem-ul-quran-syed-abu-ala-maududi'
+  | 'unified-bayan-maududi';
 
 export type TafsirTranslationPreferences = Record<TafsirEdition, string>;
 
@@ -108,6 +109,7 @@ export interface QuranSettings {
   translationAudioEnabled: boolean; // When enabled, translation audio follows the Arabic audio mode
   tafsirEdition: TafsirEdition;
   tafsirTranslationPreferences: TafsirTranslationPreferences;
+  tafsirExtrasEnabled: boolean;
   tafsirFontSize: number;          // 14-38px
   tafsirTextAreaBackground: string;
   tafsirAreaBackground: string;
@@ -246,6 +248,7 @@ export const DEFAULT_TRANSLATIONS = [
 export const DEFAULT_TAFSIR_TRANSLATION_PREFERENCES: TafsirTranslationPreferences = {
   'bayan-ul-quran-dr-israr-ahmed': DEFAULT_URDU_TRANSLATION.identifier,
   'tafheem-ul-quran-syed-abu-ala-maududi': 'ur.maududi',
+  'unified-bayan-maududi': DEFAULT_URDU_TRANSLATION.identifier,
 };
 
 // Available Reciters for Audio Playback
@@ -285,6 +288,7 @@ export const DEFAULT_QURAN_SETTINGS: QuranSettings = {
   translationAudioEnabled: false,
   tafsirEdition: 'bayan-ul-quran-dr-israr-ahmed',
   tafsirTranslationPreferences: { ...DEFAULT_TAFSIR_TRANSLATION_PREFERENCES },
+  tafsirExtrasEnabled: false,
   tafsirFontSize: 26,
   tafsirTextAreaBackground: '#f8fffb',
   tafsirAreaBackground: '#f0fdf4',

@@ -881,6 +881,160 @@ router.get('/tafsir/surah/:number/ayah/:ayahNumber', optionalAuthMiddleware, asy
   }
 });
 
+const wrapTafsirProxyPayload = (payload: any) =>
+  payload?.status
+    ? payload
+    : {
+        status: 'success',
+        data: payload?.data ?? payload,
+        source: 'tafsir-proxy',
+      };
+
+const proxyBayanTafsirPath = async (
+  path: string,
+  query = ''
+): Promise<{ ok: boolean; status: number; payload: any }> => {
+  const response = await fetch(`${TAFSIR_PROXY_API_BASE}${path}${query}`);
+  const payload: any = await response.json().catch(() => null);
+  return {
+    ok: response.ok,
+    status: response.status,
+    payload,
+  };
+};
+
+const sendTafsirProxyError = (
+  res: any,
+  proxied: { status: number; payload: any },
+  fallbackMessage: string
+) => {
+  return res.status(proxied.status || 502).json({
+    status: 'error',
+    message: proxied.payload?.message || fallbackMessage,
+  });
+};
+
+/**
+ * @route   GET /api/quran/tafsir/unified/surah/:number
+ * @desc    Proxy both Bayan and Maududi tafsir for a full surah
+ * @access  Public
+ */
+router.get('/tafsir/unified/surah/:number', optionalAuthMiddleware, async (req: any, res: any) => {
+  try {
+    const surahNumber = Number(req.params.number);
+    if (!Number.isInteger(surahNumber) || surahNumber < 1 || surahNumber > 114) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid surah number. Must be between 1 and 114.',
+      });
+    }
+
+    const proxied = await proxyBayanTafsirPath(`/unified/surah/${surahNumber}`);
+    if (!proxied.ok) {
+      return sendTafsirProxyError(res, proxied, 'Failed to load unified tafsir surah data');
+    }
+
+    return res.json(wrapTafsirProxyPayload(proxied.payload));
+  } catch (error: any) {
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch unified tafsir surah data',
+      details: error?.message || String(error),
+    });
+  }
+});
+
+/**
+ * @route   GET /api/quran/tafsir/unified/surah/:number/ayah/:ayahNumber
+ * @desc    Proxy both Bayan and Maududi tafsir for a single ayah
+ * @access  Public
+ */
+router.get('/tafsir/unified/surah/:number/ayah/:ayahNumber', optionalAuthMiddleware, async (req: any, res: any) => {
+  try {
+    const surahNumber = Number(req.params.number);
+    const ayahNumber = Number(req.params.ayahNumber);
+
+    if (!Number.isInteger(surahNumber) || surahNumber < 1 || surahNumber > 114) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid surah number. Must be between 1 and 114.',
+      });
+    }
+
+    if (!Number.isInteger(ayahNumber) || ayahNumber < 1) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid ayah number. Must be a positive integer.',
+      });
+    }
+
+    const proxied = await proxyBayanTafsirPath(`/unified/surah/${surahNumber}/ayah/${ayahNumber}`);
+    if (!proxied.ok) {
+      return sendTafsirProxyError(res, proxied, 'Failed to load unified tafsir ayah data');
+    }
+
+    return res.json(wrapTafsirProxyPayload(proxied.payload));
+  } catch (error: any) {
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch unified tafsir ayah data',
+      details: error?.message || String(error),
+    });
+  }
+});
+
+/**
+ * @route   GET /api/quran/tafsir/search
+ * @desc    Proxy keyword search across tafsir text
+ * @access  Public
+ */
+router.get('/tafsir/search', optionalAuthMiddleware, async (req: any, res: any) => {
+  try {
+    const query = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    if (!query) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Search query is required.',
+      });
+    }
+
+    const proxied = await proxyBayanTafsirPath(`/search?q=${encodeURIComponent(query)}`);
+    if (!proxied.ok) {
+      return sendTafsirProxyError(res, proxied, 'Failed to search tafsir');
+    }
+
+    return res.json(wrapTafsirProxyPayload(proxied.payload));
+  } catch (error: any) {
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to search tafsir',
+      details: error?.message || String(error),
+    });
+  }
+});
+
+/**
+ * @route   GET /api/quran/tafsir/random
+ * @desc    Proxy a random tafsir ayah (Tafsir of the Day)
+ * @access  Public
+ */
+router.get('/tafsir/random', optionalAuthMiddleware, async (_req: any, res: any) => {
+  try {
+    const proxied = await proxyBayanTafsirPath('/random');
+    if (!proxied.ok) {
+      return sendTafsirProxyError(res, proxied, 'Failed to load random tafsir');
+    }
+
+    return res.json(wrapTafsirProxyPayload(proxied.payload));
+  } catch (error: any) {
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch random tafsir',
+      details: error?.message || String(error),
+    });
+  }
+});
+
 // ============================================================
 // IndoPak Nastaleeq V3 API - Word by Word Quran Data
 // ============================================================

@@ -1,0 +1,43 @@
+name: Keep Render Backend Awake
+
+on:
+  schedule:
+    # Render Free services sleep after 15 minutes without inbound traffic.
+    # Offset from the top of the hour to reduce GitHub Actions cron congestion.
+    - cron: '2-59/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: render-backend-keepalive
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    name: Ping Render health endpoint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Verify backend health
+        env:
+          HEALTH_URL: https://hikmahsphere-backend.onrender.com/health
+        run: |
+          response="$(
+            curl \
+              --fail \
+              --silent \
+              --show-error \
+              --location \
+              --retry 3 \
+              --retry-all-errors \
+              --retry-delay 10 \
+              --connect-timeout 20 \
+              --max-time 120 \
+              "$HEALTH_URL"
+          )"
+
+          echo "$response" | jq -e '.status == "success"' > /dev/null
+          echo "Render backend is healthy."
