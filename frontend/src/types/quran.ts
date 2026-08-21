@@ -172,6 +172,9 @@ export interface QuranContextType {
   
   // Settings
   settings: QuranSettings;
+  // False until the stored preferences for the resolved user scope are loaded, so
+  // consumers can avoid acting on default values that are about to be replaced.
+  settingsReady: boolean;
   updateSettings: (settings: Partial<QuranSettings>) => void;
   
   // Reading history

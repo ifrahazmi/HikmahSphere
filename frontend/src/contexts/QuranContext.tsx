@@ -131,6 +131,10 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
   const [settings, setSettings] = useState<QuranSettings>(DEFAULT_QURAN_SETTINGS);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [lastRead, setLastRead] = useState<LastRead | null>(null);
+  // Scope whose stored settings are currently in `settings`. Until this matches the
+  // signed-in user's scope, `settings` still holds defaults or another scope's values,
+  // so consumers must not act on preferences like the tafsir edition yet.
+  const [hydratedScope, setHydratedScope] = useState<string | null>(null);
   const selectedTranslationsDependency = settings.selectedTranslations.join('|');
 
   const getSafeDuration = useCallback((value: number, fallback: number) => {
@@ -522,6 +526,8 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     const lastReadPayload =
       parseJson(userLastReadRaw) ?? parseJson(preDeviceLastReadRaw) ?? parseJson(fallbackLastReadRaw);
     setLastRead(normalizeLastRead(lastReadPayload));
+
+    setHydratedScope(userStorageScope);
   }, [
     userSettingsStorageKey,
     userSettingsMigrationKey,
@@ -533,6 +539,11 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     normalizeLastRead,
     normalizeSettings,
   ]);
+
+  // The cloud copy is deliberately not part of this: a cold backend can take tens of
+  // seconds to answer, and consumers must not stay blocked that long. A later cloud
+  // update simply re-renders with the new preferences.
+  const settingsReady = !authLoading && hydratedScope === userStorageScope;
 
   const syncUserQuranStateToBackend = useCallback(
     async (payload: { settings: QuranSettings; bookmarks: Bookmark[]; lastRead: LastRead | null }) => {
@@ -1869,6 +1880,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     loading,
     error,
     settings,
+    settingsReady,
     updateSettings,
     bookmarks,
     lastRead,

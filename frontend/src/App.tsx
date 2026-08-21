@@ -291,9 +291,6 @@ const AppContent: React.FC = () => {
       {/* Global Adhan scheduler (fires prayer notifications on any page) */}
       <PrayerAdhanScheduler />
 
-      {/* PWA Install Prompt */}
-      <InstallAppPrompt />
-
       {/* Global Notifications */}
       <Toaster />
     </div>
@@ -308,6 +305,9 @@ const App: React.FC = () => {
           <DarkModeProvider>
             <LanguageProvider>
               <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                {/* Mount outside AppContent so a slow authentication check or sleeping
+                    backend cannot delay/cancel the browser's install opportunity. */}
+                <InstallAppPrompt />
                 <AppContent />
               </Router>
             </LanguageProvider>

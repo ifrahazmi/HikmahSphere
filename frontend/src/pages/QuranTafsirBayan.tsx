@@ -152,7 +152,7 @@ const QuranTafsirBayan: React.FC = () => {
     ? Math.max(250, Math.floor(configuredBookmarkTapIntervalMs))
     : 2000;
 
-  const { surahs, settings, updateSettings, bookmarks, addBookmark, removeBookmark, currentSurah, translations } = useQuran();
+  const { surahs, settings, settingsReady, updateSettings, bookmarks, addBookmark, removeBookmark, currentSurah, translations } = useQuran();
   const { isAuthenticated, loading: authLoading, user } = useAuth();
   const [readerMode, setReaderMode] = useState<ReaderMode>('ayah');
   const [selectedSurah, setSelectedSurah] = useState<number>(1);
@@ -190,6 +190,10 @@ const QuranTafsirBayan: React.FC = () => {
   const readerContentRef = useRef<HTMLDivElement | null>(null);
   const bookmarkViewportRafRef = useRef<number | null>(null);
   const tafsirSearchTimerRef = useRef<number | null>(null);
+  // Only the newest reader request may publish its result. Settings hydration and
+  // rapid edition switches can leave several requests in flight, and the slowest one
+  // must not overwrite the selection the user is actually looking at.
+  const fetchGenerationRef = useRef(0);
   const translationMapCacheRef = useRef<Map<string, Map<number, string>>>(new Map());
   const mobileSettingsSwipeStartYRef = useRef<number | null>(null);
   const mobileSettingsSwipeCurrentYRef = useRef<number | null>(null);
@@ -964,6 +968,10 @@ const QuranTafsirBayan: React.FC = () => {
 
   const handleFetch = useCallback(
     async () => {
+      // Claim this run. Anything still in flight is now superseded and must stay silent.
+      const generation = ++fetchGenerationRef.current;
+      const isStale = () => generation !== fetchGenerationRef.current;
+
       const runtimeIssue = getTafsirRuntimeIssue();
       if (runtimeIssue) {
         setError(runtimeIssue);
@@ -987,8 +995,11 @@ const QuranTafsirBayan: React.FC = () => {
 
       try {
         const displayAyahs = await buildDisplayAyahs();
+        if (isStale()) return;
         setAyahList(displayAyahs);
       } catch (err: any) {
+        if (isStale()) return;
+
         if (isRateLimitError(err)) {
           setError(err.message || 'Quran data is temporarily rate limited. Please wait a moment and retry.');
           return;
@@ -996,13 +1007,21 @@ const QuranTafsirBayan: React.FC = () => {
 
         setError(err.message || 'Failed to load tafsir. Please try again.');
       } finally {
-        setLoading(false);
+        if (!isStale()) {
+          setLoading(false);
+        }
       }
     },
     [activeSurahMeta?.numberOfAyahs, buildDisplayAyahs, readerMode, selectedAyah, selectedSurah]
   );
 
   useEffect(() => {
+    // Stored preferences arrive after the first render, so fetching before they land
+    // would request the default edition and then race the correct one.
+    if (!settingsReady) {
+      setLoading(true);
+      return;
+    }
     // Wait until the active translation is aligned with the current tafsir edition's
     // preferred translation. This prevents a Maududi tafsir from briefly rendering
     // next to the previous edition's translation while the alignment effect catches up.
@@ -1011,7 +1030,7 @@ const QuranTafsirBayan: React.FC = () => {
       return;
     }
     void handleFetch();
-  }, [handleFetch, selectedTranslation, preferredTafsirTranslation]);
+  }, [handleFetch, settingsReady, selectedTranslation, preferredTafsirTranslation]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
