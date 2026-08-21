@@ -43,8 +43,11 @@ interface DashboardUser {
     notificationPermission?: 'granted' | 'denied' | 'default' | 'unknown';
     hasValidNotificationDevice?: boolean;
     isNotificationLive?: boolean;
+    isNotificationActive?: boolean;
+    isNotificationRecentlySeen?: boolean;
     notificationDeviceCount?: number;
     notificationLastSeenAt?: string | null;
+    notificationLastActiveAt?: string | null;
     notificationPreference?: {
         prayers: boolean;
         events: boolean;
@@ -78,7 +81,11 @@ const Dashboard: React.FC = () => {
         return 'Permission Unknown';
     };
 
-    const formatLiveLabel = (isLive?: boolean) => (isLive ? 'Live' : 'Offline');
+    const formatActivityLabel = (u: DashboardUser) => {
+        if (u.isNotificationActive || u.isNotificationLive) return 'Active now';
+        if (u.isNotificationRecentlySeen) return 'Recently seen';
+        return 'Not recently seen';
+    };
 
     const formatDateTime = (value?: string | null) => {
         if (!value) return 'N/A';
@@ -589,11 +596,17 @@ const Dashboard: React.FC = () => {
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="flex flex-col gap-1">
-                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${u.hasValidNotificationDevice ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-                                                    {u.hasValidNotificationDevice ? 'Can Receive' : 'No Valid Device'}
+                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${u.hasValidNotificationDevice ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'}`}>
+                                                    {u.hasValidNotificationDevice ? 'Push Ready' : 'Push Not Ready'}
                                                 </span>
-                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${u.isNotificationLive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'}`}>
-                                                    {formatLiveLabel(u.isNotificationLive)}
+                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                                    u.isNotificationActive || u.isNotificationLive
+                                                        ? 'bg-green-100 text-green-800'
+                                                        : u.isNotificationRecentlySeen
+                                                          ? 'bg-amber-100 text-amber-800'
+                                                          : 'bg-gray-100 text-gray-700'
+                                                }`}>
+                                                    {formatActivityLabel(u)}
                                                 </span>
                                                 <span className="text-xs text-gray-500">
                                                     Devices: {u.notificationDeviceCount || 0} | Last Seen: {formatDateTime(u.notificationLastSeenAt)}
@@ -658,8 +671,8 @@ const Dashboard: React.FC = () => {
                         <div><span className="font-medium text-gray-700">Email:</span> {selectedUserProfile.email}</div>
                         <div><span className="font-medium text-gray-700">Role:</span> {selectedUserProfile.role}</div>
                         <div><span className="font-medium text-gray-700">Permission:</span> {formatPermissionLabel(selectedUserProfile.notificationPermission)}</div>
-                        <div><span className="font-medium text-gray-700">Capability:</span> {selectedUserProfile.hasValidNotificationDevice ? 'Can Receive Notifications' : 'Cannot Receive Notifications'}</div>
-                        <div><span className="font-medium text-gray-700">Live:</span> {formatLiveLabel(selectedUserProfile.isNotificationLive)}</div>
+                        <div><span className="font-medium text-gray-700">Push:</span> {selectedUserProfile.hasValidNotificationDevice ? 'Push Ready' : 'Push Not Ready'}</div>
+                        <div><span className="font-medium text-gray-700">Activity:</span> {formatActivityLabel(selectedUserProfile)}</div>
                         <div><span className="font-medium text-gray-700">Device Count:</span> {selectedUserProfile.notificationDeviceCount || 0}</div>
                         <div><span className="font-medium text-gray-700">Last Seen:</span> {formatDateTime(selectedUserProfile.notificationLastSeenAt)}</div>
                         <div><span className="font-medium text-gray-700">Profile Edited:</span> {selectedUserProfile.profileEdited ? 'Yes' : 'No'}</div>

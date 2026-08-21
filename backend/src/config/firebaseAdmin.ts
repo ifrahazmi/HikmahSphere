@@ -88,6 +88,8 @@ try {
 
 // --- Helper Functions ---
 
+export const isFirebaseAdminReady = (): boolean => admin.apps.length > 0;
+
 export const sendNotification = async (token: string, title: string, body: string, data?: any) => {
     if (!admin.apps.length) {
         throw new Error("Firebase Admin not initialized. Check server logs.");

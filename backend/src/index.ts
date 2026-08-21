@@ -75,20 +75,23 @@ logObjectStorageStatus();
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '5000', 10);
-const NOTIFICATION_LIVE_WINDOW_MS = 5 * 60 * 1000;
+const NOTIFICATION_ACTIVE_WINDOW_MS = 2 * 60 * 1000;
+const NOTIFICATION_RECENT_WINDOW_MS = 30 * 60 * 1000;
 
 type NotificationPermissionState = 'granted' | 'denied' | 'default' | 'unknown';
 
 type NotificationDeviceStatus = {
   deviceId: string;
-  token: string;
+  token?: string;
   permission: NotificationPermissionState;
   supportsWebPush: boolean;
   isIOS: boolean;
   isStandalone: boolean;
   lastSeenAt: Date | null;
+  lastActiveAt: Date | null;
   updatedAt: Date | null;
   isLive: boolean;
+  isRecentlySeen: boolean;
   canReceiveNotification: boolean;
 };
 
@@ -110,7 +113,7 @@ const toDateOrNull = (value: unknown): Date | null => {
 const normalizeDeviceStatus = (rawDevice: any): NotificationDeviceStatus | null => {
   const deviceId = typeof rawDevice?.deviceId === 'string' ? rawDevice.deviceId.trim() : '';
   const token = typeof rawDevice?.token === 'string' ? rawDevice.token.trim() : '';
-  if (!deviceId || !token) {
+  if (!deviceId) {
     return null;
   }
 
@@ -119,24 +122,34 @@ const normalizeDeviceStatus = (rawDevice: any): NotificationDeviceStatus | null 
   const isIOS = rawDevice?.isIOS === true;
   const isStandalone = rawDevice?.isStandalone === true;
   const lastSeenAt = toDateOrNull(rawDevice?.lastSeenAt);
+  const lastActiveAt = toDateOrNull(rawDevice?.lastActiveAt);
   const updatedAt = toDateOrNull(rawDevice?.updatedAt);
   const referenceTime = lastSeenAt || updatedAt;
-  const isLive = Boolean(referenceTime && (Date.now() - referenceTime.getTime()) <= NOTIFICATION_LIVE_WINDOW_MS);
+  const isLive = Boolean(
+    lastActiveAt && (Date.now() - lastActiveAt.getTime()) <= NOTIFICATION_ACTIVE_WINDOW_MS
+  );
+  const isRecentlySeen = Boolean(
+    referenceTime && (Date.now() - referenceTime.getTime()) <= NOTIFICATION_RECENT_WINDOW_MS
+  );
   const iosBlocked = isIOS && !isStandalone;
-  const canReceiveNotification = permission === 'granted' && supportsWebPush && !iosBlocked;
+  const canReceiveNotification =
+    Boolean(token) && permission === 'granted' && supportsWebPush && !iosBlocked;
 
-  return {
+  const normalized: NotificationDeviceStatus = {
     deviceId,
-    token,
     permission,
     supportsWebPush,
     isIOS,
     isStandalone,
     lastSeenAt,
+    lastActiveAt,
     updatedAt,
     isLive,
+    isRecentlySeen,
     canReceiveNotification,
   };
+  if (token) normalized.token = token;
+  return normalized;
 };
 
 const deriveUserNotificationStatus = (rawUser: any) => {
@@ -155,6 +168,12 @@ const deriveUserNotificationStatus = (rawUser: any) => {
 
   const hasValidNotificationDevice = devices.some((device) => device.canReceiveNotification);
   const isNotificationLive = devices.some((device) => device.isLive);
+  const isNotificationRecentlySeen = devices.some((device) => device.isRecentlySeen);
+  const lastActiveAt = devices.reduce<Date | null>((latest, device) => {
+    const candidate = device.lastActiveAt;
+    if (!candidate || (latest && candidate.getTime() <= latest.getTime())) return latest;
+    return candidate;
+  }, null);
   const topLevelPermission = normalizePermission(rawUser?.notificationPermission);
   const effectivePermission = topLevelPermission !== 'unknown'
     ? topLevelPermission
@@ -170,8 +189,11 @@ const deriveUserNotificationStatus = (rawUser: any) => {
     },
     hasValidNotificationDevice,
     isNotificationLive,
+    isNotificationActive: isNotificationLive,
+    isNotificationRecentlySeen,
     notificationDeviceCount: devices.length,
     notificationLastSeenAt: lastSeenAt,
+    notificationLastActiveAt: lastActiveAt,
     notificationDevices: devices,
   };
 };

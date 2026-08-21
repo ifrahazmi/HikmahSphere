@@ -2,7 +2,13 @@ import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
-import { requestForToken, getPushSupportInfo, getPushDeviceId, storePushToken } from './firebase';
+import {
+  requestForToken,
+  getPushSupportInfo,
+  getPushDeviceId,
+  getPushConfigurationIssue,
+  storePushToken,
+} from './firebase';
 import axios from 'axios'; // Import axios
 import { toast } from 'react-hot-toast';
 
@@ -66,6 +72,8 @@ const queryClient = new QueryClient({
 });
 
 const IOS_PUSH_GUIDE_SHOWN_KEY = 'iosPushGuideShown';
+const PUSH_CONFIGURATION_TOAST_KEY = 'pushConfigurationToastShown';
+const PUSH_PERMISSION_TOAST_KEY = 'pushPermissionToastShown';
 
 const AppContent: React.FC = () => {
   const { user, loading } = useAuth();
@@ -91,6 +99,8 @@ const AppContent: React.FC = () => {
             isIOS: support.isIOS,
             isStandalone: support.isStandalone,
           },
+          visibilityState: document.visibilityState,
+          isOnline: navigator.onLine,
           heartbeatAt: new Date().toISOString(),
         }, {
           headers: { Authorization: `Bearer ${authToken}` }
@@ -112,17 +122,39 @@ const AppContent: React.FC = () => {
     };
 
     document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('online', sendHeartbeat);
 
     return () => {
       window.clearInterval(heartbeatInterval);
       document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('online', sendHeartbeat);
     };
   }, [user]);
   
   useEffect(() => {
-    // 1. Request Token & Register with Backend
-    const registerToken = async () => {
+    if (!user) return;
+
+    let registrationInProgress = false;
+
+    const registerToken = async (allowPermissionPrompt: boolean) => {
+      if (registrationInProgress) return;
+      if (!allowPermissionPrompt && (
+        typeof Notification === 'undefined' || Notification.permission !== 'granted'
+      )) {
+        return;
+      }
+
+      registrationInProgress = true;
       try {
+        const configurationIssue = getPushConfigurationIssue();
+        if (configurationIssue) {
+          if (!sessionStorage.getItem(PUSH_CONFIGURATION_TOAST_KEY)) {
+            toast.error(`${configurationIssue} Please contact the administrator.`);
+            sessionStorage.setItem(PUSH_CONFIGURATION_TOAST_KEY, '1');
+          }
+          return;
+        }
+
         const pushSupport = await getPushSupportInfo();
         if (!pushSupport.supported && pushSupport.isIOS && !pushSupport.isStandalone) {
           const alreadyShown = sessionStorage.getItem(IOS_PUSH_GUIDE_SHOWN_KEY);
@@ -148,9 +180,6 @@ const AppContent: React.FC = () => {
           }
         }
 
-        // Wait a bit for service worker to be ready (especially important for iOS)
-        await new Promise(resolve => setTimeout(resolve, 500));
-
         const token = await requestForToken();
 
         if (token) {
@@ -170,6 +199,7 @@ const AppContent: React.FC = () => {
                             isIOS: pushSupport.isIOS,
                             isStandalone: pushSupport.isStandalone,
                           },
+                          visibilityState: document.visibilityState,
                           heartbeatAt: new Date().toISOString(),
                         },
                         { headers: { Authorization: `Bearer ${authToken}` } }
@@ -186,6 +216,14 @@ const AppContent: React.FC = () => {
             if (pushSupport.isIOS) {
               console.log("iOS detected - ensure PWA is installed to Home Screen and permission granted");
             }
+            if (
+              typeof Notification !== 'undefined' &&
+              Notification.permission === 'denied' &&
+              !sessionStorage.getItem(PUSH_PERMISSION_TOAST_KEY)
+            ) {
+              toast.error('Notifications are blocked. Enable them in your browser site settings, then reopen HikmahSphere.');
+              sessionStorage.setItem(PUSH_PERMISSION_TOAST_KEY, '1');
+            }
             const authToken = localStorage.getItem('token');
             if (authToken) {
               try {
@@ -197,6 +235,8 @@ const AppContent: React.FC = () => {
                     isIOS: pushSupport.isIOS,
                     isStandalone: pushSupport.isStandalone,
                   },
+                  visibilityState: document.visibilityState,
+                  isOnline: navigator.onLine,
                   heartbeatAt: new Date().toISOString(),
                 }, {
                   headers: { Authorization: `Bearer ${authToken}` }
@@ -208,14 +248,25 @@ const AppContent: React.FC = () => {
         }
       } catch (err) {
         console.error('Error getting token:', err);
+      } finally {
+        registrationInProgress = false;
       }
     };
 
-    // Only register token if user is logged in
-    if (user) {
-      registerToken();
-    }
+    void registerToken(true);
 
+    const retryRegistration = () => {
+      if (document.visibilityState === 'visible' && navigator.onLine) {
+        void registerToken(false);
+      }
+    };
+    document.addEventListener('visibilitychange', retryRegistration);
+    window.addEventListener('online', retryRegistration);
+
+    return () => {
+      document.removeEventListener('visibilitychange', retryRegistration);
+      window.removeEventListener('online', retryRegistration);
+    };
   }, [user]);
 
   if (loading) {

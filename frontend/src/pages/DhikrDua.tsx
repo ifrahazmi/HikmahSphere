@@ -18,7 +18,7 @@ import { toast } from 'react-hot-toast';
 import PageSEO from '../components/PageSEO';
 import { API_URL } from '../config';
 import { useAuth } from '../hooks/useAuth';
-import { requestForToken, storePushToken, getPushDeviceId } from '../firebase';
+import { requestForToken, storePushToken, getPushDeviceId, getPushSupportInfo } from '../firebase';
 import {
   DUA_CATEGORIES,
   DUA_LIBRARY,
@@ -1414,6 +1414,7 @@ const DhikrDua: React.FC = () => {
     if (!authToken) return;
 
     try {
+      const pushSupport = await getPushSupportInfo();
       const token = await requestForToken();
       if (!token) return;
       storePushToken(token);
@@ -1428,6 +1429,12 @@ const DhikrDua: React.FC = () => {
           deviceId: getPushDeviceId(),
           userAgent: navigator.userAgent,
           permission: typeof Notification !== 'undefined' ? Notification.permission : 'unknown',
+          capability: {
+            supportsWebPush: pushSupport.supported,
+            isIOS: pushSupport.isIOS,
+            isStandalone: pushSupport.isStandalone,
+          },
+          visibilityState: document.visibilityState,
           heartbeatAt: new Date().toISOString(),
         }),
       });

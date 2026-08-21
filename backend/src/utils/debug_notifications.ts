@@ -60,7 +60,7 @@ const checkTokens = async () => {
             otherCount++;
             console.log(`   💻 [Other] Device: ${device.deviceId}`);
           }
-          console.log(`      Token: ${device.token.substring(0, 30)}...`);
+          console.log(`      Token: ${device.token ? `${device.token.substring(0, 30)}...` : 'Not registered'}`);
           console.log(`      UA: ${userAgent.substring(0, 50)}...`);
           console.log(`      Updated: ${device.updatedAt}`);
         }

@@ -16,6 +16,8 @@ interface UserSuggestion {
     };
     hasValidNotificationDevice: boolean;
     isLive: boolean;
+    isActive: boolean;
+    isRecentlySeen: boolean;
     lastSeenAt: string | null;
 }
 
@@ -124,9 +126,6 @@ const AdminNotificationPanel = () => {
                 toast('Warning: user denied browser notification permission. Delivery may fail.', { icon: '!' });
             }
 
-            if (!selectedUser.isLive) {
-                toast('Warning: user is offline right now. Notification may arrive later.', { icon: '!' });
-            }
         }
 
         setLoading(true);
@@ -141,11 +140,22 @@ const AdminNotificationPanel = () => {
                 ? { title, body }
                 : { userId, title, body };
 
-            await axios.post(endpoint, payload, {
+            const response = await axios.post(endpoint, payload, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
-            toast.success('Notification sent successfully!');
+            const details = response.data?.details;
+            if (response.data?.status === 'partial' || Number(details?.successCount) === 0) {
+                toast(response.data?.message || 'Saved in-app, but no push notification was delivered.', {
+                    icon: '!',
+                });
+            } else {
+                toast.success(
+                    details?.successCount
+                        ? `Notification delivered to ${details.successCount} device${details.successCount === 1 ? '' : 's'}.`
+                        : 'Notification sent successfully!'
+                );
+            }
             setTitle('');
             setBody('');
             setUserId('');
@@ -289,10 +299,20 @@ const AdminNotificationPanel = () => {
                                         {formatPermissionLabel(selectedUser.permission)}
                                     </span>
                                     <span className={`px-2 py-1 rounded-full font-medium ${selectedUser.hasValidNotificationDevice ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'}`}>
-                                        {selectedUser.hasValidNotificationDevice ? 'Valid Device' : 'No Valid Device'}
+                                        {selectedUser.hasValidNotificationDevice ? 'Push Ready' : 'Push Not Ready'}
                                     </span>
-                                    <span className={`px-2 py-1 rounded-full font-medium ${selectedUser.isLive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'}`}>
-                                        {selectedUser.isLive ? 'Live' : 'Offline'}
+                                    <span className={`px-2 py-1 rounded-full font-medium ${
+                                        selectedUser.isActive || selectedUser.isLive
+                                            ? 'bg-green-100 text-green-800'
+                                            : selectedUser.isRecentlySeen
+                                              ? 'bg-amber-100 text-amber-800'
+                                              : 'bg-gray-100 text-gray-700'
+                                    }`}>
+                                        {selectedUser.isActive || selectedUser.isLive
+                                            ? 'Active now'
+                                            : selectedUser.isRecentlySeen
+                                              ? 'Recently seen'
+                                              : 'Not recently seen'}
                                     </span>
                                 </div>
                                 <div className="text-gray-600">
