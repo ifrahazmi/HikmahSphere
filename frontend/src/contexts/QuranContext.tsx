@@ -580,13 +580,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
 
         if (hasRemoteState) {
           if (remoteSettings && typeof remoteSettings === 'object') {
-            let mergedSettings = normalizeSettings(remoteSettings);
-            // Cloud state saved during the bad deploy may pin the unreachable Maududi
-            // (Tafheem) source. Reset it to the default so tafsir loads; the corrected
-            // value is re-synced to the backend by the debounced sync effect.
-            if (mergedSettings.tafsirEdition === 'tafheem-ul-quran-syed-abu-ala-maududi') {
-              mergedSettings = { ...mergedSettings, tafsirEdition: DEFAULT_QURAN_SETTINGS.tafsirEdition };
-            }
+            const mergedSettings = normalizeSettings(remoteSettings);
             setSettings(mergedSettings);
             saveSettingsToLocal(mergedSettings);
           }
