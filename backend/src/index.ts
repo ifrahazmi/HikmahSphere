@@ -54,8 +54,8 @@ for (const envPath of envPaths) {
   dotenv.config({ path: envPath, override: false });
 }
 
-// Render captures stdout/stderr. Convert legacy console output across routes and
-// services to one-line JSON in production so every entry is searchable and parseable.
+// Render captures stdout/stderr. Keep only readable warnings/errors from legacy
+// console output; routine request access lines come from the central logger.
 installProductionConsoleBridge();
 appLogger.info('environment_loaded', {
   sourcesChecked: envPaths,
@@ -590,12 +590,14 @@ const seedAdminUser = async () => {
 // MongoDB connection (single shared Mongoose connection for the process)
 // Local Docker / host: MONGODB_URI (or optional MONGODB_URI_LOCAL override)
 // Production (Atlas on Render): MONGODB_URI=mongodb+srv://...
+// Prefer optional local override, then MONGODB_URI, then unauthenticated local default
+const resolveMongoUri = (): string =>
+  process.env.MONGODB_URI_LOCAL ||
+  process.env.MONGODB_URI ||
+  'mongodb://127.0.0.1:27017/hikmahsphere';
+
 const connectDB = async () => {
-  // Prefer optional local override, then MONGODB_URI, then unauthenticated local default
-  const mongoURI =
-    process.env.MONGODB_URI_LOCAL ||
-    process.env.MONGODB_URI ||
-    'mongodb://127.0.0.1:27017/hikmahsphere';
+  const mongoURI = resolveMongoUri();
 
   const { host, database } = summarizeMongoUri(mongoURI);
 
@@ -645,14 +647,13 @@ const connectDB = async () => {
 const startServer = async () => {
   try {
     // Check Redis connection
-    if (redisClient.isOpen) {
-        console.log('✅ Redis connection confirmed.');
-    } else {
-        console.log('⚠️ Redis not yet connected, attempting...');
+    if (!redisClient.isOpen) {
         try {
             await redisClient.connect();
         } catch (e) {
-            console.error('⚠️ Could not connect to Redis at startup (non-fatal for now)');
+            appLogger.warn('redis_unavailable_at_startup', {
+                message: 'Redis is unavailable at startup (non-fatal)',
+            });
         }
     }
 
@@ -660,7 +661,10 @@ const startServer = async () => {
 
     // Listen on 0.0.0.0 to allow access from other interfaces (required for VMs/external access)
     app.listen(PORT, '0.0.0.0', () => {
-      logStartup(PORT);
+      logStartup(PORT, {
+        database: `${summarizeMongoUri(resolveMongoUri()).host} / ${mongoose.connection.name || 'hikmahsphere'}`,
+        redis: redisClient.isOpen ? 'connected' : 'unavailable',
+      });
       startMeetingNotificationScheduler();
       startPrayerNotificationScheduler();
       startPrayerTimesCacheScheduler();
