@@ -27,10 +27,16 @@ export const getTafsirApiUrl = (): string => {
 
 const TAFSIR_API_URL = getTafsirApiUrl();
 
-// Bayan lives at REACT_APP_TAFSIR_API_URL (.../api).
-// Maududi lives on the same host at .../api/maududi — a different path.
-const DEFAULT_MAUDUDI_API_URL = 'https://aws-vm.reedfish-temperature.ts.net/api/maududi';
-const MAUDUDI_API_URL = (process.env.REACT_APP_MAUDUDI_API_URL || DEFAULT_MAUDUDI_API_URL).replace(/\/$/, '');
+export const getMaududiApiUrl = (): string => {
+  if (process.env.REACT_APP_MAUDUDI_API_URL) {
+    return process.env.REACT_APP_MAUDUDI_API_URL.replace(/\/$/, '');
+  }
+
+  // Production: use the Render proxy. The Tailscale tunnel stays on the backend.
+  return `${API_URL}/quran/tafsir`;
+};
+
+const MAUDUDI_API_URL = getMaududiApiUrl();
 
 const isTafheemEdition = (edition?: string): boolean => {
   return (edition || '').trim().toLowerCase() === TAFHEEM_EDITION;
@@ -112,7 +118,9 @@ export const getTafsirRuntimeIssue = (): string | null => {
     return null;
   }
 
-  if (window.location.protocol === 'https:' && /^http:\/\//i.test(TAFSIR_API_URL)) {
+  const usesInsecureApi =
+    /^http:\/\//i.test(TAFSIR_API_URL) || /^http:\/\//i.test(MAUDUDI_API_URL);
+  if (window.location.protocol === 'https:' && usesInsecureApi) {
     return 'Tafsir API is using HTTP while this site is HTTPS. Browser mixed-content protection blocks this request. Use HTTPS for the API or proxy this endpoint through your backend domain.';
   }
 
