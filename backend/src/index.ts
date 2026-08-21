@@ -271,7 +271,7 @@ app.get('/', (req, res) => {
       salahTracker: '/api/salah-tracker',
       hajjGuide: '/api/hajj-guide',
     },
-    documentation: `http://localhost:${process.env.PORT || 5000}/docs`
+    documentation: `${req.protocol}://${req.get('host')}/docs`
   });
 });
 
