@@ -1,12 +1,14 @@
+const PRODUCTION_API_URL = 'https://hikmahsphere-backend.onrender.com/api';
+
 export const getApiUrl = () => {
-  // Check if we have an environment variable first
-  if (process.env.REACT_APP_API_URL) {
-    return process.env.REACT_APP_API_URL.replace(/\/$/, '');
+  const configuredUrl = process.env.REACT_APP_API_URL?.trim();
+  if (configuredUrl) {
+    return configuredUrl.replace(/\/$/, '');
   }
 
-  // Use relative path to leverage the proxy in package.json
-  // This is the correct way for IDX/Codespaces where 127.0.0.1 is not accessible from the client browser directly
-  return '/api';
+  // Local development uses CRA's /api proxy. Production has a safe
+  // fallback so a missed Vercel environment variable cannot break API calls.
+  return process.env.NODE_ENV === 'production' ? PRODUCTION_API_URL : '/api';
 };
 
 export const API_URL = getApiUrl();
