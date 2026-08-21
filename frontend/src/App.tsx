@@ -72,7 +72,6 @@ const queryClient = new QueryClient({
 });
 
 const IOS_PUSH_GUIDE_SHOWN_KEY = 'iosPushGuideShown';
-const PUSH_CONFIGURATION_TOAST_KEY = 'pushConfigurationToastShown';
 const PUSH_PERMISSION_TOAST_KEY = 'pushPermissionToastShown';
 
 const AppContent: React.FC = () => {
@@ -146,16 +145,37 @@ const AppContent: React.FC = () => {
 
       registrationInProgress = true;
       try {
+        const pushSupport = await getPushSupportInfo();
         const configurationIssue = getPushConfigurationIssue();
+
+        // Missing VAPID is a deploy/config problem — never show a toast to end users.
+        // Presence heartbeats still run; token registration is skipped until the key is set.
         if (configurationIssue) {
-          if (!sessionStorage.getItem(PUSH_CONFIGURATION_TOAST_KEY)) {
-            toast.error(`${configurationIssue} Please contact the administrator.`);
-            sessionStorage.setItem(PUSH_CONFIGURATION_TOAST_KEY, '1');
+          console.warn(configurationIssue);
+          const authToken = localStorage.getItem('token');
+          if (authToken) {
+            try {
+              await axios.post(`${API_URL}/notifications/heartbeat`, {
+                deviceId: getPushDeviceId(),
+                permission: typeof Notification !== 'undefined' ? Notification.permission : 'unknown',
+                capability: {
+                  supportsWebPush: pushSupport.supported,
+                  isIOS: pushSupport.isIOS,
+                  isStandalone: pushSupport.isStandalone,
+                },
+                visibilityState: document.visibilityState,
+                isOnline: navigator.onLine,
+                heartbeatAt: new Date().toISOString(),
+              }, {
+                headers: { Authorization: `Bearer ${authToken}` },
+              });
+            } catch (apiError) {
+              console.error('❌ Failed to update notification presence:', apiError);
+            }
           }
           return;
         }
 
-        const pushSupport = await getPushSupportInfo();
         if (!pushSupport.supported && pushSupport.isIOS && !pushSupport.isStandalone) {
           const alreadyShown = sessionStorage.getItem(IOS_PUSH_GUIDE_SHOWN_KEY);
           if (!alreadyShown) {
