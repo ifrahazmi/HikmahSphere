@@ -4,17 +4,19 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
-import { MongoMemoryServer } from 'mongodb-memory-server';
 import path from 'path';
 import fs from 'fs';
 import User from './models/User';
 import { authMiddleware, superAdminMiddleware } from './middleware/auth';
-import { requestLogger, errorLogger, logStartup, logDatabaseConnection } from './middleware/logger';
+import { requestLogger, errorLogger, logStartup, logDatabaseConnection, summarizeMongoUri } from './middleware/logger';
 import redisClient from './config/redis'; // Import Redis client
+import { getUploadsRoot } from './utils/uploads';
 import { startMeetingNotificationScheduler, stopMeetingNotificationScheduler } from './services/meetingNotificationScheduler';
 import { startPrayerNotificationScheduler, stopPrayerNotificationScheduler } from './services/prayerNotificationScheduler';
 import { startPrayerTimesCacheScheduler, stopPrayerTimesCacheScheduler } from './services/prayerTimesCacheScheduler';
 import { startDhikrReminderScheduler, stopDhikrReminderScheduler } from './services/dhikrReminderScheduler';
+import { logZohoMailStatus } from './services/zohoMail';
+import { logObjectStorageStatus } from './services/objectStorage';
 
 // Import routes
 import authRoutes from './routes/auth';
@@ -49,10 +51,13 @@ for (const envPath of envPaths) {
 // Log loaded Islamic API Key (masked)
 const apiKey = process.env.ISLAMIC_API_KEY;
 if (apiKey) {
-    console.log(`🔑 ISLAMIC_API_KEY loaded successfully: ${apiKey.substring(0, 5)}...`);
+    console.log('🔑 ISLAMIC_API_KEY loaded successfully');
 } else {
     console.warn('⚠️ ISLAMIC_API_KEY is missing from environment variables!');
 }
+
+logZohoMailStatus();
+logObjectStorageStatus();
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '5000', 10);
@@ -211,9 +216,23 @@ const quranLimiter = rateLimit({
   },
 });
 
-// CORS configuration
+// CORS configuration — honor CORS_ORIGIN when set (comma-separated allowlist).
+// When unset, reflect the request origin (local Docker / IDX development).
+const corsOriginEnv = process.env.CORS_ORIGIN?.trim();
+const allowedOrigins = corsOriginEnv
+  ? corsOriginEnv.split(',').map((origin) => origin.trim()).filter(Boolean)
+  : [];
+
 app.use(cors({
-  origin: true, // Allow all origins for development/IDX to prevent CORS issues
+  origin: allowedOrigins.length > 0
+    ? (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin)) {
+          callback(null, true);
+          return;
+        }
+        callback(null, false);
+      }
+    : true,
   credentials: true,
 }));
 
@@ -222,9 +241,10 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Serve static files for uploads from one shared base path.
-const uploadsPath = (process.env.NODE_ENV === 'production' || fs.existsSync('/var/www/hikmah/uploads'))
-  ? '/var/www/hikmah/uploads'
-  : path.resolve(process.cwd(), 'src', 'uploads');
+const uploadsPath = getUploadsRoot();
+if (!fs.existsSync(uploadsPath)) {
+  fs.mkdirSync(uploadsPath, { recursive: true });
+}
 app.use('/uploads', express.static(uploadsPath));
 
 // Also serve from src/uploads for backwards compatibility
@@ -555,30 +575,56 @@ const seedAdminUser = async () => {
 };
 
 
-// MongoDB connection
+// MongoDB connection (single shared Mongoose connection for the process)
+// Local Docker / host: MONGODB_URI (or optional MONGODB_URI_LOCAL override)
+// Production (Atlas on Render): MONGODB_URI=mongodb+srv://...
 const connectDB = async () => {
+  // Prefer optional local override, then MONGODB_URI, then unauthenticated local default
+  const mongoURI =
+    process.env.MONGODB_URI_LOCAL ||
+    process.env.MONGODB_URI ||
+    'mongodb://127.0.0.1:27017/hikmahsphere';
+
+  const { host, database } = summarizeMongoUri(mongoURI);
+
   try {
-    // Use MONGODB_URI_LOCAL for local dev, MONGODB_URI for Docker, or default
-    const mongoURI = process.env.MONGODB_URI_LOCAL || process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/hikmahsphere';
+    const configuredDbName =
+      !database || database === '(default)' || database === '(unknown)'
+        ? 'hikmahsphere'
+        : database;
 
     const connectOptions: mongoose.ConnectOptions = {
-      serverSelectionTimeoutMS: 10000,
-      connectTimeoutMS: 10000,
+      serverSelectionTimeoutMS: 15000,
+      connectTimeoutMS: 15000,
+      // Sensible pool defaults; Atlas and local Docker both work with these
+      maxPoolSize: 10,
+      // Atlas SRV URIs often omit the path; keep the existing app database name
+      dbName: configuredDbName,
     };
 
-    if (process.env.MONGO_USER) {
+    // URI already embeds credentials (Atlas / Docker auth URI) — do not override with MONGO_USER/MONGO_PASS
+    const uriHasEmbeddedCredentials = /mongodb(\+srv)?:\/\/[^/@]+@/i.test(mongoURI);
+
+    if (!uriHasEmbeddedCredentials && process.env.MONGO_USER) {
       connectOptions.user = process.env.MONGO_USER;
       connectOptions.authSource = 'admin';
     }
-    if (process.env.MONGO_PASS) connectOptions.pass = process.env.MONGO_PASS;
+    if (!uriHasEmbeddedCredentials && process.env.MONGO_PASS) {
+      connectOptions.pass = process.env.MONGO_PASS;
+    }
 
     await mongoose.connect(mongoURI, connectOptions);
 
-    logDatabaseConnection(mongoURI);
+    logDatabaseConnection(mongoURI, mongoose.connection.name || configuredDbName);
     await seedAdminUser();
-
-  } catch (error) {
-    console.error('❌ MongoDB connection failed:', error);
+  } catch (error: any) {
+    // Never log the connection string or credentials
+    const message = error?.message || String(error);
+    console.error('❌ MongoDB connection failed');
+    console.error(`   Host: ${host}`);
+    console.error(`   Database: ${database}`);
+    console.error(`   Error: ${message}`);
+    console.error('   Check MONGODB_URI (Atlas) or local Docker MongoDB. Do not put secrets in source code.');
     process.exit(1);
   }
 };

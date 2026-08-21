@@ -182,8 +182,11 @@ export const requestForToken = async () => {
   }
 
   try {
-    const vapidKey = process.env.REACT_APP_FIREBASE_VAPID_KEY || 'BMKXPfAlQOob4fha6L9Pos9_rcJxMsdCr-Z2uR0FrVOHqhMXTTD1qg133D5AN2klLzFIg8ii0iMEqccgdfSLLTY';
-    
+    const vapidKey = process.env.REACT_APP_FIREBASE_VAPID_KEY || '';
+    if (!vapidKey) {
+      console.warn('REACT_APP_FIREBASE_VAPID_KEY is not set; push token registration skipped.');
+      return null;
+    }
     // Retry logic for token retrieval (especially important for iOS)
     let currentToken: string | null = null;
     const maxRetries = 3;

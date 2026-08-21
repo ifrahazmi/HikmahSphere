@@ -685,13 +685,28 @@ router.get('/search', [
 // ============================================================
 // Tafsir API Proxy + Tafheem Fixture Support
 // ============================================================
-const TAFSIR_PROXY_API_BASE = process.env.TAFSIR_API_URL || process.env.REACT_APP_TAFSIR_API_URL || 'http://localhost:8080/api';
+const TAFSIR_PROXY_API_BASE = (
+  process.env.TAFSIR_API_URL ||
+  process.env.REACT_APP_TAFSIR_API_URL ||
+  'http://localhost:8080/api'
+).replace(/\/$/, '');
+const DEFAULT_MAUDUDI_API_URL = 'https://aws-vm.reedfish-temperature.ts.net/api/maududi';
+const MAUDUDI_PROXY_API_BASE = (
+  process.env.MAUDUDI_API_URL || DEFAULT_MAUDUDI_API_URL
+).replace(/\/$/, '');
 const TAFHEEM_EDITION = 'tafheem-ul-quran-syed-abu-ala-maududi';
 
 const getRequestedEdition = (value: unknown): string | null => {
   if (typeof value !== 'string') return null;
   const normalized = value.trim().toLowerCase();
   return normalized || null;
+};
+
+const getTafsirProxyBase = (edition: string | null): string => {
+  if (edition === TAFHEEM_EDITION) {
+    return MAUDUDI_PROXY_API_BASE;
+  }
+  return TAFSIR_PROXY_API_BASE;
 };
 
 const tryLoadTafheemFixture = (): Record<string, any> | null => {
@@ -722,8 +737,11 @@ const proxyTafsirRequest = async (
   path: string,
   edition: string | null
 ): Promise<{ ok: boolean; status: number; payload: any }> => {
-  const query = edition ? `?edition=${encodeURIComponent(edition)}` : '';
-  const response = await fetch(`${TAFSIR_PROXY_API_BASE}${path}${query}`);
+  const base = getTafsirProxyBase(edition);
+  const useMaududiBase = edition === TAFHEEM_EDITION;
+  // Maududi upstream typically does not use ?edition=; Bayan/other editions do.
+  const query = !useMaududiBase && edition ? `?edition=${encodeURIComponent(edition)}` : '';
+  const response = await fetch(`${base}${path}${query}`);
   const payload: any = await response.json().catch(() => null);
 
   return {

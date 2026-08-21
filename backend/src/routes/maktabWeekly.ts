@@ -8,40 +8,24 @@ import { authMiddleware, adminMiddleware } from '../middleware/auth';
 import { getMaktabTeacherName, isMaktabTeacherSlug, MAKTAB_TEACHER_SLUGS } from '../constants/maktabTeachers';
 import MaktabWeeklyReport, { IMaktabWeeklyPhoto, IMaktabWeeklyReport } from '../models/MaktabWeeklyReport';
 import { getIsoWeekBounds } from '../utils/isoWeek';
+import { resolveUploadFilesystemPath } from '../utils/uploads';
+import {
+  createObjectKey,
+  deleteStoredObject,
+  getPrivateObjectUrl,
+  parseStoredObjectRef,
+  uploadObject,
+} from '../services/objectStorage';
 
 const router = express.Router();
 
 const MAX_WEEKLY_UPLOAD_BYTES = 10 * 1024 * 1024;
 const MAX_WEEKLY_PHOTOS = 8;
 
-const isProduction = process.env.NODE_ENV === 'production' || fs.existsSync('/var/www/hikmah/uploads');
-const weeklyUploadDir = isProduction
-  ? '/var/www/hikmah/uploads/maktab/weekly'
-  : path.resolve(process.cwd(), 'src', 'uploads', 'maktab', 'weekly');
-
-if (!fs.existsSync(weeklyUploadDir)) {
-  fs.mkdirSync(weeklyUploadDir, { recursive: true });
-}
-
-const getFilesystemPath = (urlPath: string): string => {
-  const clean = urlPath.replace(/^\//, '');
-  return isProduction
-    ? `/var/www/hikmah/${clean}`
-    : path.resolve(process.cwd(), 'src', clean);
-};
-
-const weeklyStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, weeklyUploadDir);
-  },
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `maktab-week-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
-  },
-});
+const getFilesystemPath = (urlPath: string): string => resolveUploadFilesystemPath(urlPath);
 
 const weeklyUpload = multer({
-  storage: weeklyStorage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: MAX_WEEKLY_UPLOAD_BYTES, files: MAX_WEEKLY_PHOTOS },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
@@ -86,26 +70,26 @@ const uploadedFiles = (req: Request): Express.Multer.File[] => {
   return [];
 };
 
-const unlinkQuietly = (filePath: string) => {
+const deletePhotoQuietly = async (storedValue?: string | null): Promise<void> => {
   try {
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-    }
+    await deleteStoredObject(storedValue);
   } catch (error) {
-    console.warn('Failed to remove weekly report file:', (error as Error).message);
+    console.warn('Failed to remove weekly report photo:', (error as Error).message);
   }
 };
 
-const cleanupUploadedFiles = (req: Request) => {
-  uploadedFiles(req).forEach((file) => unlinkQuietly(file.path));
+const cleanupPhotos = async (photos: Array<Pick<IMaktabWeeklyPhoto, 'url'>>): Promise<void> => {
+  await Promise.all(photos.map((photo) => deletePhotoQuietly(photo.url)));
 };
 
-const unlinkPhoto = (photo: IMaktabWeeklyPhoto) => {
-  unlinkQuietly(getFilesystemPath(photo.url));
-};
-
-const mapFileToPhoto = (file: Express.Multer.File): IMaktabWeeklyPhoto => ({
-  url: `/uploads/maktab/weekly/${file.filename}`,
+const uploadFileAsPhoto = async (file: Express.Multer.File): Promise<IMaktabWeeklyPhoto> => ({
+  url: await uploadObject({
+    visibility: 'private',
+    key: createObjectKey('maktab/weekly', file.originalname),
+    body: file.buffer,
+    contentType: file.mimetype,
+    originalName: file.originalname,
+  }),
   name: file.originalname.slice(0, 240),
   mimeType: file.mimetype,
   size: file.size,
@@ -195,10 +179,14 @@ router.get(
 
 /**
  * @route   GET /api/maktab/weekly-reports/:id/photos/:index
- * @desc    Stream a register photo inline (public)
- * @access  Public
+ * @desc    Return a short-lived private register photo URL
+ * @access  Private (Admin / Manager)
  */
-router.get('/weekly-reports/:id/photos/:index', async (req: Request, res: Response) => {
+router.get(
+  '/weekly-reports/:id/photos/:index',
+  authMiddleware,
+  adminMiddleware,
+  async (req: Request, res: Response) => {
   try {
     const id = getSingleParam(req.params.id);
     const indexParam = getSingleParam(req.params.index);
@@ -217,21 +205,31 @@ router.get('/weekly-reports/:id/photos/:index', async (req: Request, res: Respon
       return res.status(404).json({ status: 'error', message: 'Photo not found' });
     }
 
+    const storedRef = parseStoredObjectRef(photo.url);
+    if (storedRef) {
+      const signedUrl = await getPrivateObjectUrl(photo.url, {
+        fileName: photo.name,
+        contentType: photo.mimeType || 'image/jpeg',
+        expiresIn: 300,
+      });
+      if (!signedUrl) {
+        return res.status(404).json({ status: 'error', message: 'Photo file is missing' });
+      }
+      return res.json({ status: 'success', data: { url: signedUrl } });
+    }
+
     const diskPath = getFilesystemPath(photo.url);
     if (!fs.existsSync(diskPath)) {
       return res.status(404).json({ status: 'error', message: 'Photo file is missing' });
     }
 
-    const downloadName = (photo.name || path.basename(diskPath)).replace(/"/g, '');
-    res.setHeader('Content-Type', photo.mimeType || 'image/jpeg');
-    res.setHeader('Content-Disposition', `inline; filename="${downloadName}"`);
-    res.setHeader('Cache-Control', 'public, max-age=86400');
-    return res.sendFile(path.resolve(diskPath));
+    return res.json({ status: 'success', data: { url: photo.url } });
   } catch (error) {
     console.error('Stream maktab weekly photo error:', error);
     return res.status(500).json({ status: 'error', message: 'Failed to load photo' });
   }
-});
+  }
+);
 
 /**
  * @route   POST /api/maktab/weekly-reports
@@ -247,9 +245,9 @@ router.post(
   body('isoWeek').matches(/^\d{4}-W\d{2}$/).withMessage('isoWeek must look like 2026-W32'),
   body('note').optional({ checkFalsy: true }).isLength({ max: 800 }).withMessage('Note cannot exceed 800 characters'),
   async (req: Request, res: Response) => {
+    let uploadedPhotos: IMaktabWeeklyPhoto[] = [];
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      cleanupUploadedFiles(req);
       return res.status(400).json({
         status: 'error',
         message: errors.array()[0]?.msg || 'Invalid weekly report',
@@ -260,13 +258,11 @@ router.post(
     const teacher = String(req.body.teacher);
     const isoWeek = String(req.body.isoWeek);
     if (!isMaktabTeacherSlug(teacher)) {
-      cleanupUploadedFiles(req);
       return res.status(400).json({ status: 'error', message: 'Unknown teacher' });
     }
 
     const bounds = getIsoWeekBounds(isoWeek);
     if (!bounds) {
-      cleanupUploadedFiles(req);
       return res.status(400).json({ status: 'error', message: 'Invalid ISO week' });
     }
 
@@ -277,20 +273,21 @@ router.post(
 
     const userId = (req as Request & { user?: { userId?: string } }).user?.userId;
     if (!userId) {
-      cleanupUploadedFiles(req);
       return res.status(401).json({ status: 'error', message: 'User not authenticated' });
     }
 
     try {
       const existing = await MaktabWeeklyReport.findOne({ teacher, isoWeek });
       if (existing) {
-        cleanupUploadedFiles(req);
         return res.status(409).json({
           status: 'error',
           message: 'A report for this teacher and week already exists. Update it instead.',
         });
       }
 
+      for (const file of files) {
+        uploadedPhotos.push(await uploadFileAsPhoto(file));
+      }
       const report = await MaktabWeeklyReport.create({
         teacher,
         isoWeek: bounds.isoWeek,
@@ -298,10 +295,11 @@ router.post(
         week: bounds.week,
         weekStart: bounds.weekStart,
         weekEnd: bounds.weekEnd,
-        photos: files.map(mapFileToPhoto),
+        photos: uploadedPhotos,
         note: typeof req.body.note === 'string' ? req.body.note.trim() : '',
         uploadedBy: userId,
       });
+      uploadedPhotos = [];
 
       return res.status(201).json({
         status: 'success',
@@ -309,7 +307,7 @@ router.post(
         data: { report: serializeReport(report) },
       });
     } catch (error: any) {
-      cleanupUploadedFiles(req);
+      await cleanupPhotos(uploadedPhotos);
       if (error?.code === 11000) {
         return res.status(409).json({
           status: 'error',
@@ -334,9 +332,9 @@ router.put(
   wrapWeeklyUpload(weeklyUpload.array('photos', MAX_WEEKLY_PHOTOS)),
   body('note').optional({ checkFalsy: true }).isLength({ max: 800 }).withMessage('Note cannot exceed 800 characters'),
   async (req: Request, res: Response) => {
+    let uploadedPhotos: IMaktabWeeklyPhoto[] = [];
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      cleanupUploadedFiles(req);
       return res.status(400).json({
         status: 'error',
         message: errors.array()[0]?.msg || 'Invalid weekly report',
@@ -346,46 +344,45 @@ router.put(
 
     const id = getSingleParam(req.params.id);
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      cleanupUploadedFiles(req);
       return res.status(400).json({ status: 'error', message: 'Invalid report id' });
     }
 
     const removeIndexes = parseRemoveIndexes(req.body.removeIndexes);
     if (removeIndexes === null) {
-      cleanupUploadedFiles(req);
       return res.status(400).json({ status: 'error', message: 'removeIndexes must be a JSON array of indexes' });
     }
 
     try {
       const report = await MaktabWeeklyReport.findById(id);
       if (!report) {
-        cleanupUploadedFiles(req);
         return res.status(404).json({ status: 'error', message: 'Weekly report not found' });
       }
 
       const removed = report.photos.filter((_, index) => removeIndexes.includes(index));
       const kept = report.photos.filter((_, index) => !removeIndexes.includes(index));
-      const added = uploadedFiles(req).map(mapFileToPhoto);
-      const nextPhotos = [...kept, ...added];
+      const files = uploadedFiles(req);
+      const nextPhotoCount = kept.length + files.length;
 
-      if (nextPhotos.length < 1) {
-        cleanupUploadedFiles(req);
+      if (nextPhotoCount < 1) {
         return res.status(400).json({ status: 'error', message: 'A weekly report must keep at least one photo' });
       }
-      if (nextPhotos.length > MAX_WEEKLY_PHOTOS) {
-        cleanupUploadedFiles(req);
+      if (nextPhotoCount > MAX_WEEKLY_PHOTOS) {
         return res.status(400).json({
           status: 'error',
           message: `A weekly report can include at most ${MAX_WEEKLY_PHOTOS} photos`,
         });
       }
 
-      removed.forEach(unlinkPhoto);
-      report.photos = nextPhotos;
+      for (const file of files) {
+        uploadedPhotos.push(await uploadFileAsPhoto(file));
+      }
+      report.photos = [...kept, ...uploadedPhotos];
       if (req.body.note !== undefined) {
         report.note = typeof req.body.note === 'string' ? req.body.note.trim() : '';
       }
       await report.save();
+      uploadedPhotos = [];
+      await cleanupPhotos(removed);
 
       return res.json({
         status: 'success',
@@ -393,7 +390,7 @@ router.put(
         data: { report: serializeReport(report) },
       });
     } catch (error) {
-      cleanupUploadedFiles(req);
+      await cleanupPhotos(uploadedPhotos);
       console.error('Update maktab weekly report error:', error);
       return res.status(500).json({ status: 'error', message: 'Failed to update weekly report' });
     }
@@ -421,8 +418,9 @@ router.delete(
         return res.status(404).json({ status: 'error', message: 'Weekly report not found' });
       }
 
-      report.photos.forEach(unlinkPhoto);
+      const photosToDelete = [...report.photos];
       await report.deleteOne();
+      await cleanupPhotos(photosToDelete);
 
       return res.json({
         status: 'success',

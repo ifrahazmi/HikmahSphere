@@ -193,11 +193,11 @@ const PrayerTimesIslamicCalendar: React.FC<IslamicCalendarProps> = ({ whiteDays,
   const currentHijriMonthLabel = isCurrentMonthView && todayHijri?.month?.en && todayHijri?.year
     ? `${todayHijri.month.en} ${todayHijri.year} AH`
     : primaryHijriMonthLabel;
-  const displayedHijriMonthLabel = orderedHijriMonthLabels.length > 0
-    ? orderedHijriMonthLabels.join(' / ')
-    : primaryHijriMonthLabel;
-  const showHijriRange = displayedHijriMonthLabel !== currentHijriMonthLabel && orderedHijriMonthLabels.length > 1;
+  const showHijriRange = orderedHijriMonthLabels.length > 1;
   const urduHijriMonth = getUrduHijriMonth(currentHijriMonthLabel);
+  const hijriYearMatch = currentHijriMonthLabel.match(/(\d{3,4})\s*AH/i);
+  const hijriYearLabel = hijriYearMatch ? `${hijriYearMatch[1]} AH` : '';
+  const hijriMonthOnly = currentHijriMonthLabel.replace(/\s*\d{3,4}\s*AH/i, '').trim() || currentHijriMonthLabel;
 
   // Build white days mapping strictly from the continuous calendar grid
   const whiteDayMap = new Map<string, WhiteDayEntry>();
@@ -267,89 +267,82 @@ const PrayerTimesIslamicCalendar: React.FC<IslamicCalendarProps> = ({ whiteDays,
 
   return (
     <div
-      className="bg-white rounded-lg shadow-md p-6 h-full border-l-4 border-emerald-500"
+      className="h-full overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-md"
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm">
-            <MoonIcon className="h-5 w-5" />
-          </div>
-          <div>
-            <h2 className="text-lg font-bold leading-tight text-gray-900">Islamic Calendar</h2>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-600">Hijri Calendar</p>
-          </div>
+      <div className="flex items-center gap-3 border-b border-gray-100 px-4 py-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white">
+          <MoonIcon className="h-4 w-4" />
         </div>
-
-        <div className="flex items-center gap-2">
-          {monthOffset > 0 && (
-            <button
-              onClick={() => setMonthOffset(0)}
-              className="hidden rounded-full border border-emerald-200 px-3 py-1 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-50 sm:inline-flex"
-              type="button"
-            >
-              Current
-            </button>
-          )}
-
-          <button
-            onClick={goToPreviousMonth}
-            className={`rounded-full border p-2 transition-colors ${
-              monthOffset === 0
-                ? 'cursor-not-allowed border-gray-200 text-gray-300'
-                : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
-            }`}
-            disabled={monthOffset === 0}
-            aria-label="View previous month"
-            type="button"
-          >
-            <ChevronLeftIcon className="h-4 w-4" />
-          </button>
-
-          <button
-            onClick={goToNextMonth}
-            className="rounded-full border border-emerald-200 p-2 text-emerald-700 transition-colors hover:bg-emerald-50"
-            aria-label="View next month"
-            type="button"
-          >
-            <ChevronRightIcon className="h-4 w-4" />
-          </button>
+        <div className="min-w-0">
+          <h2 className="text-[15px] font-bold leading-5 text-gray-900">Islamic Calendar</h2>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-600">Hijri Calendar</p>
         </div>
       </div>
 
-      <div className="mb-2">
-        <div className="relative mb-4 overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-50 via-teal-50 to-emerald-50 p-4 ring-1 ring-emerald-100">
-          <div className="pointer-events-none absolute -right-6 -top-8 h-24 w-24 rounded-full bg-emerald-100/50 blur-2xl" />
-          <div className="relative flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <span className="block bg-gradient-to-r from-emerald-700 to-teal-600 bg-clip-text text-2xl font-extrabold tracking-tight text-transparent">
-                {currentHijriMonthLabel}
-              </span>
-              <span className="mt-0.5 block text-sm font-medium text-gray-500">{monthName} {year}</span>
+      <div className="p-4">
+        <div className="mb-4 rounded-2xl bg-emerald-600 px-3 py-3 text-white">
+          <div className="grid grid-cols-[2.25rem_minmax(0,1fr)_2.25rem] items-center">
+            <button
+              onClick={goToPreviousMonth}
+              className={`flex h-9 w-9 items-center justify-center rounded-full bg-white/15 ${
+                monthOffset === 0 ? 'cursor-not-allowed text-white/40' : 'hover:bg-white/25'
+              }`}
+              disabled={monthOffset === 0}
+              aria-label="View previous month"
+              type="button"
+            >
+              <ChevronLeftIcon className="h-5 w-5" />
+            </button>
+
+            <div className="px-2 text-center">
+              {urduHijriMonth && (
+                <p
+                  dir="rtl"
+                  lang="ur"
+                  className="font-jameel-noori mb-0.5 text-[20px] font-normal leading-7"
+                >
+                  {urduHijriMonth}
+                </p>
+              )}
+              <p className="text-sm font-semibold leading-none">{hijriMonthOnly}{hijriYearLabel ? ` ${hijriYearLabel}` : ''}</p>
+              <p className="mt-0.5 text-[11px] font-medium leading-none text-emerald-100">{monthName} {year}</p>
             </div>
-            {urduHijriMonth && (
-              <span
-                dir="rtl"
-                lang="ur"
-                className="shrink-0 text-3xl font-bold leading-none text-emerald-800"
-                style={{ fontFamily: "'Noto Nastaliq Urdu', 'Noto Naskh Arabic', 'Amiri', serif" }}
-                title="Hijri month name in Urdu"
-              >
-                {urduHijriMonth}
-              </span>
-            )}
+
+            <button
+              onClick={goToNextMonth}
+              className="flex h-9 w-9 items-center justify-center justify-self-end rounded-full bg-white/15 hover:bg-white/25"
+              aria-label="View next month"
+              type="button"
+            >
+              <ChevronRightIcon className="h-5 w-5" />
+            </button>
           </div>
-          {showHijriRange && (
-            <span className="relative mt-2 inline-flex w-fit rounded-full bg-white/70 px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200">
-              {displayedHijriMonthLabel}
-            </span>
+
+          {(showHijriRange || monthOffset > 0) && (
+            <div className="mt-2 border-t border-white/15 pt-2 text-center">
+              {showHijriRange && (
+                <p className="text-[11px] leading-4 text-emerald-100">
+                  {orderedHijriMonthLabels.join(' · ')}
+                </p>
+              )}
+              {monthOffset > 0 && (
+                <button
+                  onClick={() => setMonthOffset(0)}
+                  className="mt-1 text-[11px] font-semibold underline decoration-white/40 underline-offset-2"
+                  type="button"
+                >
+                  Back to current month
+                </button>
+              )}
+            </div>
           )}
         </div>
 
-        <div className="grid grid-cols-7 gap-1 text-center text-xs">
+        <div className="grid grid-cols-7 gap-1 text-center text-xs sm:gap-1.5">
           {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((dayLabel) => (
-            <div key={dayLabel} className="py-2 font-bold text-gray-400">{dayLabel}</div>
+            <div key={dayLabel} className="pb-2 pt-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 sm:text-[11px]">{dayLabel}</div>
           ))}
 
           {Array.from({ length: firstDayOfMonth }).map((_, index) => (
@@ -370,22 +363,22 @@ const PrayerTimesIslamicCalendar: React.FC<IslamicCalendarProps> = ({ whiteDays,
               <div
                 key={iso}
                 title={isWhiteDay ? `White Day (${whiteDayLabel})` : undefined}
-                className={`relative flex flex-col items-center justify-center rounded-lg p-2 transition-colors ${
+                className={`relative flex min-h-[3.1rem] flex-col items-center justify-center rounded-xl px-0.5 py-1.5 transition-colors sm:min-h-[3.4rem] ${
                   isToday
-                    ? 'bg-emerald-600 text-white shadow-sm'
+                    ? 'bg-emerald-600 text-white shadow-md ring-2 ring-emerald-200'
                     : isWhiteDay
-                      ? 'bg-amber-100 text-gray-800 ring-1 ring-amber-300'
+                      ? 'bg-amber-50 text-gray-800 ring-1 ring-amber-300'
                       : 'text-gray-700 hover:bg-emerald-50'
                 }`}
               >
-                <span className={`font-semibold ${
+                <span className={`text-sm font-semibold leading-none ${
                   isToday ? 'text-white' : isWhiteDay ? 'text-amber-800' : 'text-gray-900'
                 }`}>{date.getDate()}</span>
-                <span className={`text-[10px] leading-tight ${
+                <span className={`mt-1 text-[10px] leading-none ${
                   isToday ? 'text-emerald-100' : isWhiteDay ? 'text-amber-600' : 'text-emerald-600'
                 }`}>{displayDay}</span>
                 {showMonth && (
-                  <span className={`text-[8px] leading-tight ${
+                  <span className={`mt-0.5 text-[8px] leading-none ${
                     isToday ? 'text-emerald-100' : 'text-gray-400'
                   }`}>{hijri.monthShort.slice(0, 3)}</span>
                 )}
@@ -398,7 +391,7 @@ const PrayerTimesIslamicCalendar: React.FC<IslamicCalendarProps> = ({ whiteDays,
         </div>
       </div>
 
-      <div className="mt-3 border-t pt-3">
+      <div className="border-t border-gray-100 px-4 py-3">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
           <span className="relative h-3 w-3 flex-shrink-0 rounded bg-amber-100 ring-1 ring-amber-300">
             <span className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-amber-400"></span>

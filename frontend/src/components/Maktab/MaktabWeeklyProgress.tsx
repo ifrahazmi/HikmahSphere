@@ -11,7 +11,7 @@ import {
   XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
-import { API_URL } from '../../config';
+import { API_URL, resolveBackendUrl } from '../../config';
 import { MAKTAB_TEACHERS, type MaktabTeacherSlug } from '../../data/maktabTeachers';
 import { useAuth } from '../../hooks/useAuth';
 import {
@@ -50,7 +50,7 @@ type ApiEnvelope = {
   data?: { report?: WeeklyReport | null };
 };
 
-const weeklyPhotoUrl = (reportId: string, index: number) =>
+const weeklyPhotoEndpoint = (reportId: string, index: number) =>
   `${API_URL}/maktab/weekly-reports/${reportId}/photos/${index}`;
 
 const compareIsoWeeks = (a: string, b: string): number => {
@@ -84,6 +84,7 @@ const MaktabWeeklyProgress: React.FC = () => {
   const [teacher, setTeacher] = useState<MaktabTeacherSlug>(MAKTAB_TEACHERS[0].slug);
   const [isoWeek, setIsoWeek] = useState(todayIsoWeek);
   const [report, setReport] = useState<WeeklyReport | null>(null);
+  const [photoUrls, setPhotoUrls] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(true);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [publishOpen, setPublishOpen] = useState(false);
@@ -115,6 +116,43 @@ const MaktabWeeklyProgress: React.FC = () => {
     void fetchReport(teacher, isoWeek);
   }, [fetchReport, teacher, isoWeek]);
 
+  useEffect(() => {
+    setPhotoUrls({});
+    if (!report || !canManage) return undefined;
+
+    let cancelled = false;
+    const loadPhotoUrls = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      try {
+        const entries = await Promise.all(
+          report.photos.map(async (photo) => {
+            const response = await fetch(weeklyPhotoEndpoint(report.id, photo.index), {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.data?.url) {
+              throw new Error(payload.message || 'Failed to load weekly photo');
+            }
+            return [photo.index, resolveBackendUrl(payload.data.url)] as const;
+          })
+        );
+        if (!cancelled) setPhotoUrls(Object.fromEntries(entries));
+      } catch (error) {
+        if (!cancelled) {
+          toast.error(error instanceof Error ? error.message : 'Failed to load weekly photos');
+        }
+      }
+    };
+
+    void loadPhotoUrls();
+    const refreshTimer = window.setInterval(() => void loadPhotoUrls(), 4 * 60 * 1000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(refreshTimer);
+    };
+  }, [canManage, report]);
+
   const weekLabel = formatIsoWeekLabel(isoWeek);
   const isCurrentWeek = isoWeek === todayIsoWeek;
   const prevWeek = addIsoWeeks(isoWeek, -1);
@@ -143,7 +181,7 @@ const MaktabWeeklyProgress: React.FC = () => {
   }, [weekPickerOpen, isoWeek]);
 
   const featuredPhoto =
-    report && report.photos.length > 0 ? weeklyPhotoUrl(report.id, report.photos[0].index) : null;
+    report && report.photos.length > 0 ? photoUrls[report.photos[0].index] : null;
 
   useEffect(() => {
     if (!publishOpen) return undefined;
@@ -209,8 +247,7 @@ const MaktabWeeklyProgress: React.FC = () => {
           Weekly attendance &amp; learning register
         </h2>
         <p className="text-slate-600 max-w-2xl mx-auto leading-relaxed">
-          Anyone can browse the published paper register for each teacher, week by week — the same
-          attendance sheet families see in class.
+          Weekly register photos are available to authorized administrators and managers.
         </p>
       </div>
 
@@ -391,7 +428,7 @@ const MaktabWeeklyProgress: React.FC = () => {
                       className="shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 hover:border-emerald-400 hover:shadow-sm transition-all"
                     >
                       <img
-                        src={weeklyPhotoUrl(report.id, photo.index)}
+                        src={photoUrls[photo.index]}
                         alt={photo.name || `Register page ${photo.index + 1}`}
                         className="h-20 w-28 object-cover"
                       />
@@ -405,6 +442,17 @@ const MaktabWeeklyProgress: React.FC = () => {
                   {report.note}
                 </p>
               )}
+            </div>
+          ) : report && canManage ? (
+            <div className="animate-pulse space-y-4">
+              <div className="h-64 sm:h-80 rounded-2xl bg-slate-100" />
+              <p className="text-center text-sm text-slate-500">Loading private register photos…</p>
+            </div>
+          ) : report && !canManage ? (
+            <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 px-6 py-14 text-center">
+              <PhotoIcon className="mx-auto mb-4 h-10 w-10 text-emerald-600" />
+              <p className="font-semibold text-slate-900">Register photos are private</p>
+              <p className="mt-1 text-sm text-slate-600">An administrator or manager account is required to view them.</p>
             </div>
           ) : (
             <div className="rounded-2xl border border-dashed border-emerald-200 bg-gradient-to-b from-emerald-50/70 to-white px-6 py-14 text-center">
@@ -429,7 +477,7 @@ const MaktabWeeklyProgress: React.FC = () => {
 
       {lightboxIndex !== null && report && (
         <ZoomablePhotoLightbox
-          src={weeklyPhotoUrl(report.id, lightboxIndex)}
+          src={photoUrls[lightboxIndex]}
           alt={report.photos[lightboxIndex]?.name || 'Register photo'}
           title={`${report.teacherName} · ${weekLabel}${
             report.photos.length > 1 ? ` · ${lightboxIndex + 1} / ${report.photos.length}` : ''
@@ -460,6 +508,7 @@ const MaktabWeeklyProgress: React.FC = () => {
           isoWeek={isoWeek}
           weekLabel={weekLabel}
           existing={report}
+          photoUrls={photoUrls}
           onClose={() => setPublishOpen(false)}
           onSaved={(nextReport) => {
             setReport(nextReport);
@@ -476,6 +525,7 @@ type PublishWeeklyModalProps = {
   isoWeek: string;
   weekLabel: string;
   existing: WeeklyReport | null;
+  photoUrls: Record<number, string>;
   onClose: () => void;
   onSaved: (report: WeeklyReport) => void;
 };
@@ -485,6 +535,7 @@ const PublishWeeklyModal: React.FC<PublishWeeklyModalProps> = ({
   isoWeek,
   weekLabel,
   existing,
+  photoUrls,
   onClose,
   onSaved,
 }) => {
@@ -679,7 +730,7 @@ const PublishWeeklyModal: React.FC<PublishWeeklyModalProps> = ({
                         }`}
                       >
                         <img
-                          src={weeklyPhotoUrl(existing.id, photo.index)}
+                          src={photoUrls[photo.index]}
                           alt={photo.name}
                           className="h-20 w-full object-cover"
                         />

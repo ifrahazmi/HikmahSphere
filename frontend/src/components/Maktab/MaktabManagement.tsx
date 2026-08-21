@@ -12,7 +12,7 @@ import {
   EyeIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../../hooks/useAuth';
-import { API_URL } from '../../config';
+import { API_URL, resolveBackendUrl } from '../../config';
 import toast from 'react-hot-toast';
 import { MAX_UPLOAD_SIZE_BYTES, optimizeImageForUpload, readFileAsDataUrl } from '../../utils/imageUpload';
 import RecordMaktabCollection from './RecordMaktabCollection';
@@ -100,6 +100,7 @@ const MaktabManagement: React.FC<MaktabManagementProps> = ({
   const [viewingTransaction, setViewingTransaction] = useState<MaktabTransaction | null>(null);
   const [showProofPreview, setShowProofPreview] = useState(false);
   const [previewProofPath, setPreviewProofPath] = useState('');
+  const [previewProofId, setPreviewProofId] = useState<string | null>(null);
   const [clickedProofPath, setClickedProofPath] = useState<string | null>(null);
 
   const [showCollectionModal, setShowCollectionModal] = useState(false);
@@ -399,28 +400,48 @@ const MaktabManagement: React.FC<MaktabManagementProps> = ({
     return details.join(' • ') || t.paymentMethod;
   };
 
-  const handleProofClick = (e: React.MouseEvent, proofPath: string) => {
+  const getProofUrl = async (transactionId: string): Promise<string> => {
+    const token = localStorage.getItem('token');
+    const response = await fetch(`${API_URL}/maktab/payment/${transactionId}/proof-url`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload.data?.url) {
+      throw new Error(payload.message || 'Failed to load proof');
+    }
+    return resolveBackendUrl(payload.data.url);
+  };
+
+  const handleProofClick = async (e: React.MouseEvent, transactionId: string) => {
     e.preventDefault();
     e.stopPropagation();
-    setPreviewProofPath(proofPath);
-    setClickedProofPath(proofPath);
-    setShowProofPreview(true);
+    try {
+      const proofUrl = await getProofUrl(transactionId);
+      setPreviewProofPath(proofUrl);
+      setPreviewProofId(transactionId);
+      setClickedProofPath(proofUrl);
+      setShowProofPreview(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to load proof');
+    }
   };
 
   const handleProofClose = () => {
     setShowProofPreview(false);
     setClickedProofPath(null);
+    setPreviewProofId(null);
   };
 
-  const handleDownloadProof = async (proofPath: string) => {
+  const handleDownloadProof = async (transactionId: string) => {
     try {
-      const cleanPath = proofPath.replace(/^\/+/, '');
-      const response = await fetch(`/${cleanPath}`);
+      const proofUrl = await getProofUrl(transactionId);
+      const response = await fetch(proofUrl);
+      if (!response.ok) throw new Error('Failed to download proof');
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = proofPath.split('/').pop() || 'proof-document';
+      link.download = new URL(proofUrl, window.location.origin).pathname.split('/').pop() || 'proof-document';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -732,7 +753,7 @@ const MaktabManagement: React.FC<MaktabManagementProps> = ({
                           )}
                           {t.proofFilePath && isAdmin && (
                             <span
-                              onClick={(e) => handleProofClick(e, t.proofFilePath!)}
+                              onClick={(e) => void handleProofClick(e, t._id)}
                               className="text-xs text-indigo-600 hover:text-indigo-700 hover:underline cursor-pointer inline-flex items-center gap-1 font-medium px-2.5 py-1.5 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors"
                             >
                               View Proof
@@ -837,7 +858,7 @@ const MaktabManagement: React.FC<MaktabManagementProps> = ({
                     )}
                     {t.proofFilePath && isAdmin && (
                       <button
-                        onClick={(e) => handleProofClick(e, t.proofFilePath!)}
+                        onClick={(e) => void handleProofClick(e, t._id)}
                         className="text-xs text-indigo-600 hover:text-indigo-700 font-medium mt-1 inline-flex items-center gap-1"
                       >
                         View Proof
@@ -1024,7 +1045,7 @@ const MaktabManagement: React.FC<MaktabManagementProps> = ({
                 <div>
                   <p className="text-sm text-gray-500 mb-1">Proof of Payment</p>
                   <button
-                    onClick={() => handleDownloadProof(viewingTransaction.proofFilePath!)}
+                    onClick={() => void handleDownloadProof(viewingTransaction._id)}
                     className="text-indigo-600 hover:text-indigo-700 underline inline-flex items-center gap-1 cursor-pointer font-medium"
                   >
                     <DocumentArrowDownIcon className="w-4 h-4" />
@@ -1240,8 +1261,13 @@ const MaktabManagement: React.FC<MaktabManagementProps> = ({
                       <button
                         type="button"
                         onClick={() => {
-                          setPreviewProofPath(editingTransaction.proofFilePath!);
-                          setShowProofPreview(true);
+                          void getProofUrl(editingTransaction._id)
+                            .then((url) => {
+                              setPreviewProofPath(url);
+                              setPreviewProofId(editingTransaction._id);
+                              setShowProofPreview(true);
+                            })
+                            .catch((error) => toast.error(error instanceof Error ? error.message : 'Failed to load proof'));
                         }}
                         className="text-xs text-indigo-600 hover:text-indigo-700 font-medium hover:underline"
                       >
@@ -1363,7 +1389,7 @@ const MaktabManagement: React.FC<MaktabManagementProps> = ({
                   <p className="text-2xl text-gray-700 font-bold text-center">PDF Document</p>
                   <p className="text-base text-gray-500 text-center mt-3">Click below to download the proof document</p>
                   <button
-                    onClick={() => handleDownloadProof(previewProofPath)}
+                    onClick={() => previewProofId && void handleDownloadProof(previewProofId)}
                     className="mt-8 px-8 py-4 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 transition-colors text-lg font-semibold inline-flex items-center gap-3 shadow-xl hover:shadow-2xl hover:scale-105"
                   >
                     <DocumentArrowDownIcon className="w-6 h-6" />
@@ -1373,7 +1399,7 @@ const MaktabManagement: React.FC<MaktabManagementProps> = ({
               ) : (
                 <div className="flex items-center justify-center">
                   <img
-                    src={`/${previewProofPath.replace(/^\/+/, '')}`}
+                    src={previewProofPath}
                     alt="Proof of Payment"
                     className="w-full h-auto rounded-2xl shadow-xl"
                     style={{ maxHeight: '600px', objectFit: 'contain' }}
@@ -1385,7 +1411,7 @@ const MaktabManagement: React.FC<MaktabManagementProps> = ({
             <div className="px-8 py-5 bg-gradient-to-r from-gray-50 to-gray-100 border-t border-gray-200 flex justify-between items-center">
               <p className="text-base text-gray-600 font-medium">Click outside or close to dismiss</p>
               <button
-                onClick={() => handleDownloadProof(previewProofPath)}
+                onClick={() => previewProofId && void handleDownloadProof(previewProofId)}
                 className="text-base text-indigo-600 hover:text-indigo-700 hover:underline font-semibold inline-flex items-center gap-2 bg-indigo-50 px-6 py-3 rounded-xl hover:bg-indigo-100 transition-all hover:scale-105"
               >
                 <DocumentArrowDownIcon className="w-5 h-5" />

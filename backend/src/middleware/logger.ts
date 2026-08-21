@@ -156,13 +156,31 @@ export const logStartup = (port: number) => {
   console.log('='.repeat(80) + '\n');
 };
 
-// Log database connection
-export const logDatabaseConnection = (uri: string) => {
-  const sanitizedUri = uri.replace(/\/\/([^:]+):([^@]+)@/, '//$1:****@');
+/**
+ * Summarize a MongoDB URI for logs without credentials or the full connection string.
+ * Example: mongodb+srv://user:pass@cluster.mongodb.net/hikmahsphere?... → cluster.mongodb.net / hikmahsphere
+ */
+export const summarizeMongoUri = (uri: string): { host: string; database: string } => {
+  try {
+    const normalized = uri.replace(/^mongodb(\+srv)?:\/\//i, 'http://');
+    const parsed = new URL(normalized);
+    const database = parsed.pathname.replace(/^\//, '').split('?')[0] || '(default)';
+    const hostname = parsed.hostname || '(unknown)';
+    const host = hostname.endsWith('.mongodb.net') ? 'MongoDB Atlas' : hostname;
+    return { host, database };
+  } catch {
+    return { host: '(unknown)', database: '(unknown)' };
+  }
+};
+
+// Log database connection (never logs credentials or the full URI)
+export const logDatabaseConnection = (uri: string, resolvedDatabase?: string) => {
+  const { host, database } = summarizeMongoUri(uri);
   console.log('\n' + '='.repeat(80));
   console.log(`${colors.success}${colors.bright}🗄️  DATABASE CONNECTED${colors.reset}`);
   console.log(`${colors.dim}Timestamp:${colors.reset} ${getTimestamp()}`);
-  console.log(`${colors.dim}URI:${colors.reset} ${sanitizedUri}`);
+  console.log(`${colors.dim}Host:${colors.reset} ${host}`);
+  console.log(`${colors.dim}Database:${colors.reset} ${resolvedDatabase || database}`);
   console.log(`${colors.success}✅ MongoDB connection established${colors.reset}`);
   console.log('='.repeat(80) + '\n');
 };

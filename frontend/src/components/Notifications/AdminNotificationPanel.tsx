@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Send, Users, User, Check, Search } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import axios from 'axios';
+import { API_URL } from '../../config';
 
 interface UserSuggestion {
     id: string;
@@ -50,9 +51,6 @@ const AdminNotificationPanel = () => {
     const [loading, setLoading] = useState(false);
     const suggestionsRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
-
-    // Use relative URL to leverage package.json proxy
-    const API_URL = '/api';
 
     // Close suggestions when clicking outside
     useEffect(() => {

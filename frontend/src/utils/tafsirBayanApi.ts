@@ -1,9 +1,8 @@
 import type { TafsirAyahResponse, TafsirSurahResponse } from '../types/tafsir';
+import { API_URL } from '../config';
 import { fetchJsonWithRecovery } from './fetchWithRecovery';
 
-const DEFAULT_TAFSIR_API_URL = '/api/quran/tafsir';
 const TAFHEEM_EDITION = 'tafheem-ul-quran-syed-abu-ala-maududi';
-const DEFAULT_MAUDUDI_API_URL = 'https://aws-vm.reedfish-temperature.ts.net/api/maududi';
 const REQUEST_TIMEOUT_MS = Number(process.env.REACT_APP_TAFSIR_TIMEOUT_MS || 30000);
 const TAFSIR_CACHE_TTL_MS = Number(process.env.REACT_APP_TAFSIR_CACHE_TTL_MS || 300000);
 
@@ -19,17 +18,42 @@ const ayahInFlight = new Map<string, Promise<TafsirAyahResponse>>();
 
 export const getTafsirApiUrl = (): string => {
   if (process.env.REACT_APP_TAFSIR_API_URL) {
-    return process.env.REACT_APP_TAFSIR_API_URL;
+    return process.env.REACT_APP_TAFSIR_API_URL.replace(/\/$/, '');
   }
 
-  return DEFAULT_TAFSIR_API_URL;
+  // Default: route through the Express backend proxy (works on Vercel + Render)
+  return `${API_URL}/quran/tafsir`;
 };
 
 const TAFSIR_API_URL = getTafsirApiUrl();
-const MAUDUDI_API_URL = process.env.REACT_APP_MAUDUDI_API_URL || DEFAULT_MAUDUDI_API_URL;
+
+// Bayan lives at REACT_APP_TAFSIR_API_URL (.../api).
+// Maududi lives on the same host at .../api/maududi — a different path.
+const DEFAULT_MAUDUDI_API_URL = 'https://aws-vm.reedfish-temperature.ts.net/api/maududi';
+const MAUDUDI_API_URL = (process.env.REACT_APP_MAUDUDI_API_URL || DEFAULT_MAUDUDI_API_URL).replace(/\/$/, '');
 
 const isTafheemEdition = (edition?: string): boolean => {
   return (edition || '').trim().toLowerCase() === TAFHEEM_EDITION;
+};
+
+const resolveTafsirEndpoint = (
+  surahNumber: number,
+  ayahNumber: number | null,
+  edition?: string
+): string => {
+  const endpointBase = isTafheemEdition(edition) ? MAUDUDI_API_URL : TAFSIR_API_URL;
+  const path =
+    ayahNumber === null
+      ? `${endpointBase}/surah/${surahNumber}`
+      : `${endpointBase}/surah/${surahNumber}/ayah/${ayahNumber}`;
+
+  // Maududi upstream does not use ?edition=; only Bayan/other editions do.
+  if (isTafheemEdition(edition)) {
+    return path;
+  }
+
+  const query = edition ? `?edition=${encodeURIComponent(edition)}` : '';
+  return `${path}${query}`;
 };
 
 const toRecord = (value: unknown): Record<string, unknown> | null => {
@@ -207,11 +231,7 @@ export const fetchTafsirSurah = async (surahNumber: number, edition?: string): P
     throw new Error(runtimeIssue);
   }
 
-  const endpointBase = isTafheemEdition(edition) ? MAUDUDI_API_URL : TAFSIR_API_URL;
-  const query = edition ? `?edition=${encodeURIComponent(edition)}` : '';
-  const url = isTafheemEdition(edition)
-    ? `${endpointBase}/surah/${surahNumber}`
-    : `${endpointBase}/surah/${surahNumber}${query}`;
+  const url = resolveTafsirEndpoint(surahNumber, null, edition);
   const cacheKey = `${isTafheemEdition(edition) ? 'tafheem' : 'default'}|surah|${surahNumber}|${edition || ''}`;
 
   const cached = getCached(surahCache, cacheKey);
@@ -250,11 +270,7 @@ export const fetchTafsirAyah = async (
     throw new Error(runtimeIssue);
   }
 
-  const endpointBase = isTafheemEdition(edition) ? MAUDUDI_API_URL : TAFSIR_API_URL;
-  const query = edition ? `?edition=${encodeURIComponent(edition)}` : '';
-  const url = isTafheemEdition(edition)
-    ? `${endpointBase}/surah/${surahNumber}/ayah/${ayahNumber}`
-    : `${endpointBase}/surah/${surahNumber}/ayah/${ayahNumber}${query}`;
+  const url = resolveTafsirEndpoint(surahNumber, ayahNumber, edition);
   const cacheKey = `${isTafheemEdition(edition) ? 'tafheem' : 'default'}|ayah|${surahNumber}|${ayahNumber}|${edition || ''}`;
 
   const cached = getCached(ayahCache, cacheKey);
