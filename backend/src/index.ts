@@ -8,7 +8,15 @@ import path from 'path';
 import fs from 'fs';
 import User from './models/User';
 import { authMiddleware, superAdminMiddleware } from './middleware/auth';
-import { requestLogger, errorLogger, logStartup, logDatabaseConnection, summarizeMongoUri } from './middleware/logger';
+import {
+  appLogger,
+  requestLogger,
+  errorLogger,
+  installProductionConsoleBridge,
+  logStartup,
+  logDatabaseConnection,
+  summarizeMongoUri,
+} from './middleware/logger';
 import redisClient from './config/redis'; // Import Redis client
 import { getUploadsRoot } from './utils/uploads';
 import { startMeetingNotificationScheduler, stopMeetingNotificationScheduler } from './services/meetingNotificationScheduler';
@@ -42,11 +50,17 @@ const envPaths = [
   path.join(process.cwd(), '.env'),     // Fallback to current directory
 ];
 
-console.log('📝 Attempting to load .env from:', envPaths);
-
 for (const envPath of envPaths) {
   dotenv.config({ path: envPath, override: false });
 }
+
+// Render captures stdout/stderr. Keep only readable warnings/errors from legacy
+// console output; routine request access lines come from the central logger.
+installProductionConsoleBridge();
+appLogger.info('environment_loaded', {
+  sourcesChecked: envPaths,
+  nodeEnvironment: process.env.NODE_ENV || 'development',
+});
 
 // Log loaded Islamic API Key (masked)
 const apiKey = process.env.ISLAMIC_API_KEY;
@@ -528,8 +542,6 @@ app.use(errorLogger);
 
 // Global error handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error(err.stack);
-
   res.status(err.status || 500).json({
     status: 'error',
     message: err.message || 'Internal Server Error',
@@ -578,12 +590,14 @@ const seedAdminUser = async () => {
 // MongoDB connection (single shared Mongoose connection for the process)
 // Local Docker / host: MONGODB_URI (or optional MONGODB_URI_LOCAL override)
 // Production (Atlas on Render): MONGODB_URI=mongodb+srv://...
+// Prefer optional local override, then MONGODB_URI, then unauthenticated local default
+const resolveMongoUri = (): string =>
+  process.env.MONGODB_URI_LOCAL ||
+  process.env.MONGODB_URI ||
+  'mongodb://127.0.0.1:27017/hikmahsphere';
+
 const connectDB = async () => {
-  // Prefer optional local override, then MONGODB_URI, then unauthenticated local default
-  const mongoURI =
-    process.env.MONGODB_URI_LOCAL ||
-    process.env.MONGODB_URI ||
-    'mongodb://127.0.0.1:27017/hikmahsphere';
+  const mongoURI = resolveMongoUri();
 
   const { host, database } = summarizeMongoUri(mongoURI);
 
@@ -620,11 +634,11 @@ const connectDB = async () => {
   } catch (error: any) {
     // Never log the connection string or credentials
     const message = error?.message || String(error);
-    console.error('❌ MongoDB connection failed');
-    console.error(`   Host: ${host}`);
-    console.error(`   Database: ${database}`);
-    console.error(`   Error: ${message}`);
-    console.error('   Check MONGODB_URI (Atlas) or local Docker MongoDB. Do not put secrets in source code.');
+    appLogger.error('database_connection_failed', {
+      host,
+      database,
+      error: new Error(message),
+    });
     process.exit(1);
   }
 };
@@ -633,14 +647,13 @@ const connectDB = async () => {
 const startServer = async () => {
   try {
     // Check Redis connection
-    if (redisClient.isOpen) {
-        console.log('✅ Redis connection confirmed.');
-    } else {
-        console.log('⚠️ Redis not yet connected, attempting...');
+    if (!redisClient.isOpen) {
         try {
             await redisClient.connect();
         } catch (e) {
-            console.error('⚠️ Could not connect to Redis at startup (non-fatal for now)');
+            appLogger.warn('redis_unavailable_at_startup', {
+                message: 'Redis is unavailable at startup (non-fatal)',
+            });
         }
     }
 
@@ -648,33 +661,36 @@ const startServer = async () => {
 
     // Listen on 0.0.0.0 to allow access from other interfaces (required for VMs/external access)
     app.listen(PORT, '0.0.0.0', () => {
-      logStartup(PORT);
+      logStartup(PORT, {
+        database: `${summarizeMongoUri(resolveMongoUri()).host} / ${mongoose.connection.name || 'hikmahsphere'}`,
+        redis: redisClient.isOpen ? 'connected' : 'unavailable',
+      });
       startMeetingNotificationScheduler();
       startPrayerNotificationScheduler();
       startPrayerTimesCacheScheduler();
       startDhikrReminderScheduler();
     });
   } catch (error) {
-    console.error('❌ Failed to start server:', error);
+    appLogger.error('server_start_failed', { error });
     process.exit(1);
   }
 };
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err: any) => {
-  console.error('❌ Unhandled Promise Rejection:', err);
+  appLogger.error('unhandled_promise_rejection', { error: err });
   process.exit(1);
 });
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (err: Error) => {
-  console.error('❌ Uncaught Exception:', err);
+  appLogger.error('uncaught_exception', { error: err });
   process.exit(1);
 });
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
-  console.log('👋 SIGTERM received. Shutting down gracefully...');
+  appLogger.info('shutdown_started', { signal: 'SIGTERM' });
   stopMeetingNotificationScheduler();
   stopPrayerNotificationScheduler();
   stopPrayerTimesCacheScheduler();
@@ -683,7 +699,7 @@ process.on('SIGTERM', async () => {
   if (redisClient.isOpen) {
       await redisClient.quit();
   }
-  console.log('🔒 MongoDB and Redis connections closed.');
+  appLogger.info('shutdown_completed', { signal: 'SIGTERM' });
   process.exit(0);
 });
 

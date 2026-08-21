@@ -9,38 +9,57 @@ import {
 
 const INSTALLED_KEY = 'hs_app_installed';
 
+const readInstalledMarker = (): boolean => {
+  try {
+    return localStorage.getItem(INSTALLED_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
+
+const writeInstalledMarker = (): void => {
+  try {
+    localStorage.setItem(INSTALLED_KEY, '1');
+  } catch {
+    // Standalone detection still prevents the prompt when storage is unavailable.
+  }
+};
+
+const detectStandalone = (): boolean =>
+  window.matchMedia('(display-mode: standalone)').matches ||
+  window.navigator.standalone === true;
+
 const InstallAppPrompt: React.FC = () => {
   const [visible, setVisible] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(
     () => (typeof window !== 'undefined' ? window.deferredInstallPrompt ?? null : null)
   );
   const [installing, setInstalling] = useState(false);
+  const [installedAlready, setInstalledAlready] = useState(readInstalledMarker);
+  const [isStandalone, setIsStandalone] = useState(detectStandalone);
 
   const ua = navigator.userAgent || '';
-  const isDev = process.env.NODE_ENV === 'development';
 
   const isAndroid = useMemo(() => /Android/i.test(ua), [ua]);
-  const isIOS = useMemo(() => /iPad|iPhone|iPod/.test(ua), [ua]);
+  const isIOS = useMemo(
+    () =>
+      /iPad|iPhone|iPod/.test(ua) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1),
+    [ua]
+  );
   const isSafari = useMemo(
     () => /Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS|SamsungBrowser/i.test(ua),
     [ua]
   );
-  const isStandalone = useMemo(
-    () =>
-      window.matchMedia('(display-mode: standalone)').matches ||
-      window.navigator.standalone === true,
-    []
-  );
 
   const canUseNativeInstall = !!deferredPrompt && !isIOS;
   const shouldShowIosGuide = isIOS && !isStandalone;
-  const installedAlready = localStorage.getItem(INSTALLED_KEY) === '1';
 
   useEffect(() => {
-    // Only stay hidden for users already running the installed app.
-    // We intentionally do NOT suppress based on previous dismissals, so the
-    // prompt keeps appearing on every visit until the app is installed.
-    if (isStandalone || (!isDev && installedAlready)) {
+    // A dismissal is intentionally not persisted: every new website visit prompts
+    // again until installation has been confirmed or the app runs standalone.
+    if (isStandalone || installedAlready) {
+      setVisible(false);
       return;
     }
 
@@ -67,15 +86,30 @@ const InstallAppPrompt: React.FC = () => {
     };
 
     const handleAppInstalled = () => {
-      localStorage.setItem(INSTALLED_KEY, '1');
+      writeInstalledMarker();
+      setInstalledAlready(true);
       window.deferredInstallPrompt = null;
       setVisible(false);
       setDeferredPrompt(null);
     };
 
+    const refreshDisplayMode = () => {
+      const standalone = detectStandalone();
+      setIsStandalone(standalone);
+      if (standalone) {
+        writeInstalledMarker();
+        setInstalledAlready(true);
+        setVisible(false);
+      }
+    };
+
+    const displayModeQuery = window.matchMedia('(display-mode: standalone)');
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt as EventListener);
     window.addEventListener('hs-install-available', handleInstallAvailable);
     window.addEventListener('appinstalled', handleAppInstalled);
+    window.addEventListener('pageshow', refreshDisplayMode);
+    document.addEventListener('visibilitychange', refreshDisplayMode);
+    displayModeQuery.addEventListener?.('change', refreshDisplayMode);
 
     // If the prompt was already captured before this component mounted, use it now.
     if (window.deferredInstallPrompt) {
@@ -92,12 +126,21 @@ const InstallAppPrompt: React.FC = () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt as EventListener);
       window.removeEventListener('hs-install-available', handleInstallAvailable);
       window.removeEventListener('appinstalled', handleAppInstalled);
+      window.removeEventListener('pageshow', refreshDisplayMode);
+      document.removeEventListener('visibilitychange', refreshDisplayMode);
+      displayModeQuery.removeEventListener?.('change', refreshDisplayMode);
     };
-  }, [installedAlready, isDev, isStandalone]);
+  }, [installedAlready, isStandalone]);
 
   const dismiss = () => {
     // Hide for the current view only; it reappears on the next visit/reload
     // until the app is actually installed.
+    setVisible(false);
+  };
+
+  const confirmManualInstall = () => {
+    writeInstalledMarker();
+    setInstalledAlready(true);
     setVisible(false);
   };
 
@@ -108,7 +151,8 @@ const InstallAppPrompt: React.FC = () => {
       await deferredPrompt.prompt();
       const choice = await deferredPrompt.userChoice;
       if (choice.outcome === 'accepted') {
-        localStorage.setItem(INSTALLED_KEY, '1');
+        writeInstalledMarker();
+        setInstalledAlready(true);
         setVisible(false);
       } else {
         setVisible(false);
@@ -123,7 +167,7 @@ const InstallAppPrompt: React.FC = () => {
     }
   };
 
-  if (!visible || isStandalone || (!isDev && installedAlready)) return null;
+  if (!visible || isStandalone || installedAlready) return null;
 
   return (
     <div className="fixed inset-x-3 bottom-3 z-[80] sm:inset-x-auto sm:bottom-5 sm:right-5 sm:max-w-md">
@@ -191,6 +235,13 @@ const InstallAppPrompt: React.FC = () => {
                   <span>Tap <span className="font-semibold">Add</span> in the top corner — that's it!</span>
                 </li>
               </ol>
+              <button
+                type="button"
+                onClick={confirmManualInstall}
+                className="mt-3 w-full rounded-lg border border-emerald-500/60 px-3 py-2 text-sm font-semibold text-emerald-200 transition-colors hover:bg-emerald-500/10"
+              >
+                I have installed the app
+              </button>
             </div>
           )}
 
@@ -214,6 +265,13 @@ const InstallAppPrompt: React.FC = () => {
                   <span>Tap <span className="font-semibold">Install</span> to confirm.</span>
                 </li>
               </ol>
+              <button
+                type="button"
+                onClick={confirmManualInstall}
+                className="mt-3 w-full rounded-lg border border-emerald-500/60 px-3 py-2 text-sm font-semibold text-emerald-200 transition-colors hover:bg-emerald-500/10"
+              >
+                I have installed the app
+              </button>
             </div>
           )}
 
