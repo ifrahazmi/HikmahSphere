@@ -24,3 +24,29 @@ export interface TafsirAyahResponse {
   translationPlain?: string;
   footnotes?: TafsirFootnoteMap;
 }
+
+export interface UnifiedTafsirAyahResponse {
+  ayah: number;
+  surah: number;
+  bayan: TafsirAyahResponse;
+  maududi: TafsirAyahResponse;
+}
+
+export interface UnifiedTafsirSurahResponse {
+  surah_number: number;
+  ayahs: UnifiedTafsirAyahResponse[];
+}
+
+export type TafsirSearchSource = 'bayan' | 'maududi' | 'unknown';
+
+export interface TafsirSearchHit {
+  surah: number;
+  ayah: number;
+  snippet: string;
+  source: TafsirSearchSource;
+}
+
+export interface RandomTafsirAyah {
+  surah: number;
+  ayah: number;
+}

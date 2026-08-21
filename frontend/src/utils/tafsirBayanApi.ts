@@ -1,4 +1,12 @@
-import type { TafsirAyahResponse, TafsirSurahResponse } from '../types/tafsir';
+import type {
+  RandomTafsirAyah,
+  TafsirAyahResponse,
+  TafsirSearchHit,
+  TafsirSearchSource,
+  TafsirSurahResponse,
+  UnifiedTafsirAyahResponse,
+  UnifiedTafsirSurahResponse,
+} from '../types/tafsir';
 import { API_URL } from '../config';
 import { fetchJsonWithRecovery } from './fetchWithRecovery';
 
@@ -307,4 +315,246 @@ export const fetchTafsirAyah = async (
   } finally {
     ayahInFlight.delete(cacheKey);
   }
+};
+
+const getTafsirFeatureUrl = (path: string, query = ''): string => {
+  return `${TAFSIR_API_URL}${path}${query}`;
+};
+
+const pickNumber = (...values: unknown[]): number | null => {
+  for (const value of values) {
+    const parsed = Number(value);
+    if (Number.isInteger(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return null;
+};
+
+const pickSnippet = (...values: unknown[]): string => {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) {
+      return value.replace(/<[^>]+>/g, '').trim();
+    }
+  }
+  return '';
+};
+
+const normalizeSearchSource = (value: unknown): TafsirSearchSource => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized.includes('maududi') || normalized.includes('tafheem')) {
+    return 'maududi';
+  }
+  if (normalized.includes('israr') || normalized.includes('bayan')) {
+    return 'bayan';
+  }
+  return 'unknown';
+};
+
+export const normalizeUnifiedAyah = (
+  payload: unknown,
+  fallbackSurah?: number,
+  fallbackAyah?: number
+): UnifiedTafsirAyahResponse => {
+  const data = toRecord((payload as { data?: unknown })?.data ?? payload) || {};
+  const nested = toRecord(data.unified) || data;
+  const surah =
+    pickNumber(nested.surah_number, nested.surah, nested.surahNumber, fallbackSurah) || 0;
+  const ayah =
+    pickNumber(nested.ayah_number, nested.ayah, nested.ayahNumber, fallbackAyah) || 0;
+  const bayanRaw = nested.dr_israr ?? nested.bayan ?? nested.bayan_ul_quran;
+  const maududiRaw = nested.maududi ?? nested.tafheem;
+
+  if (!surah || !ayah) {
+    throw new Error('Unexpected unified tafsir ayah response format');
+  }
+
+  return {
+    surah,
+    ayah,
+    bayan: normalizeAyahEntry(bayanRaw, surah, ayah),
+    maududi: normalizeAyahEntry(maududiRaw, surah, ayah),
+  };
+};
+
+export const normalizeUnifiedSurah = (payload: unknown): UnifiedTafsirSurahResponse => {
+  const data = toRecord((payload as { data?: unknown })?.data ?? payload) || {};
+  const surahNumber = pickNumber(data.surah_number, data.surah, data.surahNumber) || 0;
+  const rawAyahs = data.ayahs ?? data.verses ?? data.items;
+
+  if (Array.isArray(rawAyahs)) {
+    const ayahs = rawAyahs
+      .map((item, index) => normalizeUnifiedAyah(item, surahNumber, index + 1))
+      .sort((first, second) => first.ayah - second.ayah);
+
+    if (!ayahs.length) {
+      throw new Error('Unexpected unified tafsir surah response format');
+    }
+
+    return {
+      surah_number: surahNumber || ayahs[0].surah,
+      ayahs,
+    };
+  }
+
+  if (rawAyahs && typeof rawAyahs === 'object') {
+    const ayahs = Object.entries(rawAyahs as Record<string, unknown>)
+      .map(([key, value]) => {
+        const parsed = parseAyahFromKey(key);
+        return normalizeUnifiedAyah(value, parsed?.surah || surahNumber, parsed?.ayah);
+      })
+      .sort((first, second) => first.ayah - second.ayah);
+
+    if (!ayahs.length) {
+      throw new Error('Unexpected unified tafsir surah response format');
+    }
+
+    return {
+      surah_number: surahNumber || ayahs[0].surah,
+      ayahs,
+    };
+  }
+
+  throw new Error('Unexpected unified tafsir surah response format');
+};
+
+export const normalizeTafsirSearchHits = (payload: unknown): TafsirSearchHit[] => {
+  const data = (payload as { data?: unknown })?.data ?? payload;
+  const list = Array.isArray(data)
+    ? data
+    : Array.isArray((data as { results?: unknown })?.results)
+      ? (data as { results: unknown[] }).results
+      : Array.isArray((data as { hits?: unknown })?.hits)
+        ? (data as { hits: unknown[] }).hits
+        : Array.isArray((data as { items?: unknown })?.items)
+          ? (data as { items: unknown[] }).items
+          : [];
+
+  return list
+    .map((item): TafsirSearchHit | null => {
+      const record = toRecord(item) || {};
+      const keyParsed = typeof record.key === 'string' ? parseAyahFromKey(record.key) : null;
+      const surah = pickNumber(record.surah, record.surah_number, record.surahNumber, keyParsed?.surah);
+      const ayah = pickNumber(record.ayah, record.ayah_number, record.ayahNumber, keyParsed?.ayah);
+      if (!surah || !ayah) {
+        return null;
+      }
+
+      return {
+        surah,
+        ayah,
+        snippet: pickSnippet(record.snippet, record.text, record.excerpt, record.t, record.match),
+        source: normalizeSearchSource(record.source || record.edition || record.author),
+      };
+    })
+    .filter((hit): hit is TafsirSearchHit => Boolean(hit));
+};
+
+export const normalizeRandomTafsir = (payload: unknown): RandomTafsirAyah => {
+  const data = toRecord((payload as { data?: unknown })?.data ?? payload) || {};
+  const nested = toRecord(data.dr_israr) || toRecord(data.maududi) || data;
+  const keyParsed = typeof data.key === 'string'
+    ? parseAyahFromKey(data.key)
+    : typeof nested.key === 'string'
+      ? parseAyahFromKey(nested.key)
+      : null;
+  const surah = pickNumber(
+    data.surah_number,
+    data.surah,
+    data.surahNumber,
+    nested.surah,
+    nested.surah_number,
+    keyParsed?.surah
+  );
+  const ayah = pickNumber(
+    data.ayah_number,
+    data.ayah,
+    data.ayahNumber,
+    nested.ayah,
+    nested.ayah_number,
+    keyParsed?.ayah
+  );
+
+  if (!surah || !ayah) {
+    throw new Error('Unexpected random tafsir response format');
+  }
+
+  return { surah, ayah };
+};
+
+export const fetchUnifiedAyah = async (
+  surahNumber: number,
+  ayahNumber: number
+): Promise<UnifiedTafsirAyahResponse> => {
+  const runtimeIssue = getTafsirRuntimeIssue();
+  if (runtimeIssue) {
+    throw new Error(runtimeIssue);
+  }
+
+  const payload = await fetchJsonWithRecovery<any>(
+    getTafsirFeatureUrl(`/unified/surah/${surahNumber}/ayah/${ayahNumber}`),
+    {
+      cacheTtlMs: TAFSIR_CACHE_TTL_MS,
+      timeoutMs: REQUEST_TIMEOUT_MS,
+      fallbackMessage: 'Failed to load unified tafsir for this ayah',
+    }
+  );
+
+  return normalizeUnifiedAyah(payload, surahNumber, ayahNumber);
+};
+
+export const fetchUnifiedSurah = async (surahNumber: number): Promise<UnifiedTafsirSurahResponse> => {
+  const runtimeIssue = getTafsirRuntimeIssue();
+  if (runtimeIssue) {
+    throw new Error(runtimeIssue);
+  }
+
+  const payload = await fetchJsonWithRecovery<any>(
+    getTafsirFeatureUrl(`/unified/surah/${surahNumber}`),
+    {
+      cacheTtlMs: TAFSIR_CACHE_TTL_MS,
+      timeoutMs: REQUEST_TIMEOUT_MS,
+      fallbackMessage: 'Failed to load unified tafsir for this surah',
+    }
+  );
+
+  return normalizeUnifiedSurah(payload);
+};
+
+export const searchTafsir = async (query: string): Promise<TafsirSearchHit[]> => {
+  const runtimeIssue = getTafsirRuntimeIssue();
+  if (runtimeIssue) {
+    throw new Error(runtimeIssue);
+  }
+
+  const trimmed = query.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  const payload = await fetchJsonWithRecovery<any>(
+    getTafsirFeatureUrl('/search', `?q=${encodeURIComponent(trimmed)}`),
+    {
+      cacheTtlMs: 30_000,
+      timeoutMs: REQUEST_TIMEOUT_MS,
+      fallbackMessage: 'Failed to search tafsir',
+    }
+  );
+
+  return normalizeTafsirSearchHits(payload);
+};
+
+export const fetchRandomTafsir = async (): Promise<RandomTafsirAyah> => {
+  const runtimeIssue = getTafsirRuntimeIssue();
+  if (runtimeIssue) {
+    throw new Error(runtimeIssue);
+  }
+
+  const payload = await fetchJsonWithRecovery<any>(getTafsirFeatureUrl('/random'), {
+    cacheTtlMs: 0,
+    timeoutMs: REQUEST_TIMEOUT_MS,
+    fallbackMessage: 'Failed to load tafsir of the day',
+  });
+
+  return normalizeRandomTafsir(payload);
 };

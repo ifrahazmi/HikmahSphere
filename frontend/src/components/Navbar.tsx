@@ -21,6 +21,8 @@ interface NavbarProps {
   user?: any;
 }
 
+const APP_VERSION_LABEL = `v1.0.2 ${process.env.NODE_ENV === 'production' ? 'Prod' : 'Dev'}`;
+
 const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
   const { user: authUser, logout, hasRole } = useAuth();
   const { isDarkMode } = useDarkMode();
@@ -174,12 +176,12 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                 <span className={`text-sm sm:text-base md:text-lg xl:text-xl 2xl:text-2xl font-bold truncate ${
                   isDark ? 'text-white' : 'text-gray-900'
                 }`}>HikmahSphere</span>
-                <span className={`hidden 2xl:inline-flex ml-1 text-[10px] 2xl:text-xs font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${
+                <span className={`inline-flex ml-1 text-[10px] 2xl:text-xs font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${
                   isDark
                     ? 'bg-emerald-900 text-emerald-300'
                     : 'bg-emerald-100 text-emerald-700'
                 } -translate-y-0.5`}>
-                  v3.0 Beta
+                  {APP_VERSION_LABEL}
                 </span>
               </div>
             </Link>

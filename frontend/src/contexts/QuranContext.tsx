@@ -40,7 +40,9 @@ const TRANSLATION_AUDIO_SOURCES: Record<string, { baseUrl: string; label: string
 const LEGACY_QURAN_SETTINGS_KEY = 'quranSettings';
 const LEGACY_QURAN_BOOKMARKS_KEY = 'quranBookmarks';
 const LEGACY_QURAN_LAST_READ_KEY = 'quranLastRead';
-const QURAN_SETTINGS_MIGRATION_VERSION = 4; // v2: reset default translation to Urdu; v3: (reverted) Maududi default; v4: restore Bayan default edition (Maududi source not reachable in production)
+// v2: reset default translation to Urdu. v5 retires the v3/v4 Maududi resets: the
+// Maududi upstream is now proxied through the backend, so the selection must persist.
+const QURAN_SETTINGS_MIGRATION_VERSION = 5;
 const QURAN_SURAHS_CACHE_TTL_MS = 1000 * 60 * 30;
 const QURAN_EDITIONS_CACHE_TTL_MS = 1000 * 60 * 10;
 
@@ -116,6 +118,9 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
 
   const userStorageScope = user?.id || user?.email || 'guest';
   const userSettingsStorageKey = `quranSettings:${userStorageScope}`;
+  // Kept outside the settings blob so a cloud sync round-trip cannot drop it and
+  // make one-time migrations run again on every load.
+  const userSettingsMigrationKey = `quranSettingsMigration:${userStorageScope}`;
   const userBookmarksStorageKey = `quranBookmarks:${userStorageScope}`;
   // Reading position is scoped per device/browser (stable id shared with push
   // registration) so phone and desktop each restore their own spot.
@@ -440,6 +445,18 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       arabicFont: normalizedArabicFont,
       selectedTranslations: normalizeSelectedTranslations(mergedSettings.selectedTranslations),
       tafsirTranslationPreferences: normalizeTafsirTranslationPreferences(mergedSettings.tafsirTranslationPreferences),
+      tafsirExtrasEnabled: mergedSettings.tafsirExtrasEnabled === true,
+      tafsirEdition: (() => {
+        const extrasEnabled = mergedSettings.tafsirExtrasEnabled === true;
+        const edition = mergedSettings.tafsirEdition;
+        if (edition === 'unified-bayan-maududi') {
+          return extrasEnabled ? edition : 'bayan-ul-quran-dr-israr-ahmed';
+        }
+        if (edition === 'tafheem-ul-quran-syed-abu-ala-maududi' || edition === 'bayan-ul-quran-dr-israr-ahmed') {
+          return edition;
+        }
+        return DEFAULT_QURAN_SETTINGS.tafsirEdition;
+      })(),
       translationAudioEnabled:
         typeof mergedSettings.translationAudioEnabled === 'boolean'
           ? mergedSettings.translationAudioEnabled
@@ -472,27 +489,23 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     const settingsPayload = parseJson(userSettingsRaw) ?? parseJson(fallbackSettingsRaw);
     
     // Migration: apply version-specific resets for existing users
+    const trackedVersion = Number(localStorage.getItem(userSettingsMigrationKey));
     let migratedPayload = settingsPayload;
     if (migratedPayload && typeof migratedPayload === 'object') {
       let migrated: Record<string, any> = { ...(migratedPayload as Record<string, any>) };
-      const storedVersion = migrated._migrationVersion ?? 1;
+      const storedVersion = Number.isFinite(trackedVersion) && trackedVersion > 0
+        ? trackedVersion
+        : migrated._migrationVersion ?? 1;
 
       // v2: Force Urdu as default translation for users who haven't been migrated yet
       if (storedVersion < 2) {
         migrated.selectedTranslations = [DEFAULT_URDU_TRANSLATION.identifier];
       }
 
-      // v4: Restore the default (Bayan) tafsir edition. The Maududi (Tafheem) source
-      // is only reachable on the dev tailnet, so users stuck on it after the earlier
-      // deploy could not load any tafsir. Reset stale Maududi selections back to default.
-      // (Supersedes the earlier v3 Maududi-default migration.)
-      if (storedVersion < 4 && migrated.tafsirEdition === 'tafheem-ul-quran-syed-abu-ala-maududi') {
-        migrated.tafsirEdition = DEFAULT_QURAN_SETTINGS.tafsirEdition;
-      }
-
       migrated._migrationVersion = QURAN_SETTINGS_MIGRATION_VERSION;
       migratedPayload = migrated;
     }
+    localStorage.setItem(userSettingsMigrationKey, String(QURAN_SETTINGS_MIGRATION_VERSION));
     
     const hydratedSettings = normalizeSettings(migratedPayload);
     setSettings(hydratedSettings);
@@ -511,6 +524,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     setLastRead(normalizeLastRead(lastReadPayload));
   }, [
     userSettingsStorageKey,
+    userSettingsMigrationKey,
     userBookmarksStorageKey,
     userLastReadStorageKey,
     preDeviceLastReadStorageKey,

@@ -24,9 +24,17 @@ import { API_URL } from '../config';
 import { fetchIndopakV3Ayah, fetchIndopakV3Surah } from '../utils/indopakV3Quran';
 import { getPushDeviceId } from '../firebase';
 import { fetchJsonWithRecovery, isRateLimitError } from '../utils/fetchWithRecovery';
-import { fetchTafsirAyah, fetchTafsirSurah, getTafsirRuntimeIssue } from '../utils/tafsirBayanApi';
-import type { TafsirAyah } from '../types/tafsir';
-import { BOOKMARK_COLOR_OPTIONS, DEFAULT_TAFSIR_TRANSLATION_PREFERENCES, DEFAULT_TRANSLATIONS, DEFAULT_URDU_TRANSLATION, type BookmarkColor, type SurahData } from '../types/quran';
+import {
+  fetchRandomTafsir,
+  fetchTafsirAyah,
+  fetchTafsirSurah,
+  fetchUnifiedAyah,
+  fetchUnifiedSurah,
+  getTafsirRuntimeIssue,
+  searchTafsir,
+} from '../utils/tafsirBayanApi';
+import type { TafsirAyah, TafsirSearchHit } from '../types/tafsir';
+import { BOOKMARK_COLOR_OPTIONS, DEFAULT_TAFSIR_TRANSLATION_PREFERENCES, DEFAULT_TRANSLATIONS, DEFAULT_URDU_TRANSLATION, type BookmarkColor, type SurahData, type TafsirEdition } from '../types/quran';
 
 interface DisplayAyah {
   ayahNumber: number;
@@ -36,6 +44,9 @@ interface DisplayAyah {
   translationPlain?: string;
   footnotes: Record<string, string>;
   tafsirText: string;
+  bayanTafsirText?: string;
+  maududiTafsirText?: string;
+  maududiFootnotes?: Record<string, string>;
 }
 
 interface TranslationSegment {
@@ -65,10 +76,17 @@ const AREA_BACKGROUND_OPTIONS = [
   { label: 'Soft Peach', value: '#fff7ed', swatchClass: 'bg-orange-50' },
 ];
 
-const TAFSIR_EDITION_OPTIONS = [
+const TAFSIR_EDITION_OPTIONS: Array<{ value: TafsirEdition; label: string }> = [
   { value: 'bayan-ul-quran-dr-israr-ahmed', label: 'Bayan-ul-Quran by Dr Israr Ahmed' },
   { value: 'tafheem-ul-quran-syed-abu-ala-maududi', label: "Tafheem e Qur'an - Syed Abu Ala Maududi" },
-] as const;
+];
+
+const UNIFIED_TAFSIR_OPTION: { value: TafsirEdition; label: string } = {
+  value: 'unified-bayan-maududi',
+  label: 'Both (Bayan + Tafheem)',
+};
+
+const TAFSIR_OF_THE_DAY_KEY = 'tafsirOfTheDay';
 
 const TAFSIR_TEXT_COLOR_OPTIONS = [
   { label: 'Default', value: '#1f2937', textClass: 'text-gray-800' },
@@ -152,6 +170,12 @@ const QuranTafsirBayan: React.FC = () => {
   const [showMobileTranslationPicker, setShowMobileTranslationPicker] = useState(false);
   const [showMobileTafsirPicker, setShowMobileTafsirPicker] = useState(false);
   const [settingsTab, setSettingsTab] = useState<'display' | 'bookmarks'>('display');
+  const [mobileSearchTab, setMobileSearchTab] = useState<'surah' | 'tafsir'>('surah');
+  const [tafsirSearch, setTafsirSearch] = useState('');
+  const [tafsirSearchHits, setTafsirSearchHits] = useState<TafsirSearchHit[]>([]);
+  const [tafsirSearchLoading, setTafsirSearchLoading] = useState(false);
+  const [tafsirSearchError, setTafsirSearchError] = useState<string | null>(null);
+  const [randomLoading, setRandomLoading] = useState(false);
   const [showHeader, setShowHeader] = useState(true);
   const [pendingBookmarkTarget, setPendingBookmarkTarget] = useState<{ surahNumber: number; ayahNumber: number } | null>(null);
   const [bookmarkConfirm, setBookmarkConfirm] = useState<{
@@ -165,6 +189,7 @@ const QuranTafsirBayan: React.FC = () => {
   const [bookmarkModalViewport, setBookmarkModalViewport] = useState<{ height: number; offsetTop: number } | null>(null);
   const readerContentRef = useRef<HTMLDivElement | null>(null);
   const bookmarkViewportRafRef = useRef<number | null>(null);
+  const tafsirSearchTimerRef = useRef<number | null>(null);
   const translationMapCacheRef = useRef<Map<string, Map<number, string>>>(new Map());
   const mobileSettingsSwipeStartYRef = useRef<number | null>(null);
   const mobileSettingsSwipeCurrentYRef = useRef<number | null>(null);
@@ -297,6 +322,11 @@ const QuranTafsirBayan: React.FC = () => {
 
   const selectedTranslation = settings.selectedTranslations[0] || DEFAULT_URDU_TRANSLATION.identifier;
   const tafsirEdition = settings.tafsirEdition || 'bayan-ul-quran-dr-israr-ahmed';
+  const tafsirExtrasEnabled = settings.tafsirExtrasEnabled === true;
+  const visibleTafsirEditionOptions = useMemo(
+    () => (tafsirExtrasEnabled ? [...TAFSIR_EDITION_OPTIONS, UNIFIED_TAFSIR_OPTION] : TAFSIR_EDITION_OPTIONS),
+    [tafsirExtrasEnabled]
+  );
   const preferredTafsirTranslation =
     settings.tafsirTranslationPreferences[tafsirEdition]
     || DEFAULT_TAFSIR_TRANSLATION_PREFERENCES[tafsirEdition];
@@ -321,7 +351,7 @@ const QuranTafsirBayan: React.FC = () => {
   }, [settings.tafsirTranslationPreferences, tafsirEdition, updateSettings]);
 
   const setTafsirEdition = useCallback((value: string) => {
-    const matchedOption = TAFSIR_EDITION_OPTIONS.find((option) => option.value === value);
+    const matchedOption = visibleTafsirEditionOptions.find((option) => option.value === value);
     if (!matchedOption) return;
 
     const nextPreferredTranslation =
@@ -333,7 +363,22 @@ const QuranTafsirBayan: React.FC = () => {
       selectedTranslations: [nextPreferredTranslation],
       arabicOnlyMode: false,
     });
-  }, [settings.tafsirTranslationPreferences, updateSettings]);
+  }, [settings.tafsirTranslationPreferences, updateSettings, visibleTafsirEditionOptions]);
+
+  const setTafsirExtrasEnabled = useCallback((enabled: boolean) => {
+    if (!enabled) {
+      setMobileSearchTab('surah');
+      setTafsirSearch('');
+    }
+    updateSettings({
+      tafsirExtrasEnabled: enabled,
+      ...(enabled
+        ? {}
+        : tafsirEdition === 'unified-bayan-maududi'
+          ? { tafsirEdition: 'bayan-ul-quran-dr-israr-ahmed' as TafsirEdition }
+          : {}),
+    });
+  }, [tafsirEdition, updateSettings]);
 
   useEffect(() => {
     if (selectedTranslation === preferredTafsirTranslation) {
@@ -364,6 +409,9 @@ const QuranTafsirBayan: React.FC = () => {
   }, [updateSettings]);
 
   const tafsirEditionLabel = useMemo(() => {
+    if (tafsirEdition === 'unified-bayan-maududi') {
+      return UNIFIED_TAFSIR_OPTION.label;
+    }
     if (tafsirEdition === 'tafheem-ul-quran-syed-abu-ala-maududi') {
       return "Tafheem e Qur'an - Syed Abu Ala Maududi";
     }
@@ -371,6 +419,7 @@ const QuranTafsirBayan: React.FC = () => {
   }, [tafsirEdition]);
 
   const isTafheemEdition = tafsirEdition === 'tafheem-ul-quran-syed-abu-ala-maududi';
+  const isUnifiedEdition = tafsirEdition === 'unified-bayan-maududi';
 
   const isTranslationUrdu = selectedTranslationMeta?.language === 'Urdu';
 
@@ -667,6 +716,81 @@ const QuranTafsirBayan: React.FC = () => {
     [readerMode]
   );
 
+  const jumpToTafsirAyah = useCallback((surahNumber: number, ayahNumber: number) => {
+    setReaderMode('ayah');
+    setSelectedSurah(surahNumber);
+    setSelectedAyah(ayahNumber);
+    setShowMobileSurahSearch(false);
+    setAllowMobileSurahSearchFocus(false);
+  }, []);
+
+  useEffect(() => {
+    if (!tafsirExtrasEnabled) {
+      setTafsirSearchHits([]);
+      setTafsirSearchError(null);
+      setTafsirSearchLoading(false);
+      return;
+    }
+
+    const query = tafsirSearch.trim();
+    if (tafsirSearchTimerRef.current !== null) {
+      window.clearTimeout(tafsirSearchTimerRef.current);
+    }
+
+    if (query.length < 2) {
+      setTafsirSearchHits([]);
+      setTafsirSearchError(null);
+      setTafsirSearchLoading(false);
+      return;
+    }
+
+    setTafsirSearchLoading(true);
+    tafsirSearchTimerRef.current = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const hits = await searchTafsir(query);
+          setTafsirSearchHits(hits);
+          setTafsirSearchError(hits.length ? null : 'No matching tafsir found.');
+        } catch (searchError) {
+          setTafsirSearchHits([]);
+          setTafsirSearchError(searchError instanceof Error ? searchError.message : 'Failed to search tafsir');
+        } finally {
+          setTafsirSearchLoading(false);
+        }
+      })();
+    }, 400);
+
+    return () => {
+      if (tafsirSearchTimerRef.current !== null) {
+        window.clearTimeout(tafsirSearchTimerRef.current);
+      }
+    };
+  }, [tafsirExtrasEnabled, tafsirSearch]);
+
+  const handleTafsirOfTheDay = useCallback(async () => {
+    if (randomLoading) return;
+    setRandomLoading(true);
+    try {
+      const todayKey = `${TAFSIR_OF_THE_DAY_KEY}:${new Date().toISOString().slice(0, 10)}`;
+      const cachedRaw = sessionStorage.getItem(todayKey);
+      if (cachedRaw) {
+        const cached = JSON.parse(cachedRaw) as { surah?: number; ayah?: number };
+        if (Number.isInteger(cached.surah) && Number.isInteger(cached.ayah)) {
+          jumpToTafsirAyah(Number(cached.surah), Number(cached.ayah));
+          return;
+        }
+      }
+
+      const randomAyah = await fetchRandomTafsir();
+      sessionStorage.setItem(todayKey, JSON.stringify(randomAyah));
+      jumpToTafsirAyah(randomAyah.surah, randomAyah.ayah);
+    } catch (randomError) {
+      setError(randomError instanceof Error ? randomError.message : 'Failed to load Tafsir of the Day');
+    } finally {
+      setRandomLoading(false);
+    }
+  }, [jumpToTafsirAyah, randomLoading]);
+
   const fetchTranslationMap = useCallback(async (surahNumber: number, translationIdentifier: string) => {
     const parseTranslationPayload = (payload: any) => {
       const translationSurah = Array.isArray(payload.data) ? payload.data[0] : payload.data;
@@ -742,39 +866,55 @@ const QuranTafsirBayan: React.FC = () => {
     const surahNumber = selectedSurah;
     const translationIdentifier = selectedTranslation;
     const selectedTafsirEdition = tafsirEdition;
+    const useUnifiedTafsir = selectedTafsirEdition === 'unified-bayan-maududi';
     const useTafheemApiTranslation =
       selectedTafsirEdition === 'tafheem-ul-quran-syed-abu-ala-maududi'
       && translationIdentifier === 'ur.maududi';
 
     if (readerMode === 'ayah') {
-      const [arabicAyah, translationMap, tafsirAyah] = await Promise.all([
+      const [arabicAyah, translationMap, tafsirAyah, unifiedAyah] = await Promise.all([
         fetchIndopakV3Ayah(surahNumber, selectedAyah),
         fetchTranslationMap(surahNumber, translationIdentifier),
-        fetchTafsirAyah(surahNumber, selectedAyah, selectedTafsirEdition),
+        useUnifiedTafsir
+          ? Promise.resolve(null)
+          : fetchTafsirAyah(surahNumber, selectedAyah, selectedTafsirEdition),
+        useUnifiedTafsir
+          ? fetchUnifiedAyah(surahNumber, selectedAyah)
+          : Promise.resolve(null),
       ]);
 
       const derivedArabicText =
         arabicAyah.text || (Array.isArray(arabicAyah.words) ? arabicAyah.words.map((word) => word.text).join(' ') : '');
+      const ayahNumber = unifiedAyah?.ayah || tafsirAyah?.ayah || selectedAyah;
+      const translationSource = unifiedAyah?.maududi || tafsirAyah;
 
       return [
         {
-          ayahNumber: tafsirAyah.ayah,
+          ayahNumber,
           arabicText: derivedArabicText,
           translationText: useTafheemApiTranslation
-            ? (tafsirAyah.translationPlain || stripHtml(tafsirAyah.translationHtml || '') || translationMap.get(tafsirAyah.ayah) || '')
-            : (translationMap.get(tafsirAyah.ayah) || tafsirAyah.translationPlain || stripHtml(tafsirAyah.translationHtml || '') || ''),
-          translationHtml: useTafheemApiTranslation ? tafsirAyah.translationHtml : undefined,
-          translationPlain: useTafheemApiTranslation ? tafsirAyah.translationPlain : undefined,
-          footnotes: tafsirAyah.footnotes || {},
-          tafsirText: tafsirAyah.text,
+            ? (translationSource?.translationPlain || stripHtml(translationSource?.translationHtml || '') || translationMap.get(ayahNumber) || '')
+            : (translationMap.get(ayahNumber) || translationSource?.translationPlain || stripHtml(translationSource?.translationHtml || '') || ''),
+          translationHtml: useTafheemApiTranslation ? translationSource?.translationHtml : undefined,
+          translationPlain: useTafheemApiTranslation ? translationSource?.translationPlain : undefined,
+          footnotes: unifiedAyah?.maududi.footnotes || tafsirAyah?.footnotes || {},
+          tafsirText: unifiedAyah?.bayan.text || tafsirAyah?.text || '',
+          bayanTafsirText: unifiedAyah?.bayan.text,
+          maududiTafsirText: unifiedAyah?.maududi.text || unifiedAyah?.maududi.translationPlain || stripHtml(unifiedAyah?.maududi.translationHtml || ''),
+          maududiFootnotes: unifiedAyah?.maududi.footnotes,
         },
       ];
     }
 
-    const [arabicSurah, translationMap, tafsirSurah] = await Promise.all([
+    const [arabicSurah, translationMap, tafsirSurah, unifiedSurah] = await Promise.all([
       fetchIndopakV3Surah(surahNumber),
       fetchTranslationMap(surahNumber, translationIdentifier),
-      fetchTafsirSurah(surahNumber, selectedTafsirEdition),
+      useUnifiedTafsir
+        ? Promise.resolve(null)
+        : fetchTafsirSurah(surahNumber, selectedTafsirEdition),
+      useUnifiedTafsir
+        ? fetchUnifiedSurah(surahNumber)
+        : Promise.resolve(null),
     ]);
 
     const arabicMap = new Map<number, string>();
@@ -783,7 +923,26 @@ const QuranTafsirBayan: React.FC = () => {
       arabicMap.set(ayah.ayah, text);
     });
 
-    const tafsirAyahs: TafsirAyah[] = tafsirSurah.ayahs;
+    if (unifiedSurah) {
+      if (unifiedSurah.ayahs.length === 0) {
+        throw new Error('No tafsir data found for this Surah');
+      }
+
+      return unifiedSurah.ayahs
+        .sort((first, second) => first.ayah - second.ayah)
+        .map((ayah) => ({
+          ayahNumber: ayah.ayah,
+          arabicText: arabicMap.get(ayah.ayah) || '',
+          translationText: translationMap.get(ayah.ayah) || ayah.maududi.translationPlain || stripHtml(ayah.maududi.translationHtml || '') || '',
+          footnotes: ayah.maududi.footnotes || {},
+          tafsirText: ayah.bayan.text,
+          bayanTafsirText: ayah.bayan.text,
+          maududiTafsirText: ayah.maududi.text || ayah.maududi.translationPlain || stripHtml(ayah.maududi.translationHtml || ''),
+          maududiFootnotes: ayah.maududi.footnotes,
+        }));
+    }
+
+    const tafsirAyahs: TafsirAyah[] = tafsirSurah?.ayahs || [];
     if (tafsirAyahs.length === 0) {
       throw new Error('No tafsir data found for this Surah');
     }
@@ -1297,6 +1456,107 @@ const QuranTafsirBayan: React.FC = () => {
                   </p>
                 </div>
 
+                {isUnifiedEdition ? (
+                  <div className="space-y-3">
+                    <div
+                      className="rounded-xl p-4 border"
+                      style={getRenderBlockStyle(
+                        bookmark?.color,
+                        tafsirAreaBackgroundColor,
+                        resolvedTafsirAreaBackground,
+                        0.14,
+                        0.24
+                      )}
+                    >
+                      <h3 className={`mb-2 text-sm font-semibold ${settings.theme === 'dark' ? 'text-emerald-300' : 'text-emerald-700'}`}>
+                        Bayan-ul-Quran by Dr Israr Ahmed
+                      </h3>
+                      <p
+                        dir="rtl"
+                        lang="ur"
+                        style={{
+                          fontSize: `${tafsirFontSize}px`,
+                          textAlign: 'justify',
+                          textJustify: 'inter-word',
+                          lineHeight: 2.2,
+                          color: resolvedTafsirTextColor,
+                        }}
+                        className="quran-urdu-tafsir font-alvi-nastaleeq"
+                      >
+                        {ayah.bayanTafsirText || ayah.tafsirText || 'Tafsir unavailable for selected edition.'}
+                      </p>
+                    </div>
+                    <div
+                      className="rounded-xl p-4 border"
+                      style={getRenderBlockStyle(
+                        bookmark?.color,
+                        tafsirAreaBackgroundColor,
+                        resolvedTafsirAreaBackground,
+                        0.14,
+                        0.24
+                      )}
+                    >
+                      <h3 className={`mb-2 text-sm font-semibold ${settings.theme === 'dark' ? 'text-emerald-300' : 'text-emerald-700'}`}>
+                        Tafheem e Qur'an - Syed Abu Ala Maududi
+                      </h3>
+                      {ayah.maududiTafsirText ? (
+                        <p
+                          dir="rtl"
+                          lang="ur"
+                          style={{
+                            fontSize: `${tafsirFontSize}px`,
+                            textAlign: 'justify',
+                            textJustify: 'inter-word',
+                            lineHeight: 2.2,
+                            color: resolvedTafsirTextColor,
+                          }}
+                          className="quran-urdu-tafsir font-alvi-nastaleeq"
+                        >
+                          {ayah.maududiTafsirText}
+                        </p>
+                      ) : null}
+                      {visibleFootnotes.length > 0 && (
+                        <div className="mt-3 space-y-3" dir="rtl" lang="ur">
+                          {visibleFootnotes.map((note) => (
+                            <div
+                              key={`unified-${ayah.ayahNumber}-${note.footnoteId}`}
+                              id={`tafheem-footnote-${selectedSurah}-${ayah.ayahNumber}-${note.footnoteId}`}
+                              className={`rounded-md border px-3 py-3 ${settings.theme === 'dark' ? 'border-gray-700 bg-gray-900/40' : 'border-emerald-100 bg-white/70'}`}
+                            >
+                              <p
+                                style={{
+                                  fontSize: `${tafsirFontSize}px`,
+                                  lineHeight: 2.2,
+                                  color: resolvedTafsirTextColor,
+                                }}
+                                className="font-alvi-nastaleeq text-right"
+                              >
+                                <span className={`ml-2 font-semibold ${settings.theme === 'dark' ? 'text-emerald-300' : 'text-emerald-700'}`}>
+                                  [{note.marker}]
+                                </span>
+                                {note.text}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {!ayah.maududiTafsirText && visibleFootnotes.length === 0 && (
+                        <p
+                          dir="rtl"
+                          lang="ur"
+                          style={{
+                            fontSize: `${tafsirFontSize}px`,
+                            textAlign: 'justify',
+                            color: resolvedTafsirTextColor,
+                          }}
+                          className="quran-urdu-tafsir font-alvi-nastaleeq"
+                        >
+                          Tafsir unavailable for selected edition.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ) : (
                 <div
                   className="rounded-xl p-4 border"
                   style={getRenderBlockStyle(
@@ -1364,6 +1624,7 @@ const QuranTafsirBayan: React.FC = () => {
                     </p>
                   )}
                 </div>
+                )}
               </>
             );
           })()}
@@ -1379,6 +1640,7 @@ const QuranTafsirBayan: React.FC = () => {
       getScrollBehavior,
       isBookmarked,
       isTafheemEdition,
+      isUnifiedEdition,
       isTranslationUrdu,
       settings.fontSize,
       settings.theme,
@@ -1432,6 +1694,20 @@ const QuranTafsirBayan: React.FC = () => {
               <h1 className={`text-2xl font-bold ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
                 {tafsirEditionLabel}
               </h1>
+              {tafsirExtrasEnabled && (
+                <button
+                  type="button"
+                  onClick={() => void handleTafsirOfTheDay()}
+                  disabled={randomLoading}
+                  className={`ml-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                    settings.theme === 'dark'
+                      ? 'bg-emerald-900 text-emerald-200 hover:bg-emerald-800'
+                      : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                  } disabled:opacity-50`}
+                >
+                  {randomLoading ? 'Loading...' : 'Today'}
+                </button>
+              )}
             </div>
             <p className={`text-xs ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
               Ayah, Urdu translation, and tafsir together in one reading flow
@@ -1465,11 +1741,23 @@ const QuranTafsirBayan: React.FC = () => {
                 <div className="min-w-0 flex items-center justify-center gap-1.5">
                   <BookOpenIcon className="h-3.5 w-3.5 text-emerald-600 flex-shrink-0" />
                   <h1 className={`text-base font-bold leading-none truncate ${settings.theme === 'dark' ? 'text-white' : 'text-gray-800'}`} style={{ fontFamily: 'Lora, serif' }}>
-                    {isTafheemEdition ? 'Tafheem e Qur\'an' : 'Bayan-ul-Quran'}
+                    {isUnifiedEdition ? 'Both Tafsirs' : isTafheemEdition ? 'Tafheem e Qur\'an' : 'Bayan-ul-Quran'}
                   </h1>
                 </div>
 
                 <div className="flex items-center justify-end gap-1.5">
+                  {tafsirExtrasEnabled && (
+                    <button
+                      type="button"
+                      onClick={() => void handleTafsirOfTheDay()}
+                      disabled={randomLoading}
+                      className={`h-8 px-2 rounded-lg text-[11px] font-semibold ${settings.theme === 'dark' ? 'bg-emerald-900 text-emerald-200' : 'bg-emerald-100 text-emerald-800'} disabled:opacity-50`}
+                      aria-label="Tafsir of the Day"
+                      title="Tafsir of the Day"
+                    >
+                      Today
+                    </button>
+                  )}
                   <button
                     onClick={() => handleReaderModeChange(readerMode === 'ayah' ? 'surah' : 'ayah')}
                     className={`h-8 w-8 rounded-lg flex items-center justify-center ${settings.theme === 'dark' ? 'bg-gray-700 text-gray-200' : 'bg-gray-100 text-gray-700'}`}
@@ -1718,9 +2006,31 @@ const QuranTafsirBayan: React.FC = () => {
                         onChange={(event) => setTafsirEdition(event.target.value)}
                         className={`w-full rounded-md border px-2 py-2 text-xs ${settings.theme === 'dark' ? 'border-gray-600 bg-gray-700 text-white' : 'border-gray-300 bg-white text-gray-900'}`}
                       >
-                        <option value="bayan-ul-quran-dr-israr-ahmed">Bayan-ul-Quran by Dr Israr Ahmed</option>
-                        <option value="tafheem-ul-quran-syed-abu-ala-maududi">Tafheem e Qur'an - Syed Abu Ala Maududi</option>
+                        {visibleTafsirEditionOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
                       </select>
+                    </div>
+
+                    <div className={`rounded-md border px-2.5 py-2 ${settings.theme === 'dark' ? 'border-gray-600 bg-gray-700/60' : 'border-gray-200 bg-gray-50'}`}>
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={tafsirExtrasEnabled}
+                          onChange={(event) => setTafsirExtrasEnabled(event.target.checked)}
+                          className="mt-0.5 h-3.5 w-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                        />
+                        <span>
+                          <span className={`block text-xs font-medium ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                            New Tafsir tools
+                          </span>
+                          <span className={`block text-[11px] leading-4 ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                            Both tafsirs, text search, and Tafsir of the Day
+                          </span>
+                        </span>
+                      </label>
                     </div>
 
                     <div>
@@ -2053,6 +2363,47 @@ const QuranTafsirBayan: React.FC = () => {
                     </h2>
                   </div>
 
+                  {tafsirExtrasEnabled && (
+                    <div className="mb-3">
+                      <label className={`mb-1 block text-xs font-medium ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                        Search Tafsir
+                      </label>
+                      <input
+                        type="text"
+                        value={tafsirSearch}
+                        onChange={(event) => setTafsirSearch(event.target.value)}
+                        placeholder="Search tafsir text..."
+                        className={`mb-2 w-full rounded-md border px-2 py-2 text-sm ${settings.theme === 'dark' ? 'border-gray-600 bg-gray-700 text-white placeholder-gray-400' : 'border-gray-300 bg-white text-gray-900 placeholder-gray-500'}`}
+                      />
+                      {tafsirSearchLoading && (
+                        <p className={`text-xs ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Searching...</p>
+                      )}
+                      {tafsirSearchError && !tafsirSearchLoading && (
+                        <p className={`text-xs ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>{tafsirSearchError}</p>
+                      )}
+                      <div className="max-h-40 space-y-1 overflow-y-auto">
+                        {tafsirSearchHits.map((hit, index) => (
+                          <button
+                            key={`${hit.surah}:${hit.ayah}:${index}`}
+                            type="button"
+                            onClick={() => jumpToTafsirAyah(hit.surah, hit.ayah)}
+                            className={`w-full rounded-md px-2 py-2 text-left text-xs ${settings.theme === 'dark' ? 'text-gray-100 hover:bg-gray-700' : 'text-gray-800 hover:bg-emerald-50'}`}
+                          >
+                            <span className="font-semibold">{hit.surah}:{hit.ayah}</span>
+                            {hit.source !== 'unknown' && (
+                              <span className="ml-1 text-[10px] uppercase tracking-wide text-emerald-600">{hit.source}</span>
+                            )}
+                            {hit.snippet && (
+                              <p className={`mt-1 line-clamp-2 ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`} dir="rtl">
+                                {hit.snippet}
+                              </p>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <input
                     type="text"
                     value={surahSearch}
@@ -2262,7 +2613,7 @@ const QuranTafsirBayan: React.FC = () => {
                 </button>
                 {showMobileTafsirPicker && (
                   <div className={`mt-2 max-h-56 overflow-y-auto rounded-md border p-1.5 space-y-1 ${settings.theme === 'dark' ? 'border-gray-600 bg-gray-800' : 'border-gray-200 bg-white'}`}>
-                    {TAFSIR_EDITION_OPTIONS.map((option) => {
+                    {visibleTafsirEditionOptions.map((option) => {
                       const isSelected = tafsirEdition === option.value;
                       return (
                         <button
@@ -2289,6 +2640,23 @@ const QuranTafsirBayan: React.FC = () => {
                   </div>
                 )}
               </div>
+
+              <label className={`flex items-start gap-3 rounded-lg px-3 py-3 ${settings.theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'}`}>
+                <input
+                  type="checkbox"
+                  checked={tafsirExtrasEnabled}
+                  onChange={(event) => setTafsirExtrasEnabled(event.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                />
+                <span>
+                  <span className={`block text-sm font-medium ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                    New Tafsir tools
+                  </span>
+                  <span className={`block text-xs leading-5 ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                    Both tafsirs, text search, and Tafsir of the Day
+                  </span>
+                </span>
+              </label>
 
               <button
                 onClick={() => updateSettings({ theme: settings.theme === 'light' ? 'dark' : 'light' })}
@@ -2477,7 +2845,9 @@ const QuranTafsirBayan: React.FC = () => {
           />
           <div className={`absolute bottom-0 left-0 right-0 rounded-t-2xl p-4 max-h-[85vh] overflow-y-auto ${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
             <div className="flex items-center justify-between mb-3">
-              <h2 className={`text-base font-semibold ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Surah Finder</h2>
+              <h2 className={`text-base font-semibold ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                {tafsirExtrasEnabled && mobileSearchTab === 'tafsir' ? 'Search Tafsir' : 'Surah Finder'}
+              </h2>
               <button
                 onClick={() => {
                   setAllowMobileSurahSearchFocus(false);
@@ -2488,6 +2858,39 @@ const QuranTafsirBayan: React.FC = () => {
               </button>
             </div>
 
+            {tafsirExtrasEnabled && (
+              <div className="mb-3 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMobileSearchTab('surah')}
+                  className={`rounded-md px-3 py-2 text-sm font-medium ${
+                    mobileSearchTab === 'surah'
+                      ? 'bg-emerald-500 text-white'
+                      : settings.theme === 'dark'
+                      ? 'bg-gray-700 text-gray-200'
+                      : 'bg-gray-100 text-gray-700'
+                  }`}
+                >
+                  Surahs
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMobileSearchTab('tafsir')}
+                  className={`rounded-md px-3 py-2 text-sm font-medium ${
+                    mobileSearchTab === 'tafsir'
+                      ? 'bg-emerald-500 text-white'
+                      : settings.theme === 'dark'
+                      ? 'bg-gray-700 text-gray-200'
+                      : 'bg-gray-100 text-gray-700'
+                  }`}
+                >
+                  Tafsir
+                </button>
+              </div>
+            )}
+
+            {(!tafsirExtrasEnabled || mobileSearchTab === 'surah') && (
+              <>
             <input
               type="text"
               value={surahSearch}
@@ -2537,6 +2940,47 @@ const QuranTafsirBayan: React.FC = () => {
                 </button>
               ))}
             </div>
+              </>
+            )}
+
+            {tafsirExtrasEnabled && mobileSearchTab === 'tafsir' && (
+              <>
+                <input
+                  type="text"
+                  value={tafsirSearch}
+                  onChange={(event) => setTafsirSearch(event.target.value)}
+                  placeholder="Search tafsir text..."
+                  style={{ fontSize: '16px' }}
+                  className={`mb-3 w-full rounded-md border px-3 py-2 text-base ${settings.theme === 'dark' ? 'border-gray-600 bg-gray-700 text-white placeholder-gray-400' : 'border-gray-300 bg-white text-gray-900 placeholder-gray-500'}`}
+                />
+                {tafsirSearchLoading && (
+                  <p className={`mb-2 text-sm ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Searching...</p>
+                )}
+                {tafsirSearchError && !tafsirSearchLoading && (
+                  <p className={`mb-2 text-sm ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>{tafsirSearchError}</p>
+                )}
+                <div className="space-y-1 max-h-[60vh] overflow-y-auto">
+                  {tafsirSearchHits.map((hit, index) => (
+                    <button
+                      key={`mobile-hit-${hit.surah}:${hit.ayah}:${index}`}
+                      type="button"
+                      onClick={() => jumpToTafsirAyah(hit.surah, hit.ayah)}
+                      className={`w-full rounded-md px-2 py-2 text-left text-sm ${settings.theme === 'dark' ? 'text-gray-100 hover:bg-gray-700' : 'text-gray-800 hover:bg-emerald-50'}`}
+                    >
+                      <span className="font-semibold">{hit.surah}:{hit.ayah}</span>
+                      {hit.source !== 'unknown' && (
+                        <span className="ml-1 text-[10px] uppercase tracking-wide text-emerald-600">{hit.source}</span>
+                      )}
+                      {hit.snippet && (
+                        <p className={`mt-1 line-clamp-2 text-xs ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`} dir="rtl">
+                          {hit.snippet}
+                        </p>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

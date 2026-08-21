@@ -193,15 +193,23 @@ router.post('/login', [
       status: 'success',
       token: accessToken,
       refreshToken,
+      // Includes the profile fields the client renders on the profile page so it
+      // does not have to wait for a second /auth/profile round trip after login.
       user: {
         id: user._id,
+        _id: user._id,
         username: user.username,
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
         createdAt: user.createdAt,
         role: user.role,
-        isAdmin: user.isAdmin
+        isAdmin: user.isAdmin,
+        gender: user.gender,
+        phoneNumber: user.phoneNumber,
+        address: user.address,
+        preferences: { madhab: user.preferences?.madhab },
+        profile: { avatar: user.profile?.avatar, bio: user.profile?.bio },
       },
     });
   } catch (error) {
