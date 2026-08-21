@@ -17,6 +17,13 @@ import {
   getGlobalMeetingNotificationSettings,
   sendMeetingNotifications,
 } from '../services/meetingNotificationSender';
+import { getUploadsSubdir } from '../utils/uploads';
+import {
+  createObjectKey,
+  deleteStoredObject,
+  getPrivateObjectUrl,
+  uploadObject,
+} from '../services/objectStorage';
 
 const router = express.Router();
 
@@ -45,27 +52,10 @@ const MEETING_ATTACHMENT_MIME_ALLOWLIST = new Set([
   'image/webp',
 ]);
 
-const isProduction = process.env.NODE_ENV === 'production' || fs.existsSync('/var/www/hikmah/uploads');
-const communityUploadsDir = isProduction
-  ? '/var/www/hikmah/uploads/community'
-  : path.resolve(process.cwd(), 'src', 'uploads', 'community');
-
-if (!fs.existsSync(communityUploadsDir)) {
-  fs.mkdirSync(communityUploadsDir, { recursive: true });
-}
-
-const communityStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, communityUploadsDir);
-  },
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `community-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
-  },
-});
+const communityUploadsDir = getUploadsSubdir('community');
 
 const communityUpload = multer({
-  storage: communityStorage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: MAX_COMMUNITY_UPLOAD_BYTES },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
@@ -108,12 +98,31 @@ const resolveAttachmentDiskPath = (storedUrl?: string): string | null => {
   return path.join(communityUploadsDir, filename);
 };
 
-const unlinkAttachmentFile = (storedUrl?: string) => {
-  const diskPath = resolveAttachmentDiskPath(storedUrl);
-  if (!diskPath) return;
-  fs.unlink(diskPath, (unlinkError) => {
-    if (unlinkError && (unlinkError as NodeJS.ErrnoException).code !== 'ENOENT') {
-      console.warn('Failed to remove meeting attachment:', unlinkError.message);
+const uploadCommunityFile = async (
+  file: Express.Multer.File,
+  visibility: 'public' | 'private',
+  prefix: string
+): Promise<string> => {
+  const key = createObjectKey(`community/${prefix}`, file.originalname);
+  return uploadObject({
+    visibility,
+    key,
+    body: file.buffer,
+    contentType: file.mimetype,
+    originalName: file.originalname,
+  });
+};
+
+const cleanupStoredObjects = async (
+  storedValues: Array<string | null | undefined>,
+  context: string
+): Promise<void> => {
+  const results = await Promise.allSettled(
+    storedValues.filter((value): value is string => Boolean(value)).map((value) => deleteStoredObject(value))
+  );
+  results.forEach((result) => {
+    if (result.status === 'rejected') {
+      console.warn(`Failed to clean up ${context}:`, result.reason);
     }
   });
 };
@@ -238,13 +247,6 @@ const sanitizeLinkList = (value: unknown): string[] => {
   }
 
   return [];
-};
-
-const mapUploadFileToUrl = (file?: Express.Multer.File): string | undefined => {
-  if (!file) {
-    return undefined;
-  }
-  return `/uploads/community/${file.filename}`;
 };
 
 const normalizeRole = (req: AuthenticatedRequest): string => {
@@ -586,6 +588,8 @@ router.post(
     { name: 'attachment', maxCount: 1 },
   ])),
   async (req: AuthenticatedRequest, res: Response) => {
+    const uploadedObjects: string[] = [];
+    let forumPersisted = false;
     try {
       const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
       const image = files?.image?.[0];
@@ -626,13 +630,22 @@ router.post(
         return;
       }
 
+      const coverImageUrl = image
+        ? await uploadCommunityFile(image, 'public', 'forums/images')
+        : undefined;
+      if (coverImageUrl) uploadedObjects.push(coverImageUrl);
+      const attachmentUrl = attachment
+        ? await uploadCommunityFile(attachment, 'public', 'forums/attachments')
+        : undefined;
+      if (attachmentUrl) uploadedObjects.push(attachmentUrl);
+
       const createdForum = await CommunityForum.create({
         title,
         description,
         category,
         tags,
-        coverImageUrl: mapUploadFileToUrl(image),
-        attachmentUrl: mapUploadFileToUrl(attachment),
+        coverImageUrl,
+        attachmentUrl,
         externalLink: externalLink || undefined,
         videoUrl: videoUrl || undefined,
         createdById: userId,
@@ -642,6 +655,7 @@ router.post(
         postCount: 0,
         isActive: true,
       });
+      forumPersisted = true;
 
       await logCommunityActivity(req, 'community_forum_created', `Forum created: ${title}`, {
         forumId: createdForum._id.toString(),
@@ -670,6 +684,9 @@ router.post(
         },
       });
     } catch (error: any) {
+      if (!forumPersisted) {
+        await cleanupStoredObjects(uploadedObjects, 'failed forum upload');
+      }
       console.error('Create forum error:', error);
       res.status(500).json({
         status: 'error',
@@ -693,6 +710,8 @@ router.put(
     { name: 'attachment', maxCount: 1 },
   ])),
   async (req: AuthenticatedRequest, res: Response) => {
+    const uploadedObjects: string[] = [];
+    let forumPersisted = false;
     try {
       const forumId = getSingleParam(req.params.forumId);
       if (!forumId || !mongoose.Types.ObjectId.isValid(forumId)) {
@@ -737,6 +756,8 @@ router.put(
         res.status(404).json({ status: 'error', message: 'Forum not found' });
         return;
       }
+      const oldCoverImageUrl = forum.coverImageUrl;
+      const oldAttachmentUrl = forum.attachmentUrl;
 
       forum.title = title;
       forum.description = description;
@@ -753,20 +774,23 @@ router.put(
         forum.set('videoUrl', undefined);
       }
       if (image) {
-        const imageUrl = mapUploadFileToUrl(image);
-        if (imageUrl) {
-          forum.coverImageUrl = imageUrl;
-        }
+        const imageUrl = await uploadCommunityFile(image, 'public', 'forums/images');
+        uploadedObjects.push(imageUrl);
+        forum.coverImageUrl = imageUrl;
       }
       if (attachment) {
-        const attachmentUrl = mapUploadFileToUrl(attachment);
-        if (attachmentUrl) {
-          forum.attachmentUrl = attachmentUrl;
-        }
+        const attachmentUrl = await uploadCommunityFile(attachment, 'public', 'forums/attachments');
+        uploadedObjects.push(attachmentUrl);
+        forum.attachmentUrl = attachmentUrl;
       }
       forum.lastActivityAt = new Date();
 
       await forum.save();
+      forumPersisted = true;
+      await cleanupStoredObjects([
+        image ? oldCoverImageUrl : undefined,
+        attachment ? oldAttachmentUrl : undefined,
+      ], 'replaced forum uploads');
 
       await logCommunityActivity(req, 'community_forum_updated', `Forum updated: ${forum.title}`, {
         forumId,
@@ -794,6 +818,9 @@ router.put(
         },
       });
     } catch (error: any) {
+      if (!forumPersisted) {
+        await cleanupStoredObjects(uploadedObjects, 'failed forum replacement');
+      }
       console.error('Update forum error:', error);
       res.status(500).json({
         status: 'error',
@@ -822,7 +849,8 @@ router.delete('/forums/:forumId', authMiddleware, adminMiddleware, async (req: A
       return;
     }
 
-    const postIds = await CommunityPost.find({ forumId }).distinct('_id');
+    const posts = await CommunityPost.find({ forumId }).select('_id imageUrl attachmentUrl').lean();
+    const postIds = posts.map((post) => post._id);
 
     await Promise.all([
       CommunityComment.deleteMany({ forumId }),
@@ -830,6 +858,11 @@ router.delete('/forums/:forumId', authMiddleware, adminMiddleware, async (req: A
       CommunityForumMember.deleteMany({ forumId }),
       CommunityForum.deleteOne({ _id: forumId }),
     ]);
+    await cleanupStoredObjects([
+      forum.coverImageUrl,
+      forum.attachmentUrl,
+      ...posts.flatMap((post) => [post.imageUrl, post.attachmentUrl]),
+    ], 'deleted forum uploads');
 
     await logCommunityActivity(req, 'community_forum_deleted', `Forum deleted: ${forum.title}`, {
       forumId,
@@ -1008,6 +1041,8 @@ router.post('/posts', [
     .custom((value) => Array.isArray(value) || typeof value === 'string')
     .withMessage('Tags must be a comma-separated string or an array'),
 ], async (req: AuthenticatedRequest, res: Response) => {
+  const uploadedObjects: string[] = [];
+  let postPersisted = false;
   try {
     if (hasValidationErrors(req, res)) {
       return;
@@ -1061,6 +1096,15 @@ router.post('/posts', [
       return;
     }
 
+    const imageUrl = image
+      ? await uploadCommunityFile(image, 'public', 'posts/images')
+      : undefined;
+    if (imageUrl) uploadedObjects.push(imageUrl);
+    const attachmentUrl = attachment
+      ? await uploadCommunityFile(attachment, 'public', 'posts/attachments')
+      : undefined;
+    if (attachmentUrl) uploadedObjects.push(attachmentUrl);
+
     const newPost = await CommunityPost.create({
       forumId,
       authorId: userId,
@@ -1068,8 +1112,8 @@ router.post('/posts', [
       title,
       content,
       tags,
-      imageUrl: mapUploadFileToUrl(image),
-      attachmentUrl: mapUploadFileToUrl(attachment),
+      imageUrl,
+      attachmentUrl,
       externalLink: externalLink || undefined,
       videoUrl: videoUrl || undefined,
       likeCount: 0,
@@ -1078,6 +1122,7 @@ router.post('/posts', [
       isPinned: false,
       isLocked: false,
     });
+    postPersisted = true;
 
     await CommunityForum.updateOne(
       { _id: forumId },
@@ -1123,6 +1168,9 @@ router.post('/posts', [
     });
 
   } catch (error) {
+    if (!postPersisted) {
+      await cleanupStoredObjects(uploadedObjects, 'failed post upload');
+    }
     console.error('Create post error:', error);
     res.status(500).json({
       status: 'error',
@@ -1144,6 +1192,8 @@ router.put('/posts/:postId', [
     { name: 'attachment', maxCount: 1 },
   ])),
 ], async (req: AuthenticatedRequest, res: Response) => {
+  const uploadedObjects: string[] = [];
+  let postPersisted = false;
   try {
     const postId = getSingleParam(req.params.postId);
     if (!postId || !mongoose.Types.ObjectId.isValid(postId)) {
@@ -1188,6 +1238,8 @@ router.put('/posts/:postId', [
       res.status(404).json({ status: 'error', message: 'Post not found' });
       return;
     }
+    const oldImageUrl = post.imageUrl;
+    const oldAttachmentUrl = post.attachmentUrl;
 
     const oldForumId = post.forumId.toString();
     post.title = title;
@@ -1205,19 +1257,22 @@ router.put('/posts/:postId', [
       post.set('videoUrl', undefined);
     }
     if (image) {
-      const imageUrl = mapUploadFileToUrl(image);
-      if (imageUrl) {
-        post.imageUrl = imageUrl;
-      }
+      const imageUrl = await uploadCommunityFile(image, 'public', 'posts/images');
+      uploadedObjects.push(imageUrl);
+      post.imageUrl = imageUrl;
     }
     if (attachment) {
-      const attachmentUrl = mapUploadFileToUrl(attachment);
-      if (attachmentUrl) {
-        post.attachmentUrl = attachmentUrl;
-      }
+      const attachmentUrl = await uploadCommunityFile(attachment, 'public', 'posts/attachments');
+      uploadedObjects.push(attachmentUrl);
+      post.attachmentUrl = attachmentUrl;
     }
 
     await post.save();
+    postPersisted = true;
+    await cleanupStoredObjects([
+      image ? oldImageUrl : undefined,
+      attachment ? oldAttachmentUrl : undefined,
+    ], 'replaced post uploads');
 
     if (oldForumId !== forumId) {
       await Promise.all([
@@ -1258,6 +1313,9 @@ router.put('/posts/:postId', [
       },
     });
   } catch (error) {
+    if (!postPersisted) {
+      await cleanupStoredObjects(uploadedObjects, 'failed post replacement');
+    }
     console.error('Update post error:', error);
     res.status(500).json({ status: 'error', message: 'Failed to update post' });
   }
@@ -1300,6 +1358,7 @@ router.delete('/posts/:postId', authMiddleware, adminMiddleware, async (req: Aut
       { _id: forumId, postCount: { $lt: 0 } },
       { $set: { postCount: 0 } }
     );
+    await cleanupStoredObjects([post.imageUrl, post.attachmentUrl], 'deleted post uploads');
 
     await logCommunityActivity(req, 'community_post_deleted', `Post deleted: ${post.title}`, {
       postId,
@@ -2211,6 +2270,16 @@ router.get('/meetings/:meetingId/attachment', authMiddleware, async (req: Authen
       return;
     }
 
+    const signedUrl = await getPrivateObjectUrl(meeting.attachment.url, {
+      fileName: meeting.attachment.name,
+      contentType: meeting.attachment.mimeType,
+      expiresIn: 300,
+    });
+    if (signedUrl) {
+      res.redirect(302, signedUrl);
+      return;
+    }
+
     const diskPath = resolveAttachmentDiskPath(meeting.attachment.url);
     if (!diskPath || !fs.existsSync(diskPath)) {
       res.status(404).json({ status: 'error', message: 'Attachment file is missing' });
@@ -2276,6 +2345,8 @@ router.post('/meetings', [
     .isInt({ min: 1, max: 100000 })
     .withMessage('maxCapacity must be between 1 and 100000'),
 ], async (req: AuthenticatedRequest, res: Response) => {
+  const uploadedObjects: string[] = [];
+  let meetingPersisted = false;
   try {
     if (hasValidationErrors(req, res)) {
       return;
@@ -2343,6 +2414,10 @@ router.post('/meetings', [
     }
 
     const globalSettings = await getGlobalMeetingNotificationSettings();
+    const attachmentUrl = attachment
+      ? await uploadCommunityFile(attachment, 'private', 'meetings/attachments')
+      : undefined;
+    if (attachmentUrl) uploadedObjects.push(attachmentUrl);
 
     const newMeeting = await CommunityMeeting.create({
       title,
@@ -2370,7 +2445,7 @@ router.post('/meetings', [
       ...(attachment
         ? {
             attachment: {
-              url: mapUploadFileToUrl(attachment),
+              url: attachmentUrl,
               name: attachment.originalname,
               mimeType: attachment.mimetype,
               size: attachment.size,
@@ -2387,6 +2462,7 @@ router.post('/meetings', [
         sendHistory: [],
       },
     });
+    meetingPersisted = true;
 
     await logCommunityActivity(req, 'community_meeting_created', `Meeting created: ${title}`, {
       meetingId: newMeeting._id.toString(),
@@ -2401,6 +2477,9 @@ router.post('/meetings', [
       },
     });
   } catch (error) {
+    if (!meetingPersisted) {
+      await cleanupStoredObjects(uploadedObjects, 'failed meeting upload');
+    }
     console.error('Create meeting error:', error);
     res.status(500).json({
       status: 'error',
@@ -2462,6 +2541,8 @@ router.put('/meetings/:meetingId', [
     .isIn(MEETING_STATUSES as unknown as string[])
     .withMessage('Invalid status value'),
 ], async (req: AuthenticatedRequest, res: Response) => {
+  const uploadedObjects: string[] = [];
+  let meetingPersisted = false;
   try {
     if (hasValidationErrors(req, res)) {
       return;
@@ -2478,6 +2559,7 @@ router.put('/meetings/:meetingId', [
       res.status(404).json({ status: 'error', message: 'Meeting not found' });
       return;
     }
+    const oldAttachmentUrl = meeting.attachment?.url;
 
     const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
     const attachment = files?.attachment?.[0];
@@ -2496,6 +2578,14 @@ router.put('/meetings/:meetingId', [
 
     if (meetingUrl && !isSafeHttpsUrl(meetingUrl)) {
       res.status(400).json({ status: 'error', message: 'Invalid meeting URL' });
+      return;
+    }
+    if (attachment && !MEETING_ATTACHMENT_MIME_ALLOWLIST.has(attachment.mimetype)) {
+      res.status(400).json({
+        status: 'error',
+        message: 'Validation failed',
+        errors: [{ field: 'attachment', message: 'Unsupported attachment type', value: attachment.mimetype }],
+      });
       return;
     }
 
@@ -2561,30 +2651,27 @@ router.put('/meetings/:meetingId', [
       meeting.notesLinks = sanitizeLinkList(req.body.notesLinks).filter((url) => isSafeHttpsUrl(url));
     }
 
+    if (!meeting.meetingUrl && !meeting.meetingId) {
+      res.status(400).json({ status: 'error', message: 'Meeting URL or meeting ID is required' });
+      return;
+    }
+
     if (attachment) {
-      if (!MEETING_ATTACHMENT_MIME_ALLOWLIST.has(attachment.mimetype)) {
-        res.status(400).json({
-          status: 'error',
-          message: 'Validation failed',
-          errors: [{ field: 'attachment', message: 'Unsupported attachment type', value: attachment.mimetype }],
-        });
-        return;
-      }
-      unlinkAttachmentFile(meeting.attachment?.url);
+      const attachmentUrl = await uploadCommunityFile(attachment, 'private', 'meetings/attachments');
+      uploadedObjects.push(attachmentUrl);
       meeting.attachment = {
-        url: mapUploadFileToUrl(attachment) || '',
+        url: attachmentUrl,
         name: attachment.originalname,
         mimeType: attachment.mimetype,
         size: attachment.size,
       };
     }
 
-    if (!meeting.meetingUrl && !meeting.meetingId) {
-      res.status(400).json({ status: 'error', message: 'Meeting URL or meeting ID is required' });
-      return;
-    }
-
     await meeting.save();
+    meetingPersisted = true;
+    if (attachment) {
+      await cleanupStoredObjects([oldAttachmentUrl], 'replaced meeting attachment');
+    }
 
     await logCommunityActivity(req, 'community_meeting_updated', `Meeting updated: ${meeting.title}`, {
       meetingId,
@@ -2599,6 +2686,9 @@ router.put('/meetings/:meetingId', [
       },
     });
   } catch (error) {
+    if (!meetingPersisted) {
+      await cleanupStoredObjects(uploadedObjects, 'failed meeting replacement');
+    }
     console.error('Update meeting error:', error);
     res.status(500).json({ status: 'error', message: 'Failed to update meeting' });
   }
@@ -2669,8 +2759,8 @@ router.delete('/meetings/:meetingId/permanent', [
       return;
     }
 
-    unlinkAttachmentFile(meeting.attachment?.url);
     await CommunityMeeting.deleteOne({ _id: meetingId });
+    await cleanupStoredObjects([meeting.attachment?.url], 'deleted meeting attachment');
 
     await logCommunityActivity(req, 'community_meeting_deleted', `Meeting deleted permanently: ${meeting.title}`, {
       meetingId,
@@ -2884,7 +2974,7 @@ router.post('/meetings/:meetingId/send-notification', [authMiddleware, adminMidd
           ? 'No recipients found for this audience'
           : summary.reason === 'no_fcm_tokens'
             ? 'No push tokens available. Email may also have failed.'
-            : 'No notifications were delivered. Check push tokens and SMTP settings.')
+            : 'No notifications were delivered. Check push tokens and Zoho mail settings.')
         : 'Meeting notifications sent',
       data: { summary, meeting: await normalizeMeetingForRequest(meeting, req) },
     });

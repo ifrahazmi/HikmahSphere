@@ -137,7 +137,7 @@ export const getTodayPrayerTimes = async (
 
   // ── PRIMARY: islamicapi.com ──────────────────────────────────────────────
   try {
-    const apiKey = process.env.ISLAMIC_API_KEY || 'icgUaIHMO8GWEVLh7XhFcFoTHjQlsfhSBpJtYfrtTUJXY1eI';
+    const apiKey = process.env.ISLAMIC_API_KEY || '';
     const url = `${ISLAMIC_API_PRAYER_URL}/?lat=${lat}&lon=${lon}&method=${method}&school=${school}&api_key=${apiKey}`;
     const resp = await fetchWithTimeout(url, 8000, {
       headers: {

@@ -1,5 +1,6 @@
 // IndoPak Nastaleeq V3 - Word by Word Quran Data Fetcher
 // This utility fetches Quran data from the backend API without any Unicode conversion
+import { API_URL } from '../config';
 import { fetchJsonWithRecovery } from './fetchWithRecovery';
 
 export interface IndopakV3Word {
@@ -30,7 +31,7 @@ export interface IndopakV3SingleAyah {
   font_family: 'indopak-nastaleeq-v3';
 }
 
-const API_BASE_URL = '/api/quran/indopak-v3';
+const API_BASE_URL = `${API_URL}/quran/indopak-v3`;
 const INDOPAK_CACHE_TTL_MS = 1000 * 60 * 10;
 
 /**

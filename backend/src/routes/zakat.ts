@@ -2,13 +2,19 @@ import express, { Request, Response } from 'express';
 import { body, query, validationResult } from 'express-validator';
 import multer from 'multer';
 import path from 'path';
-import fs from 'fs';
 import * as XLSX from 'xlsx';
 import { authMiddleware, optionalAuthMiddleware, adminMiddleware } from '../middleware/auth';
 import ZakatPayment, { IZakatPayment } from '../models/ZakatPayment';
 import Donor, { IDonor } from '../models/Donor';
 import User from '../models/User';
 import { logUserActivity } from '../middleware/activityLogger';
+import {
+  createObjectKey,
+  deleteStoredObject,
+  getPrivateObjectUrl,
+  parseStoredObjectRef,
+  uploadObject,
+} from '../services/objectStorage';
 
 // Type assertions for static methods
 const ZakatPaymentModel = ZakatPayment as typeof ZakatPayment & {
@@ -39,43 +45,9 @@ const DonorModel = Donor as typeof Donor & {
 
 const router = express.Router();
 
-// Ensure upload directory exists - Use absolute path for production
-// In production, save to /var/www/hikmah/uploads/zakat
-// In development, save to backend/src/uploads/zakat
-// Check NODE_ENV first, then fall back to checking if the production path exists.
-const isProduction = process.env.NODE_ENV === 'production' || fs.existsSync('/var/www/hikmah/uploads');
-const uploadDir = isProduction
-  ? '/var/www/hikmah/uploads/zakat'
-  : path.resolve(process.cwd(), 'src', 'uploads', 'zakat');
-
-console.log(`[Zakat] Upload directory: ${uploadDir} (NODE_ENV=${process.env.NODE_ENV})`);
-
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-// Helper: convert a stored URL path (/uploads/zakat/file.jpg)
-// back to the real filesystem path for file deletion.
-const getFilesystemPath = (urlPath: string): string => {
-  const clean = urlPath.replace(/^\//, ''); // strip leading slash
-  return isProduction
-    ? `/var/www/hikmah/${clean}`
-    : path.resolve(process.cwd(), 'src', clean);
-};
-
 // Multer Storage for Zakat Proofs
-const storage = multer.diskStorage({
-  destination: (req: Express.Request, file: Express.Multer.File, cb: (error: Error | null, destination: string) => void) => {
-    cb(null, uploadDir);
-  },
-  filename: (req: Express.Request, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'zakat-proof-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
 const upload = multer({
-  storage: storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 2 * 1024 * 1024 }, // 2MB limit
   fileFilter: (req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
     const allowedTypes = /jpeg|jpg|png|pdf/;
@@ -87,6 +59,23 @@ const upload = multer({
     cb(new Error('Only images (jpeg, jpg, png) and PDFs are allowed'));
   }
 });
+
+const uploadProof = (file: Express.Multer.File): Promise<string> =>
+  uploadObject({
+    visibility: 'private',
+    key: createObjectKey('zakat/proofs', file.originalname),
+    body: file.buffer,
+    contentType: file.mimetype,
+    originalName: file.originalname,
+  });
+
+const deleteProofQuietly = async (storedValue?: string | null): Promise<void> => {
+  try {
+    await deleteStoredObject(storedValue);
+  } catch (error) {
+    console.warn('Failed to delete Zakat proof:', (error as Error).message);
+  }
+};
 
 // In-memory upload used for bulk import files (CSV / Excel / JSON)
 const importUpload = multer({
@@ -146,7 +135,7 @@ const ZAKAT_RATES = {
   ZAKAT_RATE: 0.025,
 };
 
-const ISLAMIC_API_KEY = process.env.ISLAMIC_API_KEY || 'icgUaIHMO8GWEVLh7XhFcFoTHjQlsfhSBpJtYfrtTUJXY1eI';
+const ISLAMIC_API_KEY = process.env.ISLAMIC_API_KEY || '';
 
 // Actual islamicapi.com response shape:
 // { code, status, calculation_standard, currency, weight_unit, updated_at, data: { nisab_thresholds: { gold, silver } } }
@@ -628,6 +617,7 @@ router.post('/transaction', [
   body('donorType').optional().isIn(['Individual', 'Organization', 'Charity']),
   body('recipientType').optional().isIn(['Individual', 'Family', 'Mosque', 'Madrasa', 'NGO', 'Other']),
 ], async (req: any, res: any) => {
+  let uploadedProof: string | undefined;
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -756,6 +746,8 @@ router.post('/transaction', [
       }
     }
 
+    uploadedProof = req.file ? await uploadProof(req.file) : undefined;
+
     // Handle donor for collection transactions
     let finalDonorId = undefined;
     if (type === 'collection') {
@@ -798,12 +790,13 @@ router.post('/transaction', [
       bankName: paymentMethod === 'Bank Transfer' ? bankName?.trim() : undefined,
       senderUpiId: paymentMethod === 'UPI Transfer' ? senderUpiId?.trim() : undefined,
       chequeNumber: paymentMethod === 'Cheque' ? chequeNumber?.trim() : undefined,
-      proofFilePath: req.file ? `/uploads/zakat/${req.file.filename}` : undefined,
+      proofFilePath: uploadedProof,
       notes: notes?.trim(),
       recordedBy: req.user.userId,
     });
 
     await newTransaction.save();
+    uploadedProof = undefined;
 
     const updatedTotals = await ZakatPaymentModel.getTotals();
 
@@ -833,14 +826,7 @@ router.post('/transaction', [
 
   } catch (error: any) {
     console.error('Transaction error:', error);
-    
-    if (req.file) {
-      try {
-        fs.unlinkSync(req.file.path);
-      } catch (e) {
-        console.error('File cleanup error:', e);
-      }
-    }
+    await deleteProofQuietly(uploadedProof);
 
     if (error.name === 'ValidationError') {
       return res.status(400).json({ 
@@ -1094,6 +1080,36 @@ router.get('/payment/:id', authMiddleware, adminMiddleware, async (req: any, res
   }
 });
 
+router.get('/payment/:id/proof-url', authMiddleware, adminMiddleware, async (req: any, res: any) => {
+  try {
+    const payment = await ZakatPayment.findById(req.params.id).select('proofFilePath');
+    if (!payment?.proofFilePath) {
+      return res.status(404).json({ status: 'error', message: 'Proof not found' });
+    }
+
+    const storedRef = parseStoredObjectRef(payment.proofFilePath);
+    const url = storedRef
+      ? await getPrivateObjectUrl(payment.proofFilePath, {
+          fileName: path.basename(storedRef.key),
+          expiresIn: 300,
+        })
+      : payment.proofFilePath.startsWith('/uploads/') || payment.proofFilePath.startsWith('/src/uploads/')
+        ? payment.proofFilePath
+        : null;
+
+    if (!url) {
+      return res.status(404).json({ status: 'error', message: 'Proof not found' });
+    }
+    return res.json({ status: 'success', data: { url } });
+  } catch (error: any) {
+    if (error.kind === 'ObjectId') {
+      return res.status(404).json({ status: 'error', message: 'Invalid transaction ID' });
+    }
+    console.error('Get Zakat proof URL error:', error);
+    return res.status(500).json({ status: 'error', message: 'Failed to load proof' });
+  }
+});
+
 /**
  * @route   PUT /api/zakat/payment/:id
  * @desc    Update a Zakat transaction
@@ -1104,6 +1120,7 @@ router.put('/payment/:id', [
   adminMiddleware,
   upload.single('proofOfPayment'),
 ], async (req: any, res: any) => {
+  let uploadedProof: string | undefined;
   try {
     const paymentId = req.params.id;
     const updates = req.body;
@@ -1181,33 +1198,19 @@ router.put('/payment/:id', [
     if (updates.recipientType) payment.recipientType = updates.recipientType;
     if (updates.notes !== undefined) payment.notes = updates.notes;
 
-    // Handle proof removal (user clicked red X to remove existing proof)
-    if (updates.removeProof === 'true' && !req.file) {
-      if (payment.proofFilePath) {
-        try {
-          fs.unlinkSync(getFilesystemPath(payment.proofFilePath));
-        } catch (e) {
-          console.error('Proof file deletion error:', e);
-        }
-        payment.proofFilePath = undefined as any;
-      }
-    }
-
-    // Handle file update
+    const previousProof = payment.proofFilePath;
     if (req.file) {
-      // Delete the old file using the real filesystem path (not the stored URL path)
-      if (payment.proofFilePath) {
-        try {
-          fs.unlinkSync(getFilesystemPath(payment.proofFilePath));
-        } catch (e) {
-          console.error('Old file deletion error:', e);
-        }
-      }
-      // Store as a URL path so the frontend can use it directly
-      payment.proofFilePath = `/uploads/zakat/${req.file.filename}`;
+      uploadedProof = await uploadProof(req.file);
+      payment.proofFilePath = uploadedProof;
+    } else if (updates.removeProof === 'true') {
+      payment.proofFilePath = undefined as any;
     }
 
     const updatedPayment = await payment.save();
+    uploadedProof = undefined;
+    if (previousProof && previousProof !== payment.proofFilePath) {
+      await deleteProofQuietly(previousProof);
+    }
     const updatedTotals = await ZakatPaymentModel.getTotals();
 
     res.json({ 
@@ -1223,13 +1226,7 @@ router.put('/payment/:id', [
       return res.status(404).json({ status: 'error', message: 'Invalid transaction ID' });
     }
     
-    if (req.file) {
-      try {
-        fs.unlinkSync(req.file.path);
-      } catch (e) {
-        console.error('File cleanup error:', e);
-      }
-    }
+    await deleteProofQuietly(uploadedProof);
 
     console.error('Update payment error:', error);
     res.status(500).json({ status: 'error', message: 'Server Error' });
@@ -1253,13 +1250,7 @@ router.delete('/payment/:id', authMiddleware, async (req: any, res: any) => {
       return res.status(404).json({ status: 'error', message: 'Transaction not found' });
     }
 
-    if (payment.proofFilePath) {
-      try {
-        fs.unlinkSync(getFilesystemPath(payment.proofFilePath));
-      } catch (e) {
-        console.error('File deletion error:', e);
-      }
-    }
+    const proofToDelete = payment.proofFilePath;
 
     if (payment.type === 'collection' && payment.donorId) {
       const donor = await Donor.findById(payment.donorId);
@@ -1279,6 +1270,7 @@ router.delete('/payment/:id', authMiddleware, async (req: any, res: any) => {
     }
 
     await payment.deleteOne();
+    await deleteProofQuietly(proofToDelete);
 
     const updatedTotals = await ZakatPaymentModel.getTotals();
 

@@ -46,6 +46,7 @@ import { QuranProvider } from './contexts/QuranContext';
 import { NotificationProvider } from './contexts/NotificationContext'; // Import NotificationProvider
 import { DarkModeProvider } from './contexts/DarkModeContext';
 import { LanguageProvider } from './contexts/LanguageContext';
+import { API_URL } from './config';
 
 // Styles
 import './App.css';
@@ -64,8 +65,6 @@ const queryClient = new QueryClient({
   },
 });
 
-// Use relative URL to leverage package.json proxy for local dev
-const API_URL = '/api';
 const IOS_PUSH_GUIDE_SHOWN_KEY = 'iosPushGuideShown';
 
 const AppContent: React.FC = () => {

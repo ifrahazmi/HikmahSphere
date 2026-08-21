@@ -779,7 +779,7 @@ router.get('/times', [
       // Continue to fetch from API if cache fails
     }
 
-    const islamicApiKey = process.env.ISLAMIC_API_KEY || 'icgUaIHMO8GWEVLh7XhFcFoTHjQlsfhSBpJtYfrtTUJXY1eI';
+    const islamicApiKey = process.env.ISLAMIC_API_KEY || '';
     // islamicapi.com school: 1=Shafi, 2=Hanafi (matches our param directly)
     const islamicApiUrl = `${ISLAMIC_API_PRAYER_URL}/?lat=${latitude}&lon=${longitude}&method=${method}&school=${school}&api_key=${islamicApiKey}`;
 
@@ -1216,7 +1216,7 @@ router.get('/fasting', [
     // This API supports any date and returns sahur/iftar/duration directly.
     // NOTE: We also call /prayer-time to get Fajr time for reference.
     try {
-      const islamicApiKey = process.env.ISLAMIC_API_KEY || 'icgUaIHMO8GWEVLh7XhFcFoTHjQlsfhSBpJtYfrtTUJXY1eI';
+      const islamicApiKey = process.env.ISLAMIC_API_KEY || '';
       const isoDate = toISODate(dateStr); // YYYY-MM-DD
 
       // Step 1: Get prayer times to fetch Fajr time for reference

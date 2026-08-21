@@ -1,0 +1,72 @@
+# Render Blueprint — secrets must be set in the Render dashboard (sync: false).
+# Do not put real credentials in this file.
+services:
+  - type: web
+    name: hikmahsphere-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm ci && npm run build
+    startCommand: node dist/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "10000"
+      - key: MONGODB_URI
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRE
+        value: 30d
+      - key: REFRESH_TOKEN_SECRET
+        sync: false
+      - key: REFRESH_TOKEN_EXPIRE
+        value: 7d
+      - key: CORS_ORIGIN
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: TAFSIR_API_URL
+        sync: false
+      - key: MAUDUDI_API_URL
+        sync: false
+      - key: ISLAMIC_API_KEY
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT
+        sync: false
+      - key: ZOHO_CLIENT_ID
+        sync: false
+      - key: ZOHO_CLIENT_SECRET
+        sync: false
+      - key: ZOHO_REFRESH_TOKEN
+        sync: false
+      - key: ZOHO_ACCOUNT_ID
+        sync: false
+      - key: ZOHO_FROM
+        sync: false
+      - key: ZOHO_ACCOUNTS_URL
+        sync: false
+      - key: ZOHO_MAIL_API_URL
+        sync: false
+      - key: SMTP_TO
+        sync: false
+      - key: R2_ENDPOINT
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_PUBLIC_BUCKET
+        sync: false
+      - key: R2_PRIVATE_BUCKET
+        sync: false
+      - key: R2_PUBLIC_URL
+        sync: false
+      - key: PRAYER_TIMES_CACHE_TTL
+        value: "15"
+      - key: PRAYER_TIMES_REFRESH_INTERVAL
+        value: "15"

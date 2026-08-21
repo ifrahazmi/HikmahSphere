@@ -1,43 +1,12 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
-import nodemailer from 'nodemailer';
 import { requestLogger } from '../middleware/logger';
+import { sendMail } from '../services/zohoMail';
 
 const router = express.Router();
 
-// Using environment variables for secure credential management
-// Nodemailer Transporter Configuration
-const smtpPort = parseInt(process.env.SMTP_PORT || '587');
-const smtpSecure = process.env.SMTP_SECURE
-    ? process.env.SMTP_SECURE.toLowerCase() === 'true'
-    : smtpPort === 465;
-const smtpFrom = process.env.SMTP_FROM || `"HikmahSphere" <${process.env.SMTP_USER || 'no-reply@hikmahsphere.com'}>`;
-const smtpTo = process.env.SMTP_TO || process.env.SMTP_USER || 'admin@hikmahsphere.com';
-const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'localhost',
-    port: smtpPort,
-    secure: smtpSecure,
-    auth: process.env.SMTP_USER && process.env.SMTP_PASS
-        ? {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASS,
-        }
-        : undefined,
-    tls: {
-        rejectUnauthorized: false // Keep this for compatibility
-    }
-});
-
-
-// Verify transporter connection
-transporter.verify(function (error, success) {
-    if (error) {
-        console.error('SMTP Connection Warning: Could not connect to mail server.', error.message);
-        console.log('⚠️  Email features might not work unless configured correctly in .env');
-    } else {
-        console.log('✅ SMTP Server is ready to take our messages');
-    }
-});
+const getMailTo = () =>
+    process.env.SMTP_TO || process.env.ZOHO_FROM || 'info@hikmahsphere.site';
 
 const escapeHtml = (value: unknown): string =>
     String(value ?? '')
@@ -358,15 +327,14 @@ router.post('/contact', [
         : `"${name}" <${email}>`;
 
     const mailOptions = {
-        from: smtpFrom,
         ...(replyToEmail ? { replyTo: replyToEmail } : {}),
-        to: smtpTo,
+        to: getMailTo(),
         subject,
         html,
     };
 
     try {
-        await transporter.sendMail(mailOptions);
+        await sendMail(mailOptions);
         res.status(200).json({ status: 'success', message: 'Message sent successfully' });
     } catch (error: any) {
         console.error('Email sending error:', error.message);
@@ -375,7 +343,7 @@ router.post('/contact', [
         // If we are in dev or the error is ECONNREFUSED (no mail server), pretend it worked
         // This is crucial for user testing without a real SMTP server
         if (process.env.NODE_ENV === 'development' || error.code === 'ECONNREFUSED' || error.code === 'ESOCKET') {
-            console.log('⚠️  MOCK EMAIL SENT (SMTP Failed):');
+            console.log('⚠️  MOCK EMAIL SENT (Zoho mail failed):');
             console.log('---------------------------------------------------');
             console.log(`To: ${mailOptions.to}`);
             console.log(`Subject: ${mailOptions.subject}`);
@@ -415,8 +383,7 @@ router.post('/subscribe', [
     const { email } = req.body;
 
     const mailOptions = {
-        from: smtpFrom,
-        to: smtpTo,
+        to: getMailTo(),
         subject: `[HikmahSphere Newsletter] New Subscriber`,
         html: `
             <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
@@ -429,7 +396,7 @@ router.post('/subscribe', [
     };
 
     try {
-        await transporter.sendMail(mailOptions);
+        await sendMail(mailOptions);
         res.status(200).json({ status: 'success', message: 'Subscribed successfully' });
     } catch (error: any) {
         console.error('Subscription email error:', error.message);

@@ -2,7 +2,6 @@ import express from 'express';
 import { body, query, validationResult } from 'express-validator';
 import multer from 'multer';
 import path from 'path';
-import fs from 'fs';
 import * as XLSX from 'xlsx';
 import { authMiddleware, adminMiddleware } from '../middleware/auth';
 import MaktabPayment from '../models/MaktabPayment';
@@ -10,6 +9,13 @@ import MaktabContributor, { IMaktabContributor } from '../models/MaktabContribut
 import User from '../models/User';
 import { logUserActivity } from '../middleware/activityLogger';
 import maktabWeeklyRoutes from './maktabWeekly';
+import {
+  createObjectKey,
+  deleteStoredObject,
+  getPrivateObjectUrl,
+  parseStoredObjectRef,
+  uploadObject,
+} from '../services/objectStorage';
 
 // Type assertions for static methods
 const MaktabPaymentModel = MaktabPayment as typeof MaktabPayment & {
@@ -38,42 +44,9 @@ const router = express.Router();
 
 router.use(maktabWeeklyRoutes);
 
-// Ensure upload directory exists - Use absolute path for production
-// In production, save to /var/www/hikmah/uploads/maktab
-// In development, save to backend/src/uploads/maktab
-const isProduction = process.env.NODE_ENV === 'production' || fs.existsSync('/var/www/hikmah/uploads');
-const uploadDir = isProduction
-  ? '/var/www/hikmah/uploads/maktab'
-  : path.resolve(process.cwd(), 'src', 'uploads', 'maktab');
-
-console.log(`[Maktab] Upload directory: ${uploadDir} (NODE_ENV=${process.env.NODE_ENV})`);
-
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-// Helper: convert a stored URL path (/uploads/maktab/file.jpg)
-// back to the real filesystem path for file deletion.
-const getFilesystemPath = (urlPath: string): string => {
-  const clean = urlPath.replace(/^\//, '');
-  return isProduction
-    ? `/var/www/hikmah/${clean}`
-    : path.resolve(process.cwd(), 'src', clean);
-};
-
 // Multer Storage for Maktab Proofs
-const storage = multer.diskStorage({
-  destination: (req: Express.Request, file: Express.Multer.File, cb: (error: Error | null, destination: string) => void) => {
-    cb(null, uploadDir);
-  },
-  filename: (req: Express.Request, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'maktab-proof-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
 const upload = multer({
-  storage: storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 2 * 1024 * 1024 }, // 2MB limit
   fileFilter: (req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
     const allowedTypes = /jpeg|jpg|png|pdf/;
@@ -85,6 +58,23 @@ const upload = multer({
     cb(new Error('Only images (jpeg, jpg, png) and PDFs are allowed'));
   }
 });
+
+const uploadProof = (file: Express.Multer.File): Promise<string> =>
+  uploadObject({
+    visibility: 'private',
+    key: createObjectKey('maktab/proofs', file.originalname),
+    body: file.buffer,
+    contentType: file.mimetype,
+    originalName: file.originalname,
+  });
+
+const deleteProofQuietly = async (storedValue?: string | null): Promise<void> => {
+  try {
+    await deleteStoredObject(storedValue);
+  } catch (error) {
+    console.warn('Failed to delete Maktab proof:', (error as Error).message);
+  }
+};
 
 // In-memory upload used for bulk import files (CSV / Excel / JSON)
 const importUpload = multer({
@@ -260,6 +250,7 @@ router.post('/transaction', [
   body('recipientType').optional().isIn(['Teacher', 'Student', 'Supplier', 'Other']),
   body('category').optional().isIn(SPENDING_CATEGORIES),
 ], async (req: any, res: any) => {
+  let uploadedProof: string | undefined;
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -388,6 +379,8 @@ router.post('/transaction', [
       }
     }
 
+    uploadedProof = req.file ? await uploadProof(req.file) : undefined;
+
     // Handle contributor for collection transactions
     let finalContributorId = undefined;
     if (type === 'collection') {
@@ -432,12 +425,13 @@ router.post('/transaction', [
       bankName: paymentMethod === 'Bank Transfer' ? bankName?.trim() : undefined,
       senderUpiId: paymentMethod === 'UPI Transfer' ? senderUpiId?.trim() : undefined,
       chequeNumber: paymentMethod === 'Cheque' ? chequeNumber?.trim() : undefined,
-      proofFilePath: req.file ? `/uploads/maktab/${req.file.filename}` : undefined,
+      proofFilePath: uploadedProof,
       notes: notes?.trim(),
       recordedBy: req.user.userId,
     });
 
     await newTransaction.save();
+    uploadedProof = undefined;
 
     const updatedTotals = await MaktabPaymentModel.getTotals();
 
@@ -467,13 +461,7 @@ router.post('/transaction', [
   } catch (error: any) {
     console.error('Maktab transaction error:', error);
 
-    if (req.file) {
-      try {
-        fs.unlinkSync(req.file.path);
-      } catch (e) {
-        console.error('File cleanup error:', e);
-      }
-    }
+    await deleteProofQuietly(uploadedProof);
 
     if (error.name === 'ValidationError') {
       return res.status(400).json({
@@ -706,6 +694,36 @@ router.get('/payment/:id', authMiddleware, adminMiddleware, async (req: any, res
   }
 });
 
+router.get('/payment/:id/proof-url', authMiddleware, adminMiddleware, async (req: any, res: any) => {
+  try {
+    const payment = await MaktabPayment.findById(req.params.id).select('proofFilePath');
+    if (!payment?.proofFilePath) {
+      return res.status(404).json({ status: 'error', message: 'Proof not found' });
+    }
+
+    const storedRef = parseStoredObjectRef(payment.proofFilePath);
+    const url = storedRef
+      ? await getPrivateObjectUrl(payment.proofFilePath, {
+          fileName: path.basename(storedRef.key),
+          expiresIn: 300,
+        })
+      : payment.proofFilePath.startsWith('/uploads/') || payment.proofFilePath.startsWith('/src/uploads/')
+        ? payment.proofFilePath
+        : null;
+
+    if (!url) {
+      return res.status(404).json({ status: 'error', message: 'Proof not found' });
+    }
+    return res.json({ status: 'success', data: { url } });
+  } catch (error: any) {
+    if (error.kind === 'ObjectId') {
+      return res.status(404).json({ status: 'error', message: 'Invalid transaction ID' });
+    }
+    console.error('Get Maktab proof URL error:', error);
+    return res.status(500).json({ status: 'error', message: 'Failed to load proof' });
+  }
+});
+
 /**
  * @route   PUT /api/maktab/payment/:id
  * @desc    Update a Maktab transaction
@@ -716,6 +734,7 @@ router.put('/payment/:id', [
   adminMiddleware,
   upload.single('proofOfPayment'),
 ], async (req: any, res: any) => {
+  let uploadedProof: string | undefined;
   try {
     const paymentId = req.params.id;
     const updates = req.body;
@@ -799,31 +818,19 @@ router.put('/payment/:id', [
     }
     if (updates.notes !== undefined) payment.notes = updates.notes;
 
-    // Handle proof removal (user clicked red X to remove existing proof)
-    if (updates.removeProof === 'true' && !req.file) {
-      if (payment.proofFilePath) {
-        try {
-          fs.unlinkSync(getFilesystemPath(payment.proofFilePath));
-        } catch (e) {
-          console.error('Proof file deletion error:', e);
-        }
-        payment.proofFilePath = undefined as any;
-      }
-    }
-
-    // Handle file update
+    const previousProof = payment.proofFilePath;
     if (req.file) {
-      if (payment.proofFilePath) {
-        try {
-          fs.unlinkSync(getFilesystemPath(payment.proofFilePath));
-        } catch (e) {
-          console.error('Old file deletion error:', e);
-        }
-      }
-      payment.proofFilePath = `/uploads/maktab/${req.file.filename}`;
+      uploadedProof = await uploadProof(req.file);
+      payment.proofFilePath = uploadedProof;
+    } else if (updates.removeProof === 'true') {
+      payment.proofFilePath = undefined as any;
     }
 
     const updatedPayment = await payment.save();
+    uploadedProof = undefined;
+    if (previousProof && previousProof !== payment.proofFilePath) {
+      await deleteProofQuietly(previousProof);
+    }
     const updatedTotals = await MaktabPaymentModel.getTotals();
 
     res.json({
@@ -839,13 +846,7 @@ router.put('/payment/:id', [
       return res.status(404).json({ status: 'error', message: 'Invalid transaction ID' });
     }
 
-    if (req.file) {
-      try {
-        fs.unlinkSync(req.file.path);
-      } catch (e) {
-        console.error('File cleanup error:', e);
-      }
-    }
+    await deleteProofQuietly(uploadedProof);
 
     console.error('Update maktab payment error:', error);
     res.status(500).json({ status: 'error', message: 'Server Error' });
@@ -869,13 +870,7 @@ router.delete('/payment/:id', authMiddleware, async (req: any, res: any) => {
       return res.status(404).json({ status: 'error', message: 'Transaction not found' });
     }
 
-    if (payment.proofFilePath) {
-      try {
-        fs.unlinkSync(getFilesystemPath(payment.proofFilePath));
-      } catch (e) {
-        console.error('File deletion error:', e);
-      }
-    }
+    const proofToDelete = payment.proofFilePath;
 
     if (payment.type === 'collection' && payment.contributorId) {
       const contributor = await MaktabContributor.findById(payment.contributorId);
@@ -893,6 +888,7 @@ router.delete('/payment/:id', authMiddleware, async (req: any, res: any) => {
     }
 
     await payment.deleteOne();
+    await deleteProofQuietly(proofToDelete);
 
     const updatedTotals = await MaktabPaymentModel.getTotals();
 

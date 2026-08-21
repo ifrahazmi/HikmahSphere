@@ -1,28 +1,7 @@
-import nodemailer from 'nodemailer';
 import type { ICommunityMeeting } from '../models/CommunityMeeting';
 import type { IMeetingNotificationSettings } from '../models/MeetingNotificationSettings';
+import { sendMail } from './zohoMail';
 
-const smtpPort = parseInt(process.env.SMTP_PORT || '587', 10);
-const smtpSecure = process.env.SMTP_SECURE
-  ? process.env.SMTP_SECURE.toLowerCase() === 'true'
-  : smtpPort === 465;
-
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'localhost',
-  port: smtpPort,
-  secure: smtpSecure,
-  auth: process.env.SMTP_USER && process.env.SMTP_PASS
-    ? {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      }
-    : undefined,
-  tls: {
-    rejectUnauthorized: false,
-  },
-});
-
-const smtpFrom = process.env.SMTP_FROM || `"HikmahSphere" <${process.env.SMTP_USER || 'no-reply@hikmahsphere.com'}>`;
 const baseUrl = (process.env.FRONTEND_URL || 'https://hikmahsphere.site').replace(/\/$/, '');
 
 const escapeHtml = (value: unknown): string =>
@@ -110,8 +89,7 @@ export const sendMeetingEmails = async ({
 
   for (const email of uniqueRecipients) {
     try {
-      await transporter.sendMail({
-        from: smtpFrom,
+      await sendMail({
         to: email,
         subject,
         html,

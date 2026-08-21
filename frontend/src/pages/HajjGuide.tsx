@@ -8,6 +8,7 @@ import {
   XMarkIcon,
 } from '@heroicons/react/24/outline';
 import PageSEO from '../components/PageSEO';
+import { API_URL, resolveBackendUrl } from '../config';
 import brandLogo from '../data/logo.png';
 import spiritualHajjImage from '../data/spiritual-Hajj.png';
 import hajjInfographicImage from '../data/Hajj-Guide-Steps.jpg';
@@ -85,7 +86,7 @@ interface GuidePage {
   url: string;
 }
 
-const GUIDE_MANIFEST_ENDPOINT = '/api/hajj-guide/pages';
+const GUIDE_MANIFEST_ENDPOINT = `${API_URL}/hajj-guide/pages`;
 const DEFAULT_GUIDE_PAGE = 1;
 const DEFAULT_GUIDE_ZOOM = 100;
 const DEFAULT_INFOGRAPHIC_ZOOM = 1;
@@ -208,7 +209,7 @@ const HajjGuide: React.FC = () => {
         const normalizedPages = pages.map((page: GuidePage) => ({
           fileName: String(page.fileName),
           pageNumber: Number(page.pageNumber),
-          url: String(page.url),
+          url: resolveBackendUrl(String(page.url)),
         }));
 
         setGuidePages(normalizedPages);
