@@ -4,7 +4,7 @@ import express, { Request, Response } from 'express';
 import User from '../models/User';
 import UserNotification from '../models/UserNotification';
 import { authMiddleware, superAdminMiddleware } from '../middleware/auth';
-import { sendMulticastNotification } from '../config/firebaseAdmin'; // Use the helper directly
+import { isFirebaseAdminReady, sendMulticastNotification } from '../config/firebaseAdmin';
 
 const router = express.Router();
 const INVALID_TOKEN_ERROR_CODES = new Set([
@@ -16,13 +16,16 @@ const createNotificationId = () => `notif-${Date.now()}-${Math.random().toString
 
 type NormalizedNotificationDevice = {
     deviceId: string;
-    token: string;
+    token?: string;
     userAgent?: string;
     permission?: 'granted' | 'denied' | 'default' | 'unknown';
     supportsWebPush?: boolean;
     isIOS?: boolean;
     isStandalone?: boolean;
     lastSeenAt?: Date;
+    lastActiveAt?: Date;
+    visibilityState?: 'visible' | 'hidden' | 'prerender' | 'unknown';
+    isOnline?: boolean;
     updatedAt: Date;
 };
 
@@ -34,7 +37,8 @@ type DeviceCapabilityInput = {
     isStandalone?: boolean;
 };
 
-const LIVE_WINDOW_MS = 5 * 60 * 1000;
+const ACTIVE_WINDOW_MS = 2 * 60 * 1000;
+const RECENTLY_SEEN_WINDOW_MS = 30 * 60 * 1000;
 
 const normalizeNonEmptyString = (value: unknown): string | null => {
     if (typeof value !== 'string') {
@@ -59,6 +63,15 @@ const normalizeCapability = (value: unknown): DeviceCapabilityInput => {
         isIOS: raw.isIOS === true,
         isStandalone: raw.isStandalone === true,
     };
+};
+
+const normalizeVisibilityState = (
+    value: unknown
+): 'visible' | 'hidden' | 'prerender' | 'unknown' => {
+    if (value === 'visible' || value === 'hidden' || value === 'prerender') {
+        return value;
+    }
+    return 'unknown';
 };
 
 const normalizeDateOrNow = (value: unknown): Date => {
@@ -94,11 +107,11 @@ const normalizeNotificationDevices = (devices: unknown): NormalizedNotificationD
         const normalizedToken = normalizeNonEmptyString((device as any)?.token);
         const normalizedDeviceId = normalizeNonEmptyString((device as any)?.deviceId);
 
-        if (!normalizedToken || !normalizedDeviceId) {
+        if (!normalizedDeviceId) {
             continue;
         }
 
-        const dedupeKey = `${normalizedDeviceId}|${normalizedToken}`;
+        const dedupeKey = normalizedDeviceId;
         if (seenDevices.has(dedupeKey)) {
             continue;
         }
@@ -107,14 +120,21 @@ const normalizeNotificationDevices = (devices: unknown): NormalizedNotificationD
         const normalizedUpdatedAt = new Date((device as any)?.updatedAt ?? 0);
         const normalizedDevice: NormalizedNotificationDevice = {
             deviceId: normalizedDeviceId,
-            token: normalizedToken,
             permission: normalizePermission((device as any)?.permission),
             supportsWebPush: (device as any)?.supportsWebPush === true,
             isIOS: (device as any)?.isIOS === true,
             isStandalone: (device as any)?.isStandalone === true,
             lastSeenAt: normalizeDateOrNow((device as any)?.lastSeenAt),
+            visibilityState: normalizeVisibilityState((device as any)?.visibilityState),
+            isOnline: (device as any)?.isOnline !== false,
             updatedAt: Number.isNaN(normalizedUpdatedAt.getTime()) ? new Date(0) : normalizedUpdatedAt,
         };
+        if (normalizedToken) {
+            normalizedDevice.token = normalizedToken;
+        }
+        if ((device as any)?.lastActiveAt) {
+            normalizedDevice.lastActiveAt = normalizeDateOrNow((device as any).lastActiveAt);
+        }
         const normalizedUserAgent = normalizeNonEmptyString((device as any)?.userAgent);
         if (normalizedUserAgent) {
             normalizedDevice.userAgent = normalizedUserAgent;
@@ -127,6 +147,50 @@ const normalizeNotificationDevices = (devices: unknown): NormalizedNotificationD
     return normalizedDevices;
 };
 
+export const mergeHeartbeatDevice = (
+    devices: unknown,
+    update: {
+        deviceId: string;
+        permission: NotificationPermissionState;
+        capability: DeviceCapabilityInput;
+        heartbeatAt: Date;
+        visibilityState: unknown;
+        isOnline: unknown;
+    }
+): NormalizedNotificationDevice[] => {
+    const currentDevices = normalizeNotificationDevices(devices);
+    const deviceIndex = currentDevices.findIndex(
+        (device) => device.deviceId === update.deviceId
+    );
+    const visibilityState = normalizeVisibilityState(update.visibilityState);
+    const nextDevice: NormalizedNotificationDevice =
+        deviceIndex >= 0 && currentDevices[deviceIndex]
+            ? currentDevices[deviceIndex]!
+            : {
+                deviceId: update.deviceId,
+                updatedAt: new Date(),
+            };
+
+    nextDevice.permission = update.permission;
+    nextDevice.supportsWebPush = update.capability.supportsWebPush === true;
+    nextDevice.isIOS = update.capability.isIOS === true;
+    nextDevice.isStandalone = update.capability.isStandalone === true;
+    nextDevice.lastSeenAt = update.heartbeatAt;
+    if (visibilityState === 'visible') {
+        nextDevice.lastActiveAt = update.heartbeatAt;
+    }
+    nextDevice.visibilityState = visibilityState;
+    nextDevice.isOnline = update.isOnline !== false;
+    nextDevice.updatedAt = new Date();
+
+    if (deviceIndex >= 0) {
+        currentDevices[deviceIndex] = nextDevice;
+    } else {
+        currentDevices.unshift(nextDevice);
+    }
+    return currentDevices;
+};
+
 const resolveSingleDeliveryTarget = (user: {
     fcmTokens?: unknown;
     notificationDevices?: unknown;
@@ -137,7 +201,10 @@ const resolveSingleDeliveryTarget = (user: {
 } => {
     const normalizedDevices = normalizeNotificationDevices(user.notificationDevices);
     const normalizedTokens = extractUniqueTokens(user.fcmTokens);
-    const preferredToken = normalizedDevices[0]?.token || normalizedTokens[0] || null;
+    const preferredToken =
+        normalizedDevices.find((device) => Boolean(device.token))?.token ||
+        normalizedTokens[0] ||
+        null;
 
     if (!preferredToken) {
         return {
@@ -147,30 +214,31 @@ const resolveSingleDeliveryTarget = (user: {
         };
     }
 
-    const preferredDevice = normalizedDevices.find((device) => device.token === preferredToken);
-
     return {
         token: preferredToken,
         tokens: [preferredToken],
-        devices: preferredDevice ? [preferredDevice] : [],
+        devices: normalizedDevices,
     };
 };
 
 const areDevicesEqual = (first: NormalizedNotificationDevice, second: NormalizedNotificationDevice): boolean => {
     return (
         first.deviceId === second.deviceId &&
-        first.token === second.token &&
+        (first.token || '') === (second.token || '') &&
         (first.userAgent || '') === (second.userAgent || '') &&
         (first.permission || 'unknown') === (second.permission || 'unknown') &&
         Boolean(first.supportsWebPush) === Boolean(second.supportsWebPush) &&
         Boolean(first.isIOS) === Boolean(second.isIOS) &&
         Boolean(first.isStandalone) === Boolean(second.isStandalone) &&
         (first.lastSeenAt?.getTime() || 0) === (second.lastSeenAt?.getTime() || 0) &&
+        (first.lastActiveAt?.getTime() || 0) === (second.lastActiveAt?.getTime() || 0) &&
+        (first.visibilityState || 'unknown') === (second.visibilityState || 'unknown') &&
+        Boolean(first.isOnline) === Boolean(second.isOnline) &&
         first.updatedAt.getTime() === second.updatedAt.getTime()
     );
 };
 
-const deriveNotificationStatus = (user: {
+export const deriveNotificationStatus = (user: {
     notificationPermission?: NotificationPermissionState;
     preferences?: { notifications?: { prayers?: boolean; events?: boolean; community?: boolean } };
     notificationDevices?: unknown;
@@ -179,7 +247,10 @@ const deriveNotificationStatus = (user: {
     preferences: { prayers: boolean; events: boolean; community: boolean };
     hasValidNotificationDevice: boolean;
     isLive: boolean;
+    isActive: boolean;
+    isRecentlySeen: boolean;
     lastSeenAt: Date | null;
+    lastActiveAt: Date | null;
 } => {
     const devices = normalizeNotificationDevices(user.notificationDevices);
     const now = Date.now();
@@ -198,7 +269,15 @@ const deriveNotificationStatus = (user: {
         return seenAt.getTime() > latest.getTime() ? seenAt : latest;
     }, null);
 
-    const isLive = Boolean(latestSeen && (now - latestSeen.getTime()) <= LIVE_WINDOW_MS);
+    const latestActive = devices.reduce<Date | null>((latest, device) => {
+        const activeAt = device.lastActiveAt || null;
+        if (!activeAt || (latest && activeAt.getTime() <= latest.getTime())) return latest;
+        return activeAt;
+    }, null);
+    const isActive = Boolean(latestActive && (now - latestActive.getTime()) <= ACTIVE_WINDOW_MS);
+    const isRecentlySeen = Boolean(
+        latestSeen && (now - latestSeen.getTime()) <= RECENTLY_SEEN_WINDOW_MS
+    );
     const preferences = {
         prayers: user.preferences?.notifications?.prayers !== false,
         events: user.preferences?.notifications?.events !== false,
@@ -209,8 +288,11 @@ const deriveNotificationStatus = (user: {
         permission: user.notificationPermission || devices[0]?.permission || 'unknown',
         preferences,
         hasValidNotificationDevice,
-        isLive,
+        isLive: isActive,
+        isActive,
+        isRecentlySeen,
         lastSeenAt: latestSeen,
+        lastActiveAt: latestActive,
     };
 };
 
@@ -386,7 +468,15 @@ router.delete('/history/:id', authMiddleware, async (req: any, res: Response) =>
 // Store FCM Token for the authenticated user
 router.post('/token', authMiddleware, async (req: any, res: Response) => {
     try {
-        const { token, deviceId, userAgent, permission, capability, heartbeatAt } = req.body;
+        const {
+            token,
+            deviceId,
+            userAgent,
+            permission,
+            capability,
+            heartbeatAt,
+            visibilityState,
+        } = req.body;
         const normalizedToken = normalizeNonEmptyString(token);
         if (!normalizedToken) {
             res.status(400).json({ status: 'error', message: 'Token is required' });
@@ -411,13 +501,17 @@ router.post('/token', authMiddleware, async (req: any, res: Response) => {
             }
         );
 
-        const user = await User.findById(userId);
+        const user = await User.findById(userId).select('notificationDevices');
         if (!user) {
             res.status(404).json({ status: 'error', message: 'User not found' });
             return;
         }
 
-        const latestDeviceEntry = normalizedDeviceId
+        const now = new Date();
+        const currentDevices = normalizeNotificationDevices(user.notificationDevices)
+            .filter((device) => device.deviceId !== normalizedDeviceId)
+            .map(({ token: _token, ...device }) => device);
+        const latestDeviceEntry: NormalizedNotificationDevice[] = normalizedDeviceId
             ? [{
                 deviceId: normalizedDeviceId,
                 token: normalizedToken,
@@ -427,18 +521,31 @@ router.post('/token', authMiddleware, async (req: any, res: Response) => {
                 isIOS: normalizedCapability.isIOS === true,
                 isStandalone: normalizedCapability.isStandalone === true,
                 lastSeenAt: normalizedHeartbeatAt,
-                updatedAt: new Date(),
+                ...(normalizeVisibilityState(visibilityState) === 'visible'
+                    ? { lastActiveAt: normalizedHeartbeatAt }
+                    : {}),
+                visibilityState: normalizeVisibilityState(visibilityState),
+                isOnline: true,
+                updatedAt: now,
             }]
             : [];
 
         // Single-latest-token policy:
-        // keep exactly one active key per user to avoid duplicate delivery.
-        user.notificationDevices = latestDeviceEntry;
-        user.fcmTokens = [normalizedToken];
-        user.notificationPermission = normalizedPermission;
-        user.notificationPermissionUpdatedAt = new Date();
-
-        await user.save();
+        // keep exactly one active key per user to avoid duplicate delivery, while
+        // retaining tokenless device shells for presence/capability diagnostics.
+        // A targeted update instead of save() so unrelated legacy fields on the
+        // account cannot make push registration fail.
+        await User.updateOne(
+            { _id: userId },
+            {
+                $set: {
+                    notificationDevices: [...latestDeviceEntry, ...currentDevices],
+                    fcmTokens: [normalizedToken],
+                    notificationPermission: normalizedPermission,
+                    notificationPermissionUpdatedAt: now,
+                },
+            }
+        );
 
         console.log(`✅ Token stored for user ${userId} (single-latest-token policy)`);
         console.log(`   Token: ${normalizedToken.substring(0, 20)}...`);
@@ -457,7 +564,14 @@ router.post('/token', authMiddleware, async (req: any, res: Response) => {
 
 router.post('/heartbeat', authMiddleware, async (req: any, res: Response) => {
     try {
-        const { deviceId, permission, capability, heartbeatAt } = req.body;
+        const {
+            deviceId,
+            permission,
+            capability,
+            heartbeatAt,
+            visibilityState,
+            isOnline,
+        } = req.body;
         const normalizedDeviceId = normalizeNonEmptyString(deviceId);
         if (!normalizedDeviceId) {
             res.status(400).json({ status: 'error', message: 'deviceId is required' });
@@ -467,32 +581,34 @@ router.post('/heartbeat', authMiddleware, async (req: any, res: Response) => {
         const normalizedPermission = normalizePermission(permission);
         const normalizedCapability = normalizeCapability(capability);
         const normalizedHeartbeatAt = normalizeDateOrNow(heartbeatAt);
-        const user = await User.findById(req.user.userId);
+        const user = await User.findById(req.user.userId).select('notificationDevices');
 
         if (!user) {
             res.status(404).json({ status: 'error', message: 'User not found' });
             return;
         }
 
-        const currentDevices = Array.isArray(user.notificationDevices) ? user.notificationDevices : [];
-        const deviceIndex = currentDevices.findIndex((device) => device.deviceId === normalizedDeviceId);
+        const mergedDevices = mergeHeartbeatDevice(user.notificationDevices, {
+            deviceId: normalizedDeviceId,
+            permission: normalizedPermission,
+            capability: normalizedCapability,
+            heartbeatAt: normalizedHeartbeatAt,
+            visibilityState,
+            isOnline,
+        });
 
-        if (deviceIndex !== -1) {
-            const targetDevice = currentDevices[deviceIndex];
-            if (targetDevice) {
-                targetDevice.permission = normalizedPermission;
-                targetDevice.supportsWebPush = normalizedCapability.supportsWebPush === true;
-                targetDevice.isIOS = normalizedCapability.isIOS === true;
-                targetDevice.isStandalone = normalizedCapability.isStandalone === true;
-                targetDevice.lastSeenAt = normalizedHeartbeatAt;
-                targetDevice.updatedAt = new Date();
+        // Heartbeats run every minute per device, so write only these fields.
+        // save() would validate the whole account and let unrelated data break presence.
+        await User.updateOne(
+            { _id: req.user.userId },
+            {
+                $set: {
+                    notificationDevices: mergedDevices,
+                    notificationPermission: normalizedPermission,
+                    notificationPermissionUpdatedAt: new Date(),
+                },
             }
-            user.notificationDevices = currentDevices;
-        }
-
-        user.notificationPermission = normalizedPermission;
-        user.notificationPermissionUpdatedAt = new Date();
-        await user.save();
+        );
 
         res.json({ status: 'success', message: 'Heartbeat updated' });
     } catch (error: any) {
@@ -599,6 +715,13 @@ router.post('/send-user', authMiddleware, superAdminMiddleware, async (req: any,
             res.status(400).json({ status: 'error', message: 'UserId, title, and body are required' });
             return;
         }
+        if (!isFirebaseAdminReady()) {
+            res.status(503).json({
+                status: 'error',
+                message: 'Push service is not configured on the backend.',
+            });
+            return;
+        }
 
         const user = await User.findById(userId);
         if (!user) {
@@ -630,7 +753,7 @@ router.post('/send-user', authMiddleware, superAdminMiddleware, async (req: any,
         const response = await sendMulticastNotification(tokens, title, body, {
             ...data,
             notificationId,
-        });
+        }, { dataOnly: true });
         await removeInvalidTokens(tokens, response.responses);
 
         res.json({ 
@@ -658,16 +781,19 @@ router.post('/broadcast', authMiddleware, superAdminMiddleware, async (req: any,
             res.status(400).json({ status: 'error', message: 'Title and body are required' });
             return;
         }
+        if (!isFirebaseAdminReady()) {
+            res.status(503).json({
+                status: 'error',
+                message: 'Push service is not configured on the backend.',
+            });
+            return;
+        }
 
         console.log("📢 Starting broadcast...");
 
-        // 1. Get all users with at least one notification key.
-        const users = await User.find({
-            $or: [
-                { fcmTokens: { $exists: true, $not: { $size: 0 } } },
-                { notificationDevices: { $exists: true, $not: { $size: 0 } } },
-            ],
-        }).select('fcmTokens notificationDevices username');
+        // Broadcast history is an in-app notification for every user. Push is an
+        // additional delivery channel only for users with a valid token.
+        const users = await User.find({}).select('fcmTokens notificationDevices username');
         
         console.log(`🔎 Found ${users.length} users with tokens.`);
 
@@ -724,7 +850,24 @@ router.post('/broadcast', authMiddleware, superAdminMiddleware, async (req: any,
         console.log(`📝 Total unique tokens to send to: ${uniqueDeliveryTokens.length}`);
 
         if (uniqueDeliveryTokens.length === 0) {
-            res.json({ status: 'success', message: 'No valid devices found to receive broadcast.' });
+            const notificationId = createNotificationId();
+            await persistNotificationsForUsers(
+                users.map((user) => user._id),
+                title,
+                body,
+                { ...(data || {}), notificationId },
+                'admin-broadcast'
+            );
+            res.status(207).json({
+                status: 'partial',
+                message: 'Saved in-app for all users, but no push-ready devices were found.',
+                details: {
+                    recipients: users.length,
+                    pushReadyDevices: 0,
+                    successCount: 0,
+                    failureCount: 0,
+                },
+            });
             return;
         }
 
@@ -753,7 +896,7 @@ router.post('/broadcast', authMiddleware, superAdminMiddleware, async (req: any,
                 const response = await sendMulticastNotification(batchTokens, title, body, {
                     ...data,
                     notificationId,
-                });
+                }, { dataOnly: true });
                 successCount += response.successCount;
                 failureCount += response.failureCount;
                 await removeInvalidTokens(batchTokens, response.responses);
@@ -766,7 +909,13 @@ router.post('/broadcast', authMiddleware, superAdminMiddleware, async (req: any,
 
         res.json({ 
             status: 'success', 
-            message: `Broadcast sent. Success: ${successCount}, Failed: ${failureCount}` 
+            message: `Broadcast sent. Success: ${successCount}, Failed: ${failureCount}`,
+            details: {
+                recipients: users.length,
+                pushReadyDevices: uniqueDeliveryTokens.length,
+                successCount,
+                failureCount,
+            },
         });
 
     } catch (error: any) {

@@ -18,13 +18,16 @@ export interface IUser extends Document {
   fcmTokens?: string[]; // Added FCM Tokens field
   notificationDevices?: Array<{
     deviceId: string;
-    token: string;
+    token?: string;
     userAgent?: string;
     permission?: 'granted' | 'denied' | 'default' | 'unknown';
     supportsWebPush?: boolean;
     isIOS?: boolean;
     isStandalone?: boolean;
     lastSeenAt?: Date;
+    lastActiveAt?: Date;
+    visibilityState?: 'visible' | 'hidden' | 'prerender' | 'unknown';
+    isOnline?: boolean;
     updatedAt: Date;
   }>;
   notificationPermission?: 'granted' | 'denied' | 'default' | 'unknown';
@@ -285,7 +288,7 @@ const UserSchema = new Schema<IUser>({
     },
     token: {
       type: String,
-      required: true,
+      default: '',
       trim: true,
     },
     userAgent: {
@@ -312,6 +315,18 @@ const UserSchema = new Schema<IUser>({
     lastSeenAt: {
       type: Date,
       default: Date.now,
+    },
+    lastActiveAt: {
+      type: Date,
+    },
+    visibilityState: {
+      type: String,
+      enum: ['visible', 'hidden', 'prerender', 'unknown'],
+      default: 'unknown',
+    },
+    isOnline: {
+      type: Boolean,
+      default: true,
     },
     updatedAt: {
       type: Date,

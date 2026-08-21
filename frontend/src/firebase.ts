@@ -84,6 +84,21 @@ export interface PushSupportInfo {
   limitations: string[];
 }
 
+export const getPushConfigurationIssue = (): string | null =>
+  process.env.REACT_APP_FIREBASE_VAPID_KEY?.trim()
+    ? null
+    : 'Web push is not configured for this deployment.';
+
+export const getMessagingServiceWorkerRegistration = async (): Promise<ServiceWorkerRegistration> => {
+  if (!('serviceWorker' in navigator)) {
+    throw new Error('Service workers are not supported by this browser.');
+  }
+
+  const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+  await navigator.serviceWorker.ready;
+  return registration;
+};
+
 export const getPushSupportInfo = async (): Promise<PushSupportInfo> => {
   const supported = Boolean(await messagingPromise);
   const hasNotificationApi = typeof window !== 'undefined' && 'Notification' in window;
@@ -129,17 +144,19 @@ export const requestForToken = async () => {
     return null;
   }
 
-  console.log('Requesting notification permission...');
-  let permission: NotificationPermission;
-  try {
-    permission = await Notification.requestPermission();
-  } catch (e) {
-    console.error('Permission request failed:', e);
-    return null;
+  let permission = Notification.permission;
+  if (permission === 'default') {
+    console.log('Requesting notification permission...');
+    try {
+      permission = await Notification.requestPermission();
+    } catch (e) {
+      console.error('Permission request failed:', e);
+      return null;
+    }
   }
 
   if (permission !== 'granted') {
-    console.log('Notification permission denied.');
+    console.warn('Notification permission is denied. Enable it in the browser site settings.');
     return null;
   }
 
@@ -182,18 +199,19 @@ export const requestForToken = async () => {
   }
 
   try {
-    const vapidKey = process.env.REACT_APP_FIREBASE_VAPID_KEY || '';
+    const vapidKey = process.env.REACT_APP_FIREBASE_VAPID_KEY?.trim() || '';
     if (!vapidKey) {
       console.warn('REACT_APP_FIREBASE_VAPID_KEY is not set; push token registration skipped.');
       return null;
     }
+    const serviceWorkerRegistration = await getMessagingServiceWorkerRegistration();
     // Retry logic for token retrieval (especially important for iOS)
     let currentToken: string | null = null;
     const maxRetries = 3;
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        currentToken = await getToken(msg, { vapidKey });
+        currentToken = await getToken(msg, { vapidKey, serviceWorkerRegistration });
         if (currentToken) {
           console.log(`Token retrieved successfully on attempt ${attempt}`);
           break;

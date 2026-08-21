@@ -343,17 +343,26 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     }
 
     void syncServerHistory();
+    const historyInterval = window.setInterval(() => {
+      if (document.visibilityState === 'visible' && navigator.onLine) {
+        void syncServerHistory();
+      }
+    }, 60 * 1000);
 
     const onVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         void syncServerHistory();
       }
     };
+    const onOnline = () => void syncServerHistory();
 
     document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('online', onOnline);
 
     return () => {
+      window.clearInterval(historyInterval);
       document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('online', onOnline);
     };
   }, [syncServerHistory, user]);
 

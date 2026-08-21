@@ -115,7 +115,9 @@ Edit `.env` at minimum:
 | `ISLAMIC_API_KEY` | If required by your prayer/nisab provider |
 | `REACT_APP_API_URL` | Leave as `/api` for local proxy, or full backend URL |
 | `REACT_APP_GOOGLE_MAPS_API_KEY` | Needed for Mosque Finder |
-| `REACT_APP_FIREBASE_VAPID_KEY` | Needed for web push (optional at first) |
+| `REACT_APP_FIREBASE_VAPID_KEY` | Required for web push; set in Vercel and redeploy |
+| `FIREBASE_SERVICE_ACCOUNT` | Required on Render for push delivery; full JSON from the same Firebase project |
+| `CORS_ORIGIN` | Production frontend origins allowed to register tokens and send heartbeats |
 
 There is **no** `backend/.env.example` — use the **root** `.env.example`. Frontend-only extras: `frontend/.env.example`.
 

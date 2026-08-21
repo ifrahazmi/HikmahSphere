@@ -166,21 +166,24 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
       isDark ? 'bg-gray-800' : 'bg-white'
     }`}>
       <div className="max-w-[90rem] mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16 gap-3">
-          <div className="flex items-center shrink-0 min-w-0 z-10">
-            <Link to="/" className="flex shrink-0 items-center max-w-full">
+        <div className="flex items-center h-16 gap-2 min-w-0">
+          {/* Natural width only: a growing brand would starve the centered menu,
+              whose nowrap items would then spill over the action icons. */}
+          <div className="flex items-center min-w-0 shrink">
+            <Link to="/" className="flex items-center min-w-0 max-w-full">
               <div className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 xl:w-11 xl:h-11 2xl:w-12 2xl:h-12 flex items-center justify-center overflow-hidden rounded-full bg-white shrink-0">
                 <img src="/logo.png" alt="HikmahSphere Logo" className="h-full w-full object-cover" />
               </div>
-              <div className="ml-2 flex items-baseline min-w-0">
-                <span className={`text-sm sm:text-base md:text-lg xl:text-xl 2xl:text-2xl font-bold truncate ${
+              {/* Stacked so the badge costs no extra width, and short enough to keep the h-16 bar */}
+              <div className="ml-2 flex flex-col justify-center min-w-0">
+                <span className={`text-sm sm:text-base md:text-lg xl:text-xl 2xl:text-2xl font-bold leading-tight truncate ${
                   isDark ? 'text-white' : 'text-gray-900'
                 }`}>HikmahSphere</span>
-                <span className={`inline-flex ml-1 text-[10px] 2xl:text-xs font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${
+                <span className={`self-start inline-flex text-[8px] xl:text-[9px] font-semibold leading-none px-1.5 py-0.5 rounded-full ${
                   isDark
                     ? 'bg-emerald-900 text-emerald-300'
                     : 'bg-emerald-100 text-emerald-700'
-                } -translate-y-0.5`}>
+                }`}>
                   {APP_VERSION_LABEL}
                 </span>
               </div>
@@ -196,7 +199,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                     <button
                       type="button"
                       onClick={() => setIsPrayerMenuOpen((prev) => !prev)}
-                      className={`px-1.5 xl:px-2 2xl:px-2.5 py-2 rounded-md text-xs xl:text-[13px] 2xl:text-sm font-medium whitespace-nowrap transition-colors duration-200 inline-flex items-center gap-0.5 ${
+                      className={`px-1.5 2xl:px-2.5 py-2 rounded-md text-xs xl:text-[13px] 2xl:text-sm font-medium whitespace-nowrap transition-colors duration-200 inline-flex items-center gap-0.5 ${
                         item.current
                           ? isDark
                             ? 'bg-emerald-900 text-emerald-300'
@@ -257,7 +260,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                     <button
                       type="button"
                       onClick={() => setIsQuranMenuOpen((prev) => !prev)}
-                      className={`px-1.5 xl:px-2 2xl:px-2.5 py-2 rounded-md text-xs xl:text-[13px] 2xl:text-sm font-medium whitespace-nowrap transition-colors duration-200 inline-flex items-center gap-0.5 ${
+                      className={`px-1.5 2xl:px-2.5 py-2 rounded-md text-xs xl:text-[13px] 2xl:text-sm font-medium whitespace-nowrap transition-colors duration-200 inline-flex items-center gap-0.5 ${
                         item.current
                           ? isDark
                             ? 'bg-emerald-900 text-emerald-300'
@@ -305,7 +308,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                 <Link
                   key={item.name}
                   to={item.href}
-                  className={`px-1.5 xl:px-2 2xl:px-2.5 py-2 rounded-md text-xs xl:text-[13px] 2xl:text-sm font-medium whitespace-nowrap transition-colors duration-200 ${
+                  className={`px-1.5 2xl:px-2.5 py-2 rounded-md text-xs xl:text-[13px] 2xl:text-sm font-medium whitespace-nowrap transition-colors duration-200 ${
                     item.current
                       ? isDark
                         ? 'bg-emerald-900 text-emerald-300'
@@ -322,7 +325,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
           </div>
 
           {/* Right Section - Responsive sizing */}
-          <div className="hidden xl:flex items-center gap-1.5 2xl:gap-2 shrink-0">
+          <div className="relative z-20 hidden xl:flex items-center gap-1.5 2xl:gap-2 shrink-0">
             {user ? (
               <>
                 {/* Notification Bell */}
@@ -442,11 +445,11 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
             )}
           </div>
 
-          <div className="xl:hidden flex items-center gap-2 shrink-0">
+          <div className="relative z-20 ml-auto xl:hidden flex items-center gap-1 shrink-0">
             {/* Mobile Notification Bell */}
             {user && <NotificationBell />}
 
-            {/* Mobile Dark Mode Toggle */}
+            {/* Dark Mode Toggle */}
             <button
               onClick={() => toast.success('Coming Soon!')}
               className={`p-1.5 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-colors duration-200 ${
@@ -455,6 +458,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                   : 'text-gray-700 hover:text-emerald-600'
               }`}
               title="Toggle dark mode"
+              aria-label="Toggle dark mode"
             >
               {isDarkMode ? (
                 <SunIcon className="h-5 w-5" />
@@ -463,7 +467,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
               )}
             </button>
 
-            {/* Mobile Settings Icon */}
+            {/* Settings Icon */}
             <button
               onClick={() => setIsSettingsOpen(true)}
               className={`p-1.5 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-colors duration-200 ${
@@ -472,12 +476,14 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                   : 'text-gray-700 hover:text-emerald-600'
               }`}
               title="Settings"
+              aria-label="Settings"
             >
               <Cog6ToothIcon className="h-5 w-5" />
             </button>
-            
+
             <button
               onClick={() => setIsOpen(!isOpen)}
+              aria-label={isOpen ? 'Close navigation menu' : 'Open navigation menu'}
               className={`focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 rounded-md p-2 transition-colors duration-200 ${
                 isDark
                   ? 'text-gray-300 hover:text-emerald-400'

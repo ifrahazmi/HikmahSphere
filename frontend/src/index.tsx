@@ -50,20 +50,6 @@ if (typeof window !== 'undefined') {
   });
 }
 
-const isLocalDevHost = typeof window !== 'undefined'
-  && ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
-
-if ('serviceWorker' in navigator && isLocalDevHost) {
-  window.addEventListener('load', async () => {
-    const registrations = await navigator.serviceWorker.getRegistrations();
-    await Promise.all(registrations.map((registration) => registration.unregister()));
-    if ('caches' in window) {
-      const cacheNames = await caches.keys();
-      await Promise.all(cacheNames.map((name) => caches.delete(name)));
-    }
-  });
-}
-
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
