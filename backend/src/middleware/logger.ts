@@ -62,11 +62,38 @@ const getTimestamp = (): string => {
   return new Date().toISOString();
 };
 
+const isProduction = (): boolean => process.env.NODE_ENV === 'production';
+
+// Platform health checks run every few seconds and would otherwise dominate the logs.
+const healthCheckPaths = new Set(['/health', '/api/health']);
+
+// Runs `onFinish` once the response is being sent, then delegates to the real res.end.
+const onResponseEnd = (res: Response, onFinish: () => void): void => {
+  const originalEnd = res.end;
+
+  res.end = function(this: Response, chunk?: any, encodingOrCallback?: any, callback?: any): Response {
+    onFinish();
+    return originalEnd.call(this, chunk, encodingOrCallback, callback);
+  };
+};
+
 // Request logging middleware
 export const requestLogger = (req: Request, res: Response, next: NextFunction) => {
   const startTime = Date.now();
   const timestamp = getTimestamp();
   const methodColor = getMethodColor(req.method);
+
+  if (isProduction()) {
+    if (!healthCheckPaths.has(req.path)) {
+      onResponseEnd(res, () => {
+        const duration = Date.now() - startTime;
+        console.log(`${timestamp} ${req.method} ${req.originalUrl} ${res.statusCode} ${duration}ms`);
+      });
+    }
+
+    next();
+    return;
+  }
 
   // Log incoming request
   console.log('\n' + '='.repeat(80));
@@ -92,11 +119,7 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction) =
     console.log(`${colors.dim}Auth:${colors.reset} ${colors.success}✓ Token Present${colors.reset}`);
   }
 
-  // Capture the original end function
-  const originalEnd = res.end;
-
-  // Override res.end to log response
-  res.end = function(this: Response, chunk?: any, encodingOrCallback?: any, callback?: any): Response {
+  onResponseEnd(res, () => {
     const duration = Date.now() - startTime;
     const statusColor = getStatusColor(res.statusCode);
 
@@ -116,16 +139,23 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction) =
     }
 
     console.log('='.repeat(80) + '\n');
-
-    // Call the original end function with proper arguments
-    return originalEnd.call(this, chunk, encodingOrCallback, callback);
-  };
+  });
 
   next();
 };
 
 // Error logging middleware
 export const errorLogger = (err: any, req: Request, res: Response, next: NextFunction) => {
+  if (isProduction()) {
+    console.error(`${getTimestamp()} ERROR ${req.method} ${req.originalUrl} ${err.name || 'Error'}: ${err.message}`);
+    if (err.stack) {
+      console.error(err.stack);
+    }
+
+    next(err);
+    return;
+  }
+
   console.log('\n' + '='.repeat(80));
   console.log(`${colors.error}${colors.bright}💥 ERROR OCCURRED${colors.reset}`);
   console.log(`${colors.dim}Timestamp:${colors.reset} ${getTimestamp()}`);
