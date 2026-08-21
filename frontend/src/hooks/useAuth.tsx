@@ -209,12 +209,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
 
         localStorage.setItem('token', data.token);
-        if (data.user) {
-          localStorage.setItem('user', JSON.stringify(data.user));
-          setUser(mapUser(data.user));
-        } else {
-          await checkAuthStatus();
-        }
+        // The login response intentionally contains only identity fields.
+        // Hydrate from /auth/profile before navigating so profile details and
+        // the avatar are available immediately instead of only after refresh.
+        await checkAuthStatus();
         return { passwordChangeRequired: false };
       } else {
         throw new Error(data.message || 'Login failed');

@@ -53,12 +53,14 @@ const resolveTafsirEndpoint = (
       ? `${endpointBase}/surah/${surahNumber}`
       : `${endpointBase}/surah/${surahNumber}/ayah/${ayahNumber}`;
 
-  // Maududi upstream does not use ?edition=; only Bayan/other editions do.
-  if (isTafheemEdition(edition)) {
-    return path;
-  }
-
-  const query = edition ? `?edition=${encodeURIComponent(edition)}` : '';
+  // Render needs the edition to choose the Maududi proxy. A direct local
+  // Maududi upstream does not accept the edition query parameter.
+  const usesDirectMaududiUpstream =
+    isTafheemEdition(edition) && Boolean(process.env.REACT_APP_MAUDUDI_API_URL);
+  const query =
+    edition && !usesDirectMaududiUpstream
+      ? `?edition=${encodeURIComponent(edition)}`
+      : '';
   return `${path}${query}`;
 };
 
