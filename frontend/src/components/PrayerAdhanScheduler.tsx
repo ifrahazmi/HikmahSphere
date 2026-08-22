@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import usePrayerNotificationChecker from '../hooks/usePrayerNotificationChecker';
 import { useNotificationPreferences } from '../hooks/useNotificationPreferences';
-import { readTodayAdhanTimes, StoredAdhanTimes } from '../utils/adhanStorage';
+import { useAuth } from '../hooks/useAuth';
+import { API_URL } from '../config';
+import { readTodayAdhanTimes, StoredAdhanTimes, writeTodayAdhanTimes, getLocalDateKey } from '../utils/adhanStorage';
 
 /**
  * Headless component mounted once at the app root. It keeps today's prayer
@@ -10,8 +12,39 @@ import { readTodayAdhanTimes, StoredAdhanTimes } from '../utils/adhanStorage';
  * app is open.
  */
 const PrayerAdhanScheduler: React.FC = () => {
+  const { user } = useAuth();
   const { preferences } = useNotificationPreferences();
   const [times, setTimes] = useState<StoredAdhanTimes | null>(() => readTodayAdhanTimes());
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const hydrateFromBackend = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      try {
+        const response = await fetch(`${API_URL}/users/${user.id}/location`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!response.ok) return;
+
+        const data = await response.json();
+        const push = data?.prayerPush;
+        if (
+          push?.times &&
+          push?.timesDate === getLocalDateKey() &&
+          typeof push.times === 'object'
+        ) {
+          writeTodayAdhanTimes(push.times);
+        }
+      } catch {
+        // Best-effort hydration; Prayer Times page still writes local times.
+      }
+    };
+
+    void hydrateFromBackend();
+  }, [user?.id]);
 
   useEffect(() => {
     const refresh = () => {

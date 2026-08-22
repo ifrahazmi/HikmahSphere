@@ -2158,9 +2158,9 @@ const PrayerTimes: React.FC = () => {
   }, [prayerData?.times]);
 
   // Save the user's location + calculation settings to the backend so the
-  // server can push Adhan notifications even when the app is closed. Custom
-  // Adhan audio cannot autoplay in background on mobile PWAs (OS ring only);
-  // tapping the notification opens the app and plays /sounds/adhan.mp3.
+  // server can push Adhan notifications even when the app is closed. On phone,
+  // Adhan plays automatically when the app is open; from background, tap the
+  // notification then tap Play Adhan on the prompt screen.
   useEffect(() => {
     if (!user?.id || !location?.lat || !location?.lon) return;
     const token = localStorage.getItem('token');
