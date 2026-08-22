@@ -4,7 +4,8 @@ import { toast } from 'react-hot-toast';
 import { MessagePayload } from 'firebase/messaging';
 import { API_URL } from '../config';
 import { useAuth } from '../hooks/useAuth';
-import { playAdhanAudio, setupAdhanAudioUnlock } from '../utils/adhanAudio';
+import { setupAdhanAudioUnlock } from '../utils/adhanAudio';
+import { queueAdhanPlayback } from '../utils/adhanPlayback';
 
 export interface Notification {
   id: string;
@@ -300,28 +301,20 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     setupAdhanAudioUnlock();
   }, []);
 
-  // Play Adhan when user taps a background notification, or opens /prayers?playAdhan=1
+  // Queue Adhan playback when the service worker signals a prayer notification tap.
+  // AdhanPlayPrompt shows the one-tap Play UI (required on mobile).
   useEffect(() => {
-    const playFromQuery = () => {
-      try {
-        const params = new URLSearchParams(window.location.search);
-        if (params.get('playAdhan') === '1') {
-          playAdhanAudio();
-          params.delete('playAdhan');
-          const next = `${window.location.pathname}${params.toString() ? `?${params}` : ''}${window.location.hash}`;
-          window.history.replaceState({}, '', next);
-        }
-      } catch {
-        // ignore
-      }
-    };
-
-    playFromQuery();
-
     const handleServiceWorkerMessage = (event: MessageEvent) => {
-      if (event.data?.type === PLAY_ADHAN_MESSAGE_TYPE) {
-        playAdhanAudio();
-      }
+      if (event.data?.type !== PLAY_ADHAN_MESSAGE_TYPE) return;
+
+      const payload = event.data?.payload;
+      const prayer =
+        payload?.data?.prayer ||
+        payload?.prayer ||
+        event.data?.prayer ||
+        undefined;
+
+      queueAdhanPlayback(typeof prayer === 'string' ? prayer : undefined, 'service-worker');
     };
 
     if ('serviceWorker' in navigator) {

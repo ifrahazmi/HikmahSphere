@@ -6,7 +6,7 @@ import { useNotificationPreferences } from '../hooks/useNotificationPreferences'
 import { useNotification } from '../contexts/NotificationContext';
 import { useAuth } from '../hooks/useAuth';
 import { useUserPreferences } from '../hooks/useUserPreferences';
-import { playAdhanAudio } from '../utils/adhanAudio';
+import { playAdhanFromUserGesture } from '../utils/adhanAudio';
 import toast from 'react-hot-toast';
 
 interface SettingsModalProps {
@@ -114,6 +114,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
               <BellIcon className="h-5 w-5" />
               {t('settings.notifications')}
             </h3>
+            <p className="mb-3 text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+              On phone, Adhan plays automatically when the app is open. From background,
+              tap the prayer notification, then tap Play Adhan on the prompt.
+            </p>
             <div className="space-y-3">
               {(['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'] as const).map((prayer) => (
                 <div key={prayer} className="flex items-center justify-between rounded-lg bg-gray-50 p-3 dark:bg-gray-800">
@@ -174,7 +178,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                       toast.success('Test successful: Notification displayed!');
                       if (anySound) {
                         try {
-                          playAdhanAudio();
+                          playAdhanFromUserGesture();
                           toast.success('Test successful: Audio playing for 20s!');
                         } catch (err) {
                           console.error('Audio playback error', err);

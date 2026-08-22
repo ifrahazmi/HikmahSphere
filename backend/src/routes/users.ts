@@ -157,6 +157,9 @@ router.get('/:id/location', authMiddleware, async (req: any, res) => {
         method: push?.method,
         school: push?.school,
       },
+      prayerPush: push?.times && push?.timesDate
+        ? { times: push.times, timesDate: push.timesDate }
+        : null,
     });
   } catch (err: any) {
     return res.status(500).json({ message: err.message });

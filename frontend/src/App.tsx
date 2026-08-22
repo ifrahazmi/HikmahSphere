@@ -22,6 +22,7 @@ import LoadingSpinner from './components/LoadingSpinner';
 import ProtectedRoute from './components/ProtectedRoute'; // Import ProtectedRoute
 import InstallAppPrompt from './components/InstallAppPrompt';
 import PrayerAdhanScheduler from './components/PrayerAdhanScheduler';
+import AdhanPlayPrompt from './components/AdhanPlayPrompt';
 
 // Pages
 import Home from './pages/Home';
@@ -361,6 +362,9 @@ const AppContent: React.FC = () => {
 
       {/* Global Adhan scheduler (fires prayer notifications on any page) */}
       <PrayerAdhanScheduler />
+
+      {/* One-tap Adhan prompt after notification tap or ?playAdhan=1 */}
+      <AdhanPlayPrompt />
 
       {/* Global Notifications */}
       <Toaster />

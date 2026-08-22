@@ -5,9 +5,10 @@
 importScripts('https://www.gstatic.com/firebasejs/10.7.2/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.2/firebase-messaging-compat.js');
 
-const CACHE_NAME = 'hikmahsphere-app-v5';
+const CACHE_NAME = 'hikmahsphere-app-v6';
 const TILE_CACHE = 'hikmahsphere-tiles-v1';
-const APP_SHELL = ['/', '/index.html', '/manifest.json', '/logo.png', '/favicon.ico'];
+const IS_LOCAL_DEV = ['localhost', '127.0.0.1', '[::1]'].includes(self.location.hostname);
+const APP_SHELL = ['/', '/index.html', '/manifest.json', '/logo.png', '/favicon.ico', '/sounds/adhan.mp3'];
 const OFFLINE_DOCUMENT = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>HikmahSphere Offline</title><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f8fafc;color:#0f172a;display:grid;min-height:100vh;place-items:center;padding:24px}main{max-width:28rem;text-align:center}h1{margin:0 0 12px;color:#047857;font-size:1.75rem}p{margin:0;color:#475569;line-height:1.6}</style></head><body><main><h1>You're offline</h1><p>HikmahSphere could not load this page right now. Please check your connection and try again.</p></main></body></html>`;
 
 const cacheAppShell = async () => {
@@ -90,6 +91,10 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
+
+  // Local dev: stay registered so push can be tested, but never serve cached
+  // app code, otherwise source edits only appear after clearing site storage.
+  if (IS_LOCAL_DEV) return;
 
   const url = new URL(request.url);
 
@@ -231,6 +236,16 @@ async function getTileCacheSize() {
   }
 }
 
+const buildAdhanTargetUrl = (payload) => {
+  const prayer = payload?.data?.prayer || payload?.prayer;
+  const base = payload?.data?.url || '/prayers';
+  if (!prayer) {
+    return base.includes('playAdhan=1') ? base : `${base}${base.includes('?') ? '&' : '?'}playAdhan=1`;
+  }
+  const separator = base.includes('?') ? '&' : '?';
+  return `${base}${separator}playAdhan=1&prayer=${encodeURIComponent(prayer)}`;
+};
+
 const createNotificationPayload = (payload) => {
   const id = payload?.data?.notificationId || payload?.messageId || `sw-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   return {
@@ -283,9 +298,10 @@ messaging.onBackgroundMessage((payload) => {
     return;
   }
   const notificationTitle = normalizedPayload.title;
-  const targetUrl = payload?.data?.url || '/prayers?playAdhan=1';
+  const targetUrl = buildAdhanTargetUrl(payload);
   const isAdhan = (payload?.data?.type || normalizedPayload.type) === 'adhan'
     || payload?.data?.playAdhan === '1';
+  const prayerName = payload?.data?.prayer || normalizedPayload.data?.prayer;
 
   // If FCM already included a visible `notification` block, the browser/OS
   // may auto-display it. Showing again here causes the classic double popup.
@@ -329,36 +345,47 @@ messaging.onBackgroundMessage((payload) => {
     data: {
       url: targetUrl,
       playAdhan: isAdhan ? '1' : '0',
+      prayer: prayerName || '',
       notificationPayload: normalizedPayload
-    }
+    },
+    actions: isAdhan
+      ? [{ action: 'play-adhan', title: 'Play Adhan' }]
+      : undefined
   };
 
   self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
-// Add notification click handler
 self.addEventListener('notificationclick', function(event) {
   console.log('[firebase-messaging-sw.js] Notification click Received.', event);
 
   event.notification.close();
-  const targetUrl = event.notification?.data?.url || '/prayers?playAdhan=1';
   const notificationPayload = event.notification?.data?.notificationPayload;
-  const shouldPlayAdhan = event.notification?.data?.playAdhan === '1'
+  const prayerName = event.notification?.data?.prayer || notificationPayload?.data?.prayer;
+  const shouldPlayAdhan = event.action === 'play-adhan'
+    || event.notification?.data?.playAdhan === '1'
     || notificationPayload?.data?.type === 'adhan'
     || notificationPayload?.type === 'adhan';
+  const targetUrl = shouldPlayAdhan
+    ? buildAdhanTargetUrl({
+        data: {
+          url: event.notification?.data?.url || '/prayers',
+          prayer: prayerName,
+          playAdhan: '1',
+        },
+      })
+    : (event.notification?.data?.url || '/');
 
-  // This looks to see if the current is already open and
-  // focuses if it is
+  const playMessage = shouldPlayAdhan
+    ? { type: 'HIKMAH_PLAY_ADHAN', payload: notificationPayload || { data: { prayer: prayerName } } }
+    : null;
+
   event.waitUntil(
     clients.matchAll({
       type: 'window',
       includeUncontrolled: true
     })
     .then(function(clientList) {
-      const playMessage = shouldPlayAdhan
-        ? { type: 'HIKMAH_PLAY_ADHAN', payload: notificationPayload || null }
-        : null;
-
       for (let i = 0; i < clientList.length; i++) {
         const client = clientList[i];
 
@@ -375,9 +402,13 @@ self.addEventListener('notificationclick', function(event) {
         if (targetUrl && 'navigate' in client && typeof client.navigate === 'function') {
           try {
             const currentPath = new URL(client.url).pathname + new URL(client.url).search;
-            const nextPath = targetUrl.startsWith('http') ? new URL(targetUrl).pathname + new URL(targetUrl).search : targetUrl;
+            const nextPath = targetUrl.startsWith('http')
+              ? new URL(targetUrl).pathname + new URL(targetUrl).search
+              : targetUrl;
             if (currentPath !== nextPath) {
-              return client.navigate(targetUrl).then((navigated) => (navigated && 'focus' in navigated ? navigated.focus() : client.focus()));
+              return client.navigate(targetUrl).then((navigated) => (
+                navigated && 'focus' in navigated ? navigated.focus() : client.focus()
+              ));
             }
           } catch (_err) {
             // Fall through to focus.
@@ -390,21 +421,7 @@ self.addEventListener('notificationclick', function(event) {
       }
 
       if (clients.openWindow) {
-        return clients.openWindow(targetUrl).then((windowClient) => {
-          if (windowClient && notificationPayload) {
-            windowClient.postMessage({
-              type: APP_MESSAGE_TYPE,
-              payload: notificationPayload
-            });
-          }
-          if (windowClient && playMessage) {
-            // Small delay so the newly opened page can attach its listener.
-            setTimeout(() => {
-              windowClient.postMessage(playMessage);
-            }, 800);
-          }
-          return windowClient;
-        });
+        return clients.openWindow(targetUrl);
       }
 
       return undefined;
@@ -447,6 +464,8 @@ self.addEventListener('push', (event) => {
   }
 
   const isAdhan = (payload?.data?.type || normalizedPayload.type) === 'adhan' || payload?.data?.playAdhan === '1';
+  const targetUrl = buildAdhanTargetUrl(payload);
+  const prayerName = payload?.data?.prayer || normalizedPayload.data?.prayer;
 
   if (isAdhan) {
     broadcastToOpenClients({ type: 'HIKMAH_PLAY_ADHAN', payload: normalizedPayload }).catch(() => {});
@@ -463,7 +482,15 @@ self.addEventListener('push', (event) => {
         renotify: false,
         vibrate: [200, 100, 200],
         sound: isAdhan ? '/sounds/adhan.mp3' : undefined,
-        data: { url: payload?.data?.url || '/', playAdhan: isAdhan ? '1' : '0', notificationPayload: normalizedPayload },
+        data: {
+          url: targetUrl,
+          playAdhan: isAdhan ? '1' : '0',
+          prayer: prayerName || '',
+          notificationPayload: normalizedPayload,
+        },
+        actions: isAdhan
+          ? [{ action: 'play-adhan', title: 'Play Adhan' }]
+          : undefined,
       }),
     ])
   );

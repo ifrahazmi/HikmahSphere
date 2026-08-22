@@ -132,7 +132,7 @@ const runTick = async () => {
         const data = {
           type: 'adhan',
           prayer,
-          url: '/prayers?playAdhan=1',
+          url: `/prayers?playAdhan=1&prayer=${encodeURIComponent(prayer)}`,
           notificationId,
           playAdhan: '1',
         };
