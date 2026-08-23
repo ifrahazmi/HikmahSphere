@@ -209,6 +209,31 @@ Helpers: `deploy/verify.sh`, `deploy/restart-docker.sh`, `deploy/setup-uploads.s
 
 ---
 
+## Keeping the free Render backend awake
+
+Render Free web services sleep after 15 minutes without public inbound traffic.
+The backend's internal prayer-cache scheduler does not count as public traffic.
+For best-effort free availability:
+
+1. Deploy the latest backend so `GET /health/keepalive` is available.
+2. In [Better Stack Uptime](https://betterstack.com/uptime), create an HTTP monitor:
+   - URL: `https://hikmahsphere-backend.onrender.com/health/keepalive`
+   - Check frequency: 3 minutes
+   - Expected HTTP status: `200`
+   - Response keyword: `"keepalive":true`
+3. Keep `.github/workflows/render-keepalive.yml` enabled on the repository's
+   default branch as a five-minute fallback.
+4. Confirm Render logs contain `GET /health/keepalive 200` at intervals shorter
+   than 15 minutes. The endpoint includes `uptimeSeconds`; an unexpectedly small
+   value indicates that Render restarted the process.
+
+GitHub scheduled workflows can be delayed or dropped and are disabled after 60
+days without repository activity in public repositories, so they should not be
+the only monitor. This setup is best effort: only a paid Render instance removes
+idle spin-down and provides an always-on hosting guarantee.
+
+---
+
 ## Tech stack
 
 | Layer | Stack |

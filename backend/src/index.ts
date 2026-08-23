@@ -19,6 +19,7 @@ import {
 } from './middleware/logger';
 import redisClient from './config/redis'; // Import Redis client
 import { getUploadsRoot } from './utils/uploads';
+import { createKeepalivePayload } from './utils/health';
 import { startMeetingNotificationScheduler, stopMeetingNotificationScheduler } from './services/meetingNotificationScheduler';
 import { startPrayerNotificationScheduler, stopPrayerNotificationScheduler } from './services/prayerNotificationScheduler';
 import { startPrayerTimesCacheScheduler, stopPrayerTimesCacheScheduler } from './services/prayerTimesCacheScheduler';
@@ -358,6 +359,14 @@ app.get(['/health', '/api/health'], async (req, res) => {
         redis: redisStatus
     }
   });
+});
+
+// Observable endpoint for external monitors. Successful calls stay in the
+// request log so missing keepalives can be diagnosed from Render.
+app.get('/health/keepalive', (_req, res) => {
+  res.status(200).json(
+    createKeepalivePayload(mongoose.connection.readyState === 1)
+  );
 });
 
 // --- REDIS TEST ROUTE START ---

@@ -12,7 +12,8 @@ permissions:
 
 concurrency:
   group: render-backend-keepalive
-  cancel-in-progress: true
+  # Never cancel a slow cold-start request when the next scheduled run queues.
+  cancel-in-progress: false
 
 jobs:
   ping:
@@ -23,8 +24,9 @@ jobs:
     steps:
       - name: Verify backend health
         env:
-          HEALTH_URL: https://hikmahsphere-backend.onrender.com/health
+          HEALTH_URL: https://hikmahsphere-backend.onrender.com/health/keepalive
         run: |
+          started_at="$(date +%s)"
           response="$(
             curl \
               --fail \
@@ -35,9 +37,17 @@ jobs:
               --retry-all-errors \
               --retry-delay 10 \
               --connect-timeout 20 \
-              --max-time 120 \
+              --max-time 180 \
               "$HEALTH_URL"
           )"
 
-          echo "$response" | jq -e '.status == "success"' > /dev/null
-          echo "Render backend is healthy."
+          echo "$response" | jq -e '
+            .status == "success"
+            and .keepalive == true
+            and (.timestamp | type == "string")
+          ' > /dev/null
+
+          elapsed="$(( $(date +%s) - started_at ))"
+          uptime="$(echo "$response" | jq -r '.uptimeSeconds')"
+          database="$(echo "$response" | jq -r '.services.database')"
+          echo "Render keepalive succeeded in ${elapsed}s (process uptime: ${uptime}s, database: ${database})."
