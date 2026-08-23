@@ -8,7 +8,7 @@
 
 **Free · Ad-free · Privacy-first tools for worship, learning, and community**
 
-[Live site](https://hikmahsphere.site) · [Report issues](https://github.com/yani2298/HikmahSphere/issues) · [Contribute](CONTRIBUTING.md)
+[Live site](https://hikmahsphere.site) · [Report issues](https://github.com/ifrahazmi/HikmahSphere/issues) · [Contribute](CONTRIBUTING.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 [![React](https://img.shields.io/badge/React-18.3-61DAFB?style=for-the-badge&logo=react&logoColor=white)](https://reactjs.org/)
@@ -86,7 +86,7 @@ This is the recommended way to develop and try the code on your machine.
 ### 1. Clone
 
 ```bash
-git clone https://github.com/yani2298/HikmahSphere.git
+git clone https://github.com/ifrahazmi/HikmahSphere.git
 cd HikmahSphere
 ```
 
@@ -172,7 +172,7 @@ npm run build
 Runs frontend, backend, MongoDB, and Redis together.
 
 ```bash
-git clone https://github.com/yani2298/HikmahSphere.git
+git clone https://github.com/ifrahazmi/HikmahSphere.git
 cd HikmahSphere
 cp .env.example .env
 # Edit secrets and ports if needed
@@ -213,19 +213,28 @@ Helpers: `deploy/verify.sh`, `deploy/restart-docker.sh`, `deploy/setup-uploads.s
 
 Render Free web services sleep after 15 minutes without public inbound traffic.
 The backend's internal prayer-cache scheduler does not count as public traffic.
-For best-effort free availability:
+Better Stack is the primary keepalive because GitHub Actions scheduled workflows
+have a minimum interval of five minutes and may be delayed or dropped. For
+best-effort free availability:
 
 1. Deploy the latest backend so `GET /health/keepalive` is available.
 2. In [Better Stack Uptime](https://betterstack.com/uptime), create an HTTP monitor:
+   - Monitor type: `HTTP`
    - URL: `https://hikmahsphere-backend.onrender.com/health/keepalive`
+   - Request method: `GET`
    - Check frequency: 3 minutes
    - Expected HTTP status: `200`
    - Response keyword: `"keepalive":true`
+   - Enable failure notifications for the desired email or escalation policy.
 3. Keep `.github/workflows/render-keepalive.yml` enabled on the repository's
-   default branch as a five-minute fallback.
-4. Confirm Render logs contain `GET /health/keepalive 200` at intervals shorter
-   than 15 minutes. The endpoint includes `uptimeSeconds`; an unexpectedly small
-   value indicates that Render restarted the process.
+   default branch as a best-effort five-minute fallback. It is not the
+   three-minute primary monitor.
+4. In Better Stack, wait for at least three consecutive successful checks and
+   confirm their start times are approximately three minutes apart.
+5. Confirm Render logs contain `GET /health/keepalive 200` at intervals shorter
+   than 15 minutes. The endpoint includes `uptimeSeconds`; it should increase
+   across checks. An unexpectedly small value indicates that Render restarted
+   the process.
 
 GitHub scheduled workflows can be delayed or dropped and are disabled after 60
 days without repository activity in public repositories, so they should not be

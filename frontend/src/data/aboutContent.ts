@@ -369,7 +369,7 @@ export const developers: Developer[] = [
     expertise: ['Creative Direction', 'Content Review', 'Quality Assurance', 'Cyber Security', 'User Experience', 'Design Systems', 'Security & Privacy',],
     image: '/zafia.png',
     social: {
-      github: 'https://github.com/yani2298/HikmahSphere'
+      github: 'https://github.com/ifrahazmi/HikmahSphere'
     }
   }
 ];
