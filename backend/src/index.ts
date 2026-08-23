@@ -345,7 +345,7 @@ app.get(['/health', '/api/health'], async (req, res) => {
           await redisClient.ping();
           redisStatus = 'connected';
       }
-  } catch (error) {
+  } catch {
       redisStatus = 'error';
   }
 
@@ -572,7 +572,7 @@ app.use((req, res) => {
 app.use(errorLogger);
 
 // Global error handler
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   res.status(err.status || 500).json({
     status: 'error',
     message: err.message || 'Internal Server Error',
@@ -681,7 +681,7 @@ const startServer = async () => {
     if (!redisClient.isOpen) {
         try {
             await redisClient.connect();
-        } catch (e) {
+        } catch {
             appLogger.warn('redis_unavailable_at_startup', {
                 message: 'Redis is unavailable at startup (non-fatal)',
             });

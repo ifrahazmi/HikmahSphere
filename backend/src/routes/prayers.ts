@@ -155,7 +155,7 @@ function calculateQiblaDirection(lat: number, lon: number): number {
  * Islamic date changes at Maghrib, not midnight
  * Returns true if current time is after Maghrib (Islamic date should be tomorrow)
  */
-function isAfterMaghrib(maghribTime: string, timezone: string = 'UTC'): boolean {
+function isAfterMaghrib(maghribTime: string, _timezone: string = 'UTC'): boolean {
   const now = new Date();
   
   if (!maghribTime) {
@@ -202,6 +202,12 @@ function formatDDMMYYYY(date: Date): string {
   return `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}-${date.getFullYear()}`;
 }
 
+function toISODate(ddmmyyyy: string): string {
+  const parts = ddmmyyyy.split('-');
+  if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+  return ddmmyyyy;
+}
+
 function addDaysToDDMMYYYY(value: string, days: number): string {
   const date = parseDDMMYYYY(value);
   date.setDate(date.getDate() + days);
@@ -216,13 +222,6 @@ type PrayerTuningConfig = {
 };
 
 const PRAYER_TIME_KEYS: PrayerTimeOffsetKey[] = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha', 'imsak'];
-
-const getDefaultPrayerTuningConfig = (): PrayerTuningConfig => ({
-  offsets: { ...DEFAULT_PRAYER_TIME_OFFSETS },
-  imsakMode: 'tied-to-fajr',
-  applyToFasting: true,
-  updatedAt: null,
-});
 
 const normalizeOffset = (value: unknown): number => {
   const parsed = Number(value);
@@ -424,18 +423,6 @@ const resolveCorrectedHijriAtMaghrib = async (params: {
   });
 
   return convertCorrectedHijriForPayload(corrected, fallbackHijri);
-}
-
-/**
- * Helper: Get prayer times for the correct date
- * - Prayer times change at midnight (12 AM) based on English/Gregorian date
- * - This function ensures we fetch prayer times for the current Gregorian date
- */
-function getPrayerTimesDate(): string {
-  // Prayer times always follow Gregorian date (change at midnight)
-  const isoString = new Date().toISOString();
-  const datePart = isoString.split('T')[0];
-  return String(datePart); // YYYY-MM-DD format
 }
 
 router.get('/hijri-date', [
@@ -1075,30 +1062,30 @@ router.get('/timesByCity', [
     }
     console.log('🕌 ======================================');
 
-	    if (apiData.code === 200 && apiData.data) {
-	      const data = apiData.data;
-          const derivedLatitude = data?.meta?.latitude;
-          const derivedLongitude = data?.meta?.longitude;
-          let adjustedHijriDate = data.date?.hijri;
+    if (apiData.code === 200 && apiData.data) {
+      const data = apiData.data;
+      const derivedLatitude = data?.meta?.latitude;
+      const derivedLongitude = data?.meta?.longitude;
+      let adjustedHijriDate = data.date?.hijri;
 
-          if (typeof derivedLatitude !== 'undefined' && typeof derivedLongitude !== 'undefined') {
-            try {
-              adjustedHijriDate = await resolveCorrectedHijriAtMaghrib({
-                requestDate,
-                maghribTime: data.timings?.Maghrib,
-                timezone: data.meta?.timezone,
-                latitude: String(derivedLatitude),
-                longitude: String(derivedLongitude),
-                country,
-                fallbackHijri: data.date?.hijri,
-              });
-            } catch (hijriError) {
-              console.warn('⚠️ Hijri correction failed for city route; using source hijri:', hijriError);
-            }
-          }
-	      const responseData = {
-	        status: 'success',
-	        data: {
+      if (typeof derivedLatitude !== 'undefined' && typeof derivedLongitude !== 'undefined') {
+        try {
+          adjustedHijriDate = await resolveCorrectedHijriAtMaghrib({
+            requestDate,
+            maghribTime: data.timings?.Maghrib,
+            timezone: data.meta?.timezone,
+            latitude: String(derivedLatitude),
+            longitude: String(derivedLongitude),
+            country,
+            fallbackHijri: data.date?.hijri,
+          });
+        } catch (hijriError) {
+          console.warn('⚠️ Hijri correction failed for city route; using source hijri:', hijriError);
+        }
+      }
+      const responseData = {
+        status: 'success',
+        data: {
           times: applyPrayerTuningToTimes({
             Fajr: data.timings.Fajr,
             Sunrise: data.timings.Sunrise,
@@ -1109,20 +1096,20 @@ router.get('/timesByCity', [
             Midnight: data.timings.Midnight,
             Imsak: data.timings.Imsak || data.timings.Fajr
           }, prayerTuning),
-	          date: {
-	            ...data.date,
-	            hijri: adjustedHijriDate,
-	          },
-	          meta: data.meta,
-	          source: 'aladhan.com',
-	          tuning: prayerTuning,
-	          date_calculation: {
-	            islamic_date_changes_at: 'maghrib',
-	            prayer_times_change_at: 'midnight',
-	            is_after_maghrib: isAfterMaghrib(data.timings?.Maghrib, data.meta?.timezone),
-	          },
-	        }
-	      };
+          date: {
+            ...data.date,
+            hijri: adjustedHijriDate,
+          },
+          meta: data.meta,
+          source: 'aladhan.com',
+          tuning: prayerTuning,
+          date_calculation: {
+            islamic_date_changes_at: 'maghrib',
+            prayer_times_change_at: 'midnight',
+            is_after_maghrib: isAfterMaghrib(data.timings?.Maghrib, data.meta?.timezone),
+          },
+        }
+      };
 
       // Store in cache
       try {
@@ -1201,13 +1188,6 @@ router.get('/fasting', [
       }
     } catch (cacheError) {
       console.warn('⚠️ Redis cache read error:', cacheError);
-    }
-
-    // Convert DD-MM-YYYY → YYYY-MM-DD (islamicapi.com format)
-    function toISODate(ddmmyyyy: string): string {
-      const parts = ddmmyyyy.split('-');
-      if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
-      return ddmmyyyy;
     }
 
     let responseData: any = null;

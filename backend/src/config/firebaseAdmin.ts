@@ -40,7 +40,7 @@ try {
             serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
             console.log("✅ [Firebase] Loaded credentials from environment variable");
             credentialsLoaded = true;
-        } catch (e) {
+        } catch {
             console.error("❌ [Firebase] Failed to parse FIREBASE_SERVICE_ACCOUNT env var");
         }
     }
@@ -59,8 +59,8 @@ try {
                     console.log(`✅ [Firebase] Loaded credentials from: ${filePath}`);
                     credentialsLoaded = true;
                     break;
-                } catch (e) {
-                    console.error(`❌ [Firebase] Failed to parse: ${filePath}`, e);
+                } catch {
+                    console.error(`❌ [Firebase] Failed to parse: ${filePath}`);
                 }
             } else {
                 console.log(`   ❌ File not found: ${filePath}`);

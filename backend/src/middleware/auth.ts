@@ -48,7 +48,7 @@ export const authMiddleware = async (req: AuthRequest, res: Response, next: Next
       isAdmin: dbUser.isAdmin,
     };
     return next();
-  } catch (err) {
+  } catch {
     return res.status(401).json({
       status: 'error',
       message: 'Token is not valid',
@@ -70,7 +70,7 @@ export const optionalAuthMiddleware = (req: AuthRequest, res: Response, next: Ne
     );
     req.user = decoded;
     return next();
-  } catch (err) {
+  } catch {
     // If token is invalid, just proceed without user
     return next();
   }
@@ -90,7 +90,7 @@ export const adminMiddleware = async (req: AuthRequest, res: Response, next: Nex
         } else {
             return res.status(403).json({ status: 'error', message: 'Access denied. Authorized personnel only.' });
         }
-    } catch (error) {
+    } catch {
         return res.status(500).json({ status: 'error', message: 'Server error checking admin status.' });
     }
 };
@@ -108,7 +108,7 @@ export const superAdminMiddleware = async (req: AuthRequest, res: Response, next
         } else {
              return res.status(403).json({ status: 'error', message: 'Access denied. Super Admin only.' });
         }
-    } catch (error) {
+    } catch {
         return res.status(500).json({ status: 'error', message: 'Server error checking superadmin status.' });
     }
 };

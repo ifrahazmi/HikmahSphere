@@ -107,7 +107,7 @@ function getDailySeed(): number {
 
 // ─── Badge Logic ───────────────────────────────────────────────────────────────
 
-function computeNewBadges(score: any, newCorrect: number, category: string): string[] {
+function computeNewBadges(score: any, _newCorrect: number, _category: string): string[] {
   const earned: string[] = [];
   const existing = score.badges || [];
 
@@ -339,7 +339,7 @@ router.post(
 
       await seedQuestionsIfNeeded();
 
-      const { answers, category, difficulty } = req.body;
+      const { answers, category } = req.body;
       const userId = req.user?.userId;
       const requestCategory = category as QuizRequestCategory;
 
@@ -742,7 +742,7 @@ router.get(
 router.get('/user-stats', authMiddleware, async (req: any, res: any) => {
   try {
     const userId = req.user?.userId;
-    let score = await UserGameScore.findOne({ userId });
+    const score = await UserGameScore.findOne({ userId });
 
     if (!score) {
       return res.json({
