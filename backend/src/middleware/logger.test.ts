@@ -229,6 +229,17 @@ describe('readable Render logger', () => {
     expect(outputOf(stderr)).toContain('FAILED');
   });
 
+  it('keeps successful external keepalive requests observable', () => {
+    const stdout = spyOnStdout();
+
+    runRequest({ method: 'GET', path: '/health/keepalive' });
+
+    expect(linesOf(stdout)).toHaveLength(1);
+    expect(outputOf(stdout)).toContain('GET');
+    expect(outputOf(stdout)).toContain('/health/keepalive');
+    expect(outputOf(stdout)).toContain('200');
+  });
+
   it('writes a block for a slow but successful read', () => {
     const stdout = spyOnStdout();
 

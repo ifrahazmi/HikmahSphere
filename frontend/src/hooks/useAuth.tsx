@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
+import { useState, useEffect, createContext, useContext, ReactNode, useRef, useCallback } from 'react';
 import { API_URL } from '../config';
 import { getPushDeviceId, getStoredPushToken, storePushToken } from '../firebase';
 
@@ -31,9 +31,24 @@ interface AuthContextType {
   logout: () => void;
   isAuthenticated: boolean;
   hasRole: (roles: string[]) => boolean; // Add role check helper definition
+  sessionStatus: 'ready' | 'reconnecting';
 }
 
-const AUTH_FETCH_TIMEOUT_MS = 15000;
+// Render Free cold starts commonly take close to a minute. Profile validation
+// runs in the background, so allow the wake request to finish without blocking
+// cached UI or converting a timeout into a logout.
+const AUTH_FETCH_TIMEOUT_MS = 75000;
+const PROFILE_RETRY_DELAYS_MS = [0, 2000] as const;
+
+class ProfileRequestError extends Error {
+  status?: number;
+
+  constructor(message: string, status?: number) {
+    super(message);
+    this.name = 'ProfileRequestError';
+    this.status = status;
+  }
+}
 
 const fetchWithTimeout = async (input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = AUTH_FETCH_TIMEOUT_MS): Promise<Response> => {
   const controller = new AbortController();
@@ -82,6 +97,13 @@ const isJwtExpired = (token: string, clockSkewMs = 30_000): boolean => {
   return Date.now() >= expiryMs - clockSkewMs;
 };
 
+const isDefinitiveAuthFailure = (error: unknown): boolean =>
+  error instanceof ProfileRequestError
+  && (error.status === 401 || error.status === 403);
+
+const delay = (ms: number): Promise<void> =>
+  new Promise((resolve) => window.setTimeout(resolve, ms));
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -89,13 +111,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Tracks the initial session check only. AppContent swaps the whole router for a
   // spinner while this is true, so sign-in requests must not toggle it.
   const [loading, setLoading] = useState(true);
+  const [sessionStatus, setSessionStatus] = useState<'ready' | 'reconnecting'>('ready');
+  const profileSyncRef = useRef<Promise<boolean> | null>(null);
 
-  useEffect(() => {
-    checkAuthStatus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const mapUser = (apiUser: any): User => {
+  const mapUser = useCallback((apiUser: any): User => {
       const firstName = typeof apiUser.firstName === 'string' ? apiUser.firstName.trim() : '';
       const lastName = typeof apiUser.lastName === 'string' ? apiUser.lastName.trim() : '';
       const composedName = `${firstName} ${lastName}`.trim();
@@ -116,30 +135,37 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         gender: apiUser.gender,
         phoneNumber: apiUser.phoneNumber,
         address: apiUser.address,
-        madhab: apiUser.preferences?.madhab,
-        bio: apiUser.profile?.bio,
-        avatar: apiUser.profile?.avatar
+        madhab: apiUser.preferences?.madhab || apiUser.madhab,
+        bio: apiUser.profile?.bio || apiUser.bio,
+        avatar: apiUser.profile?.avatar || apiUser.avatar
       };
-  };
+  }, []);
 
-  const persistUser = (apiUser: any) => {
-    setUser(mapUser(apiUser));
+  const persistUser = useCallback((apiUser: any) => {
+    const mappedUser = mapUser(apiUser);
+    setUser(mappedUser);
     try {
-      localStorage.setItem('user', JSON.stringify(apiUser));
+      // Cache the compact UI shape rather than the full API document. Large
+      // profile payloads previously exceeded localStorage and removed warm start.
+      const cacheUser = {
+        ...mappedUser,
+        avatar: mappedUser.avatar?.startsWith('data:') ? undefined : mappedUser.avatar,
+      };
+      localStorage.setItem('user', JSON.stringify(cacheUser));
     } catch {
-      // Avatars are data URLs, so this cache can exceed the storage quota. The
-      // in-memory user stays authoritative; the cache is only a warm-start hint.
-      localStorage.removeItem('user');
+      // In-memory identity remains valid; never delete the auth token because a
+      // best-effort profile cache could not be written.
     }
-  };
+  }, [mapUser]);
 
-  const clearSession = () => {
+  const clearSession = useCallback(() => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setUser(null);
-  };
+    setSessionStatus('ready');
+  }, []);
 
-  const fetchProfile = async (): Promise<boolean> => {
+  const fetchProfile = useCallback(async (): Promise<boolean> => {
     const token = localStorage.getItem('token');
     if (!token) return false;
 
@@ -150,7 +176,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     if (!response.ok) {
-      throw new Error(`Profile request failed (${response.status})`);
+      throw new ProfileRequestError(`Profile request failed (${response.status})`, response.status);
     }
 
     const data = await response.json();
@@ -158,51 +184,116 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       throw new Error('Profile response missing user');
     }
 
+    // Logout or account switching may happen while a slow cold-start request
+    // is in flight. Never restore a profile for a token that is no longer active.
+    if (localStorage.getItem('token') !== token) {
+      return false;
+    }
+
     persistUser(data.data.user);
     return true;
-  };
+  }, [persistUser]);
 
-  const checkAuthStatus = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const storedUser = localStorage.getItem('user');
-
-      if (token && isJwtExpired(token)) {
-        clearSession();
-        return;
-      }
-
-      // Only set user from localStorage if we have a token
-      // Otherwise wait for API validation
-      if (token && storedUser) {
-        try {
-          const parsedUser = JSON.parse(storedUser);
-          setUser(mapUser(parsedUser));
-        } catch (e) {
-          localStorage.removeItem('user');
-        }
-      }
-
-      if (token) {
-        try {
-            await fetchProfile();
-        } catch (err) {
-            console.error("Failed to fetch profile", err);
-            clearSession();
-        }
-      } else {
-        // No token - clear any stored user data
-        localStorage.removeItem('user');
-        setUser(null);
-      }
-    } catch (error) {
-      console.error('Auth check failed:', error);
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-    } finally {
-      setLoading(false);
+  const syncProfileWithRecovery = useCallback((): Promise<boolean> => {
+    if (profileSyncRef.current) {
+      return profileSyncRef.current;
     }
-  };
+
+    const syncPromise = (async () => {
+      setSessionStatus('reconnecting');
+      let lastError: unknown;
+
+      for (let attempt = 0; attempt < PROFILE_RETRY_DELAYS_MS.length; attempt += 1) {
+        const retryDelay = PROFILE_RETRY_DELAYS_MS[attempt];
+        if (retryDelay > 0) {
+          await delay(retryDelay);
+        }
+
+        if (!navigator.onLine) {
+          lastError = new Error('Browser is offline');
+          break;
+        }
+
+        try {
+          const refreshed = await fetchProfile();
+          setSessionStatus('ready');
+          return refreshed;
+        } catch (error) {
+          lastError = error;
+          if (isDefinitiveAuthFailure(error)) {
+            clearSession();
+            return false;
+          }
+        }
+      }
+
+      // Timeouts, offline state, rate limits, and server failures are
+      // recoverable. Preserve cached identity and retry on foreground/online.
+      console.warn('Profile refresh deferred; cached session retained.', lastError);
+      setSessionStatus('reconnecting');
+      return false;
+    })().finally(() => {
+      profileSyncRef.current = null;
+    });
+
+    profileSyncRef.current = syncPromise;
+    return syncPromise;
+  }, [clearSession, fetchProfile]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const storedUser = localStorage.getItem('user');
+
+    if (!token) {
+      localStorage.removeItem('user');
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+
+    if (isJwtExpired(token)) {
+      clearSession();
+      setLoading(false);
+      return;
+    }
+
+    let restoredFromCache = false;
+    if (storedUser) {
+      try {
+        setUser(mapUser(JSON.parse(storedUser)));
+        restoredFromCache = true;
+      } catch {
+        localStorage.removeItem('user');
+      }
+    }
+
+    // Cached sessions render immediately. Legacy sessions without a cache get
+    // one profile request before the initial spinner is released.
+    if (restoredFromCache) {
+      setLoading(false);
+      void syncProfileWithRecovery();
+    } else {
+      void syncProfileWithRecovery().finally(() => setLoading(false));
+    }
+  }, [clearSession, mapUser, syncProfileWithRecovery]);
+
+  useEffect(() => {
+    const retryWhenAvailable = () => {
+      const currentToken = localStorage.getItem('token');
+      if (!currentToken || isJwtExpired(currentToken)) return;
+      if (document.visibilityState === 'visible' && navigator.onLine) {
+        void syncProfileWithRecovery();
+      }
+    };
+
+    document.addEventListener('visibilitychange', retryWhenAvailable);
+    window.addEventListener('online', retryWhenAvailable);
+
+    return () => {
+      document.removeEventListener('visibilitychange', retryWhenAvailable);
+      window.removeEventListener('online', retryWhenAvailable);
+    };
+  }, [syncProfileWithRecovery]);
 
   const login = async (email: string, password: string): Promise<{ passwordChangeRequired: boolean }> => {
     try {
@@ -311,6 +402,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setUser(null);
+    setSessionStatus('ready');
   };
 
   // Implement hasRole helper
@@ -326,7 +418,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     register,
     logout,
     isAuthenticated: !!user,
-    hasRole
+    hasRole,
+    sessionStatus,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

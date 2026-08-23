@@ -76,10 +76,10 @@ const IOS_PUSH_GUIDE_SHOWN_KEY = 'iosPushGuideShown';
 const PUSH_PERMISSION_TOAST_KEY = 'pushPermissionToastShown';
 
 const AppContent: React.FC = () => {
-  const { user, loading } = useAuth();
+  const { user, loading, sessionStatus } = useAuth();
 
   useEffect(() => {
-    if (!user) {
+    if (!user || sessionStatus !== 'ready') {
       return;
     }
 
@@ -129,10 +129,10 @@ const AppContent: React.FC = () => {
       document.removeEventListener('visibilitychange', onVisibilityChange);
       window.removeEventListener('online', sendHeartbeat);
     };
-  }, [user]);
+  }, [user, sessionStatus]);
   
   useEffect(() => {
-    if (!user) return;
+    if (!user || sessionStatus !== 'ready') return;
 
     let registrationInProgress = false;
 
@@ -288,7 +288,7 @@ const AppContent: React.FC = () => {
       document.removeEventListener('visibilitychange', retryRegistration);
       window.removeEventListener('online', retryRegistration);
     };
-  }, [user]);
+  }, [user, sessionStatus]);
 
   if (loading) {
     return <LoadingSpinner />;
@@ -296,6 +296,14 @@ const AppContent: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-800 transition-colors duration-300">
+      {user && sessionStatus === 'reconnecting' && (
+        <div
+          className="fixed bottom-4 left-1/2 z-[90] -translate-x-1/2 rounded-full bg-gray-900/90 px-4 py-2 text-xs font-medium text-white shadow-lg"
+          role="status"
+        >
+          Reconnecting to the server…
+        </div>
+      )}
       {/* Navigation */}
       <Navbar user={user} />
 
