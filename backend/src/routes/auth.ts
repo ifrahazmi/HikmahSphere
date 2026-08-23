@@ -44,7 +44,7 @@ router.get('/check-admin', async (req, res) => {
         } else {
              res.json({ status: 'fail', message: 'Admin user not found' });
         }
-    } catch (error) {
+    } catch {
         res.status(500).json({ status: 'error', message: 'Failed to check admin user' });
     }
 });
@@ -121,7 +121,7 @@ router.post('/register', [
         isAdmin: user.isAdmin
       },
     });
-  } catch (error) {
+  } catch {
     return res.status(500).json({ status: 'error', message: 'Server error' });
   }
 });
@@ -248,7 +248,7 @@ router.post('/change-password', authMiddleware, [
             message: 'Password changed successfully'
         });
 
-    } catch (error) {
+    } catch {
         res.status(500).json({ status: 'error', message: 'Server error' });
     }
 });
@@ -264,7 +264,7 @@ router.get('/profile', authMiddleware, async (req: any, res: Response) => {
       return res.status(404).json({ status: 'error', message: 'User not found' });
     }
     return res.json({ status: 'success', data: { user } });
-  } catch (error) {
+  } catch {
     return res.status(500).json({ status: 'error', message: 'Server error' });
   }
 });

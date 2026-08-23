@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import express from 'express';
 import { query, validationResult } from 'express-validator';
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth';
@@ -711,15 +713,13 @@ const getTafsirProxyBase = (edition: string | null): string => {
 
 const tryLoadTafheemFixture = (): Record<string, any> | null => {
   try {
-    const fsModule = require('fs') as typeof import('fs');
-    const pathModule = require('path') as typeof import('path');
-    const fixturePath = process.env.TAFHEEM_FIXTURE_PATH || pathModule.resolve(process.cwd(), 'tmp/Test.json');
+    const fixturePath = process.env.TAFHEEM_FIXTURE_PATH || path.resolve(process.cwd(), 'tmp/Test.json');
 
-    if (!fsModule.existsSync(fixturePath)) {
+    if (!fs.existsSync(fixturePath)) {
       return null;
     }
 
-    const raw = fsModule.readFileSync(fixturePath, 'utf8');
+    const raw = fs.readFileSync(fixturePath, 'utf8');
     const parsed = JSON.parse(raw);
 
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
@@ -1039,8 +1039,6 @@ router.get('/tafsir/random', optionalAuthMiddleware, async (_req: any, res: any)
 // IndoPak Nastaleeq V3 API - Word by Word Quran Data
 // ============================================================
 import sqlite3 from 'sqlite3';
-import path from 'path';
-import fs from 'fs';
 import { Request, Response } from 'express';
 
 let indopakV3Db: sqlite3.Database | null = null;

@@ -1,6 +1,6 @@
 // src/routes/notifications.ts
 
-import express, { Request, Response } from 'express';
+import express, { Response } from 'express';
 import User from '../models/User';
 import UserNotification from '../models/UserNotification';
 import { authMiddleware, superAdminMiddleware } from '../middleware/auth';
@@ -257,7 +257,7 @@ export const deriveNotificationStatus = (user: {
 
     const hasValidNotificationDevice = devices.some((device) => {
         const permission = device.permission || user.notificationPermission || 'unknown';
-        const iosBlocked = Boolean(device.isIOS) && !Boolean(device.isStandalone);
+        const iosBlocked = Boolean(device.isIOS) && !device.isStandalone;
         return permission === 'granted' && Boolean(device.token) && Boolean(device.supportsWebPush) && !iosBlocked;
     });
 

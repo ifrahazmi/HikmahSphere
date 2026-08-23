@@ -1,10 +1,10 @@
-import express, { Request, Response } from 'express';
+import express from 'express';
 import { body, query, validationResult } from 'express-validator';
 import multer from 'multer';
 import path from 'path';
 import * as XLSX from 'xlsx';
 import { authMiddleware, optionalAuthMiddleware, adminMiddleware } from '../middleware/auth';
-import ZakatPayment, { IZakatPayment } from '../models/ZakatPayment';
+import ZakatPayment from '../models/ZakatPayment';
 import Donor, { IDonor } from '../models/Donor';
 import User from '../models/User';
 import { logUserActivity } from '../middleware/activityLogger';
@@ -916,7 +916,7 @@ router.post('/import', authMiddleware, adminMiddleware, importUpload.single('fil
           throw new Error(`Invalid type "${typeRaw || '(empty)'}"`);
         }
 
-        const amount = parseFloat(pickField(row, ['Amount', 'amount']).replace(/[^0-9.\-]/g, ''));
+        const amount = parseFloat(pickField(row, ['Amount', 'amount']).replace(/[^0-9.-]/g, ''));
         if (!amount || amount <= 0) {
           throw new Error('Amount must be greater than 0');
         }

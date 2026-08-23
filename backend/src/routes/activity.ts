@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import express from 'express';
 import { authMiddleware, adminMiddleware } from '../middleware/auth';
 import UserActivity from '../models/UserActivity';
 

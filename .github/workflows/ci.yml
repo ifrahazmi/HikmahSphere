@@ -2,8 +2,9 @@ name: HikmahSphere CI Checks
 
 on:
   push:
+  pull_request:
     branches:
-      - notification
+      - main
   workflow_dispatch:
 
 concurrency:
@@ -130,7 +131,8 @@ jobs:
 
       - name: Trivy filesystem scan (report only)
         continue-on-error: true
-        uses: aquasecurity/trivy-action@0.28.0
+        # v0.36.0; pin the resolved commit so action setup is reproducible.
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           scan-type: fs
           scan-ref: '.'
@@ -147,7 +149,8 @@ jobs:
 
       - name: Gitleaks secret scan (report only)
         continue-on-error: true
-        uses: gitleaks/gitleaks-action@v2
+        # v2; pin the resolved commit so action setup is reproducible.
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

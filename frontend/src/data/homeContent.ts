@@ -424,7 +424,7 @@ export const HOME_JSON_LD = {
       '@type': 'Organization',
       name: 'HikmahSphere',
       url: 'https://hikmahsphere.site',
-      sameAs: 'https://github.com/yani2298/HikmahSphere',
+      sameAs: 'https://github.com/ifrahazmi/HikmahSphere',
     },
     description:
       'Founder and Lead Developer of HikmahSphere - a unified Islamic digital platform serving the global Muslim community. Expert in React, Node.js, TypeScript, MongoDB, Python, AI/ML, and Islamic digital solutions.',
@@ -453,6 +453,8 @@ export const HOME_JSON_LD = {
     '@context': 'https://schema.org',
     '@type': 'Organization',
     name: 'HikmahSphere',
+    // Spelling variants users actually type, so brand queries resolve to this entity.
+    alternateName: ['Hikmah Sphere', 'Hikmahsphere', 'HikmahSphere App', 'Hikmah Sphere App'],
     url: 'https://hikmahsphere.site',
     logo: {
       '@type': 'ImageObject',
@@ -469,7 +471,7 @@ export const HOME_JSON_LD = {
         'https://www.linkedin.com/in/ifrahuddin-azmi-8869787a/',
       ],
     },
-    sameAs: ['https://github.com/yani2298/HikmahSphere'],
+    sameAs: ['https://github.com/ifrahazmi/HikmahSphere'],
     contactPoint: {
       '@type': 'ContactPoint',
       email: 'ifrahazmi@hikmahsphere.site',

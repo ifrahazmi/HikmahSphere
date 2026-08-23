@@ -222,6 +222,7 @@ const About: React.FC = () => {
           "@context": "https://schema.org",
           "@type": "Organization",
           "name": "HikmahSphere",
+          "alternateName": ["Hikmah Sphere", "Hikmahsphere", "HikmahSphere App", "Hikmah Sphere App"],
           "url": "https://hikmahsphere.site",
           "logo": "https://hikmahsphere.site/logo.png",
           "description": "A Unified Islamic Digital Platform for the global Muslim community",
@@ -231,7 +232,7 @@ const About: React.FC = () => {
             "url": "https://hikmahsphere.site/about"
           },
           "sameAs": [
-            "https://github.com/yani2298/HikmahSphere"
+            "https://github.com/ifrahazmi/HikmahSphere"
           ],
           "contactPoint": {
             "@type": "ContactPoint",
