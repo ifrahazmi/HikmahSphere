@@ -86,14 +86,6 @@
   },
   "jest": {
     "preset": "ts-jest",
-    "transform": {
-      "^.+\\.tsx?$": [
-        "ts-jest",
-        {
-          "isolatedModules": true
-        }
-      ]
-    },
     "testEnvironment": "node",
     "testMatch": [
       "**/__tests__/**/*.ts",

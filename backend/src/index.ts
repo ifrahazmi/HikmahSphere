@@ -19,7 +19,7 @@ import {
 } from './middleware/logger';
 import redisClient from './config/redis'; // Import Redis client
 import { getUploadsRoot } from './utils/uploads';
-import { createKeepalivePayload } from './utils/health';
+import { createKeepalivePayload, createReadinessPayload } from './utils/health';
 import { startMeetingNotificationScheduler, stopMeetingNotificationScheduler } from './services/meetingNotificationScheduler';
 import { startPrayerNotificationScheduler, stopPrayerNotificationScheduler } from './services/prayerNotificationScheduler';
 import { startPrayerTimesCacheScheduler, stopPrayerTimesCacheScheduler } from './services/prayerTimesCacheScheduler';
@@ -367,6 +367,26 @@ app.get('/health/keepalive', (_req, res) => {
   res.status(200).json(
     createKeepalivePayload(mongoose.connection.readyState === 1)
   );
+});
+
+// Strict startup readiness for installed clients. MongoDB is required; Redis
+// is an optional cache and can report degraded without making the app unusable.
+app.get(['/health/ready', '/api/health/ready'], async (_req, res) => {
+  const payload = await createReadinessPayload({
+    databaseConnected: mongoose.connection.readyState === 1 && Boolean(mongoose.connection.db),
+    pingDatabase: async () => {
+      if (!mongoose.connection.db) {
+        throw new Error('Database connection unavailable');
+      }
+      await mongoose.connection.db.admin().ping();
+    },
+    cacheConnected: redisClient.isOpen,
+    pingCache: async () => {
+      await redisClient.ping();
+    },
+  });
+
+  res.status(payload.ready ? 200 : 503).json(payload);
 });
 
 // --- REDIS TEST ROUTE START ---

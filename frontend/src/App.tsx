@@ -23,6 +23,7 @@ import ProtectedRoute from './components/ProtectedRoute'; // Import ProtectedRou
 import InstallAppPrompt from './components/InstallAppPrompt';
 import PrayerAdhanScheduler from './components/PrayerAdhanScheduler';
 import AdhanPlayPrompt from './components/AdhanPlayPrompt';
+import StartupReadinessScreen from './components/StartupReadinessScreen';
 
 // Pages
 import Home from './pages/Home';
@@ -47,6 +48,7 @@ import HajjGuide from './pages/HajjGuide';
 
 // Hooks
 import { useAuth, AuthProvider } from './hooks/useAuth';
+import { useStartupReadiness } from './hooks/useStartupReadiness';
 
 // Contexts
 import { QuranProvider } from './contexts/QuranContext';
@@ -77,6 +79,7 @@ const PUSH_PERMISSION_TOAST_KEY = 'pushPermissionToastShown';
 
 const AppContent: React.FC = () => {
   const { user, loading, sessionStatus } = useAuth();
+  const startupReadiness = useStartupReadiness();
 
   useEffect(() => {
     if (!user || sessionStatus !== 'ready') {
@@ -289,6 +292,19 @@ const AppContent: React.FC = () => {
       window.removeEventListener('online', retryRegistration);
     };
   }, [user, sessionStatus]);
+
+  if (
+    startupReadiness.enabled
+    && (startupReadiness.state.outcome !== 'ready' || loading)
+  ) {
+    return (
+      <StartupReadinessScreen
+        state={startupReadiness.state}
+        authReady={!loading}
+        onRetry={startupReadiness.retry}
+      />
+    );
+  }
 
   if (loading) {
     return <LoadingSpinner />;
