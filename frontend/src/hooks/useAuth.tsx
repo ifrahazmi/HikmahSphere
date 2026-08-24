@@ -104,6 +104,8 @@ const isDefinitiveAuthFailure = (error: unknown): boolean =>
 const delay = (ms: number): Promise<void> =>
   new Promise((resolve) => window.setTimeout(resolve, ms));
 
+const AUTH_BOOTSTRAP_MAX_WAIT_MS = 30_000;
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -113,6 +115,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loading, setLoading] = useState(true);
   const [sessionStatus, setSessionStatus] = useState<'ready' | 'reconnecting'>('ready');
   const profileSyncRef = useRef<Promise<boolean> | null>(null);
+
+  useEffect(() => {
+    // Never keep the startup surface spinning beyond its global readiness
+    // budget. A slow legacy profile request continues as background recovery.
+    const timeout = window.setTimeout(() => {
+      setLoading(false);
+    }, AUTH_BOOTSTRAP_MAX_WAIT_MS);
+    return () => window.clearTimeout(timeout);
+  }, []);
 
   const mapUser = useCallback((apiUser: any): User => {
       const firstName = typeof apiUser.firstName === 'string' ? apiUser.firstName.trim() : '';

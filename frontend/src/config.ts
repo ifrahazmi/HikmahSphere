@@ -25,6 +25,11 @@ export const getBackendOrigin = (): string => {
   return '';
 };
 
+export const getBackendReadinessUrl = (): string => {
+  const origin = getBackendOrigin();
+  return origin ? `${origin}/health/ready` : '/api/health/ready';
+};
+
 /**
  * Resolve a backend-served path (e.g. `/uploads/...` or `/api/hajj-guide/images/...`)
  * so it works when the frontend is on a different origin (Vercel → Render).

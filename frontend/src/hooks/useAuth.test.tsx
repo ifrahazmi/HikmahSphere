@@ -169,6 +169,30 @@ describe('useAuth login hydration', () => {
     await waitFor(() => expect(screen.getByTestId('session-status').textContent).toBe('ready'));
   });
 
+  it('releases legacy startup loading after the thirty-second readiness budget', async () => {
+    jest.useFakeTimers();
+    localStorage.setItem('token', TOKEN);
+    (global as any).fetch = jest.fn(() => new Promise(() => undefined));
+
+    const view = render(
+      <AuthProvider>
+        <Harness />
+      </AuthProvider>
+    );
+    expect(screen.getByTestId('auth-loading').textContent).toBe('true');
+
+    await act(async () => {
+      jest.advanceTimersByTime(30_000);
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('auth-loading').textContent).toBe('false');
+    expect(screen.getByTestId('session-status').textContent).toBe('reconnecting');
+    view.unmount();
+    jest.clearAllTimers();
+    jest.useRealTimers();
+  });
+
   it('retains a valid cached session after a server failure', async () => {
     localStorage.setItem('token', TOKEN);
     localStorage.setItem('user', JSON.stringify(LOGIN_USER));

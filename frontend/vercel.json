@@ -4,6 +4,15 @@
   "outputDirectory": "build",
   "headers": [
     {
+      "source": "/online-check.txt",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, no-cache, must-revalidate"
+        }
+      ]
+    },
+    {
       "source": "/firebase-messaging-sw.js",
       "headers": [
         {

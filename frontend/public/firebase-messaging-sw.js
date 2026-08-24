@@ -5,10 +5,10 @@
 importScripts('https://www.gstatic.com/firebasejs/10.7.2/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.2/firebase-messaging-compat.js');
 
-const CACHE_NAME = 'hikmahsphere-app-v6';
+const CACHE_NAME = 'hikmahsphere-app-v7';
 const TILE_CACHE = 'hikmahsphere-tiles-v1';
 const IS_LOCAL_DEV = ['localhost', '127.0.0.1', '[::1]'].includes(self.location.hostname);
-const APP_SHELL = ['/', '/index.html', '/manifest.json', '/logo.png', '/favicon.ico', '/sounds/adhan.mp3'];
+const APP_SHELL = ['/', '/index.html', '/manifest.json', '/logo.png', '/disconnect.png', '/favicon.ico', '/sounds/adhan.mp3'];
 const OFFLINE_DOCUMENT = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>HikmahSphere Offline</title><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f8fafc;color:#0f172a;display:grid;min-height:100vh;place-items:center;padding:24px}main{max-width:28rem;text-align:center}h1{margin:0 0 12px;color:#047857;font-size:1.75rem}p{margin:0;color:#475569;line-height:1.6}</style></head><body><main><h1>You're offline</h1><p>HikmahSphere could not load this page right now. Please check your connection and try again.</p></main></body></html>`;
 
 const cacheAppShell = async () => {
@@ -128,6 +128,9 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/api/')) return;
   if (url.pathname.startsWith('/uploads/')) return;
+  // Startup connectivity must always hit the network; a cached success would
+  // incorrectly report an offline installed PWA as connected.
+  if (url.pathname === '/online-check.txt') return;
 
   // Let the browser handle PDF and worker files natively to avoid
   // corruption or "Failed to fetch" errors inside pdfjs / web workers.
