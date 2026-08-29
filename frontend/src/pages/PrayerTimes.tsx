@@ -1060,8 +1060,27 @@ const PrayerTimes: React.FC = () => {
       }
 
       console.log('Fetching prayer times from backend:', prayerUrl);
-      const prayerRes = await fetch(prayerUrl);
-      const prayerJson = await prayerRes.json();
+      let prayerJson: any;
+      try {
+        const prayerRes = await fetch(prayerUrl);
+        prayerJson = await prayerRes.json();
+        if (!prayerRes.ok || prayerJson.status !== 'success' || !prayerJson.data) {
+          throw new Error(prayerJson?.message || `Prayer API returned HTTP ${prayerRes.status}`);
+        }
+      } catch (cityError) {
+        if (!city || city === 'Unknown' || !country || country === 'Unknown') {
+          throw cityError;
+        }
+
+        // City lookup can fail independently of the coordinate-backed route.
+        const coordinatePrayerUrl = `${API_URL}/prayers/times?latitude=${lat}&longitude=${lon}&method=${calculationMethod}&school=${school}&date=${encodeURIComponent(requestGregorianDate)}`;
+        console.warn('City prayer lookup failed; retrying with coordinates:', cityError);
+        const coordinatePrayerRes = await fetch(coordinatePrayerUrl);
+        prayerJson = await coordinatePrayerRes.json();
+        if (!coordinatePrayerRes.ok || prayerJson.status !== 'success' || !prayerJson.data) {
+          throw new Error(prayerJson?.message || `Coordinate prayer API returned HTTP ${coordinatePrayerRes.status}`);
+        }
+      }
       if (hijriFetchRequestIdRef.current !== requestId) return;
 
       // Hoisted so fasting logic below can read it regardless of the prayer status branch

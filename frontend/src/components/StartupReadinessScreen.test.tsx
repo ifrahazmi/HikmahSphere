@@ -54,6 +54,7 @@ describe('StartupReadinessScreen', () => {
       'src',
       '/disconnect.png'
     );
+    expect(screen.queryByRole('img', { name: '' })).not.toBeInTheDocument();
     expect(screen.getByText(/check wi-fi or mobile data/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /retry startup check/i }));
     expect(retry).toHaveBeenCalledTimes(1);

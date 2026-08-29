@@ -86,14 +86,16 @@ const StartupReadinessScreen: React.FC<StartupReadinessScreenProps> = ({
           aria-describedby="startup-description"
         >
           <div className="text-center">
-            <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-3xl bg-emerald-50 ring-1 ring-emerald-100 dark:bg-emerald-950/70 dark:ring-emerald-800/60">
-              <img
-                src="/logo.png"
-                alt=""
-                className="h-16 w-16 object-contain"
-                aria-hidden="true"
-              />
-            </div>
+            {!isOffline && (
+              <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-3xl bg-emerald-50 ring-1 ring-emerald-100 dark:bg-emerald-950/70 dark:ring-emerald-800/60">
+                <img
+                  src="/logo.png"
+                  alt=""
+                  className="h-16 w-16 object-contain"
+                  aria-hidden="true"
+                />
+              </div>
+            )}
 
             {isOffline && (
               <img
@@ -156,10 +158,9 @@ const StartupReadinessScreen: React.FC<StartupReadinessScreenProps> = ({
           </div>
 
           {checksReady && !authReady && (
-            <div className="mt-5 flex items-center justify-center gap-2 text-sm font-medium text-emerald-700 dark:text-emerald-400">
-              <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden />
+            <p className="mt-5 text-center text-sm font-medium text-emerald-700 dark:text-emerald-400">
               Finishing securely…
-            </div>
+            </p>
           )}
 
           {isTerminal && (

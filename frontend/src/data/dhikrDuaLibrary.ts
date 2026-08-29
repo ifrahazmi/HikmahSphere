@@ -1090,42 +1090,78 @@ export const getTimeOfDaySlot = (date: Date = new Date()): TimeOfDaySlot => {
   return 'late-night';
 };
 
-const pickByTags = (primary: SituationFilterId[], secondary: SituationFilterId[] = []): DuaEntry[] => {
-  const primaryMatches = DUA_LIBRARY.filter((dua) =>
-    primary.some((tag) => dua.situationTags.includes(tag))
-  );
-  const secondaryMatches = secondary.length
-    ? DUA_LIBRARY.filter(
-        (dua) =>
-          !primaryMatches.includes(dua) &&
-          secondary.some((tag) => dua.situationTags.includes(tag))
-      )
-    : [];
-  return [...primaryMatches, ...secondaryMatches];
-};
-
 export const getSuggestedDuas = (slot: TimeOfDaySlot, limit = 6): DuaEntry[] => {
-  let matches: DuaEntry[];
+  const timePriority: Record<TimeOfDaySlot, SituationFilterId[]> = {
+    'early-morning': ['morning', 'after-waking', 'knowledge'],
+    morning: ['morning', 'after-waking', 'knowledge'],
+    afternoon: ['travel', 'knowledge', 'forgiveness'],
+    evening: ['evening', 'forgiveness', 'protection'],
+    night: ['before-sleep', 'forgiveness', 'protection'],
+    'late-night': ['before-sleep', 'forgiveness', 'anxiety'],
+  };
 
-  switch (slot) {
-    case 'early-morning':
-    case 'morning':
-      matches = pickByTags(['morning', 'after-waking']);
-      break;
-    case 'afternoon':
-      matches = DUA_LIBRARY.filter((dua) => dua.categoryId === 'daily-life');
-      break;
-    case 'evening':
-      matches = pickByTags(['evening']);
-      break;
-    case 'night':
-      matches = pickByTags(['before-sleep']);
-      break;
-    case 'late-night':
-    default:
-      matches = pickByTags(['before-sleep', 'forgiveness']);
-      break;
+  const categoryPriority: Record<TimeOfDaySlot, DuaCategoryId> = {
+    'early-morning': 'morning-evening',
+    morning: 'morning-evening',
+    afternoon: 'daily-life',
+    evening: 'morning-evening',
+    night: 'morning-evening',
+    'late-night': 'situational',
+  };
+
+  const keywordMap: Record<TimeOfDaySlot, string[]> = {
+    'early-morning': ['morning', 'wake', 'waking', 'dawn'],
+    morning: ['morning', 'wake', 'waking', 'dawn'],
+    afternoon: ['daily life', 'food', 'travel', 'knowledge', 'study'],
+    evening: ['evening', 'peace', 'protection', 'forgiveness'],
+    night: ['sleep', 'before sleeping', 'night', 'rest'],
+    'late-night': ['sleep', 'forgiveness', 'night', 'istighfar'],
+  };
+
+  const scored = DUA_LIBRARY.map((dua) => {
+    let score = 0;
+    const situationSet = new Set(dua.situationTags);
+    const titleText = `${dua.title} ${dua.sectionTitle} ${dua.shortDescription}`.toLowerCase();
+
+    timePriority[slot].forEach((tag, index) => {
+      if (situationSet.has(tag)) score += 35 - index * 5;
+    });
+
+    if (dua.categoryId === categoryPriority[slot]) score += 20;
+
+    keywordMap[slot].forEach((keyword) => {
+      if (titleText.includes(keyword.toLowerCase())) score += 12;
+    });
+
+    if (slot === 'morning' || slot === 'early-morning') {
+      if (situationSet.has('morning') || situationSet.has('after-waking')) score += 12;
+    }
+
+    if ((slot === 'night' || slot === 'late-night') && situationSet.has('before-sleep')) score += 18;
+    if ((slot === 'evening' || slot === 'night' || slot === 'late-night') && situationSet.has('forgiveness')) score += 10;
+    if (slot === 'afternoon' && dua.categoryId === 'daily-life') score += 12;
+
+    return { dua, score };
+  })
+    .filter(({ score }) => score > 0)
+    .sort((left, right) => {
+      if (right.score !== left.score) return right.score - left.score;
+      return left.dua.title.localeCompare(right.dua.title);
+    });
+
+  if (scored.length > 0) {
+    return scored.map(({ dua }) => dua).slice(0, limit);
   }
 
-  return matches.slice(0, limit);
+  const fallbackBySlot: Record<TimeOfDaySlot, DuaCategoryId[]> = {
+    'early-morning': ['morning-evening', 'daily-life'],
+    morning: ['morning-evening', 'daily-life'],
+    afternoon: ['daily-life', 'situational'],
+    evening: ['morning-evening', 'situational'],
+    night: ['morning-evening', 'situational'],
+    'late-night': ['situational', 'morning-evening'],
+  };
+
+  const fallback = DUA_LIBRARY.filter((dua) => fallbackBySlot[slot].includes(dua.categoryId));
+  return fallback.slice(0, limit);
 };

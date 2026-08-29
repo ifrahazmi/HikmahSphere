@@ -61,12 +61,15 @@ interface DailyDhikrTracker {
   counts: Record<string, number>;
 }
 
+type TasbihMode = 'stone' | 'tap';
+
 interface DhikrUserStatePayload {
   bookmarks?: string[];
   lastViewedDuaId?: string | null;
   tasbih?: {
     presetId: string;
     count: number;
+    mode?: TasbihMode;
   };
   dailyTracker?: DailyDhikrTracker | null;
   reminders?: ReminderSettings;
@@ -270,6 +273,7 @@ const DhikrDua: React.FC = () => {
   const [focusedDuaId, setFocusedDuaId] = useState<string | null>(null);
 
   const [selectedPresetId, setSelectedPresetId] = useState<string>(TASBIH_PRESETS[0].id);
+  const [tasbihMode, setTasbihMode] = useState<TasbihMode>('stone');
   const [tasbihCount, setTasbihCount] = useState(0);
   const [dailyTracker, setDailyTracker] = useState<DailyDhikrTracker>({
     date: getTodayKey(),
@@ -283,6 +287,7 @@ const DhikrDua: React.FC = () => {
     DEFAULT_TRANSLIT_FONT_SCALE
   );
   const [playingDuaId, setPlayingDuaId] = useState<string | null>(null);
+  const [beadRotation, setBeadRotation] = useState(0);
   const [activeMobileSection, setActiveMobileSection] = useState<'search' | 'tasbih' | 'profile'>('search');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [areCategoriesOpen, setAreCategoriesOpen] = useState<boolean>(() => {
@@ -329,6 +334,7 @@ const DhikrDua: React.FC = () => {
   const listSectionRef = useRef<HTMLDivElement | null>(null);
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
+  const beadMotionRef = useRef<{ startY: number; lastDirection: 1 | -1 } | null>(null);
   const cardRefs = useRef<Record<string, HTMLElement | null>>({});
   const arabicSectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const isHydratingCloudStateRef = useRef(false);
@@ -499,6 +505,7 @@ const DhikrDua: React.FC = () => {
         const parsed = JSON.parse(savedTasbih);
         if (typeof parsed?.presetId === 'string') setSelectedPresetId(parsed.presetId);
         if (typeof parsed?.count === 'number' && parsed.count >= 0) setTasbihCount(parsed.count);
+        if (parsed?.mode === 'stone' || parsed?.mode === 'tap') setTasbihMode(parsed.mode);
       }
 
       const savedDailyTracker = localStorage.getItem(DAILY_DHIKR_STORAGE_KEY);
@@ -552,8 +559,11 @@ const DhikrDua: React.FC = () => {
   }, [lastViewedDuaId]);
 
   useEffect(() => {
-    localStorage.setItem(TASBIH_STORAGE_KEY, JSON.stringify({ presetId: selectedPresetId, count: tasbihCount }));
-  }, [selectedPresetId, tasbihCount]);
+    localStorage.setItem(
+      TASBIH_STORAGE_KEY,
+      JSON.stringify({ presetId: selectedPresetId, count: tasbihCount, mode: tasbihMode })
+    );
+  }, [selectedPresetId, tasbihCount, tasbihMode]);
 
   useEffect(() => {
     localStorage.setItem(DAILY_DHIKR_STORAGE_KEY, JSON.stringify(dailyTracker));
@@ -1204,6 +1214,15 @@ const DhikrDua: React.FC = () => {
         [presetId]: 0,
       },
     }));
+  };
+
+  const applyTasbihMotion = (direction: 1 | -1) => {
+    if (direction > 0) {
+      incrementTasbih();
+    } else {
+      decrementTasbih();
+    }
+    setBeadRotation((previous) => previous + direction * 18);
   };
 
   const focusDuaCard = (duaId: string, fromMobileProfile = false) => {
@@ -2151,20 +2170,57 @@ const DhikrDua: React.FC = () => {
 
                 {suggestedDuas.length > 0 && (
                   <div
-                    className={`mb-4 flex items-start gap-3 rounded-2xl border p-4 ${
+                    className={`mb-4 overflow-hidden rounded-2xl border shadow-sm ${
                       isDarkMode
-                        ? 'border-emerald-800 bg-emerald-950/40'
-                        : 'border-emerald-200 bg-emerald-50'
+                        ? 'border-emerald-800/70 bg-gradient-to-r from-emerald-950/80 via-emerald-900/60 to-slate-900'
+                        : 'border-emerald-200 bg-gradient-to-r from-emerald-50 via-white to-teal-50'
                     }`}
                   >
-                    <span className="text-2xl leading-none" aria-hidden="true">{timeSlotMeta.emoji}</span>
-                    <div>
-                      <p className={`text-sm font-bold ${isDarkMode ? 'text-emerald-300' : 'text-emerald-800'}`}>
-                        Suggested right now · {timeSlotMeta.title}
-                      </p>
-                      <p className={`mt-0.5 text-xs ${mutedText}`}>
-                        {timeSlotMeta.description} The first {suggestedDuas.length} duas below are picked for this time of day.
-                      </p>
+                    <div className="flex items-start gap-3 p-4 sm:p-5">
+                      <div
+                        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-xl shadow-sm ${
+                          isDarkMode ? 'bg-emerald-600/20 text-emerald-200' : 'bg-emerald-100 text-emerald-700'
+                        }`}
+                        aria-hidden="true"
+                      >
+                        {timeSlotMeta.emoji}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                          <p className={`text-sm font-bold ${isDarkMode ? 'text-emerald-200' : 'text-emerald-800'}`}>
+                            Suggested for now · {timeSlotMeta.title}
+                          </p>
+                          <span
+                            className={`inline-flex w-fit items-center rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${
+                              isDarkMode
+                                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                                : 'border-emerald-300 bg-emerald-100 text-emerald-800'
+                            }`}
+                          >
+                            Recommended
+                          </span>
+                        </div>
+
+                        <p className={`mt-1 text-xs leading-5 ${mutedText}`}>
+                          {timeSlotMeta.description} The top {Math.min(suggestedDuas.length, 3)} duas are chosen to fit this moment of the day.
+                        </p>
+
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {suggestedDuas.slice(0, 3).map((dua) => (
+                            <span
+                              key={`suggested-pill-${dua.id}`}
+                              className={`rounded-full border px-2.5 py-1 text-[10px] font-medium ${
+                                isDarkMode
+                                  ? 'border-emerald-700/50 bg-slate-900/70 text-emerald-100'
+                                  : 'border-emerald-200 bg-white text-emerald-700'
+                              }`}
+                            >
+                              {dua.title}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -2445,9 +2501,37 @@ const DhikrDua: React.FC = () => {
                 className={`scroll-mt-24 rounded-2xl border p-4 shadow-sm sm:p-5 lg:sticky lg:top-24 max-md:fixed max-md:inset-x-0 max-md:top-16 max-md:bottom-[4.25rem] max-md:z-30 max-md:flex max-md:flex-col max-md:overflow-hidden max-md:rounded-none max-md:border-0 max-md:px-4 max-md:py-3 ${cardBg}`}
               >
                 <div className="mx-auto flex h-full min-h-0 w-full max-w-md flex-col">
-                  {/* Compact header + dhikr picker */}
-                  <div className="flex shrink-0 items-center gap-2">
-                    <div className="relative min-w-0 flex-1">
+                  <div className="flex shrink-0 flex-col gap-3">
+                    <div className="rounded-full border border-emerald-200/70 bg-emerald-50/70 p-1 shadow-inner shadow-emerald-900/5 dark:border-slate-700 dark:bg-slate-900/80">
+                      <div className="grid grid-cols-2 gap-1">
+                        {(['stone', 'tap'] as const).map((mode) => {
+                          const isActive = tasbihMode === mode;
+                          const label = mode === 'stone' ? 'Stone / Scroll' : 'Tap';
+
+                          return (
+                            <button
+                              key={mode}
+                              type="button"
+                              onClick={() => setTasbihMode(mode)}
+                              aria-label={label}
+                              className={`rounded-full px-3 py-2 text-xs font-semibold tracking-[0.12em] uppercase transition-all duration-200 ${
+                                isActive
+                                  ? isDarkMode
+                                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-900/30'
+                                    : 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md shadow-emerald-200'
+                                  : isDarkMode
+                                    ? 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
+                                    : 'text-emerald-700 hover:bg-white hover:text-emerald-900'
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="relative min-w-0">
                       <select
                         value={selectedPreset.id}
                         onChange={(event) => updatePreset(event.target.value)}
@@ -2517,20 +2601,56 @@ const DhikrDua: React.FC = () => {
                       type="button"
                       onPointerDown={(event) => {
                         if (event.pointerType === 'mouse' && event.button !== 0) return;
+                        const target = event.currentTarget;
+                        target.setPointerCapture?.(event.pointerId);
+
+                        if (tasbihMode === 'tap') {
+                          incrementTasbih();
+                          return;
+                        }
+
+                        beadMotionRef.current = { startY: event.clientY, lastDirection: 1 };
+                      }}
+                      onPointerMove={(event) => {
+                        if (tasbihMode !== 'stone' || !beadMotionRef.current) return;
+                        const deltaY = event.clientY - beadMotionRef.current.startY;
+                        if (Math.abs(deltaY) < 18) return;
+                        const direction = deltaY > 0 ? 1 : -1;
+                        if (direction !== beadMotionRef.current.lastDirection) {
+                          applyTasbihMotion(direction);
+                          beadMotionRef.current.lastDirection = direction;
+                          beadMotionRef.current.startY = event.clientY;
+                        }
+                      }}
+                      onPointerUp={() => {
+                        beadMotionRef.current = null;
+                      }}
+                      onPointerLeave={() => {
+                        beadMotionRef.current = null;
+                      }}
+                      onWheel={(event) => {
+                        if (tasbihMode !== 'stone') return;
+                        event.preventDefault();
+                        const direction = event.deltaY > 0 ? 1 : -1;
+                        applyTasbihMotion(direction);
+                      }}
+                      onClick={(event) => {
+                        if (tasbihMode === 'stone') {
+                          event.preventDefault();
+                          return;
+                        }
                         incrementTasbih();
                       }}
                       onContextMenu={(event) => event.preventDefault()}
-                      aria-label="Tap to count"
+                      aria-label={tasbihMode === 'stone' ? 'Stone / Scroll counter' : 'Tap counter'}
                       className="group relative flex aspect-square w-[min(52vw,13.5rem)] shrink-0 select-none touch-manipulation items-center justify-center rounded-full transition-transform duration-150 active:scale-[0.96] sm:w-44"
                     >
-                      {/* Soft outer glow */}
                       <span
                         aria-hidden="true"
                         className={`absolute inset-[-10%] rounded-full blur-xl transition-opacity ${
                           isDarkMode ? 'bg-emerald-400/20' : 'bg-emerald-300/40'
                         }`}
                       />
-                      {/* Progress ring track */}
                       <svg
                         aria-hidden="true"
                         className="absolute inset-0 h-full w-full -rotate-90"
@@ -2556,19 +2676,27 @@ const DhikrDua: React.FC = () => {
                           className="stroke-emerald-400 transition-[stroke-dashoffset] duration-300 ease-out"
                         />
                       </svg>
-                      {/* Light inner disc */}
                       <span
-                        className={`relative z-[1] flex h-[78%] w-[78%] flex-col items-center justify-center rounded-full shadow-[0_8px_28px_rgba(16,185,129,0.18)] ring-1 transition-shadow group-active:shadow-md ${
+                        className={`absolute inset-[8%] rounded-full opacity-90 ${
                           isDarkMode
-                            ? 'bg-gradient-to-b from-slate-700 to-slate-800 ring-slate-600/60 text-emerald-50'
-                            : 'bg-gradient-to-b from-white to-emerald-50 ring-emerald-100 text-emerald-800'
+                            ? 'bg-[radial-gradient(circle_at_30%_30%,rgba(110,231,183,0.65),rgba(15,118,110,0.75)_30%,rgba(2,6,23,0.9)_68%)]'
+                            : 'bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.9),rgba(167,243,208,0.72)_20%,rgba(110,231,183,0.7)_32%,rgba(6,78,59,0.98)_75%)]'
                         }`}
+                        style={{ transform: `rotate(${beadRotation}deg)` }}
+                      />
+                      <span
+                        className={`relative z-[1] flex h-[74%] w-[74%] flex-col items-center justify-center rounded-full shadow-[0_20px_40px_rgba(16,185,129,0.28)] ring-1 ring-white/40 backdrop-blur-sm transition-all duration-200 active:scale-[0.98] ${
+                          isDarkMode
+                            ? 'bg-gradient-to-b from-slate-700 via-slate-800 to-slate-900 text-emerald-50'
+                            : 'bg-gradient-to-b from-white via-emerald-50 to-emerald-100 text-emerald-800'
+                        }`}
+                        style={{ transform: `rotate(${beadRotation * 0.6}deg)` }}
                       >
-                        <span className="text-[2.6rem] font-bold leading-none tabular-nums tracking-tight max-md:text-[2.35rem]">
+                        <span className="text-[2.6rem] font-black leading-none tabular-nums tracking-tight max-md:text-[2.35rem]">
                           {tasbihCount}
                         </span>
-                        <span className={`mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${mutedText}`}>
-                          Tap
+                        <span className={`mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${mutedText}`}>
+                          {tasbihMode === 'stone' ? 'Stone / Scroll' : 'Tap'}
                         </span>
                       </span>
                     </button>
