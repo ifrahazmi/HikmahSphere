@@ -24,7 +24,7 @@ services:
       - REDIS_URL=${REDIS_URL:-}
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3000}
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
-      - TAFSIR_API_URL=${TAFSIR_API_URL:-http://localhost:8080/api}
+      - TAFSIR_API_URL=${TAFSIR_API_URL:-https://aws-vm.reedfish-temperature.ts.net/api}
       - MAUDUDI_API_URL=${MAUDUDI_API_URL:-}
       - UPLOADS_DIR=${UPLOADS_DIR:-}
       - ISLAMIC_API_KEY=${ISLAMIC_API_KEY:-}

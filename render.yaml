@@ -31,7 +31,7 @@ services:
       - key: FRONTEND_URL
         sync: false
       - key: TAFSIR_API_URL
-        sync: false
+        value: https://aws-vm.reedfish-temperature.ts.net/api
       - key: MAUDUDI_API_URL
         sync: false
       - key: ISLAMIC_API_KEY
