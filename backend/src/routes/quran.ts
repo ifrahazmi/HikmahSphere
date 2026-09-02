@@ -687,10 +687,12 @@ router.get('/search', [
 // ============================================================
 // Tafsir API Proxy + Tafheem Fixture Support
 // ============================================================
+const DEFAULT_TAFSIR_API_URL = 'https://aws-vm.reedfish-temperature.ts.net/api';
+const configuredTafsirApiUrl = process.env.TAFSIR_API_URL || process.env.REACT_APP_TAFSIR_API_URL;
+const isProductionLocalTafsirUrl =
+  process.env.NODE_ENV === 'production' && /^https?:\/\/localhost(?::\d+)?\//i.test(configuredTafsirApiUrl || '');
 const TAFSIR_PROXY_API_BASE = (
-  process.env.TAFSIR_API_URL ||
-  process.env.REACT_APP_TAFSIR_API_URL ||
-  'http://localhost:8080/api'
+  isProductionLocalTafsirUrl ? DEFAULT_TAFSIR_API_URL : configuredTafsirApiUrl || DEFAULT_TAFSIR_API_URL
 ).replace(/\/$/, '');
 const DEFAULT_MAUDUDI_API_URL = 'https://aws-vm.reedfish-temperature.ts.net/api/maududi';
 const MAUDUDI_PROXY_API_BASE = (

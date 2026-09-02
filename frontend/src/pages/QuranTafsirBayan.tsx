@@ -1689,7 +1689,7 @@ const QuranTafsirBayan: React.FC = () => {
         <div className={`fixed inset-0 z-[80] flex items-center justify-center px-5 ${settings.theme === 'dark' ? 'bg-gray-900' : 'bg-gradient-to-br from-emerald-50 via-white to-teal-50'}`}>
           <div className={`w-full max-w-md rounded-2xl border shadow-xl p-6 text-center ${settings.theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-emerald-100'}`}>
             <div className="mb-4">
-              <LoadingSpinner size="md" text="" />
+              <LoadingSpinner size="md" preserveLogo text="" />
             </div>
             <h2 className={`text-lg font-semibold mb-2 ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
               Preparing Tafsir Experience
@@ -2337,7 +2337,7 @@ const QuranTafsirBayan: React.FC = () => {
 
                 {loading && (
                   <div className={`rounded-lg shadow-md p-4 ${settings.theme === 'dark' ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
-                    <LoadingSpinner size="sm" text="Loading Tafsir..." />
+                    <LoadingSpinner size="sm" preserveLogo text="Loading Tafsir..." />
                   </div>
                 )}
 

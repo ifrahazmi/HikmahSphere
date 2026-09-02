@@ -5,13 +5,15 @@ interface LoadingSpinnerProps {
   color?: 'emerald' | 'blue' | 'gray' | 'white';
   text?: string;
   fullScreen?: boolean;
+  preserveLogo?: boolean;
 }
 
 const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({ 
   size = 'md', 
   color = 'emerald',
   text = 'Loading...',
-  fullScreen = false 
+  fullScreen = false,
+  preserveLogo = false,
 }) => {
   const ringSizeClasses = {
     sm: 'w-10 h-10',
@@ -72,7 +74,11 @@ const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
       <div className={`relative ${ringSizeClasses[size]}`}>
         <div className={`absolute inset-0 rounded-full animate-spin border-gray-200 ${ringBorderClasses[size]} ${colorClasses[color]} border-t-transparent`}></div>
         <div className="absolute inset-0 flex items-center justify-center">
-          <img src="/logo.png" alt="HikmahSphere Logo" className={`${logoSizeClasses[size]} object-contain`} />
+          <img
+            src="/logo.png"
+            alt="HikmahSphere Logo"
+            className={`${logoSizeClasses[size]} object-contain ${preserveLogo ? 'rounded-full bg-white p-0.5' : ''}`}
+          />
         </div>
       </div>
       

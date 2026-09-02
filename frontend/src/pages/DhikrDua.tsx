@@ -1177,7 +1177,12 @@ const DhikrDua: React.FC = () => {
 
   const incrementTasbih = () => {
     localMutatedDuringHydrationRef.current = true;
-    setTasbihCount((previous) => previous + 1);
+    const nextCount = tasbihCount + 1;
+    const classicPresetIds = ['subhanallah', 'alhamdulillah', 'allahu-akbar'];
+    const classicPresetIndex = classicPresetIds.indexOf(selectedPreset.id);
+    const shouldAdvanceClassicPreset = classicPresetIndex >= 0 && nextCount >= selectedPreset.target;
+
+    setTasbihCount(shouldAdvanceClassicPreset ? 0 : (previous) => previous + 1);
     setDailyTracker((previous) => ({
       date: getTodayKey(),
       counts: {
@@ -1185,6 +1190,11 @@ const DhikrDua: React.FC = () => {
         [selectedPreset.id]: (previous.counts[selectedPreset.id] || 0) + 1,
       },
     }));
+
+    if (shouldAdvanceClassicPreset) {
+      const nextPresetId = classicPresetIds[(classicPresetIndex + 1) % classicPresetIds.length];
+      setSelectedPresetId(nextPresetId);
+    }
 
     if (navigator.vibrate) {
       navigator.vibrate(12);
@@ -2545,6 +2555,11 @@ const DhikrDua: React.FC = () => {
                     event.preventDefault();
                   }
                 }}
+                onWheel={(event) => {
+                  if (tasbihMode !== 'stone') return;
+                  event.preventDefault();
+                  applyTasbihMotion(event.deltaY > 0 ? 1 : -1);
+                }}
               >
                 <div className="mx-auto flex h-full min-h-0 w-full max-w-md flex-col">
                   <div className="flex shrink-0 flex-col gap-2.5">
@@ -2678,12 +2693,6 @@ const DhikrDua: React.FC = () => {
                         if (tasbihMode === 'stone') {
                           event.preventDefault();
                         }
-                      }}
-                      onWheel={(event) => {
-                        if (tasbihMode !== 'stone') return;
-                        event.preventDefault();
-                        const direction = event.deltaY > 0 ? 1 : -1;
-                        applyTasbihMotion(direction);
                       }}
                       onClick={(event) => {
                         if (tasbihMode === 'stone') {

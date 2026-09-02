@@ -1213,6 +1213,7 @@ const QuranReader: React.FC = () => {
           <LoadingSpinner
             size="xl"
             color={settings.theme === 'dark' ? 'white' : 'emerald'}
+            preserveLogo
             text="Loading Surah..."
           />
         </div>
