@@ -957,50 +957,56 @@ const About: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="space-y-6">
-                    <div className="flex items-center gap-4 bg-gradient-to-r from-purple-500/10 to-transparent rounded-xl p-4 border border-purple-500/20">
-                      <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                        <svg className="w-6 h-6 text-purple-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <div className="group flex h-full flex-col gap-4 rounded-2xl border border-purple-500/20 bg-gradient-to-br from-purple-500/10 via-purple-500/5 to-transparent p-4 shadow-lg shadow-purple-950/10 transition duration-300 hover:-translate-y-1 hover:border-purple-400/40">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-500/15 text-purple-200 ring-1 ring-purple-400/20">
+                          <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </div>
+                        <span className="rounded-full border border-purple-400/30 bg-purple-500/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-purple-100">
+                          In Development
+                        </span>
                       </div>
-                      <div className="flex-1">
-                        <div className="text-purple-200 font-semibold">AI Islamic Assistant</div>
-                        <div className="text-purple-300/60 text-sm">Context-aware Islamic guidance with verified references</div>
-                      </div>
-                      <div className="px-3 py-1 bg-purple-500/20 text-purple-200 text-xs font-semibold rounded-full">
-                        In Development
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-4 bg-gradient-to-r from-pink-500/10 to-transparent rounded-xl p-4 border border-pink-500/20">
-                      <div className="w-12 h-12 bg-pink-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                        <svg className="w-6 h-6 text-pink-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                        </svg>
-                      </div>
-                      <div className="flex-1">
-                        <div className="text-pink-200 font-semibold">Hadith Section</div>
-                        <div className="text-pink-300/60 text-sm">Comprehensive Hadith collection with search</div>
-                      </div>
-                      <div className="px-3 py-1 bg-pink-500/20 text-pink-200 text-xs font-semibold rounded-full">
-                        Planned
+                      <div>
+                        <div className="text-lg font-semibold text-purple-100">AI Islamic Assistant</div>
+                        <p className="mt-2 text-sm leading-6 text-purple-200/75">Context-aware Islamic guidance with verified references</p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-4 bg-gradient-to-r from-amber-500/10 to-transparent rounded-xl p-4 border border-amber-500/20">
-                      <div className="w-12 h-12 bg-amber-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                        <svg className="w-6 h-6 text-amber-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                        </svg>
+                    <div className="group flex h-full flex-col gap-4 rounded-2xl border border-pink-500/20 bg-gradient-to-br from-pink-500/10 via-pink-500/5 to-transparent p-4 shadow-lg shadow-pink-950/10 transition duration-300 hover:-translate-y-1 hover:border-pink-400/40">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-pink-500/15 text-pink-200 ring-1 ring-pink-400/20">
+                          <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                          </svg>
+                        </div>
+                        <span className="rounded-full border border-pink-400/30 bg-pink-500/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-pink-100">
+                          Planned
+                        </span>
                       </div>
-                      <div className="flex-1">
-                        <div className="text-amber-200 font-semibold">Islamic Learning Hub</div>
-                        <div className="text-amber-300/60 text-sm">Free & paid courses from verified authentic source references</div>
+                      <div>
+                        <div className="text-lg font-semibold text-pink-100">Hadith Section</div>
+                        <p className="mt-2 text-sm leading-6 text-pink-200/75">Comprehensive Hadith collection with search</p>
                       </div>
-                      <div className="px-3 py-1 bg-amber-500/20 text-amber-200 text-xs font-semibold rounded-full">
-                        Planned
+                    </div>
+
+                    <div className="group flex h-full flex-col gap-4 rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent p-4 shadow-lg shadow-amber-950/10 transition duration-300 hover:-translate-y-1 hover:border-amber-400/40">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/15 text-amber-200 ring-1 ring-amber-400/20">
+                          <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                          </svg>
+                        </div>
+                        <span className="rounded-full border border-amber-400/30 bg-amber-500/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-100">
+                          Planned
+                        </span>
+                      </div>
+                      <div>
+                        <div className="text-lg font-semibold text-amber-100">Islamic Learning Hub</div>
+                        <p className="mt-2 text-sm leading-6 text-amber-200/75">Free &amp; paid courses from verified authentic source references</p>
                       </div>
                     </div>
                   </div>

@@ -61,12 +61,15 @@ interface DailyDhikrTracker {
   counts: Record<string, number>;
 }
 
+type TasbihMode = 'stone' | 'tap';
+
 interface DhikrUserStatePayload {
   bookmarks?: string[];
   lastViewedDuaId?: string | null;
   tasbih?: {
     presetId: string;
     count: number;
+    mode?: TasbihMode;
   };
   dailyTracker?: DailyDhikrTracker | null;
   reminders?: ReminderSettings;
@@ -270,6 +273,7 @@ const DhikrDua: React.FC = () => {
   const [focusedDuaId, setFocusedDuaId] = useState<string | null>(null);
 
   const [selectedPresetId, setSelectedPresetId] = useState<string>(TASBIH_PRESETS[0].id);
+  const [tasbihMode, setTasbihMode] = useState<TasbihMode>('stone');
   const [tasbihCount, setTasbihCount] = useState(0);
   const [dailyTracker, setDailyTracker] = useState<DailyDhikrTracker>({
     date: getTodayKey(),
@@ -283,6 +287,7 @@ const DhikrDua: React.FC = () => {
     DEFAULT_TRANSLIT_FONT_SCALE
   );
   const [playingDuaId, setPlayingDuaId] = useState<string | null>(null);
+  const [beadRotation, setBeadRotation] = useState(0);
   const [activeMobileSection, setActiveMobileSection] = useState<'search' | 'tasbih' | 'profile'>('search');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [areCategoriesOpen, setAreCategoriesOpen] = useState<boolean>(() => {
@@ -329,6 +334,7 @@ const DhikrDua: React.FC = () => {
   const listSectionRef = useRef<HTMLDivElement | null>(null);
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
+  const beadMotionRef = useRef<{ startY: number; lastDirection: 1 | -1; lastMoveY: number } | null>(null);
   const cardRefs = useRef<Record<string, HTMLElement | null>>({});
   const arabicSectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const isHydratingCloudStateRef = useRef(false);
@@ -499,6 +505,7 @@ const DhikrDua: React.FC = () => {
         const parsed = JSON.parse(savedTasbih);
         if (typeof parsed?.presetId === 'string') setSelectedPresetId(parsed.presetId);
         if (typeof parsed?.count === 'number' && parsed.count >= 0) setTasbihCount(parsed.count);
+        if (parsed?.mode === 'stone' || parsed?.mode === 'tap') setTasbihMode(parsed.mode);
       }
 
       const savedDailyTracker = localStorage.getItem(DAILY_DHIKR_STORAGE_KEY);
@@ -552,8 +559,11 @@ const DhikrDua: React.FC = () => {
   }, [lastViewedDuaId]);
 
   useEffect(() => {
-    localStorage.setItem(TASBIH_STORAGE_KEY, JSON.stringify({ presetId: selectedPresetId, count: tasbihCount }));
-  }, [selectedPresetId, tasbihCount]);
+    localStorage.setItem(
+      TASBIH_STORAGE_KEY,
+      JSON.stringify({ presetId: selectedPresetId, count: tasbihCount, mode: tasbihMode })
+    );
+  }, [selectedPresetId, tasbihCount, tasbihMode]);
 
   useEffect(() => {
     localStorage.setItem(DAILY_DHIKR_STORAGE_KEY, JSON.stringify(dailyTracker));
@@ -1206,6 +1216,15 @@ const DhikrDua: React.FC = () => {
     }));
   };
 
+  const applyTasbihMotion = (direction: 1 | -1) => {
+    if (direction > 0) {
+      incrementTasbih();
+    } else {
+      decrementTasbih();
+    }
+    setBeadRotation((previous) => previous + direction * 18);
+  };
+
   const focusDuaCard = (duaId: string, fromMobileProfile = false) => {
     const scheduleFocusScroll = (delayMs = 140) => {
       window.setTimeout(() => {
@@ -1241,23 +1260,6 @@ const DhikrDua: React.FC = () => {
     if (typeof window === 'undefined') return false;
     return window.innerWidth < 768;
   };
-
-  // On mobile the tasbih view is a fixed, viewport-height panel: freeze the
-  // page scroll behind it so the counter never drifts while tapping.
-  useEffect(() => {
-    if (activeMobileSection !== 'tasbih') return;
-
-    const applyLock = () => {
-      document.body.style.overflow = window.innerWidth < 768 ? 'hidden' : '';
-    };
-
-    applyLock();
-    window.addEventListener('resize', applyLock);
-    return () => {
-      window.removeEventListener('resize', applyLock);
-      document.body.style.overflow = '';
-    };
-  }, [activeMobileSection]);
 
   const scrollToLibrary = (
     behavior: ScrollBehavior = isMobileView() ? 'auto' : 'smooth',
@@ -1558,6 +1560,13 @@ const DhikrDua: React.FC = () => {
     reminders.scheduleType === 'periodic'
       ? `Periodic (${reminders.periodicIntervalMinutes} min)`
       : `Specific Time (${formatReminderTime(reminders.specificTime)})`;
+  const todayLabel = new Date().toLocaleDateString([], {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+  });
+  const totalBookmarks = bookmarkedIds.length;
+  const dailyProgress = Math.min(100, Math.round((tasbihCount / selectedPreset.target) * 100));
   const siteUrl = 'https://hikmahsphere.site';
   const duaPageUrl = `${siteUrl}/dhikr-dua`;
   const featuredDuaSchemaItems = DUA_LIBRARY.slice(0, 12).map((dua, index) => ({
@@ -1686,32 +1695,58 @@ const DhikrDua: React.FC = () => {
           }} />
 
           <div className="absolute -right-14 -top-14 h-52 w-52 rounded-full border-[14px] border-amber-300/30" />
-          <div className="relative mx-auto max-w-7xl px-4 pb-16 pt-20 sm:px-6 lg:px-8 lg:pb-20">
-            <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="absolute -left-14 bottom-[-4rem] h-40 w-40 rounded-full border-[10px] border-emerald-200/20" />
+
+          <div className="relative mx-auto max-w-7xl px-4 pb-12 pt-16 sm:px-6 lg:px-8 lg:pb-14">
+            <div className="grid gap-6 lg:grid-cols-[1.5fr_0.9fr] lg:items-end">
               <div className="max-w-3xl">
-                <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-200/30 bg-white/10 px-4 py-2 text-sm font-medium text-emerald-100">
-                  <MoonIcon className="h-4 w-4" />
-                  Digital Hisn-ul-Muslim Experience
+                <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-200/30 bg-white/10 px-3 py-1.5 text-xs font-medium text-emerald-100 backdrop-blur-sm">
+                  <MoonIcon className="h-3.5 w-3.5" />
+                  Digital Hisn-ul-Muslim
                 </div>
-                <h1 className="text-4xl font-bold sm:text-5xl lg:text-6xl">Dhikr & Dua</h1>
-                <p className="mt-3 max-w-2xl text-lg text-emerald-100">
+                <h1 className="text-3xl font-black tracking-tight sm:text-4xl lg:text-5xl">Dhikr & Dua</h1>
+                <p className="mt-2 max-w-2xl text-sm text-emerald-100/90 sm:text-base">
                   Daily remembrance and supplications for every moment of life.
                 </p>
-                <p className="mt-2 text-sm text-emerald-200">
-                  {DUA_LIBRARY_META.totalDuas}+ duas from {DUA_LIBRARY_META.source}
+                <p className="mt-2 text-xs text-emerald-200">
+                  {DUA_LIBRARY_META.totalDuas}+ authentic duas from {DUA_LIBRARY_META.source}
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setIsDarkMode((previous) => !previous)}
-                className="rounded-xl border border-white/30 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20"
-              >
-                {isDarkMode ? 'Light Mode' : 'Dark Mode'}
-              </button>
+              <div className="rounded-2xl border border-white/15 bg-white/10 p-3 sm:p-4 shadow-2xl shadow-emerald-950/30 backdrop-blur-md">
+                <div className="flex items-center justify-between gap-2 text-emerald-100">
+                  <div>
+                    <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-emerald-200/80">Today</p>
+                    <h2 className="mt-1 text-sm font-bold text-white">{todayLabel}</h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsDarkMode((previous) => !previous)}
+                    className="rounded-lg border border-white/25 bg-white/10 px-2.5 py-1.5 text-[10px] font-semibold text-white transition hover:bg-white/20"
+                  >
+                    {isDarkMode ? 'Light' : 'Dark'}
+                  </button>
+                </div>
+                <div className="mt-3 grid grid-cols-3 gap-1.5">
+                  <div className="flex min-h-[90px] flex-col justify-between rounded-lg border border-white/10 bg-slate-950/10 p-2.5 text-left">
+                    <p className="text-[8px] font-semibold uppercase tracking-[0.12em] text-emerald-200/80">Focus</p>
+                    <p className="mt-1 text-xs font-bold leading-tight text-white break-words" style={{ overflowWrap: 'anywhere' }}>
+                      {selectedPreset.label}
+                    </p>
+                  </div>
+                  <div className="flex min-h-[90px] flex-col justify-between rounded-lg border border-white/10 bg-slate-950/10 p-2.5 text-left">
+                    <p className="text-[8px] font-semibold uppercase tracking-[0.12em] text-emerald-200/80">Saved</p>
+                    <p className="mt-1 text-lg font-bold leading-none text-white">{totalBookmarks}</p>
+                  </div>
+                  <div className="flex min-h-[90px] flex-col justify-between rounded-lg border border-white/10 bg-slate-950/10 p-2.5 text-left">
+                    <p className="text-[8px] font-semibold uppercase tracking-[0.12em] text-emerald-200/80">Progress</p>
+                    <p className="mt-1 text-lg font-bold leading-none text-white">{dailyProgress}%</p>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div className="mt-6 flex flex-wrap gap-2">
+            <div className="mt-4 flex flex-wrap gap-2">
               {QUICK_ACCESS_ITEMS.map((item) => (
                 <button
                   key={item}
@@ -1726,63 +1761,83 @@ const DhikrDua: React.FC = () => {
           </div>
         </section>
 
+        <section className="relative z-10 mx-auto -mt-4 hidden max-w-7xl px-4 pb-2 sm:px-6 md:block lg:px-8 max-md:pb-6">
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className={`flex min-h-[100px] flex-col justify-between rounded-xl border p-3 shadow-sm ${cardBg}`}>
+              <p className={`text-[9px] font-semibold uppercase tracking-[0.15em] ${mutedText}`}>Daily Rhythm</p>
+              <p className={`mt-1 text-base font-bold ${headingText}`}>{timeSlotMeta.title}</p>
+              <p className={`mt-1 text-xs ${mutedText}`}>{timeSlotMeta.description}</p>
+            </div>
+            <div className={`flex min-h-[100px] flex-col justify-between rounded-xl border p-3 shadow-sm ${cardBg}`}>
+              <p className={`text-[9px] font-semibold uppercase tracking-[0.15em] ${mutedText}`}>Tasbih Goal</p>
+              <p className={`mt-1 text-base font-bold ${headingText}`}>{selectedPreset.target}</p>
+              <p className={`mt-1 text-xs ${mutedText}`}>{selectedPreset.label}</p>
+            </div>
+            <div className={`flex min-h-[100px] flex-col justify-between rounded-xl border p-3 shadow-sm ${cardBg}`}>
+              <p className={`text-[9px] font-semibold uppercase tracking-[0.15em] ${mutedText}`}>Recommendation</p>
+              <p className={`mt-1 text-base font-bold ${headingText}`}>{suggestedDuas.length || 0}</p>
+              <p className={`mt-1 text-xs ${mutedText}`}>Curated for this hour</p>
+            </div>
+          </div>
+        </section>
+
         <section
-          className={`mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 ${
-            activeMobileSection === 'tasbih' ? 'py-0 md:py-8' : 'py-8'
+          className={`mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8 max-md:pb-28 ${
+            activeMobileSection === 'tasbih' ? 'py-0 md:py-6' : 'py-6'
           }`}
         >
           {lastViewedDua && (
-            <div className={`mb-6 rounded-2xl border p-4 shadow-sm ${cardBg} ${
+            <div className={`mb-4 rounded-xl border p-3 shadow-sm ${cardBg} ${
               activeMobileSection === 'search' ? 'block' : 'hidden md:block'
             }`}>
-              <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <p className={`text-xs font-semibold uppercase tracking-wide ${mutedText}`}>Continue Reading</p>
-                  <h2 className={`text-lg font-bold ${headingText}`}>{lastViewedDua.title}</h2>
+                  <h2 className={`text-base font-bold ${headingText}`}>{lastViewedDua.title}</h2>
                 </div>
                 <button
                   type="button"
                   onClick={resumeReading}
-                  className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                  className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700 whitespace-nowrap"
                 >
-                  Open Last Viewed Dua
+                  Open
                 </button>
               </div>
             </div>
           )}
 
-          <div className="grid gap-6 lg:grid-cols-12">
-            <div className={`space-y-6 lg:col-span-8 ${activeMobileSection === 'search' ? 'block' : 'hidden lg:block'}`}>
-              <div ref={searchSectionRef} className={`scroll-mt-24 rounded-2xl border p-4 shadow-sm sm:p-6 ${cardBg}`}>
-                <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="grid gap-5 lg:grid-cols-12">
+            <div className={`space-y-5 lg:col-span-8 ${activeMobileSection === 'search' ? 'block' : 'hidden lg:block'}`}>
+              <div ref={searchSectionRef} className={`scroll-mt-24 rounded-xl border p-4 shadow-sm sm:p-5 ${cardBg}`}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <h2 className={`text-lg font-bold ${headingText}`}>Search & Filter</h2>
-                    <p className={`text-sm ${mutedText}`}>Find duas by text, source, translation, or daily need.</p>
+                    <h2 className={`text-base font-bold ${headingText}`}>Search & Filter</h2>
+                    <p className={`text-xs ${mutedText}`}>Find duas by text or daily need.</p>
                   </div>
                   <button
                     type="button"
                     onClick={() => setIsSettingsOpen((previous) => !previous)}
-                    className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition ${
+                    className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
                       isDarkMode
                         ? 'border-slate-600 bg-slate-800 text-slate-100 hover:border-emerald-400'
                         : 'border-emerald-200 bg-white text-emerald-700 hover:border-emerald-400'
                     }`}
                   >
-                    <AdjustmentsHorizontalIcon className="h-4 w-4" />
+                    <AdjustmentsHorizontalIcon className="h-3.5 w-3.5" />
                     Settings
-                    {isSettingsOpen ? <ChevronUpIcon className="h-4 w-4" /> : <ChevronDownIcon className="h-4 w-4" />}
+                    {isSettingsOpen ? <ChevronUpIcon className="h-3.5 w-3.5" /> : <ChevronDownIcon className="h-3.5 w-3.5" />}
                   </button>
                 </div>
 
-                <label className="relative mt-4 block">
+                <label className="relative mt-3 block">
                   <span className="sr-only">Search dua</span>
-                  <MagnifyingGlassIcon className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-emerald-500" />
+                  <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-emerald-500" />
                   <input
                     type="search"
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
-                    placeholder="Search by dua text, translation, source, book, or topic"
-                    className={`w-full rounded-xl border py-3 pl-12 pr-4 text-sm outline-none transition ${
+                    placeholder="Search by text, translation, or topic"
+                    className={`w-full rounded-lg border py-2.5 pl-10 pr-3 text-sm outline-none transition ${
                       isDarkMode
                         ? 'border-slate-600 bg-slate-800 text-slate-100 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30'
                         : 'border-emerald-200 bg-emerald-50/50 text-gray-900 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200'
@@ -2151,20 +2206,57 @@ const DhikrDua: React.FC = () => {
 
                 {suggestedDuas.length > 0 && (
                   <div
-                    className={`mb-4 flex items-start gap-3 rounded-2xl border p-4 ${
+                    className={`mb-4 overflow-hidden rounded-2xl border shadow-sm ${
                       isDarkMode
-                        ? 'border-emerald-800 bg-emerald-950/40'
-                        : 'border-emerald-200 bg-emerald-50'
+                        ? 'border-emerald-800/70 bg-gradient-to-r from-emerald-950/80 via-emerald-900/60 to-slate-900'
+                        : 'border-emerald-200 bg-gradient-to-r from-emerald-50 via-white to-teal-50'
                     }`}
                   >
-                    <span className="text-2xl leading-none" aria-hidden="true">{timeSlotMeta.emoji}</span>
-                    <div>
-                      <p className={`text-sm font-bold ${isDarkMode ? 'text-emerald-300' : 'text-emerald-800'}`}>
-                        Suggested right now · {timeSlotMeta.title}
-                      </p>
-                      <p className={`mt-0.5 text-xs ${mutedText}`}>
-                        {timeSlotMeta.description} The first {suggestedDuas.length} duas below are picked for this time of day.
-                      </p>
+                    <div className="flex items-start gap-3 p-4 sm:p-5">
+                      <div
+                        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-xl shadow-sm ${
+                          isDarkMode ? 'bg-emerald-600/20 text-emerald-200' : 'bg-emerald-100 text-emerald-700'
+                        }`}
+                        aria-hidden="true"
+                      >
+                        {timeSlotMeta.emoji}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                          <p className={`text-sm font-bold ${isDarkMode ? 'text-emerald-200' : 'text-emerald-800'}`}>
+                            Suggested for now · {timeSlotMeta.title}
+                          </p>
+                          <span
+                            className={`inline-flex w-fit items-center rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${
+                              isDarkMode
+                                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                                : 'border-emerald-300 bg-emerald-100 text-emerald-800'
+                            }`}
+                          >
+                            Recommended
+                          </span>
+                        </div>
+
+                        <p className={`mt-1 text-xs leading-5 ${mutedText}`}>
+                          {timeSlotMeta.description} The top {Math.min(suggestedDuas.length, 3)} duas are chosen to fit this moment of the day.
+                        </p>
+
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {suggestedDuas.slice(0, 3).map((dua) => (
+                            <span
+                              key={`suggested-pill-${dua.id}`}
+                              className={`rounded-full border px-2.5 py-1 text-[10px] font-medium ${
+                                isDarkMode
+                                  ? 'border-emerald-700/50 bg-slate-900/70 text-emerald-100'
+                                  : 'border-emerald-200 bg-white text-emerald-700'
+                              }`}
+                            >
+                              {dua.title}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -2438,21 +2530,59 @@ const DhikrDua: React.FC = () => {
               </div>
             </div>
 
-            <aside className={`space-y-6 lg:col-span-4 ${activeMobileSection === 'tasbih' ? 'block' : 'hidden lg:block'}`}>
+            <aside className={`space-y-4 lg:col-span-4 ${activeMobileSection === 'tasbih' ? 'block' : 'hidden lg:block'}`}>
               <div
                 id="tasbih-counter"
                 ref={tasbihSectionRef}
-                className={`scroll-mt-24 rounded-2xl border p-4 shadow-sm sm:p-5 lg:sticky lg:top-24 max-md:fixed max-md:inset-x-0 max-md:top-16 max-md:bottom-[4.25rem] max-md:z-30 max-md:flex max-md:flex-col max-md:overflow-hidden max-md:rounded-none max-md:border-0 max-md:px-4 max-md:py-3 ${cardBg}`}
+                className={`scroll-mt-24 rounded-xl border p-4 shadow-sm sm:p-5 lg:sticky lg:top-24 max-md:fixed max-md:inset-x-0 max-md:top-16 max-md:bottom-[4.25rem] max-md:z-30 max-md:flex max-md:flex-col max-md:overflow-hidden max-md:rounded-none max-md:border-0 max-md:px-4 max-md:py-3 max-md:shadow-2xl ${cardBg}`}
+                style={{
+                  backgroundColor: isDarkMode ? 'rgba(2, 6, 23, 0.97)' : undefined,
+                  overscrollBehavior: 'contain',
+                  touchAction: 'none',
+                }}
+                onTouchMove={(event) => {
+                  if (tasbihMode === 'stone') {
+                    event.preventDefault();
+                  }
+                }}
               >
                 <div className="mx-auto flex h-full min-h-0 w-full max-w-md flex-col">
-                  {/* Compact header + dhikr picker */}
-                  <div className="flex shrink-0 items-center gap-2">
-                    <div className="relative min-w-0 flex-1">
+                  <div className="flex shrink-0 flex-col gap-2.5">
+                    <div className="rounded-full border border-emerald-200/70 bg-emerald-50/70 p-1 shadow-inner shadow-emerald-900/5 dark:border-slate-700 dark:bg-slate-900/80">
+                      <div className="grid grid-cols-2 gap-1">
+                        {(['stone', 'tap'] as const).map((mode) => {
+                          const isActive = tasbihMode === mode;
+                          const label = mode === 'stone' ? 'Stone / Scroll' : 'Tap';
+
+                          return (
+                            <button
+                              key={mode}
+                              type="button"
+                              onClick={() => setTasbihMode(mode)}
+                              aria-label={label}
+                              className={`rounded-full px-2.5 py-1.5 text-[10px] font-semibold tracking-[0.1em] uppercase transition-all duration-200 ${
+                                isActive
+                                  ? isDarkMode
+                                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-900/30'
+                                    : 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md shadow-emerald-200'
+                                  : isDarkMode
+                                    ? 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
+                                    : 'text-emerald-700 hover:bg-white hover:text-emerald-900'
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="relative min-w-0">
                       <select
                         value={selectedPreset.id}
                         onChange={(event) => updatePreset(event.target.value)}
                         aria-label="Select dhikr"
-                        className={`w-full appearance-none rounded-full border py-2 pl-4 pr-9 text-sm font-semibold outline-none transition focus:ring-2 focus:ring-emerald-400/40 ${
+                        className={`w-full appearance-none rounded-lg border py-1.5 pl-3 pr-8 text-xs font-semibold outline-none transition focus:ring-2 focus:ring-emerald-400/40 ${
                           isDarkMode
                             ? 'border-slate-600/80 bg-slate-800/80 text-slate-100'
                             : 'border-emerald-100 bg-white text-emerald-900 shadow-sm'
@@ -2464,15 +2594,15 @@ const DhikrDua: React.FC = () => {
                           </option>
                         ))}
                       </select>
-                      <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
-                        <svg className={`h-4 w-4 ${isDarkMode ? 'text-slate-400' : 'text-emerald-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                      <div className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center">
+                        <svg className={`h-3.5 w-3.5 ${isDarkMode ? 'text-slate-400' : 'text-emerald-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
                       </div>
                     </div>
                   </div>
 
                   {/* Arabic / current dhikr — compact, never overflows */}
-                  <div className="mt-3 shrink-0 text-center max-md:mt-2">
-                    <p className={`text-[11px] font-semibold tracking-wide ${mutedText}`}>{selectedPreset.label}</p>
+                  <div className="mt-2.5 shrink-0 text-center max-md:mt-2">
+                    <p className={`text-[10px] font-semibold tracking-wide ${mutedText}`}>{selectedPreset.label}</p>
                     <div
                       className={`mt-1 flex flex-wrap items-baseline justify-center gap-x-[0.1em] font-indopak-nastaleeq-v3 ${
                         isDarkMode ? 'text-emerald-100' : 'text-emerald-900'
@@ -2517,20 +2647,62 @@ const DhikrDua: React.FC = () => {
                       type="button"
                       onPointerDown={(event) => {
                         if (event.pointerType === 'mouse' && event.button !== 0) return;
+                        const target = event.currentTarget;
+                        target.setPointerCapture?.(event.pointerId);
+
+                        if (tasbihMode === 'stone') {
+                          beadMotionRef.current = { startY: event.clientY, lastDirection: 1, lastMoveY: event.clientY };
+                        }
+                      }}
+                      onPointerMove={(event) => {
+                        if (tasbihMode !== 'stone' || !beadMotionRef.current) return;
+
+                        const motion = beadMotionRef.current;
+                        const deltaY = event.clientY - motion.lastMoveY;
+                        if (Math.abs(deltaY) < 24) return;
+
+                        const direction = deltaY > 0 ? 1 : -1;
+                        if (direction === motion.lastDirection && Math.abs(deltaY) < 72) return;
+
+                        applyTasbihMotion(direction);
+                        motion.lastDirection = direction;
+                        motion.lastMoveY = event.clientY;
+                      }}
+                      onPointerUp={() => {
+                        beadMotionRef.current = null;
+                      }}
+                      onPointerLeave={() => {
+                        beadMotionRef.current = null;
+                      }}
+                      onTouchMove={(event) => {
+                        if (tasbihMode === 'stone') {
+                          event.preventDefault();
+                        }
+                      }}
+                      onWheel={(event) => {
+                        if (tasbihMode !== 'stone') return;
+                        event.preventDefault();
+                        const direction = event.deltaY > 0 ? 1 : -1;
+                        applyTasbihMotion(direction);
+                      }}
+                      onClick={(event) => {
+                        if (tasbihMode === 'stone') {
+                          event.preventDefault();
+                          return;
+                        }
                         incrementTasbih();
                       }}
                       onContextMenu={(event) => event.preventDefault()}
-                      aria-label="Tap to count"
+                      aria-label={tasbihMode === 'stone' ? 'Stone / Scroll counter' : 'Tap counter'}
                       className="group relative flex aspect-square w-[min(52vw,13.5rem)] shrink-0 select-none touch-manipulation items-center justify-center rounded-full transition-transform duration-150 active:scale-[0.96] sm:w-44"
+                      style={{ touchAction: 'none', overscrollBehavior: 'contain' }}
                     >
-                      {/* Soft outer glow */}
                       <span
                         aria-hidden="true"
                         className={`absolute inset-[-10%] rounded-full blur-xl transition-opacity ${
                           isDarkMode ? 'bg-emerald-400/20' : 'bg-emerald-300/40'
                         }`}
                       />
-                      {/* Progress ring track */}
                       <svg
                         aria-hidden="true"
                         className="absolute inset-0 h-full w-full -rotate-90"
@@ -2556,30 +2728,38 @@ const DhikrDua: React.FC = () => {
                           className="stroke-emerald-400 transition-[stroke-dashoffset] duration-300 ease-out"
                         />
                       </svg>
-                      {/* Light inner disc */}
                       <span
-                        className={`relative z-[1] flex h-[78%] w-[78%] flex-col items-center justify-center rounded-full shadow-[0_8px_28px_rgba(16,185,129,0.18)] ring-1 transition-shadow group-active:shadow-md ${
+                        className={`absolute inset-[8%] rounded-full opacity-90 ${
                           isDarkMode
-                            ? 'bg-gradient-to-b from-slate-700 to-slate-800 ring-slate-600/60 text-emerald-50'
-                            : 'bg-gradient-to-b from-white to-emerald-50 ring-emerald-100 text-emerald-800'
+                            ? 'bg-[radial-gradient(circle_at_30%_30%,rgba(110,231,183,0.65),rgba(15,118,110,0.75)_30%,rgba(2,6,23,0.9)_68%)]'
+                            : 'bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.9),rgba(167,243,208,0.72)_20%,rgba(110,231,183,0.7)_32%,rgba(6,78,59,0.98)_75%)]'
                         }`}
+                        style={{ transform: `rotate(${beadRotation}deg)` }}
+                      />
+                      <span
+                        className={`relative z-[1] flex h-[74%] w-[74%] flex-col items-center justify-center rounded-full shadow-[0_20px_40px_rgba(16,185,129,0.28)] ring-1 ring-white/40 backdrop-blur-sm transition-all duration-200 active:scale-[0.98] ${
+                          isDarkMode
+                            ? 'bg-gradient-to-b from-slate-700 via-slate-800 to-slate-900 text-emerald-50'
+                            : 'bg-gradient-to-b from-white via-emerald-50 to-emerald-100 text-emerald-800'
+                        }`}
+                        style={{ transform: `rotate(${beadRotation * 0.6}deg)` }}
                       >
-                        <span className="text-[2.6rem] font-bold leading-none tabular-nums tracking-tight max-md:text-[2.35rem]">
+                        <span className="text-2xl font-black leading-none tabular-nums tracking-tight max-md:text-xl sm:text-3xl">
                           {tasbihCount}
                         </span>
-                        <span className={`mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${mutedText}`}>
-                          Tap
+                        <span className={`mt-0.5 text-[9px] font-semibold uppercase tracking-[0.15em] ${mutedText}`}>
+                          {tasbihMode === 'stone' ? 'Stone / Scroll' : 'Tap'}
                         </span>
                       </span>
                     </button>
 
-                    <p className={`mt-3 text-center text-xs font-medium tabular-nums max-md:mt-2 ${mutedText}`}>
+                    <p className={`mt-2 text-center text-[11px] font-medium tabular-nums max-md:mt-1.5 ${mutedText}`}>
                       {tasbihCount} / {selectedPreset.target}
-                      <span className={`mx-1.5 ${isDarkMode ? 'text-slate-600' : 'text-emerald-200'}`}>·</span>
+                      <span className={`mx-1 ${isDarkMode ? 'text-slate-600' : 'text-emerald-200'}`}>·</span>
                       {progressPercent}%
                       {completedCycles > 0 && (
                         <>
-                          <span className={`mx-1.5 ${isDarkMode ? 'text-slate-600' : 'text-emerald-200'}`}>·</span>
+                          <span className={`mx-1 ${isDarkMode ? 'text-slate-600' : 'text-emerald-200'}`}>·</span>
                           {completedCycles} cycle{completedCycles > 1 ? 's' : ''}
                         </>
                       )}
@@ -2587,11 +2767,11 @@ const DhikrDua: React.FC = () => {
                   </div>
 
                   {/* Undo / Reset */}
-                  <div className="mt-1 grid shrink-0 grid-cols-2 gap-2 max-md:mt-0">
+                  <div className="mt-2 grid shrink-0 grid-cols-2 gap-1.5 max-md:mt-1">
                     <button
                       type="button"
                       onClick={decrementTasbih}
-                      className={`inline-flex w-full items-center justify-center gap-1 rounded-full border px-3 py-2 text-xs font-semibold transition ${
+                      className={`inline-flex w-full items-center justify-center gap-1 rounded-lg border px-2.5 py-1.5 text-[10px] font-semibold transition ${
                         isDarkMode
                           ? 'border-slate-600/80 text-slate-300 active:bg-slate-800'
                           : 'border-emerald-100 bg-white text-emerald-700 active:bg-emerald-50'
@@ -2602,32 +2782,32 @@ const DhikrDua: React.FC = () => {
                     <button
                       type="button"
                       onClick={resetTasbih}
-                      className={`inline-flex w-full items-center justify-center gap-1 rounded-full border px-3 py-2 text-xs font-semibold transition ${
+                      className={`inline-flex w-full items-center justify-center gap-1 rounded-lg border px-2.5 py-1.5 text-[10px] font-semibold transition ${
                         isDarkMode
                           ? 'border-slate-600/80 text-slate-300 active:bg-slate-800'
                           : 'border-emerald-100 bg-white text-emerald-700 active:bg-emerald-50'
                       }`}
                     >
-                      <ArrowPathIcon className="h-3.5 w-3.5" />
+                      <ArrowPathIcon className="h-3 w-3" />
                       Reset
                     </button>
                   </div>
 
                   {/* Today's progress — trio when classic dhikr, else only selected */}
                   <div
-                    className={`mt-3 shrink-0 rounded-2xl border px-3 py-2.5 max-md:mt-2 max-md:py-2 ${
+                    className={`mt-2 shrink-0 rounded-lg border px-2.5 py-2 max-md:mt-1.5 max-md:py-1.5 ${
                       isDarkMode ? 'border-slate-700/70 bg-slate-800/50' : 'border-emerald-100/80 bg-white/80'
                     }`}
                   >
-                    <div className="mb-1.5 flex items-center justify-between gap-2">
-                      <h3 className={`text-[10px] font-bold uppercase tracking-wider ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <h3 className={`text-[9px] font-bold uppercase tracking-wider ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
                         Today
                       </h3>
-                      <span className={`text-[10px] font-medium ${mutedText}`}>
+                      <span className={`text-[9px] font-medium ${mutedText}`}>
                         {progressPresets.length === 3 ? '33 · 33 · 34' : `Target ${selectedPreset.target}`}
                       </span>
                     </div>
-                    <div className={`gap-2 ${progressPresets.length > 1 ? 'grid grid-cols-3' : 'grid grid-cols-1'}`}>
+                    <div className={`gap-1.5 ${progressPresets.length > 1 ? 'grid grid-cols-3' : 'grid grid-cols-1'}`}>
                       {progressPresets.map((preset) => {
                         const count = dailyTracker.counts[preset.id] || 0;
                         const pct = Math.min(100, Math.round((count / preset.target) * 100));
@@ -2647,7 +2827,7 @@ const DhikrDua: React.FC = () => {
                             key={preset.id}
                             type="button"
                             onClick={() => updatePreset(preset.id)}
-                            className={`rounded-xl px-1.5 py-1.5 text-left transition ${
+                            className={`rounded-lg px-1 py-1 text-left transition ${
                               isActive
                                 ? isDarkMode
                                   ? 'bg-emerald-500/15 ring-1 ring-emerald-400/40'
@@ -2655,15 +2835,15 @@ const DhikrDua: React.FC = () => {
                                 : ''
                             }`}
                           >
-                            <p className={`truncate text-[10px] font-semibold leading-tight ${isActive ? headingText : mutedText}`}>
+                            <p className={`truncate text-[9px] font-semibold leading-tight ${isActive ? headingText : mutedText}`}>
                               {shortLabel}
                             </p>
                             <p className={`mt-0.5 text-xs font-bold tabular-nums ${pct >= 100 ? (isDarkMode ? 'text-emerald-400' : 'text-emerald-600') : headingText}`}>
                               {count}/{preset.target}{pct >= 100 ? ' ✓' : ''}
                             </p>
-                            <div className={`mt-1 h-1 w-full overflow-hidden rounded-full ${isDarkMode ? 'bg-slate-700' : 'bg-emerald-100'}`}>
+                            <div className={`mt-0.5 h-0.5 w-full overflow-hidden rounded-full ${isDarkMode ? 'bg-slate-700' : 'bg-emerald-100'}`}>
                               <div
-                                className={`h-1 rounded-full transition-all duration-300 ${pct >= 100 ? 'bg-emerald-500' : 'bg-emerald-400'}`}
+                                className={`h-0.5 rounded-full transition-all duration-300 ${pct >= 100 ? 'bg-emerald-500' : 'bg-emerald-400'}`}
                                 style={{ width: `${pct}%` }}
                               />
                             </div>
@@ -2679,73 +2859,143 @@ const DhikrDua: React.FC = () => {
 
           <div
             ref={profileSectionRef}
-            className={`scroll-mt-24 mt-6 gap-4 md:hidden ${activeMobileSection === 'profile' ? 'grid' : 'hidden'}`}
+            className={`scroll-mt-24 mt-0 gap-3 pb-32 md:hidden ${activeMobileSection === 'profile' ? 'grid' : 'hidden'}`}
           >
-            <div className={`scroll-mt-24 rounded-2xl border p-4 shadow-sm ${cardBg}`}>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h3 className={`text-base font-bold ${headingText}`}>Saved Duas</h3>
-                  <p className={`text-sm ${mutedText}`}>{bookmarkedIds.length} favorites saved</p>
+            <div className={`relative overflow-hidden rounded-2xl border p-4 shadow-md sm:p-5 ${cardBg}`}>
+              <div className="absolute inset-0 opacity-5" style={{
+                backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.75) 1px, transparent 0)',
+                backgroundSize: '30px 30px',
+              }} />
+              <div className="relative">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className={`text-xs font-semibold uppercase tracking-[0.15em] ${mutedText}`}>My Collection</p>
+                    <h3 className={`mt-1 text-lg font-bold ${headingText}`}>Saved Duas</h3>
+                    <p className={`mt-1 text-sm ${mutedText}`}>{bookmarkedIds.length} duas in favorites</p>
+                  </div>
+                  <div className={`rounded-full p-3 ${isDarkMode ? 'bg-emerald-500/15' : 'bg-emerald-50'}`}>
+                    <BookmarkSolidIcon className={`h-5 w-5 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`} />
+                  </div>
                 </div>
                 <button
                   type="button"
                   onClick={openFavoritesView}
-                  className="rounded-xl bg-amber-500 px-3 py-2 text-sm font-semibold text-white"
+                  className="mt-4 w-full rounded-lg bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition hover:shadow-xl hover:shadow-emerald-500/40"
                 >
-                  Open Favorites
+                  View All Favorites
                 </button>
               </div>
             </div>
 
             {lastViewedDua && (
-              <div className={`rounded-2xl border p-4 shadow-sm ${cardBg}`}>
-                <p className={`text-xs font-semibold uppercase tracking-wide ${mutedText}`}>Continue Reading</p>
-                <h3 className={`mt-1 text-base font-bold ${headingText}`}>{lastViewedDua.title}</h3>
-                <p className={`mt-1 text-sm ${mutedText}`}>{lastViewedDua.shortDescription}</p>
-                <button
-                  type="button"
-                  onClick={resumeReading}
-                  className="mt-3 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white"
-                >
-                  Open Last Viewed Dua
-                </button>
+              <div className={`relative overflow-hidden rounded-2xl border p-4 shadow-md sm:p-5 ${cardBg}`}>
+                <div className="absolute inset-0 opacity-5" style={{
+                  backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.75) 1px, transparent 0)',
+                  backgroundSize: '30px 30px',
+                }} />
+                <div className="relative">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200/30 bg-white/10 px-3 py-1 text-xs font-medium text-emerald-100 backdrop-blur-sm dark:border-slate-700 dark:bg-slate-800/50 dark:text-emerald-300">
+                    <ArrowPathIcon className="h-3 w-3" />
+                    Resume
+                  </div>
+                  <h3 className={`mt-2 text-base font-bold leading-tight ${headingText}`}>{lastViewedDua.title}</h3>
+                  <p className={`mt-2 text-sm ${mutedText}`}>{lastViewedDua.shortDescription}</p>
+                  <button
+                    type="button"
+                    onClick={resumeReading}
+                    className="mt-4 w-full rounded-lg bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-500/30 transition hover:shadow-xl hover:shadow-emerald-500/40"
+                  >
+                    Continue Reading
+                  </button>
+                </div>
               </div>
             )}
 
-            <div className={`rounded-2xl border p-4 shadow-sm ${cardBg}`}>
-              <h3 className={`text-base font-bold ${headingText}`}>Today&apos;s Dhikr Tracker</h3>
-              <div className="mt-3 space-y-2 text-sm">
-                {TASBIH_PRESETS.map((preset) => (
-                  <div key={preset.id} className="flex items-center justify-between gap-3">
-                    <span className={mutedText}>{preset.label}</span>
-                    <span className={`font-semibold ${headingText}`}>{dailyTracker.counts[preset.id] || 0}/{preset.target}</span>
+            <div className={`relative overflow-hidden rounded-2xl border p-4 shadow-md sm:p-5 ${cardBg}`}>
+              <div className="absolute inset-0 opacity-5" style={{
+                backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.75) 1px, transparent 0)',
+                backgroundSize: '30px 30px',
+              }} />
+              <div className="relative">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className={`text-xs font-semibold uppercase tracking-[0.15em] ${mutedText}`}>Daily Progress</p>
+                    <h3 className={`mt-1 text-lg font-bold ${headingText}`}>Dhikr Tracker</h3>
                   </div>
-                ))}
+                  <div className={`rounded-full p-3 ${isDarkMode ? 'bg-teal-500/15' : 'bg-teal-50'}`}>
+                    <span className="text-xl">📊</span>
+                  </div>
+                </div>
+                <div className="mt-4 space-y-2.5">
+                  {TASBIH_PRESETS.map((preset) => {
+                    const count = dailyTracker.counts[preset.id] || 0;
+                    const pct = Math.min(100, Math.round((count / preset.target) * 100));
+                    return (
+                      <div key={preset.id} className="flex flex-col gap-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className={`text-sm font-medium ${mutedText}`}>{preset.label}</span>
+                          <span className={`text-sm font-bold tabular-nums ${pct >= 100 ? (isDarkMode ? 'text-emerald-400' : 'text-emerald-600') : headingText}`}>
+                            {count}/{preset.target}
+                          </span>
+                        </div>
+                        <div className={`h-1.5 overflow-hidden rounded-full ${isDarkMode ? 'bg-slate-700' : 'bg-emerald-100'}`}>
+                          <div
+                            className={`h-1.5 rounded-full transition-all duration-300 ${pct >= 100 ? 'bg-emerald-500' : 'bg-gradient-to-r from-emerald-400 to-teal-400'}`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
-            <div className={`rounded-2xl border p-4 shadow-sm ${cardBg}`}>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h3 className={`text-base font-bold ${headingText}`}>Reminder & Language</h3>
-                  <p className={`text-sm ${mutedText}`}>
-                    {reminderStatus} • {reminderScheduleLabel} • Translation: {translationLanguage === 'urdu' ? 'Urdu' : 'English'}
-                  </p>
+            <div className={`relative overflow-hidden rounded-2xl border p-4 shadow-md sm:p-5 ${cardBg}`}>
+              <div className="absolute inset-0 opacity-5" style={{
+                backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.75) 1px, transparent 0)',
+                backgroundSize: '30px 30px',
+              }} />
+              <div className="relative">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className={`text-xs font-semibold uppercase tracking-[0.15em] ${mutedText}`}>Preferences</p>
+                    <h3 className={`mt-1 text-lg font-bold ${headingText}`}>Settings & Notifications</h3>
+                    <p className={`mt-1.5 text-xs ${mutedText}`}>
+                      <span className={`inline-block px-2 py-1 rounded-full ${isDarkMode ? 'bg-emerald-500/20 text-emerald-300' : 'bg-emerald-50 text-emerald-700'}`}>
+                        {reminderStatus}
+                      </span>
+                      <span className="mx-2">•</span>
+                      <span>{translationLanguage === 'urdu' ? 'Urdu' : 'English'}</span>
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsSettingsOpen((previous) => !previous)}
+                    className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                      isDarkMode
+                        ? `${isSettingsOpen ? 'border-emerald-500 bg-emerald-500/20 text-emerald-300' : 'border-slate-600 bg-slate-800 text-slate-100 hover:border-emerald-400'}`
+                        : `${isSettingsOpen ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50'}`
+                    }`}
+                  >
+                    {isSettingsOpen ? '✓ Open' : 'Manage'}
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setIsSettingsOpen((previous) => !previous)}
-                  className="rounded-xl border border-emerald-200 px-3 py-2 text-sm font-semibold text-emerald-700"
-                >
-                  {isSettingsOpen ? 'Hide Settings' : 'Open Settings'}
-                </button>
               </div>
             </div>
 
             {isSettingsOpen && (
-              <div className={`rounded-2xl border p-4 shadow-sm ${cardBg}`}>
-                <div className="mb-3 flex items-center justify-between gap-2">
-                  <h3 className={`text-base font-bold ${headingText}`}>Settings</h3>
+              <div className={`relative overflow-hidden rounded-2xl border p-4 shadow-md sm:p-5 ${cardBg}`}>
+                <div className="absolute inset-0 opacity-5" style={{
+                  backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.75) 1px, transparent 0)',
+                  backgroundSize: '30px 30px',
+                }} />
+                <div className="relative">
+                  <div className="mb-4 flex items-center justify-between gap-2">
+                    <div>
+                      <p className={`text-xs font-semibold uppercase tracking-[0.15em] ${mutedText}`}>Configure</p>
+                      <h3 className={`mt-0.5 text-base font-bold ${headingText}`}>Advanced Settings</h3>
+                    </div>
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
@@ -2990,6 +3240,7 @@ const DhikrDua: React.FC = () => {
                     </div>
                   </div>
 
+                  </div>
                 </div>
               </div>
             )}

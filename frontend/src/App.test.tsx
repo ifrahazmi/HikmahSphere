@@ -134,3 +134,16 @@ test('keeps the readiness screen instead of flashing the old spinner during auth
   expect(screen.getByRole('heading', { name: 'Restoring your session' })).toBeInTheDocument();
   expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
 });
+
+test('shows a clear tasbih input mode switch between stone/scroll and tap', () => {
+  window.history.pushState({}, '', '/dhikr-dua');
+
+  render(
+    <HelmetProvider>
+      <App />
+    </HelmetProvider>
+  );
+
+  expect(screen.getByRole('button', { name: 'Stone / Scroll' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Tap' })).toBeInTheDocument();
+});

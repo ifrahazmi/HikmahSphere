@@ -69,11 +69,16 @@ describe('useStartupReadiness', () => {
     jest.restoreAllMocks();
   });
 
-  it('finishes immediately when frontend, backend, and database are ready', async () => {
+  it('finishes after the minimum two-second check window', async () => {
     mockSuccessfulFetch();
     const { result } = renderHook(() => useStartupReadiness(true));
 
     await flush();
+    expect(result.current.state.outcome).toBe('checking');
+
+    act(() => {
+      jest.advanceTimersByTime(2_000);
+    });
 
     expect(result.current.state.outcome).toBe('ready');
     expect(result.current.state.steps.internet.status).toBe('success');
@@ -103,6 +108,9 @@ describe('useStartupReadiness', () => {
       resolveBackend(await backendResponse());
     });
     await flush();
+    act(() => {
+      jest.advanceTimersByTime(2_000);
+    });
 
     expect(result.current.state.outcome).toBe('ready');
   });
@@ -168,6 +176,9 @@ describe('useStartupReadiness', () => {
     const { result } = renderHook(() => useStartupReadiness(true));
 
     await flush();
+    act(() => {
+      jest.advanceTimersByTime(2_000);
+    });
 
     expect(result.current.state.outcome).toBe('ready');
   });
@@ -219,6 +230,9 @@ describe('useStartupReadiness', () => {
       result.current.retry();
     });
     await flush();
+    act(() => {
+      jest.advanceTimersByTime(2_000);
+    });
 
     expect(result.current.state.outcome).toBe('ready');
   });

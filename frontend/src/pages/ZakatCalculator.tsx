@@ -275,7 +275,7 @@ const ZakatCalculator: React.FC = () => {
           'hikmahsphere zakat',
         ]}
       />
-      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 pt-16 relative overflow-hidden">
+      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 pt-4 sm:pt-6 relative overflow-hidden">
       {/* Islamic Pattern Background */}
       <div className="absolute inset-0 opacity-5 pointer-events-none">
         <div className="absolute inset-0" style={{

@@ -16,6 +16,7 @@ export type StartupReadinessState = {
 };
 
 const SLOW_AFTER_MS = 5_000;
+const MIN_CHECK_SCREEN_MS = 2_000;
 const OFFLINE_AFTER_MS = 15_000;
 const ATTEMPT_BUDGET_MS = 30_000;
 const RETRY_DELAY_MS = 1_500;
@@ -84,6 +85,7 @@ export const useStartupReadiness = (enabled = isInstalledMobilePwa()) => {
     let databaseReady = false;
     let frontendProbeInFlight = false;
     let backendProbeInFlight = false;
+    let readyPending = false;
     const startedAt = Date.now();
     const controller = new AbortController();
     const timers = new Set<number>();
@@ -111,14 +113,19 @@ export const useStartupReadiness = (enabled = isInstalledMobilePwa()) => {
     };
 
     const finishIfReady = () => {
-      if (terminal || !networkReady || !frontendReady || !backendReady || !databaseReady) {
+      if (terminal || readyPending || !networkReady || !frontendReady || !backendReady || !databaseReady) {
         return;
       }
-      terminal = true;
-      controller.abort();
-      timers.forEach((timer) => window.clearTimeout(timer));
-      timers.clear();
-      setState((current) => ({ ...current, outcome: 'ready' }));
+      readyPending = true;
+      const remainingMs = Math.max(0, MIN_CHECK_SCREEN_MS - (Date.now() - startedAt));
+      schedule(() => {
+        if (stopped || terminal) return;
+        terminal = true;
+        controller.abort();
+        timers.forEach((timer) => window.clearTimeout(timer));
+        timers.clear();
+        setState((current) => ({ ...current, outcome: 'ready' }));
+      }, remainingMs);
     };
 
     const probeFrontend = async () => {
