@@ -62,44 +62,49 @@ export const buildEditionSurahPath = (slug: string, surah: number): string => {
 export const filterTafsirEditionsCatalog = (value: unknown): TafsirEditionCatalogItem[] => {
   const rows = Array.isArray(value) ? value : [];
   const seen = new Set<string>();
+  const items: TafsirEditionCatalogItem[] = [];
 
-  return rows
-    .map((row) => {
-      if (!row || typeof row !== 'object' || Array.isArray(row)) {
-        return null;
-      }
+  rows.forEach((row) => {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) {
+      return;
+    }
 
-      const record = row as Record<string, unknown>;
-      const slug = String(record.slug || '').trim();
-      const language = normalizeLanguageName(record.language_name);
-      if (!isValidEditionSlug(slug) || !isAllowedTafsirLanguage(language) || TRANSLATION_ONLY_EDITION_SLUGS.has(slug)) {
-        return null;
-      }
+    const record = row as Record<string, unknown>;
+    const slug = String(record.slug || '').trim();
+    const language = normalizeLanguageName(record.language_name);
+    if (!isValidEditionSlug(slug) || !isAllowedTafsirLanguage(language) || TRANSLATION_ONLY_EDITION_SLUGS.has(slug)) {
+      return;
+    }
+    if (seen.has(slug)) {
+      return;
+    }
 
-      return {
-        id: Number.isFinite(Number(record.id)) ? Number(record.id) : undefined,
-        slug,
-        name: String(record.name || slug).trim(),
-        author_name: String(record.author_name || '').trim(),
-        language_name: language,
-        source: typeof record.source === 'string' ? record.source : undefined,
-      } satisfies TafsirEditionCatalogItem;
-    })
-    .filter((item): item is TafsirEditionCatalogItem => {
-      if (!item || seen.has(item.slug)) {
-        return false;
-      }
-      seen.add(item.slug);
-      return true;
-    })
-    .sort((first, second) => {
-      const languageOrder = ALLOWED_TAFSIR_LANGUAGES.indexOf(first.language_name as AllowedTafsirLanguage)
-        - ALLOWED_TAFSIR_LANGUAGES.indexOf(second.language_name as AllowedTafsirLanguage);
-      if (languageOrder !== 0) {
-        return languageOrder;
-      }
-      return first.name.localeCompare(second.name);
-    });
+    const item: TafsirEditionCatalogItem = {
+      slug,
+      name: String(record.name || slug).trim(),
+      author_name: String(record.author_name || '').trim(),
+      language_name: language,
+    };
+    const parsedId = Number(record.id);
+    if (Number.isFinite(parsedId)) {
+      item.id = parsedId;
+    }
+    if (typeof record.source === 'string') {
+      item.source = record.source;
+    }
+
+    seen.add(slug);
+    items.push(item);
+  });
+
+  return items.sort((first, second) => {
+    const languageOrder = ALLOWED_TAFSIR_LANGUAGES.indexOf(first.language_name as AllowedTafsirLanguage)
+      - ALLOWED_TAFSIR_LANGUAGES.indexOf(second.language_name as AllowedTafsirLanguage);
+    if (languageOrder !== 0) {
+      return languageOrder;
+    }
+    return first.name.localeCompare(second.name);
+  });
 };
 
 export const normalizeEditionAyahPayload = (
