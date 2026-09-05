@@ -706,11 +706,11 @@ router.get('/search', [
 const configuredTafsirApiUrl = process.env.TAFSIR_API_URL || process.env.REACT_APP_TAFSIR_API_URL;
 const configuredMaududiApiUrl = process.env.MAUDUDI_API_URL || process.env.REACT_APP_MAUDUDI_API_URL;
 const TAFSIR_UPSTREAM_CANDIDATES = resolveTafsirUpstreamCandidates({
-  configured: configuredTafsirApiUrl,
+  configured: configuredTafsirApiUrl ?? null,
   defaults: DEFAULT_TAFSIR_UPSTREAMS,
 });
 const MAUDUDI_UPSTREAM_CANDIDATES = resolveTafsirUpstreamCandidates({
-  configured: configuredMaududiApiUrl,
+  configured: configuredMaududiApiUrl ?? null,
   defaults: DEFAULT_MAUDUDI_UPSTREAMS,
 });
 const TAFHEEM_EDITION = 'tafheem-ul-quran-syed-abu-ala-maududi';
