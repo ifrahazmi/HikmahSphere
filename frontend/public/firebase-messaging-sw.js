@@ -5,7 +5,7 @@
 importScripts('https://www.gstatic.com/firebasejs/10.7.2/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.2/firebase-messaging-compat.js');
 
-const CACHE_NAME = 'hikmahsphere-app-v7';
+const CACHE_NAME = 'hikmahsphere-app-v8';
 const TILE_CACHE = 'hikmahsphere-tiles-v1';
 const IS_LOCAL_DEV = ['localhost', '127.0.0.1', '[::1]'].includes(self.location.hostname);
 const APP_SHELL = ['/', '/index.html', '/manifest.json', '/logo.png', '/disconnect.png', '/favicon.ico', '/sounds/adhan.mp3'];
@@ -453,9 +453,20 @@ self.addEventListener('push', (event) => {
     return; // Not JSON – ignore
   }
 
+  const normalizedFcmPayload = createNotificationPayload(payload);
+
+  // When the PWA is open, onBackgroundMessage does not run. Still tell every
+  // open window so the in-app notification panel updates immediately.
+  event.waitUntil(
+    broadcastToOpenClients({
+      type: APP_MESSAGE_TYPE,
+      payload: normalizedFcmPayload,
+    }).catch(() => undefined)
+  );
+
   // FCM-handled messages always contain `gcm_message_id`; Firebase Messaging
   // compat will have already shown the notification for those.  We only handle
-  // raw web-push payloads that Firebase did NOT intercept (non-FCM format).
+  // OS display for raw web-push payloads that Firebase did NOT intercept.
   if (payload?.gcm_message_id || payload?.['google.c.sender.id']) return;
 
   const title = payload?.notification?.title || payload?.data?.title || 'HikmahSphere';

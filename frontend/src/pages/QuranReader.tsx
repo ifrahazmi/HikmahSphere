@@ -25,79 +25,21 @@ import {
   type BookmarkColor,
   DEFAULT_ENGLISH_TRANSLATION,
   DEFAULT_TRANSLATIONS,
+  isQuranTranslationLanguage,
 } from '../types/quran';
 import {
   fetchIndopakV3Surah,
   type IndopakV3Surah,
 } from '../utils/indopakV3Quran';
-
-const BOOKMARK_COLOR_CLASS_MAP: Record<
-  BookmarkColor,
-  {
-    background: string;
-    border: string;
-    list: string;
-    swatch: string;
-    selection: string;
-  }
-> = {
-  emerald: {
-    background: 'bg-emerald-300 bg-opacity-50',
-    border: 'border-emerald-600 text-emerald-600',
-    list: 'border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20',
-    swatch: 'bg-emerald-600',
-    selection: 'ring-2 ring-emerald-500',
-  },
-  red: {
-    background: 'bg-red-300 bg-opacity-50',
-    border: 'border-red-600 text-red-600',
-    list: 'border-red-600 bg-red-50 dark:bg-red-900/20',
-    swatch: 'bg-red-600',
-    selection: 'ring-2 ring-red-500',
-  },
-  teal: {
-    background: 'bg-teal-300 bg-opacity-50',
-    border: 'border-teal-600 text-teal-600',
-    list: 'border-teal-600 bg-teal-50 dark:bg-teal-900/20',
-    swatch: 'bg-teal-600',
-    selection: 'ring-2 ring-teal-500',
-  },
-  indigo: {
-    background: 'bg-indigo-300 bg-opacity-50',
-    border: 'border-indigo-600 text-indigo-600',
-    list: 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/20',
-    swatch: 'bg-indigo-600',
-    selection: 'ring-2 ring-indigo-500',
-  },
-  blue: {
-    background: 'bg-blue-300 bg-opacity-50',
-    border: 'border-blue-600 text-blue-600',
-    list: 'border-blue-600 bg-blue-50 dark:bg-blue-900/20',
-    swatch: 'bg-blue-600',
-    selection: 'ring-2 ring-blue-500',
-  },
-  purple: {
-    background: 'bg-purple-300 bg-opacity-50',
-    border: 'border-purple-600 text-purple-600',
-    list: 'border-purple-600 bg-purple-50 dark:bg-purple-900/20',
-    swatch: 'bg-purple-600',
-    selection: 'ring-2 ring-purple-500',
-  },
-  amber: {
-    background: 'bg-amber-300 bg-opacity-50',
-    border: 'border-amber-600 text-amber-600',
-    list: 'border-amber-600 bg-amber-50 dark:bg-amber-900/20',
-    swatch: 'bg-amber-600',
-    selection: 'ring-2 ring-amber-500',
-  },
-  rose: {
-    background: 'bg-rose-300 bg-opacity-50',
-    border: 'border-rose-600 text-rose-600',
-    list: 'border-rose-600 bg-rose-50 dark:bg-rose-900/20',
-    swatch: 'bg-rose-600',
-    selection: 'ring-2 ring-rose-500',
-  },
-};
+import { getArabicDisplayModePatch } from '../utils/quranDisplayMode';
+import {
+  getBookmarkBackgroundClass as getThemeBookmarkBackgroundClass,
+  getBookmarkHoverClass as getThemeBookmarkHoverClass,
+  getBookmarkListClass as getThemeBookmarkListClass,
+  getBookmarkSelectionClass as getThemeBookmarkSelectionClass,
+  getBookmarkSwatchClass as getThemeBookmarkSwatchClass,
+  getBookmarkSwatchSelectedClass,
+} from '../utils/quranBookmarkStyles';
 
 const QuranReader: React.FC = () => {
   const {
@@ -591,31 +533,24 @@ const QuranReader: React.FC = () => {
     return bookmark?.color;
   };
 
-  // Get background class based on bookmark color
   const getBookmarkBackgroundClass = (color?: BookmarkColor): string => {
-    if (!color) return '';
-    return BOOKMARK_COLOR_CLASS_MAP[color]?.background || '';
+    return getThemeBookmarkBackgroundClass(color, settings.theme);
   };
 
   const getBookmarkSelectionClass = (color?: BookmarkColor): string => {
-    if (!color) return 'bg-emerald-400 bg-opacity-40 ring-2 ring-emerald-500';
-    return BOOKMARK_COLOR_CLASS_MAP[color]?.selection || '';
+    return getThemeBookmarkSelectionClass(color, settings.theme);
   };
 
   const getBookmarkHoverClass = (color?: BookmarkColor): string => {
-    if (color) return '';
-    return 'hover:bg-emerald-100 hover:bg-opacity-30';
+    return getThemeBookmarkHoverClass(color, settings.theme);
   };
 
   const getBookmarkListClass = (color?: BookmarkColor): string => {
-    if (!color) {
-      return settings.theme === 'dark' ? 'border-gray-600 bg-gray-700' : 'border-gray-300 bg-gray-50';
-    }
-    return BOOKMARK_COLOR_CLASS_MAP[color]?.list || '';
+    return getThemeBookmarkListClass(color, settings.theme);
   };
 
   const getBookmarkSwatchClass = (color: BookmarkColor): string => {
-    return BOOKMARK_COLOR_CLASS_MAP[color]?.swatch || 'bg-emerald-600';
+    return getThemeBookmarkSwatchClass(color);
   };
 
   // Get font color class based on settings
@@ -738,14 +673,14 @@ const QuranReader: React.FC = () => {
     return DEFAULT_TRANSLATIONS.find((translation) => translation.identifier === identifier);
   };
 
-  const translationOptions = DEFAULT_TRANSLATIONS.filter(
-    (translation) => translation.language === 'English' || translation.language === 'Urdu'
+  const translationOptions = DEFAULT_TRANSLATIONS.filter((translation) =>
+    isQuranTranslationLanguage(translation.language)
   );
 
   const getSingleTranslationSelection = (identifiers: string[]) => {
     const firstSupportedTranslation = identifiers.find((identifier) => {
       const translationLanguage = getTranslationDefinition(identifier)?.language;
-      return translationLanguage === 'English' || translationLanguage === 'Urdu';
+      return translationLanguage ? isQuranTranslationLanguage(translationLanguage) : false;
     });
 
     return firstSupportedTranslation ? [firstSupportedTranslation] : [DEFAULT_ENGLISH_TRANSLATION.identifier];
@@ -757,6 +692,7 @@ const QuranReader: React.FC = () => {
   const formatTranslationLanguage = (language: string) => {
     if (language === 'en' || language === 'English') return 'English';
     if (language === 'ur' || language === 'Urdu') return 'Urdu';
+    if (language === 'hi' || language === 'Hindi') return 'Hindi';
     return language;
   };
 
@@ -782,36 +718,13 @@ const QuranReader: React.FC = () => {
   };
 
   const setDesktopDisplayMode = (arabicOnlyMode: boolean) => {
-    if (arabicOnlyMode) {
-      updateSettings({ arabicOnlyMode: true });
-      return;
-    }
-
-    updateSettings({
-      arabicOnlyMode: false,
-      selectedTranslations: [DEFAULT_ENGLISH_TRANSLATION.identifier],
-    });
+    updateSettings(getArabicDisplayModePatch(arabicOnlyMode));
   };
 
   const setMobileDisplayMode = (arabicOnlyMode: boolean) => {
-    if (arabicOnlyMode) {
-      const updatedSettings = { ...tempSettings, arabicOnlyMode: true };
-      setTempSettings(updatedSettings);
-      updateSettings({ arabicOnlyMode: true });
-      return;
-    }
-
-    const updatedSettings = {
-      ...tempSettings,
-      arabicOnlyMode: false,
-      selectedTranslations: [DEFAULT_ENGLISH_TRANSLATION.identifier],
-    };
-
-    setTempSettings(updatedSettings);
-    updateSettings({
-      arabicOnlyMode: false,
-      selectedTranslations: [DEFAULT_ENGLISH_TRANSLATION.identifier],
-    });
+    const displayPatch = getArabicDisplayModePatch(arabicOnlyMode);
+    setTempSettings({ ...tempSettings, ...displayPatch });
+    updateSettings(displayPatch);
   };
 
   const selectDesktopTranslation = (identifier: string) => {
@@ -940,12 +853,15 @@ const QuranReader: React.FC = () => {
         if (!text) return null;
 
         const isUrdu = translation.edition.language === 'ur';
+        const isHindi =
+          translation.edition.language === 'hi' || translation.edition.identifier === 'hi-farooq';
 
         return {
           key: `${translation.edition.identifier}-${ayahIndex}`,
           identifier: translation.edition.identifier,
           text,
           isUrdu,
+          isHindi,
           direction: translation.edition.direction || (isUrdu ? 'rtl' : 'ltr'),
         };
       })
@@ -954,6 +870,7 @@ const QuranReader: React.FC = () => {
       identifier: string;
       text: string;
       isUrdu: boolean;
+      isHindi: boolean;
       direction: 'ltr' | 'rtl';
     }>;
 
@@ -967,12 +884,19 @@ const QuranReader: React.FC = () => {
         currentPlayingSurah === translationSurahNumber &&
         currentPlayingAyah === ayahNumber &&
         translation.identifier === activeTranslationIdentifier;
+      const translationBookmarkColor = translationSurahNumber
+        ? getBookmarkColor(translationSurahNumber, ayahNumber)
+        : undefined;
 
       return (
         <div
           key={translation.key}
           className={`mb-3 rounded-2xl border p-4 sm:p-5 ${
-            settings.theme === 'dark' ? 'border-gray-700 bg-gray-900/30' : 'border-slate-200 bg-slate-50'
+            translationBookmarkColor
+              ? getBookmarkListClass(translationBookmarkColor)
+              : settings.theme === 'dark'
+              ? 'border-gray-700 bg-gray-900/30'
+              : 'border-slate-200 bg-slate-50'
           }`}
         >
           {settings.audioEnabled &&
@@ -1024,10 +948,15 @@ const QuranReader: React.FC = () => {
 
           <p
             dir={translation.direction}
+            lang={translation.isUrdu ? 'ur' : translation.isHindi ? 'hi' : 'en'}
             style={{ fontSize: `${settings.translationFontSize}px` }}
             className={
               translation.isUrdu
                 ? `quran-urdu-translation ${
+                    settings.theme === 'dark' ? 'text-gray-100' : 'text-gray-800'
+                  }`
+                : translation.isHindi
+                ? `quran-hindi-translation font-hindi ${
                     settings.theme === 'dark' ? 'text-gray-100' : 'text-gray-800'
                   }`
                 : `text-left leading-8 ${
@@ -2307,7 +2236,9 @@ const QuranReader: React.FC = () => {
                                   <span
                                     key={`v3-surah${surahData.number}-ayah${ayahNum}-word${wordIndex}`}
                                     className={`inline-block indopak-v3-word-container px-[0.06em] sm:px-[0.12em] my-[0.04em] rounded transition-colors ${
-                                      isSelectedForWordBookmark ? 'bg-emerald-500 text-white' : 'hover:bg-emerald-100 hover:bg-opacity-30'
+                                      isSelectedForWordBookmark
+                                        ? 'bg-emerald-500 text-white'
+                                        : getBookmarkHoverClass(bookmarkColor)
                                     } ${isBookmarkedAyah ? bgClass : ''}`}
                                     title={`Word ${wordData.position}: ${wordData.location}`}
                                     onClick={(e) => handleWordClick(e, surahData.number, ayahNum, wordIndex)}
@@ -2392,7 +2323,9 @@ const QuranReader: React.FC = () => {
                                   key={`v3-continuous-surah${surahData.number}-ayah${ayahNum}-word${wordIndex}`}
                                   id={wordIndex === firstWordIndex ? `ayah-${ayahNum}` : undefined}
                                   className={`inline-block px-[0.04em] sm:px-[0.08em] my-[0.02em] rounded transition-colors cursor-pointer ${
-                                    isSelectedForWordBookmark ? 'bg-emerald-500 text-white' : 'hover:bg-emerald-100 hover:bg-opacity-30'
+                                    isSelectedForWordBookmark
+                                      ? 'bg-emerald-500 text-white'
+                                      : getBookmarkHoverClass(bookmarkColor)
                                   } ${bgClass}`}
                                   onClick={(e) => handleWordClick(e, surahData.number, ayahNum, wordIndex)}
                                   style={{
@@ -3293,7 +3226,9 @@ const QuranReader: React.FC = () => {
                           key={color}
                           onClick={() => setBookmarkConfirm({ ...bookmarkConfirm, color })}
                           className={`w-9 h-9 rounded-lg border-2 transition-all transform hover:scale-110 ${
-                            bookmarkConfirm.color === color ? 'border-gray-900 scale-110' : 'border-transparent'
+                            bookmarkConfirm.color === color
+                              ? getBookmarkSwatchSelectedClass(settings.theme)
+                              : 'border-transparent'
                           } ${getBookmarkSwatchClass(color)}`}
                           title={color}
                         />
@@ -3380,7 +3315,9 @@ const QuranReader: React.FC = () => {
                         key={color}
                         onClick={() => setBookmarkConfirm({ ...bookmarkConfirm, color })}
                         className={`w-8 h-8 rounded-lg border-2 transition-all transform hover:scale-110 ${
-                          bookmarkConfirm.color === color ? 'border-gray-900 scale-110' : 'border-transparent'
+                          bookmarkConfirm.color === color
+                            ? getBookmarkSwatchSelectedClass(settings.theme)
+                            : 'border-transparent'
                         } ${getBookmarkSwatchClass(color)}`}
                         title={color}
                       />

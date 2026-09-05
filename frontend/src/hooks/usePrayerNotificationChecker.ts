@@ -3,6 +3,8 @@ import toast from 'react-hot-toast';
 import { useAuth } from './useAuth';
 import { useNotification } from '../contexts/NotificationContext';
 import { playAdhanAudio, setupAdhanAudioUnlock } from '../utils/adhanAudio';
+import { getLocalDateKey } from '../utils/adhanStorage';
+import { getPrayerNotificationCopy, isFridayLocal } from '../utils/fridayPrayerNotification';
 
 interface PrayerTimes {
   Fajr: string;
@@ -66,7 +68,8 @@ export const usePrayerNotificationChecker = (
     const checkUpcomingPrayers = () => {
       const now = new Date();
       const currentMinutes = now.getHours() * 60 + now.getMinutes();
-      const today = now.toISOString().split('T')[0];
+      const today = getLocalDateKey(now);
+      const friday = isFridayLocal(now);
       const checkKey = `${today}`;
 
       prayerOrder.forEach((prayer) => {
@@ -86,24 +89,23 @@ export const usePrayerNotificationChecker = (
           if (!notifiedPrayersRef.current.has(prayerKey)) {
             const prefs = notificationPrefs[prayer.toLowerCase()];
             if (prefs?.enabled) {
-              const capitalizedPrayer = prayer.charAt(0).toUpperCase() + prayer.slice(1);
+              const copy = getPrayerNotificationCopy(prayer, friday);
 
               // Request notification permission if needed
               if ('Notification' in window && Notification.permission === 'default') {
                 Notification.requestPermission();
               }
 
-              // Add to in-app bell. OS tray for Adhan is left to FCM/SW so we
-              // do not show two system notifications when the app is open.
+              // Add to in-app bell immediately so the panel updates without a refresh.
               const adhanNotificationId = `adhan-${today}-${prayer.toLowerCase()}`;
               addSystemNotification(
-                `Adhan: ${capitalizedPrayer}`,
-                `It's time for ${capitalizedPrayer} prayer.`,
+                copy.title,
+                copy.body,
                 'info',
                 { type: 'adhan', prayer, notificationId: adhanNotificationId }
               );
 
-              toast.success(`Time for ${capitalizedPrayer}`);
+              toast.success(`Time for ${copy.toastLabel}`);
 
               // Play audio if enabled (only works while the app is open)
               if (prefs.sound) {

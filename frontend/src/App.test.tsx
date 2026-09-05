@@ -146,4 +146,8 @@ test('shows a clear tasbih input mode switch between stone/scroll and tap', () =
 
   expect(screen.getByRole('button', { name: 'Stone / Scroll' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Tap' })).toBeInTheDocument();
+  expect(screen.getByRole('slider', { name: 'Scrollable tasbeeh beads' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Right thumb curve' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Left thumb curve' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Mute tasbeeh sound' })).toBeInTheDocument();
 });

@@ -357,6 +357,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                       : 'text-gray-700 hover:text-emerald-600'
                   }`}
                   title="Settings"
+                  aria-label="Settings"
                 >
                   <Cog6ToothIcon className="h-4 w-4 lg:h-5 lg:w-5" />
                 </button>
@@ -467,19 +468,20 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
               )}
             </button>
 
-            {/* Settings Icon */}
-            <button
-              onClick={() => setIsSettingsOpen(true)}
-              className={`p-1.5 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-colors duration-200 ${
-                isDark
-                  ? 'text-gray-300 hover:text-emerald-400'
-                  : 'text-gray-700 hover:text-emerald-600'
-              }`}
-              title="Settings"
-              aria-label="Settings"
-            >
-              <Cog6ToothIcon className="h-5 w-5" />
-            </button>
+            {user && (
+              <button
+                onClick={() => setIsSettingsOpen(true)}
+                className={`p-1.5 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-colors duration-200 ${
+                  isDark
+                    ? 'text-gray-300 hover:text-emerald-400'
+                    : 'text-gray-700 hover:text-emerald-600'
+                }`}
+                title="Settings"
+                aria-label="Settings"
+              >
+                <Cog6ToothIcon className="h-5 w-5" />
+              </button>
+            )}
 
             <button
               onClick={() => setIsOpen(!isOpen)}
@@ -718,7 +720,9 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
         </div>
       )}
     </nav>
-    <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+    {user && (
+      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+    )}
     </>
   );
 };

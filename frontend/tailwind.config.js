@@ -33,6 +33,7 @@ module.exports = {
         'noto-naskh': ['Noto Naskh Arabic', 'serif'],
         cairo: ['Cairo', 'sans-serif'],
         lateef: ['Lateef', 'serif'],
+        hindi: ['Noto Sans Devanagari', 'Noto Sans', 'sans-serif'],
       },
     },
   },

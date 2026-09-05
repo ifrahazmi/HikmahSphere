@@ -1,5 +1,8 @@
 import fs from 'fs';
 import {
+  getMaududiApiUrl,
+  getTafsirApiUrl,
+  getTafsirEditionsApiUrl,
   normalizeRandomTafsir,
   normalizeTafsirAyah,
   normalizeTafsirSearchHits,
@@ -79,6 +82,33 @@ describe('Tafheem fixture normalization', () => {
   });
 });
 
+describe('tafsir API routing', () => {
+  const originalTafsir = process.env.REACT_APP_TAFSIR_API_URL;
+  const originalMaududi = process.env.REACT_APP_MAUDUDI_API_URL;
+
+  afterEach(() => {
+    process.env.REACT_APP_TAFSIR_API_URL = originalTafsir;
+    process.env.REACT_APP_MAUDUDI_API_URL = originalMaududi;
+  });
+
+  it('ignores Tailscale Funnel URLs and uses the backend proxy', () => {
+    process.env.REACT_APP_TAFSIR_API_URL = 'https://aws-vm.reedfish-temperature.ts.net/api';
+    process.env.REACT_APP_MAUDUDI_API_URL = 'https://aws-vm.reedfish-temperature.ts.net/api/maududi';
+
+    expect(getTafsirApiUrl()).toMatch(/\/quran\/tafsir$/);
+    expect(getMaududiApiUrl()).toMatch(/\/quran\/tafsir$/);
+  });
+
+  it('still allows a local tafsir server from the browser', () => {
+    process.env.REACT_APP_TAFSIR_API_URL = 'http://localhost:9000/api';
+    expect(getTafsirApiUrl()).toBe('http://localhost:9000/api');
+  });
+
+  it('routes edition reads through the backend editions proxy', () => {
+    expect(getTafsirEditionsApiUrl()).toMatch(/\/quran\/tafsir\/editions$/);
+  });
+});
+
 describe('new tafsir API normalizers', () => {
   it('normalizes unified ayah payloads', () => {
     const normalized = normalizeUnifiedAyah({
@@ -137,6 +167,27 @@ describe('new tafsir API normalizers', () => {
     expect(hits[1].surah).toBe(1);
     expect(hits[1].ayah).toBe(1);
     expect(hits[1].source).toBe('maududi');
+  });
+
+  it('normalizes editions API ayah and surah payloads', () => {
+    const ayah = normalizeTafsirAyah({
+      ayah: 258,
+      surah: 2,
+      text: 'کیا تم نے اُس شخص کے حال پر غور نہیں کیا',
+    });
+    expect(ayah.surah).toBe(2);
+    expect(ayah.ayah).toBe(258);
+    expect(ayah.text).toContain('غور نہیں کیا');
+
+    const surah = normalizeTafsirSurah({
+      ayahs: [
+        { ayah: 2, surah: 1, text: 'second' },
+        { ayah: 1, surah: 1, text: 'first' },
+      ],
+    });
+    expect(surah.surah_number).toBe(1);
+    expect(surah.ayahs.map((item) => item.ayah)).toEqual([1, 2]);
+    expect(surah.ayahs[0].text).toBe('first');
   });
 
   it('normalizes random tafsir payloads', () => {

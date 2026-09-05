@@ -7,6 +7,7 @@ import {
   getCurrentDateKeyInTimezone,
   type ProviderPrayerTimes,
 } from './prayerTimesProvider';
+import { getPrayerNotificationCopy, isFridayInTimezone } from '../utils/fridayPrayerNotification';
 
 const INTERVAL_MS = 60 * 1000;
 let schedulerHandle: NodeJS.Timeout | null = null;
@@ -114,6 +115,7 @@ const runTick = async () => {
       const nowHHMM = getCurrentHHMMInTimezone(timezone);
       if (!nowHHMM) continue;
       const localDateKey = getCurrentDateKeyInTimezone(timezone);
+      const friday = isFridayInTimezone(timezone);
 
       const prayerAlerts = (user as any)?.preferences?.notifications?.prayerAlerts;
 
@@ -127,11 +129,12 @@ const runTick = async () => {
         sentRegistry.set(dedupeKey, Date.now());
 
         const notificationId = `adhan-${localDateKey}-${prayer.toLowerCase()}`;
-        const title = `Adhan: ${prayer}`;
-        const body = `It's time for ${prayer} prayer. Tap to play the Adhan.`;
+        const { title, body } = getPrayerNotificationCopy(prayer, friday);
         const data = {
           type: 'adhan',
           prayer,
+          title,
+          body,
           url: `/prayers?playAdhan=1&prayer=${encodeURIComponent(prayer)}`,
           notificationId,
           playAdhan: '1',

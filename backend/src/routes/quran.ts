@@ -5,6 +5,22 @@ import { query, validationResult } from 'express-validator';
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth';
 import User from '../models/User';
 import { rewriteAyahAudioPayload } from '../utils/quranAudioUrl';
+import {
+  DEFAULT_MAUDUDI_UPSTREAMS,
+  DEFAULT_TAFSIR_UPSTREAMS,
+  fetchFromTafsirUpstreams,
+  resolveTafsirUpstreamCandidates,
+} from '../utils/tafsirUpstream';
+import {
+  FALLBACK_TAFSIR_EDITIONS,
+  buildEditionAyahPath,
+  buildEditionSurahPath,
+  filterTafsirEditionsCatalog,
+  getTafsirEditionsApiBase,
+  isValidEditionSlug,
+  normalizeEditionAyahPayload,
+  normalizeEditionSurahPayload,
+} from '../utils/tafsirEditionsApi';
 
 const router = express.Router();
 
@@ -687,18 +703,173 @@ router.get('/search', [
 // ============================================================
 // Tafsir API Proxy + Tafheem Fixture Support
 // ============================================================
-const DEFAULT_TAFSIR_API_URL = 'https://aws-vm.reedfish-temperature.ts.net/api';
 const configuredTafsirApiUrl = process.env.TAFSIR_API_URL || process.env.REACT_APP_TAFSIR_API_URL;
-const isProductionLocalTafsirUrl =
-  process.env.NODE_ENV === 'production' && /^https?:\/\/localhost(?::\d+)?\//i.test(configuredTafsirApiUrl || '');
-const TAFSIR_PROXY_API_BASE = (
-  isProductionLocalTafsirUrl ? DEFAULT_TAFSIR_API_URL : configuredTafsirApiUrl || DEFAULT_TAFSIR_API_URL
-).replace(/\/$/, '');
-const DEFAULT_MAUDUDI_API_URL = 'https://aws-vm.reedfish-temperature.ts.net/api/maududi';
-const MAUDUDI_PROXY_API_BASE = (
-  process.env.MAUDUDI_API_URL || DEFAULT_MAUDUDI_API_URL
-).replace(/\/$/, '');
+const configuredMaududiApiUrl = process.env.MAUDUDI_API_URL || process.env.REACT_APP_MAUDUDI_API_URL;
+const TAFSIR_UPSTREAM_CANDIDATES = resolveTafsirUpstreamCandidates({
+  configured: configuredTafsirApiUrl,
+  defaults: DEFAULT_TAFSIR_UPSTREAMS,
+});
+const MAUDUDI_UPSTREAM_CANDIDATES = resolveTafsirUpstreamCandidates({
+  configured: configuredMaududiApiUrl,
+  defaults: DEFAULT_MAUDUDI_UPSTREAMS,
+});
 const TAFHEEM_EDITION = 'tafheem-ul-quran-syed-abu-ala-maududi';
+const TAFSIR_EDITIONS_API_BASE = getTafsirEditionsApiBase(process.env.TAFSIR_EDITIONS_API_URL);
+const TAFSIR_EDITIONS_TIMEOUT_MS = 12_000;
+const tafsirEditionsCatalogCache: { expiresAt: number; items: ReturnType<typeof filterTafsirEditionsCatalog> } = {
+  expiresAt: 0,
+  items: [],
+};
+
+const fetchTafsirEditionsUpstream = async (path: string): Promise<{ ok: boolean; status: number; payload: any }> => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), TAFSIR_EDITIONS_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(`${TAFSIR_EDITIONS_API_BASE}${path}`, {
+      signal: controller.signal,
+      headers: { Accept: 'application/json' },
+    });
+    const payload = await response.json().catch(() => null);
+    return { ok: response.ok, status: response.status, payload };
+  } catch (error: any) {
+    const aborted = error?.name === 'AbortError';
+    return {
+      ok: false,
+      status: aborted ? 504 : 503,
+      payload: { message: aborted ? 'Tafsir editions request timed out' : error?.message || 'Tafsir editions request failed' },
+    };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
+
+/**
+ * @route   GET /api/quran/tafsir/editions
+ * @desc    English, Urdu, and Hindi tafsir editions from api.hikmahsphere.site
+ * @access  Public
+ */
+router.get('/tafsir/editions', optionalAuthMiddleware, async (_req: any, res: any) => {
+  try {
+    if (tafsirEditionsCatalogCache.expiresAt > Date.now() && tafsirEditionsCatalogCache.items.length > 0) {
+      return res.json({
+        status: 'success',
+        data: tafsirEditionsCatalogCache.items,
+        source: 'tafsir-editions-cache',
+      });
+    }
+
+    const proxied = await fetchTafsirEditionsUpstream('/editions');
+    const filtered = filterTafsirEditionsCatalog(proxied.payload);
+    const items = filtered.length > 0 ? filtered : FALLBACK_TAFSIR_EDITIONS;
+
+    tafsirEditionsCatalogCache.expiresAt = Date.now() + 10 * 60 * 1000;
+    tafsirEditionsCatalogCache.items = items;
+
+    return res.json({
+      status: 'success',
+      data: items,
+      source: filtered.length > 0 ? 'tafsir-editions-api' : 'tafsir-editions-fallback',
+    });
+  } catch (error: any) {
+    return res.json({
+      status: 'success',
+      data: FALLBACK_TAFSIR_EDITIONS,
+      source: 'tafsir-editions-fallback',
+      message: error?.message || 'Using fallback tafsir editions',
+    });
+  }
+});
+
+/**
+ * @route   GET /api/quran/tafsir/editions/:slug/:surah/:ayah
+ * @desc    Single-ayah tafsir from api.hikmahsphere.site/editions/{slug}/{surah}/{ayah}
+ * @access  Public
+ */
+router.get('/tafsir/editions/:slug/:surah/:ayah', optionalAuthMiddleware, async (req: any, res: any) => {
+  try {
+    const slug = String(req.params.slug || '').trim();
+    const surahNumber = Number(req.params.surah);
+    const ayahNumber = Number(req.params.ayah);
+
+    if (!isValidEditionSlug(slug)) {
+      return res.status(400).json({ status: 'error', message: 'Invalid tafsir edition slug.' });
+    }
+    if (!Number.isInteger(surahNumber) || surahNumber < 1 || surahNumber > 114) {
+      return res.status(400).json({ status: 'error', message: 'Invalid surah number. Must be between 1 and 114.' });
+    }
+    if (!Number.isInteger(ayahNumber) || ayahNumber < 1) {
+      return res.status(400).json({ status: 'error', message: 'Invalid ayah number. Must be a positive integer.' });
+    }
+
+    const proxied = await fetchTafsirEditionsUpstream(buildEditionAyahPath(slug, surahNumber, ayahNumber));
+    if (!proxied.ok) {
+      return res.status(proxied.status || 502).json({
+        status: 'error',
+        message: proxied.payload?.message || 'Failed to load tafsir ayah',
+      });
+    }
+
+    return res.json({
+      status: 'success',
+      data: normalizeEditionAyahPayload(proxied.payload, surahNumber, ayahNumber),
+      source: 'tafsir-editions-api',
+    });
+  } catch (error: any) {
+    return res.status(503).json({
+      status: 'error',
+      message: 'Tafsir editions API is unreachable.',
+      details: error?.message || String(error),
+    });
+  }
+});
+
+/**
+ * @route   GET /api/quran/tafsir/editions/:slug/:surah
+ * @desc    Full-surah tafsir when the editions API supports it
+ * @access  Public
+ */
+router.get('/tafsir/editions/:slug/:surah', optionalAuthMiddleware, async (req: any, res: any) => {
+  try {
+    const slug = String(req.params.slug || '').trim();
+    const surahNumber = Number(req.params.surah);
+
+    if (!isValidEditionSlug(slug)) {
+      return res.status(400).json({ status: 'error', message: 'Invalid tafsir edition slug.' });
+    }
+    if (!Number.isInteger(surahNumber) || surahNumber < 1 || surahNumber > 114) {
+      return res.status(400).json({ status: 'error', message: 'Invalid surah number. Must be between 1 and 114.' });
+    }
+
+    const proxied = await fetchTafsirEditionsUpstream(buildEditionSurahPath(slug, surahNumber));
+    if (!proxied.ok) {
+      return res.status(proxied.status || 404).json({
+        status: 'error',
+        message: proxied.payload?.message || 'Full-surah tafsir is not available for this edition',
+      });
+    }
+
+    const normalized = normalizeEditionSurahPayload(proxied.payload, surahNumber);
+    if (normalized.ayahs.length === 0) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Full-surah tafsir is not available for this edition',
+      });
+    }
+
+    return res.json({
+      status: 'success',
+      data: normalized,
+      source: 'tafsir-editions-api',
+    });
+  } catch (error: any) {
+    return res.status(503).json({
+      status: 'error',
+      message: 'Tafsir editions API is unreachable.',
+      details: error?.message || String(error),
+    });
+  }
+});
 
 const getRequestedEdition = (value: unknown): string | null => {
   if (typeof value !== 'string') return null;
@@ -706,11 +877,11 @@ const getRequestedEdition = (value: unknown): string | null => {
   return normalized || null;
 };
 
-const getTafsirProxyBase = (edition: string | null): string => {
+const getTafsirProxyBases = (edition: string | null): string[] => {
   if (edition === TAFHEEM_EDITION) {
-    return MAUDUDI_PROXY_API_BASE;
+    return MAUDUDI_UPSTREAM_CANDIDATES;
   }
-  return TAFSIR_PROXY_API_BASE;
+  return TAFSIR_UPSTREAM_CANDIDATES;
 };
 
 const tryLoadTafheemFixture = (): Record<string, any> | null => {
@@ -739,18 +910,11 @@ const proxyTafsirRequest = async (
   path: string,
   edition: string | null
 ): Promise<{ ok: boolean; status: number; payload: any }> => {
-  const base = getTafsirProxyBase(edition);
+  const bases = getTafsirProxyBases(edition);
   const useMaududiBase = edition === TAFHEEM_EDITION;
   // Maududi upstream typically does not use ?edition=; Bayan/other editions do.
   const query = !useMaududiBase && edition ? `?edition=${encodeURIComponent(edition)}` : '';
-  const response = await fetch(`${base}${path}${query}`);
-  const payload: any = await response.json().catch(() => null);
-
-  return {
-    ok: response.ok,
-    status: response.status,
-    payload,
-  };
+  return fetchFromTafsirUpstreams(path, query, bases);
 };
 
 /**
@@ -805,9 +969,9 @@ router.get('/tafsir/surah/:number', optionalAuthMiddleware, async (req: any, res
           }
     );
   } catch (error: any) {
-    return res.status(500).json({
+    return res.status(503).json({
       status: 'error',
-      message: 'Failed to fetch tafsir surah data',
+      message: 'Tafsir source is unreachable. Start the aws-vm tafsir server or restore its Tailscale tunnel.',
       details: error?.message || String(error),
     });
   }
@@ -875,9 +1039,9 @@ router.get('/tafsir/surah/:number/ayah/:ayahNumber', optionalAuthMiddleware, asy
           }
     );
   } catch (error: any) {
-    return res.status(500).json({
+    return res.status(503).json({
       status: 'error',
-      message: 'Failed to fetch tafsir ayah data',
+      message: 'Tafsir source is unreachable. Start the aws-vm tafsir server or restore its Tailscale tunnel.',
       details: error?.message || String(error),
     });
   }
@@ -896,13 +1060,7 @@ const proxyBayanTafsirPath = async (
   path: string,
   query = ''
 ): Promise<{ ok: boolean; status: number; payload: any }> => {
-  const response = await fetch(`${TAFSIR_PROXY_API_BASE}${path}${query}`);
-  const payload: any = await response.json().catch(() => null);
-  return {
-    ok: response.ok,
-    status: response.status,
-    payload,
-  };
+  return fetchFromTafsirUpstreams(path, query, TAFSIR_UPSTREAM_CANDIDATES);
 };
 
 const sendTafsirProxyError = (
@@ -938,9 +1096,9 @@ router.get('/tafsir/unified/surah/:number', optionalAuthMiddleware, async (req: 
 
     return res.json(wrapTafsirProxyPayload(proxied.payload));
   } catch (error: any) {
-    return res.status(500).json({
+    return res.status(503).json({
       status: 'error',
-      message: 'Failed to fetch unified tafsir surah data',
+      message: 'Tafsir source is unreachable. Start the aws-vm tafsir server or restore its Tailscale tunnel.',
       details: error?.message || String(error),
     });
   }
@@ -977,9 +1135,9 @@ router.get('/tafsir/unified/surah/:number/ayah/:ayahNumber', optionalAuthMiddlew
 
     return res.json(wrapTafsirProxyPayload(proxied.payload));
   } catch (error: any) {
-    return res.status(500).json({
+    return res.status(503).json({
       status: 'error',
-      message: 'Failed to fetch unified tafsir ayah data',
+      message: 'Tafsir source is unreachable. Start the aws-vm tafsir server or restore its Tailscale tunnel.',
       details: error?.message || String(error),
     });
   }
@@ -1007,9 +1165,9 @@ router.get('/tafsir/search', optionalAuthMiddleware, async (req: any, res: any) 
 
     return res.json(wrapTafsirProxyPayload(proxied.payload));
   } catch (error: any) {
-    return res.status(500).json({
+    return res.status(503).json({
       status: 'error',
-      message: 'Failed to search tafsir',
+      message: 'Tafsir source is unreachable. Start the aws-vm tafsir server or restore its Tailscale tunnel.',
       details: error?.message || String(error),
     });
   }
@@ -1029,9 +1187,9 @@ router.get('/tafsir/random', optionalAuthMiddleware, async (_req: any, res: any)
 
     return res.json(wrapTafsirProxyPayload(proxied.payload));
   } catch (error: any) {
-    return res.status(500).json({
+    return res.status(503).json({
       status: 'error',
-      message: 'Failed to fetch random tafsir',
+      message: 'Tafsir source is unreachable. Start the aws-vm tafsir server or restore its Tailscale tunnel.',
       details: error?.message || String(error),
     });
   }

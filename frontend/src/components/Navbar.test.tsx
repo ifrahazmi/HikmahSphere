@@ -21,11 +21,11 @@ jest.mock('./Notifications/NotificationBell', () => () => (
 
 jest.mock('./SettingsModal', () => () => null);
 
-const renderNavbar = () => {
+const renderNavbar = (user?: { name: string; email: string } | null) => {
   window.scrollTo = jest.fn();
   return render(
     <MemoryRouter>
-      <Navbar user={{ name: 'User', email: 'user@example.com' }} />
+      <Navbar user={user === undefined ? { name: 'User', email: 'user@example.com' } : user ?? undefined} />
     </MemoryRouter>
   );
 };
@@ -36,8 +36,15 @@ describe('Navbar layout', () => {
 
     expect(screen.getAllByLabelText('Notifications')).toHaveLength(2);
     expect(screen.getByLabelText('Toggle dark mode')).toBeInTheDocument();
-    expect(screen.getByLabelText('Settings')).toBeInTheDocument();
+    expect(screen.getAllByLabelText('Settings')).toHaveLength(2);
     expect(screen.getByLabelText('Open navigation menu')).toBeInTheDocument();
+  });
+
+  it('hides the settings button until the user is logged in', () => {
+    renderNavbar(null);
+
+    expect(screen.queryByLabelText('Settings')).not.toBeInTheDocument();
+    expect(screen.getByText('Sign In')).toBeInTheDocument();
   });
 
   it('stacks the version badge under the name without taking extra width', () => {

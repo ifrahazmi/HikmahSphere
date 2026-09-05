@@ -340,7 +340,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
       if (document.visibilityState === 'visible' && navigator.onLine) {
         void syncServerHistory();
       }
-    }, 60 * 1000);
+    }, 15 * 1000);
 
     const onVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
@@ -363,8 +363,14 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     const unsubscribe = onMessageListener((payload: MessagePayload) => {
       console.log('Received foreground message in Context: ', payload);
       const notification = createNotificationFromPayload(payload);
+      const alreadySeen = !shouldProcessNotification(notification);
 
-      if (!shouldProcessNotification(notification)) {
+      // Always merge into the in-app panel so a live prayer alert appears
+      // without refreshing the PWA.
+      addNotification(notification);
+      void syncServerHistory();
+
+      if (alreadySeen) {
         return;
       }
 
@@ -374,7 +380,6 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         playNotificationSound();
         showNativeNotification(payload);
       }
-      addNotification(notification);
 
       if (document.visibilityState !== 'visible') {
         return;
@@ -434,7 +439,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, [addNotification, isAdhanPayload, playNotificationSound, shouldProcessNotification, showNativeNotification]);
+  }, [addNotification, isAdhanPayload, playNotificationSound, shouldProcessNotification, showNativeNotification, syncServerHistory]);
 
   useEffect(() => {
     if (!('serviceWorker' in navigator)) {
@@ -447,12 +452,9 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
       }
 
       const notificationFromSw = createNotificationFromServiceWorkerPayload(event.data.payload);
-
-      if (!shouldProcessNotification(notificationFromSw)) {
-        return;
-      }
-
+      shouldProcessNotification(notificationFromSw);
       addNotification(notificationFromSw);
+      void syncServerHistory();
     };
 
     navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
@@ -460,7 +462,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     return () => {
       navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
     };
-  }, [addNotification, shouldProcessNotification]);
+  }, [addNotification, shouldProcessNotification, syncServerHistory]);
 
   const markAsRead = useCallback(async (id: string) => {
     setNotifications(prev => 
@@ -547,10 +549,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
       data
     };
 
-    if (!shouldProcessNotification(notification)) {
-      return;
-    }
-
+    shouldProcessNotification(notification);
     addNotification(notification);
 
     // Skip OS tray for Adhan — FCM/service worker owns the single system popup.

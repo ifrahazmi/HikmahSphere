@@ -37,6 +37,7 @@ const PrayerAdhanScheduler: React.FC = () => {
           typeof push.times === 'object'
         ) {
           writeTodayAdhanTimes(push.times);
+          setTimes(readTodayAdhanTimes());
         }
       } catch {
         // Best-effort hydration; Prayer Times page still writes local times.

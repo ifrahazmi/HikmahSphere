@@ -33,7 +33,6 @@ const NotificationBell: React.FC = () => {
 
   const handleMarkAllAsRead = () => {
     markAllAsRead();
-    toast.success('All notifications marked as read');
   };
 
   const handleViewHistory = () => {

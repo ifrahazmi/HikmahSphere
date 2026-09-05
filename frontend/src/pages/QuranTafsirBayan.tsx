@@ -16,6 +16,7 @@ import {
   TrashIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
+import { toast } from 'react-hot-toast';
 import LoadingSpinner from '../components/LoadingSpinner';
 import PageSEO from '../components/PageSEO';
 import { useQuran } from '../contexts/QuranContext';
@@ -27,14 +28,35 @@ import { fetchJsonWithRecovery, isRateLimitError } from '../utils/fetchWithRecov
 import {
   fetchRandomTafsir,
   fetchTafsirAyah,
+  fetchTafsirEditions,
   fetchTafsirSurah,
   fetchUnifiedAyah,
   fetchUnifiedSurah,
   getTafsirRuntimeIssue,
   searchTafsir,
 } from '../utils/tafsirBayanApi';
-import type { TafsirAyah, TafsirSearchHit } from '../types/tafsir';
-import { BOOKMARK_COLOR_OPTIONS, DEFAULT_TAFSIR_TRANSLATION_PREFERENCES, DEFAULT_TRANSLATIONS, DEFAULT_URDU_TRANSLATION, type BookmarkColor, type SurahData, type TafsirEdition } from '../types/quran';
+import type { TafsirAyah, TafsirEditionMeta, TafsirSearchHit } from '../types/tafsir';
+import { BOOKMARK_COLOR_OPTIONS, DEFAULT_TRANSLATIONS, DEFAULT_URDU_TRANSLATION, isQuranTranslationLanguage, type BookmarkColor, type SurahData, type TafsirEdition } from '../types/quran';
+import {
+  BAYAN_EDITION_SLUG,
+  FALLBACK_TAFSIR_EDITIONS,
+  MAUDUDI_URDU_SLUG,
+  UNIFIED_TAFSIR_EDITION,
+  filterCommentaryTafsirEditions,
+  getEditionDisplayLabel,
+  getTafsirLanguageFromSlug,
+  getTafsirTextDirection,
+  getTranslationDisplayStyle,
+  groupEditionsByLanguage,
+  isEditionsApiTranslation,
+  isUnifiedTafsirEdition,
+} from '../utils/tafsirEditions';
+import {
+  getBookmarkBlockStyle as getThemeBookmarkBlockStyle,
+  getBookmarkListBlockStyle as getThemeBookmarkListBlockStyle,
+  getBookmarkSwatchClass as getThemeBookmarkSwatchClass,
+  getBookmarkSwatchSelectedClass,
+} from '../utils/quranBookmarkStyles';
 
 interface DisplayAyah {
   ayahNumber: number;
@@ -76,14 +98,11 @@ const AREA_BACKGROUND_OPTIONS = [
   { label: 'Soft Peach', value: '#fff7ed', swatchClass: 'bg-orange-50' },
 ];
 
-const TAFSIR_EDITION_OPTIONS: Array<{ value: TafsirEdition; label: string }> = [
-  { value: 'bayan-ul-quran-dr-israr-ahmed', label: 'Bayan-ul-Quran by Dr Israr Ahmed' },
-  { value: 'tafheem-ul-quran-syed-abu-ala-maududi', label: "Tafheem e Qur'an - Syed Abu Ala Maududi" },
-];
-
-const UNIFIED_TAFSIR_OPTION: { value: TafsirEdition; label: string } = {
-  value: 'unified-bayan-maududi',
-  label: 'Both (Bayan + Tafheem)',
+const UNIFIED_TAFSIR_OPTION: TafsirEditionMeta = {
+  slug: UNIFIED_TAFSIR_EDITION,
+  name: 'Both (Bayan + Tafheem)',
+  author_name: '',
+  language_name: 'urdu',
 };
 
 const TAFSIR_OF_THE_DAY_KEY = 'tafsirOfTheDay';
@@ -172,6 +191,7 @@ const QuranTafsirBayan: React.FC = () => {
   const [settingsTab, setSettingsTab] = useState<'display' | 'bookmarks'>('display');
   const [mobileSearchTab, setMobileSearchTab] = useState<'surah' | 'tafsir'>('surah');
   const [tafsirSearch, setTafsirSearch] = useState('');
+  const [tafsirEditionCatalog, setTafsirEditionCatalog] = useState<TafsirEditionMeta[]>(FALLBACK_TAFSIR_EDITIONS);
   const [tafsirSearchHits, setTafsirSearchHits] = useState<TafsirSearchHit[]>([]);
   const [tafsirSearchLoading, setTafsirSearchLoading] = useState(false);
   const [tafsirSearchError, setTafsirSearchError] = useState<string | null>(null);
@@ -319,21 +339,18 @@ const QuranTafsirBayan: React.FC = () => {
       }));
 
   const translationOptions = useMemo(() => {
-    return DEFAULT_TRANSLATIONS.filter(
-      (translation) => translation.language === 'English' || translation.language === 'Urdu'
-    );
+    return DEFAULT_TRANSLATIONS.filter((translation) => isQuranTranslationLanguage(translation.language));
   }, []);
 
   const selectedTranslation = settings.selectedTranslations[0] || DEFAULT_URDU_TRANSLATION.identifier;
-  const tafsirEdition = settings.tafsirEdition || 'bayan-ul-quran-dr-israr-ahmed';
-  const tafsirExtrasEnabled = settings.tafsirExtrasEnabled === true;
-  const visibleTafsirEditionOptions = useMemo(
-    () => (tafsirExtrasEnabled ? [...TAFSIR_EDITION_OPTIONS, UNIFIED_TAFSIR_OPTION] : TAFSIR_EDITION_OPTIONS),
-    [tafsirExtrasEnabled]
-  );
-  const preferredTafsirTranslation =
-    settings.tafsirTranslationPreferences[tafsirEdition]
-    || DEFAULT_TAFSIR_TRANSLATION_PREFERENCES[tafsirEdition];
+  const tafsirEdition = settings.tafsirEdition || BAYAN_EDITION_SLUG;
+  const tafsirExtrasEnabled = false;
+  const visibleTafsirEditionOptions = useMemo(() => {
+    const catalog = filterCommentaryTafsirEditions(
+      tafsirEditionCatalog.length > 0 ? tafsirEditionCatalog : FALLBACK_TAFSIR_EDITIONS
+    );
+    return tafsirExtrasEnabled ? [...catalog, UNIFIED_TAFSIR_OPTION] : catalog;
+  }, [tafsirEditionCatalog, tafsirExtrasEnabled]);
   const tafsirFontSize = settings.tafsirFontSize ?? 26;
   const textAreaBackgroundColor = settings.tafsirTextAreaBackground || DEFAULT_TEXT_AREA_BG;
   const tafsirAreaBackgroundColor = settings.tafsirAreaBackground || DEFAULT_TAFSIR_AREA_BG;
@@ -346,28 +363,18 @@ const QuranTafsirBayan: React.FC = () => {
   const setSelectedTranslation = useCallback((value: string) => {
     updateSettings({
       selectedTranslations: [value],
-      tafsirTranslationPreferences: {
-        ...settings.tafsirTranslationPreferences,
-        [tafsirEdition]: value,
-      },
       arabicOnlyMode: false,
     });
-  }, [settings.tafsirTranslationPreferences, tafsirEdition, updateSettings]);
+  }, [updateSettings]);
 
   const setTafsirEdition = useCallback((value: string) => {
-    const matchedOption = visibleTafsirEditionOptions.find((option) => option.value === value);
+    const matchedOption = visibleTafsirEditionOptions.find((option) => option.slug === value);
     if (!matchedOption) return;
 
-    const nextPreferredTranslation =
-      settings.tafsirTranslationPreferences[matchedOption.value]
-      || DEFAULT_TAFSIR_TRANSLATION_PREFERENCES[matchedOption.value];
-
     updateSettings({
-      tafsirEdition: matchedOption.value,
-      selectedTranslations: [nextPreferredTranslation],
-      arabicOnlyMode: false,
+      tafsirEdition: matchedOption.slug,
     });
-  }, [settings.tafsirTranslationPreferences, updateSettings, visibleTafsirEditionOptions]);
+  }, [updateSettings, visibleTafsirEditionOptions]);
 
   const setTafsirExtrasEnabled = useCallback((enabled: boolean) => {
     if (!enabled) {
@@ -378,22 +385,22 @@ const QuranTafsirBayan: React.FC = () => {
       tafsirExtrasEnabled: enabled,
       ...(enabled
         ? {}
-        : tafsirEdition === 'unified-bayan-maududi'
-          ? { tafsirEdition: 'bayan-ul-quran-dr-israr-ahmed' as TafsirEdition }
+        : isUnifiedTafsirEdition(tafsirEdition)
+          ? { tafsirEdition: BAYAN_EDITION_SLUG as TafsirEdition }
           : {}),
     });
   }, [tafsirEdition, updateSettings]);
 
-  useEffect(() => {
-    if (selectedTranslation === preferredTafsirTranslation) {
-      return;
-    }
+  const handleNewTafsirToolsClick = useCallback(() => {
+    toast.success('Coming soon');
+  }, []);
 
-    updateSettings({
-      selectedTranslations: [preferredTafsirTranslation],
-      arabicOnlyMode: false,
-    });
-  }, [preferredTafsirTranslation, selectedTranslation, updateSettings]);
+  useEffect(() => {
+    if (!settingsReady) return;
+    if (settings.tafsirExtrasEnabled || isUnifiedTafsirEdition(tafsirEdition)) {
+      setTafsirExtrasEnabled(false);
+    }
+  }, [setTafsirExtrasEnabled, settings.tafsirExtrasEnabled, settingsReady, tafsirEdition]);
 
   const setTafsirFontSize = useCallback((value: React.SetStateAction<number>) => {
     const resolved = typeof value === 'function' ? value(tafsirFontSize) : value;
@@ -412,20 +419,32 @@ const QuranTafsirBayan: React.FC = () => {
     updateSettings({ tafsirTextColor: value });
   }, [updateSettings]);
 
-  const tafsirEditionLabel = useMemo(() => {
-    if (tafsirEdition === 'unified-bayan-maududi') {
-      return UNIFIED_TAFSIR_OPTION.label;
-    }
-    if (tafsirEdition === 'tafheem-ul-quran-syed-abu-ala-maududi') {
-      return "Tafheem e Qur'an - Syed Abu Ala Maududi";
-    }
-    return 'Bayan-ul-Quran by Dr Israr Ahmed';
-  }, [tafsirEdition]);
+  const tafsirEditionMeta = useMemo(
+    () => visibleTafsirEditionOptions.find((option) => option.slug === tafsirEdition),
+    [tafsirEdition, visibleTafsirEditionOptions]
+  );
+  const tafsirEditionLabel = useMemo(
+    () => getEditionDisplayLabel(tafsirEditionMeta || { slug: tafsirEdition, name: tafsirEdition }),
+    [tafsirEdition, tafsirEditionMeta]
+  );
+  const tafsirLanguage = getTafsirLanguageFromSlug(tafsirEdition, visibleTafsirEditionOptions);
+  const tafsirTextDirection = getTafsirTextDirection(tafsirLanguage);
+  const isTafheemEdition = tafsirEdition === MAUDUDI_URDU_SLUG || tafsirEdition === 'tafheem-ul-quran-syed-abu-ala-maududi';
+  const isUnifiedEdition = isUnifiedTafsirEdition(tafsirEdition);
 
-  const isTafheemEdition = tafsirEdition === 'tafheem-ul-quran-syed-abu-ala-maududi';
-  const isUnifiedEdition = tafsirEdition === 'unified-bayan-maududi';
+  const translationDisplayStyle = getTranslationDisplayStyle(selectedTranslationMeta?.language);
 
-  const isTranslationUrdu = selectedTranslationMeta?.language === 'Urdu';
+  useEffect(() => {
+    let cancelled = false;
+    void fetchTafsirEditions().then((editions) => {
+      if (!cancelled && editions.length > 0) {
+        setTafsirEditionCatalog(filterCommentaryTafsirEditions(editions));
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const filteredSurahs = useMemo(() => {
     return surahs.filter((surah) => {
@@ -492,48 +511,21 @@ const QuranTafsirBayan: React.FC = () => {
   );
 
   const getBookmarkSwatchClass = useCallback((color: BookmarkColor): string => {
-    const swatchMap: Record<BookmarkColor, string> = {
-      emerald: 'bg-emerald-600',
-      red: 'bg-red-600',
-      teal: 'bg-teal-600',
-      indigo: 'bg-indigo-600',
-      blue: 'bg-blue-600',
-      purple: 'bg-purple-600',
-      amber: 'bg-amber-600',
-      rose: 'bg-rose-600',
-    };
-    return swatchMap[color] || 'bg-emerald-600';
+    return getThemeBookmarkSwatchClass(color);
   }, []);
-
-  const getBookmarkTint = useCallback(
-    (color: BookmarkColor) => {
-      const tintMap: Record<BookmarkColor, { light: string; dark: string; border: string }> = {
-        emerald: { light: '16, 185, 129', dark: '16, 185, 129', border: '16, 185, 129' },
-        red: { light: '220, 38, 38', dark: '248, 113, 113', border: '220, 38, 38' },
-        teal: { light: '13, 148, 136', dark: '45, 212, 191', border: '13, 148, 136' },
-        indigo: { light: '79, 70, 229', dark: '129, 140, 248', border: '79, 70, 229' },
-        blue: { light: '37, 99, 235', dark: '96, 165, 250', border: '37, 99, 235' },
-        purple: { light: '147, 51, 234', dark: '196, 181, 253', border: '147, 51, 234' },
-        amber: { light: '217, 119, 6', dark: '251, 191, 36', border: '217, 119, 6' },
-        rose: { light: '225, 29, 72', dark: '251, 113, 133', border: '225, 29, 72' },
-      };
-      return tintMap[color] || tintMap.emerald;
-    },
-    []
-  );
 
   const getBookmarkBlockStyle = useCallback(
     (color: BookmarkColor | undefined, opacityLight: number, opacityDark: number): React.CSSProperties | undefined => {
-      if (!color) return undefined;
-      const tint = getBookmarkTint(color);
-      const isDark = settings.theme === 'dark';
-
-      return {
-        backgroundColor: `rgba(${isDark ? tint.dark : tint.light}, ${isDark ? opacityDark : opacityLight})`,
-        borderColor: `rgba(${tint.border}, ${isDark ? 0.65 : 0.35})`,
-      };
+      return getThemeBookmarkBlockStyle(color, settings.theme, opacityLight, opacityDark);
     },
-    [getBookmarkTint, settings.theme]
+    [settings.theme]
+  );
+
+  const getBookmarkListBlockStyle = useCallback(
+    (color: BookmarkColor | undefined, opacityLight: number, opacityDark: number): React.CSSProperties | undefined => {
+      return getThemeBookmarkListBlockStyle(color, settings.theme, opacityLight, opacityDark);
+    },
+    [settings.theme]
   );
 
   const getBookmarkByAyah = useCallback(
@@ -809,6 +801,26 @@ const QuranTafsirBayan: React.FC = () => {
       return map;
     };
 
+    if (isEditionsApiTranslation(translationIdentifier)) {
+      const cacheKey = `${surahNumber}|${translationIdentifier}`;
+      const cachedMap = translationMapCacheRef.current.get(cacheKey);
+      if (cachedMap) {
+        return cachedMap;
+      }
+
+      const editionSurah = await fetchTafsirSurah(
+        surahNumber,
+        translationIdentifier,
+        activeSurahMeta?.numberOfAyahs
+      );
+      const parsedMap = new Map<number, string>();
+      editionSurah.ayahs.forEach((ayah) => {
+        parsedMap.set(ayah.ayah, ayah.text || '');
+      });
+      translationMapCacheRef.current.set(cacheKey, parsedMap);
+      return parsedMap;
+    }
+
     const cacheKey = `${surahNumber}|${translationIdentifier}`;
     const cachedMap = translationMapCacheRef.current.get(cacheKey);
     if (cachedMap) {
@@ -864,16 +876,14 @@ const QuranTafsirBayan: React.FC = () => {
       translationMapCacheRef.current.set(cacheKey, parsedMap);
       return parsedMap;
     }
-  }, [currentSurah, translations]);
+  }, [activeSurahMeta?.numberOfAyahs, currentSurah, translations]);
 
   const buildDisplayAyahs = useCallback(async () => {
     const surahNumber = selectedSurah;
     const translationIdentifier = selectedTranslation;
     const selectedTafsirEdition = tafsirEdition;
-    const useUnifiedTafsir = selectedTafsirEdition === 'unified-bayan-maududi';
-    const useTafheemApiTranslation =
-      selectedTafsirEdition === 'tafheem-ul-quran-syed-abu-ala-maududi'
-      && translationIdentifier === 'ur.maududi';
+    const useUnifiedTafsir = isUnifiedTafsirEdition(selectedTafsirEdition);
+    const ayahCount = activeSurahMeta?.numberOfAyahs;
 
     if (readerMode === 'ayah') {
       const [arabicAyah, translationMap, tafsirAyah, unifiedAyah] = await Promise.all([
@@ -890,17 +900,14 @@ const QuranTafsirBayan: React.FC = () => {
       const derivedArabicText =
         arabicAyah.text || (Array.isArray(arabicAyah.words) ? arabicAyah.words.map((word) => word.text).join(' ') : '');
       const ayahNumber = unifiedAyah?.ayah || tafsirAyah?.ayah || selectedAyah;
-      const translationSource = unifiedAyah?.maududi || tafsirAyah;
 
       return [
         {
           ayahNumber,
           arabicText: derivedArabicText,
-          translationText: useTafheemApiTranslation
-            ? (translationSource?.translationPlain || stripHtml(translationSource?.translationHtml || '') || translationMap.get(ayahNumber) || '')
-            : (translationMap.get(ayahNumber) || translationSource?.translationPlain || stripHtml(translationSource?.translationHtml || '') || ''),
-          translationHtml: useTafheemApiTranslation ? translationSource?.translationHtml : undefined,
-          translationPlain: useTafheemApiTranslation ? translationSource?.translationPlain : undefined,
+          translationText: translationMap.get(ayahNumber) || '',
+          translationHtml: undefined,
+          translationPlain: undefined,
           footnotes: unifiedAyah?.maududi.footnotes || tafsirAyah?.footnotes || {},
           tafsirText: unifiedAyah?.bayan.text || tafsirAyah?.text || '',
           bayanTafsirText: unifiedAyah?.bayan.text,
@@ -915,9 +922,9 @@ const QuranTafsirBayan: React.FC = () => {
       fetchTranslationMap(surahNumber, translationIdentifier),
       useUnifiedTafsir
         ? Promise.resolve(null)
-        : fetchTafsirSurah(surahNumber, selectedTafsirEdition),
+        : fetchTafsirSurah(surahNumber, selectedTafsirEdition, ayahCount),
       useUnifiedTafsir
-        ? fetchUnifiedSurah(surahNumber)
+        ? fetchUnifiedSurah(surahNumber, ayahCount)
         : Promise.resolve(null),
     ]);
 
@@ -937,7 +944,7 @@ const QuranTafsirBayan: React.FC = () => {
         .map((ayah) => ({
           ayahNumber: ayah.ayah,
           arabicText: arabicMap.get(ayah.ayah) || '',
-          translationText: translationMap.get(ayah.ayah) || ayah.maududi.translationPlain || stripHtml(ayah.maududi.translationHtml || '') || '',
+          translationText: translationMap.get(ayah.ayah) || '',
           footnotes: ayah.maududi.footnotes || {},
           tafsirText: ayah.bayan.text,
           bayanTafsirText: ayah.bayan.text,
@@ -956,15 +963,13 @@ const QuranTafsirBayan: React.FC = () => {
       .map((ayah) => ({
         ayahNumber: ayah.ayah,
         arabicText: arabicMap.get(ayah.ayah) || '',
-        translationText: useTafheemApiTranslation
-          ? (ayah.translationPlain || stripHtml(ayah.translationHtml || '') || translationMap.get(ayah.ayah) || '')
-          : (translationMap.get(ayah.ayah) || ayah.translationPlain || stripHtml(ayah.translationHtml || '') || ''),
-        translationHtml: useTafheemApiTranslation ? ayah.translationHtml : undefined,
-        translationPlain: useTafheemApiTranslation ? ayah.translationPlain : undefined,
+        translationText: translationMap.get(ayah.ayah) || '',
+        translationHtml: undefined,
+        translationPlain: undefined,
         footnotes: ayah.footnotes || {},
         tafsirText: ayah.text,
       }));
-  }, [fetchTranslationMap, readerMode, selectedAyah, selectedSurah, selectedTranslation, tafsirEdition]);
+  }, [activeSurahMeta?.numberOfAyahs, fetchTranslationMap, readerMode, selectedAyah, selectedSurah, selectedTranslation, tafsirEdition]);
 
   const handleFetch = useCallback(
     async () => {
@@ -1022,15 +1027,8 @@ const QuranTafsirBayan: React.FC = () => {
       setLoading(true);
       return;
     }
-    // Wait until the active translation is aligned with the current tafsir edition's
-    // preferred translation. This prevents a Maududi tafsir from briefly rendering
-    // next to the previous edition's translation while the alignment effect catches up.
-    if (selectedTranslation !== preferredTafsirTranslation) {
-      setLoading(true);
-      return;
-    }
     void handleFetch();
-  }, [handleFetch, settingsReady, selectedTranslation, preferredTafsirTranslation]);
+  }, [handleFetch, settingsReady]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -1427,9 +1425,10 @@ const QuranTafsirBayan: React.FC = () => {
                       : 'Translation'}
                   </h3>
                   <p
-                    dir={isTranslationUrdu ? 'rtl' : 'ltr'}
+                    dir={translationDisplayStyle.dir}
+                    lang={translationDisplayStyle.lang}
                     style={{ fontSize: `${settings.translationFontSize}px` }}
-                    className={`${isTranslationUrdu ? 'quran-urdu-translation font-jameel-noori text-right' : 'text-left leading-8'} ${settings.theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}
+                    className={`${translationDisplayStyle.className} ${settings.theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}
                     onTouchStart={(event) => beginBookmarkGesture(event, ayah.ayahNumber)}
                     onTouchMove={(event) => trackBookmarkGestureMove(event, ayah.ayahNumber)}
                     onTouchEnd={(event) => finishBookmarkGesture(event, ayah.ayahNumber)}
@@ -1619,11 +1618,11 @@ const QuranTafsirBayan: React.FC = () => {
                     </div>
                   ) : (
                     <p
-                      dir="rtl"
-                      lang="ur"
+                      dir={tafsirTextDirection}
+                      lang={tafsirLanguage === 'urdu' ? 'ur' : tafsirLanguage === 'hindi' ? 'hi' : 'en'}
                       style={{
                         fontSize: `${tafsirFontSize}px`,
-                        textAlign: 'justify',
+                        textAlign: tafsirTextDirection === 'rtl' ? 'justify' : 'left',
                         textJustify: 'inter-word',
                         lineHeight: 2.2,
                         wordSpacing: '0.03em',
@@ -1633,7 +1632,11 @@ const QuranTafsirBayan: React.FC = () => {
                         fontFeatureSettings: '"liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1',
                         color: resolvedTafsirTextColor,
                       }}
-                      className="quran-urdu-tafsir font-alvi-nastaleeq"
+                      className={
+                        tafsirLanguage === 'urdu'
+                          ? 'quran-urdu-tafsir font-alvi-nastaleeq'
+                          : 'text-left whitespace-pre-wrap'
+                      }
                       onTouchStart={(event) => beginBookmarkGesture(event, ayah.ayahNumber)}
                       onTouchMove={(event) => trackBookmarkGestureMove(event, ayah.ayahNumber)}
                       onTouchEnd={(event) => finishBookmarkGesture(event, ayah.ayahNumber)}
@@ -1660,7 +1663,9 @@ const QuranTafsirBayan: React.FC = () => {
       isBookmarked,
       isTafheemEdition,
       isUnifiedEdition,
-      isTranslationUrdu,
+      tafsirLanguage,
+      tafsirTextDirection,
+      translationDisplayStyle,
       settings.fontSize,
       settings.theme,
       settings.translationFontSize,
@@ -1760,7 +1765,7 @@ const QuranTafsirBayan: React.FC = () => {
                 <div className="min-w-0 flex items-center justify-center gap-1.5">
                   <BookOpenIcon className="h-3.5 w-3.5 text-emerald-600 flex-shrink-0" />
                   <h1 className={`text-base font-bold leading-none truncate ${settings.theme === 'dark' ? 'text-white' : 'text-gray-800'}`} style={{ fontFamily: 'Lora, serif' }}>
-                    {isUnifiedEdition ? 'Both Tafsirs' : isTafheemEdition ? 'Tafheem e Qur\'an' : 'Bayan-ul-Quran'}
+                    {isUnifiedEdition ? 'Both Tafsirs' : tafsirEditionLabel}
                   </h1>
                 </div>
 
@@ -2025,31 +2030,43 @@ const QuranTafsirBayan: React.FC = () => {
                         onChange={(event) => setTafsirEdition(event.target.value)}
                         className={`w-full rounded-md border px-2 py-2 text-xs ${settings.theme === 'dark' ? 'border-gray-600 bg-gray-700 text-white' : 'border-gray-300 bg-white text-gray-900'}`}
                       >
-                        {visibleTafsirEditionOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
+                        {groupEditionsByLanguage(visibleTafsirEditionOptions.filter((option) => option.slug !== UNIFIED_TAFSIR_EDITION)).map((group) => (
+                          <optgroup key={group.language} label={group.label}>
+                            {group.editions.map((option) => (
+                              <option key={option.slug} value={option.slug}>
+                                {getEditionDisplayLabel(option)}
+                              </option>
+                            ))}
+                          </optgroup>
                         ))}
+                        {tafsirExtrasEnabled && (
+                          <option value={UNIFIED_TAFSIR_EDITION}>{UNIFIED_TAFSIR_OPTION.name}</option>
+                        )}
                       </select>
                     </div>
 
                     <div className={`rounded-md border px-2.5 py-2 ${settings.theme === 'dark' ? 'border-gray-600 bg-gray-700/60' : 'border-gray-200 bg-gray-50'}`}>
-                      <label className="flex items-start gap-2 cursor-pointer">
+                      <button
+                        type="button"
+                        onClick={handleNewTafsirToolsClick}
+                        className="flex w-full items-start gap-2 text-left"
+                      >
                         <input
                           type="checkbox"
-                          checked={tafsirExtrasEnabled}
-                          onChange={(event) => setTafsirExtrasEnabled(event.target.checked)}
-                          className="mt-0.5 h-3.5 w-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                          checked={false}
+                          readOnly
+                          disabled
+                          className="pointer-events-none mt-0.5 h-3.5 w-3.5 rounded border-gray-300 text-emerald-600 opacity-50"
                         />
                         <span>
                           <span className={`block text-xs font-medium ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
                             New Tafsir tools
                           </span>
                           <span className={`block text-[11px] leading-4 ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                            Both tafsirs, text search, and Tafsir of the Day
+                            Coming soon
                           </span>
                         </span>
-                      </label>
+                      </button>
                     </div>
 
                     <div>
@@ -2231,7 +2248,7 @@ const QuranTafsirBayan: React.FC = () => {
                             <div
                               key={bookmark.id}
                               className="rounded-md border p-2"
-                              style={getBookmarkBlockStyle(bookmark.color, 0.12, 0.22)}
+                              style={getBookmarkListBlockStyle(bookmark.color, 0.12, 0.22)}
                             >
                               <div className="flex items-start justify-between gap-2">
                                 <button
@@ -2633,13 +2650,13 @@ const QuranTafsirBayan: React.FC = () => {
                 {showMobileTafsirPicker && (
                   <div className={`mt-2 max-h-56 overflow-y-auto rounded-md border p-1.5 space-y-1 ${settings.theme === 'dark' ? 'border-gray-600 bg-gray-800' : 'border-gray-200 bg-white'}`}>
                     {visibleTafsirEditionOptions.map((option) => {
-                      const isSelected = tafsirEdition === option.value;
+                      const isSelected = tafsirEdition === option.slug;
                       return (
                         <button
-                          key={`mobile-tafsir-${option.value}`}
+                          key={`mobile-tafsir-${option.slug}`}
                           type="button"
                           onClick={() => {
-                            setTafsirEdition(option.value);
+                            setTafsirEdition(option.slug);
                             setShowMobileTafsirPicker(false);
                           }}
                           className={`w-full rounded-md px-2.5 py-2 text-left text-sm ${
@@ -2652,7 +2669,9 @@ const QuranTafsirBayan: React.FC = () => {
                               : 'text-gray-800 hover:bg-gray-100'
                           }`}
                         >
-                          {option.label}
+                          {option.language_name !== 'urdu' || option.slug === UNIFIED_TAFSIR_EDITION
+                            ? `${option.language_name === 'english' ? 'English' : option.language_name === 'hindi' ? 'Hindi' : 'Urdu'} — ${getEditionDisplayLabel(option)}`
+                            : getEditionDisplayLabel(option)}
                         </button>
                       );
                     })}
@@ -2660,22 +2679,27 @@ const QuranTafsirBayan: React.FC = () => {
                 )}
               </div>
 
-              <label className={`flex items-start gap-3 rounded-lg px-3 py-3 ${settings.theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'}`}>
+              <button
+                type="button"
+                onClick={handleNewTafsirToolsClick}
+                className={`flex w-full items-start gap-3 rounded-lg px-3 py-3 text-left ${settings.theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'}`}
+              >
                 <input
                   type="checkbox"
-                  checked={tafsirExtrasEnabled}
-                  onChange={(event) => setTafsirExtrasEnabled(event.target.checked)}
-                  className="mt-1 h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                  checked={false}
+                  readOnly
+                  disabled
+                  className="pointer-events-none mt-1 h-4 w-4 rounded border-gray-300 text-emerald-600 opacity-50"
                 />
                 <span>
                   <span className={`block text-sm font-medium ${settings.theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
                     New Tafsir tools
                   </span>
                   <span className={`block text-xs leading-5 ${settings.theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                    Both tafsirs, text search, and Tafsir of the Day
+                    Coming soon
                   </span>
                 </span>
-              </label>
+              </button>
 
               <button
                 onClick={() => updateSettings({ theme: settings.theme === 'light' ? 'dark' : 'light' })}
@@ -2805,7 +2829,7 @@ const QuranTafsirBayan: React.FC = () => {
                     <div
                       key={bookmark.id}
                       className="rounded-lg border p-3"
-                      style={getBookmarkBlockStyle(bookmark.color, 0.14, 0.24)}
+                      style={getBookmarkListBlockStyle(bookmark.color, 0.14, 0.24)}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <button
@@ -3062,7 +3086,9 @@ const QuranTafsirBayan: React.FC = () => {
                           key={color}
                           onClick={() => setBookmarkConfirm({ ...bookmarkConfirm, color })}
                           className={`w-9 h-9 rounded-lg border-2 transition-all transform hover:scale-110 ${
-                            bookmarkConfirm.color === color ? 'border-gray-900 scale-110' : 'border-transparent'
+                            bookmarkConfirm.color === color
+                              ? getBookmarkSwatchSelectedClass(settings.theme)
+                              : 'border-transparent'
                           } ${getBookmarkSwatchClass(color)}`}
                           title={color}
                         />
@@ -3146,7 +3172,9 @@ const QuranTafsirBayan: React.FC = () => {
                         key={color}
                         onClick={() => setBookmarkConfirm({ ...bookmarkConfirm, color })}
                         className={`w-8 h-8 rounded-lg border-2 transition-all transform hover:scale-110 ${
-                          bookmarkConfirm.color === color ? 'border-gray-900 scale-110' : 'border-transparent'
+                          bookmarkConfirm.color === color
+                            ? getBookmarkSwatchSelectedClass(settings.theme)
+                            : 'border-transparent'
                         } ${getBookmarkSwatchClass(color)}`}
                         title={color}
                       />
