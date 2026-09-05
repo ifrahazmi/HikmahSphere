@@ -22,7 +22,15 @@ import {
   DEFAULT_TRANSLATIONS,
   TafsirEdition,
   TafsirTranslationPreferences,
+  isQuranTranslationLanguage,
 } from '../types/quran';
+import { fetchTafsirSurah } from '../utils/tafsirBayanApi';
+import {
+  BAYAN_EDITION_SLUG,
+  editionTranslationToSurahData,
+  isEditionsApiTranslation,
+  migrateTafsirEdition,
+} from '../utils/tafsirEditions';
 
 const QuranContext = createContext<QuranContextType | undefined>(undefined);
 const TRANSLATION_AUDIO_SOURCES: Record<string, { baseUrl: string; label: string; provider: string }> = {
@@ -378,7 +386,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
   const normalizeSelectedTranslations = useCallback((value: unknown): string[] => {
     const supportedTranslations = new Set(
       DEFAULT_TRANSLATIONS
-        .filter((translation) => translation.language === 'English' || translation.language === 'Urdu')
+        .filter((translation) => isQuranTranslationLanguage(translation.language))
         .map((translation) => translation.identifier)
     );
 
@@ -386,10 +394,13 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       return [...DEFAULT_QURAN_SETTINGS.selectedTranslations];
     }
 
-    const firstSupportedTranslation = value.find(
-      (translation): translation is string =>
-        typeof translation === 'string' && supportedTranslations.has(translation)
-    );
+    const firstSupportedTranslation = value
+      .map((translation) => {
+        if (typeof translation !== 'string') return null;
+        if (translation === 'ur.maududi') return 'ur-maududi';
+        return translation;
+      })
+      .find((translation): translation is string => Boolean(translation && supportedTranslations.has(translation)));
 
     return firstSupportedTranslation
       ? [firstSupportedTranslation]
@@ -406,9 +417,12 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     }
 
     const rawPreferences = value as Partial<Record<TafsirEdition, unknown>>;
-    const editions = Object.keys(DEFAULT_TAFSIR_TRANSLATION_PREFERENCES) as TafsirEdition[];
+    const storedKeys = new Set([
+      ...Object.keys(DEFAULT_TAFSIR_TRANSLATION_PREFERENCES),
+      ...Object.keys(rawPreferences),
+    ]);
 
-    editions.forEach((edition) => {
+    storedKeys.forEach((edition) => {
       const rawPreference = rawPreferences[edition];
       if (typeof rawPreference !== 'string') {
         return;
@@ -444,23 +458,16 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
         ? 'indopak-nastaleeq-v3'
         : mergedSettings.arabicFont;
 
+    const extrasEnabled = mergedSettings.tafsirExtrasEnabled === true;
+    const migratedTafsirEdition = migrateTafsirEdition(mergedSettings.tafsirEdition, extrasEnabled) || BAYAN_EDITION_SLUG;
+
     return {
       ...mergedSettings,
       arabicFont: normalizedArabicFont,
       selectedTranslations: normalizeSelectedTranslations(mergedSettings.selectedTranslations),
       tafsirTranslationPreferences: normalizeTafsirTranslationPreferences(mergedSettings.tafsirTranslationPreferences),
-      tafsirExtrasEnabled: mergedSettings.tafsirExtrasEnabled === true,
-      tafsirEdition: (() => {
-        const extrasEnabled = mergedSettings.tafsirExtrasEnabled === true;
-        const edition = mergedSettings.tafsirEdition;
-        if (edition === 'unified-bayan-maududi') {
-          return extrasEnabled ? edition : 'bayan-ul-quran-dr-israr-ahmed';
-        }
-        if (edition === 'tafheem-ul-quran-syed-abu-ala-maududi' || edition === 'bayan-ul-quran-dr-israr-ahmed') {
-          return edition;
-        }
-        return DEFAULT_QURAN_SETTINGS.tafsirEdition;
-      })(),
+      tafsirExtrasEnabled: extrasEnabled,
+      tafsirEdition: migratedTafsirEdition,
       translationAudioEnabled:
         typeof mergedSettings.translationAudioEnabled === 'boolean'
           ? mergedSettings.translationAudioEnabled
@@ -685,7 +692,9 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
         if (settings.showTransliteration) {
           editions.push('en.transliteration');
         }
-        editions.push(...settings.selectedTranslations);
+        editions.push(
+          ...settings.selectedTranslations.filter((identifier) => !isEditionsApiTranslation(identifier))
+        );
       }
 
       const cacheKey = `${surahNumber}|${settings.arabicOnlyMode ? 'arabic' : 'mixed'}|${settings.showTransliteration ? 'translit' : 'plain'}|${settings.selectedTranslations.join(',')}`;
@@ -727,6 +736,21 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       
       if (data.status === 'success') {
         let fetchedEditions: SurahData[] = data.data;
+        const apiTranslationIds = settings.arabicOnlyMode
+          ? []
+          : settings.selectedTranslations.filter((identifier) => isEditionsApiTranslation(identifier));
+
+        if (apiTranslationIds.length > 0) {
+          const arabicTemplate = fetchedEditions[0];
+          const ayahCount = arabicTemplate?.numberOfAyahs || 0;
+          const apiEditions = await Promise.all(
+            apiTranslationIds.map(async (slug) => {
+              const editionSurah = await fetchTafsirSurah(surahNumber, slug, ayahCount || undefined);
+              return editionTranslationToSurahData(slug, surahNumber, editionSurah.ayahs, arabicTemplate);
+            })
+          );
+          fetchedEditions = [...fetchedEditions, ...apiEditions];
+        }
 
         surahEditionsCacheRef.current.set(cacheKey, fetchedEditions);
         if (surahEditionsCacheRef.current.size > 18) {
@@ -750,7 +774,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     } finally {
       setLoading(false);
     }
-  }, [settings.selectedTranslations, settings.showTransliteration, settings.arabicOnlyMode]);
+  }, [settings.arabicOnlyMode, settings.selectedTranslations, settings.showTransliteration]);
 
   // Update settings and reload if necessary
   const updateSettings = useCallback((newSettings: Partial<QuranSettings>) => {

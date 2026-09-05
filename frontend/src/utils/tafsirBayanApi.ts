@@ -1,6 +1,7 @@
 import type {
   RandomTafsirAyah,
   TafsirAyahResponse,
+  TafsirEditionMeta,
   TafsirSearchHit,
   TafsirSearchSource,
   TafsirSurahResponse,
@@ -9,8 +10,14 @@ import type {
 } from '../types/tafsir';
 import { API_URL } from '../config';
 import { fetchJsonWithRecovery } from './fetchWithRecovery';
+import {
+  BAYAN_EDITION_SLUG,
+  FALLBACK_TAFSIR_EDITIONS,
+  MAUDUDI_URDU_SLUG,
+  filterCommentaryTafsirEditions,
+  resolveEditionsApiSlug,
+} from './tafsirEditions';
 
-const TAFHEEM_EDITION = 'tafheem-ul-quran-syed-abu-ala-maududi';
 const REQUEST_TIMEOUT_MS = Number(process.env.REACT_APP_TAFSIR_TIMEOUT_MS || 30000);
 const TAFSIR_CACHE_TTL_MS = Number(process.env.REACT_APP_TAFSIR_CACHE_TTL_MS || 300000);
 
@@ -24,53 +31,32 @@ const ayahCache = new Map<string, CacheEntry<TafsirAyahResponse>>();
 const surahInFlight = new Map<string, Promise<TafsirSurahResponse>>();
 const ayahInFlight = new Map<string, Promise<TafsirAyahResponse>>();
 
-export const getTafsirApiUrl = (): string => {
-  if (process.env.REACT_APP_TAFSIR_API_URL) {
-    return process.env.REACT_APP_TAFSIR_API_URL.replace(/\/$/, '');
-  }
+const isBrowserDirectTafsirUrl = (url: string): boolean => {
+  // The browser may only talk to a tafsir process on this machine.
+  // Tailscale Funnel / AWS hosts belong on the Express proxy — visitors and
+  // HTTPS pages cannot reach *.ts.net, and a dead tunnel hangs the page.
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(?::\d+)?(?:\/|$)/i.test(url);
+};
 
-  // Default: route through the Express backend proxy (works on Vercel + Render)
-  return `${API_URL}/quran/tafsir`;
+const resolveOptionalDirectUrl = (value?: string): string | null => {
+  const normalized = (value || '').trim().replace(/\/$/, '');
+  if (!normalized || !isBrowserDirectTafsirUrl(normalized)) {
+    return null;
+  }
+  return normalized;
+};
+
+export const getTafsirApiUrl = (): string => {
+  return resolveOptionalDirectUrl(process.env.REACT_APP_TAFSIR_API_URL) || `${API_URL}/quran/tafsir`;
 };
 
 const TAFSIR_API_URL = getTafsirApiUrl();
 
 export const getMaududiApiUrl = (): string => {
-  if (process.env.REACT_APP_MAUDUDI_API_URL) {
-    return process.env.REACT_APP_MAUDUDI_API_URL.replace(/\/$/, '');
-  }
-
-  // Production: use the Render proxy. The Tailscale tunnel stays on the backend.
-  return `${API_URL}/quran/tafsir`;
+  return resolveOptionalDirectUrl(process.env.REACT_APP_MAUDUDI_API_URL) || `${API_URL}/quran/tafsir`;
 };
 
 const MAUDUDI_API_URL = getMaududiApiUrl();
-
-const isTafheemEdition = (edition?: string): boolean => {
-  return (edition || '').trim().toLowerCase() === TAFHEEM_EDITION;
-};
-
-const resolveTafsirEndpoint = (
-  surahNumber: number,
-  ayahNumber: number | null,
-  edition?: string
-): string => {
-  const endpointBase = isTafheemEdition(edition) ? MAUDUDI_API_URL : TAFSIR_API_URL;
-  const path =
-    ayahNumber === null
-      ? `${endpointBase}/surah/${surahNumber}`
-      : `${endpointBase}/surah/${surahNumber}/ayah/${ayahNumber}`;
-
-  // Render needs the edition to choose the Maududi proxy. A direct local
-  // Maududi upstream does not accept the edition query parameter.
-  const usesDirectMaududiUpstream =
-    isTafheemEdition(edition) && Boolean(process.env.REACT_APP_MAUDUDI_API_URL);
-  const query =
-    edition && !usesDirectMaududiUpstream
-      ? `?edition=${encodeURIComponent(edition)}`
-      : '';
-  return `${path}${query}`;
-};
 
 const toRecord = (value: unknown): Record<string, unknown> | null => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -168,6 +154,26 @@ export const normalizeTafsirSurah = (payload: any): TafsirSurahResponse => {
       .sort((first, second) => first.ayah - second.ayah);
   };
 
+  if (data && typeof data === 'object' && Array.isArray((data as { ayahs?: unknown }).ayahs)) {
+    const ayahs = ((data as { ayahs: unknown[] }).ayahs).map((ayah, index) =>
+      normalizeAyahEntry(
+        ayah,
+        Number((data as { surah_number?: number; surah?: number }).surah_number ?? (data as { surah?: number }).surah ?? 0),
+        Number((ayah as { ayah?: number })?.ayah ?? index + 1)
+      )
+    );
+    if (ayahs.length > 0) {
+      return {
+        surah_number: Number(
+          (data as { surah_number?: number; surah?: number }).surah_number
+          ?? (data as { surah?: number }).surah
+          ?? ayahs[0].surah
+        ),
+        ayahs: ayahs.sort((first, second) => first.ayah - second.ayah),
+      };
+    }
+  }
+
   if (data && typeof data === 'object' && !Array.isArray(data) && !('surah_number' in data)) {
     const keyedAyahs = normalizeKeyedAyahMap(data as Record<string, unknown>);
 
@@ -243,14 +249,64 @@ export const normalizeTafsirAyah = (payload: any): TafsirAyahResponse => {
   return normalizeAyahEntry(data, Number(data.surah), Number(data.ayah));
 };
 
-export const fetchTafsirSurah = async (surahNumber: number, edition?: string): Promise<TafsirSurahResponse> => {
-  const runtimeIssue = getTafsirRuntimeIssue();
-  if (runtimeIssue) {
-    throw new Error(runtimeIssue);
+export const getTafsirEditionsApiUrl = (): string => `${API_URL}/quran/tafsir/editions`;
+
+const getEditionsApiUrl = (): string => getTafsirEditionsApiUrl();
+
+const resolveEditionSlug = (edition?: string): string => resolveEditionsApiSlug(edition);
+
+export const fetchTafsirEditions = async (): Promise<TafsirEditionMeta[]> => {
+  try {
+    const payload = await fetchJsonWithRecovery<{ status?: string; data?: TafsirEditionMeta[] }>(
+      getEditionsApiUrl(),
+      {
+        cacheTtlMs: 10 * 60 * 1000,
+        timeoutMs: REQUEST_TIMEOUT_MS,
+        maxRetries: 1,
+        retryOnStatuses: [429],
+        fallbackMessage: 'Failed to load tafsir editions',
+      }
+    );
+    const rows = filterCommentaryTafsirEditions(Array.isArray(payload?.data) ? payload.data : []);
+    if (rows.length > 0) {
+      return rows;
+    }
+  } catch {
+    // Fall through to the local catalog so the picker still works offline.
   }
 
-  const url = resolveTafsirEndpoint(surahNumber, null, edition);
-  const cacheKey = `${isTafheemEdition(edition) ? 'tafheem' : 'default'}|surah|${surahNumber}|${edition || ''}`;
+  return FALLBACK_TAFSIR_EDITIONS;
+};
+
+const fetchEditionAyahsInParallel = async (
+  slug: string,
+  surahNumber: number,
+  ayahCount: number
+): Promise<TafsirSurahResponse> => {
+  const ayahs: TafsirAyahResponse[] = [];
+  const concurrency = 6;
+
+  for (let start = 1; start <= ayahCount; start += concurrency) {
+    const batch = Array.from(
+      { length: Math.min(concurrency, ayahCount - start + 1) },
+      (_, index) => fetchTafsirAyah(surahNumber, start + index, slug)
+    );
+    ayahs.push(...await Promise.all(batch));
+  }
+
+  return {
+    surah_number: surahNumber,
+    ayahs: ayahs.sort((first, second) => first.ayah - second.ayah),
+  };
+};
+
+export const fetchTafsirSurah = async (
+  surahNumber: number,
+  edition?: string,
+  ayahCount?: number
+): Promise<TafsirSurahResponse> => {
+  const slug = resolveEditionSlug(edition);
+  const cacheKey = `editions|surah|${surahNumber}|${slug}|${ayahCount || ''}`;
 
   const cached = getCached(surahCache, cacheKey);
   if (cached) return cached;
@@ -259,14 +315,25 @@ export const fetchTafsirSurah = async (surahNumber: number, edition?: string): P
   if (existingRequest) return existingRequest;
 
   const request = (async () => {
-    const payload = await fetchJsonWithRecovery<any>(url, {
-      cacheTtlMs: 0,
-      timeoutMs: REQUEST_TIMEOUT_MS,
-      fallbackMessage: 'Failed to load tafsir for this surah',
-    });
-    const normalized = normalizeTafsirSurah(payload);
-    setCached(surahCache, cacheKey, normalized);
-    return normalized;
+    try {
+      const payload = await fetchJsonWithRecovery<any>(`${getEditionsApiUrl()}/${slug}/${surahNumber}`, {
+        cacheTtlMs: 0,
+        timeoutMs: REQUEST_TIMEOUT_MS,
+        maxRetries: 1,
+        retryOnStatuses: [429],
+        fallbackMessage: 'Failed to load tafsir for this surah',
+      });
+      const normalized = normalizeTafsirSurah(payload);
+      setCached(surahCache, cacheKey, normalized);
+      return normalized;
+    } catch (error) {
+      if (ayahCount && ayahCount > 0) {
+        const fallback = await fetchEditionAyahsInParallel(slug, surahNumber, ayahCount);
+        setCached(surahCache, cacheKey, fallback);
+        return fallback;
+      }
+      throw error;
+    }
   })();
 
   surahInFlight.set(cacheKey, request);
@@ -283,13 +350,8 @@ export const fetchTafsirAyah = async (
   ayahNumber: number,
   edition?: string
 ): Promise<TafsirAyahResponse> => {
-  const runtimeIssue = getTafsirRuntimeIssue();
-  if (runtimeIssue) {
-    throw new Error(runtimeIssue);
-  }
-
-  const url = resolveTafsirEndpoint(surahNumber, ayahNumber, edition);
-  const cacheKey = `${isTafheemEdition(edition) ? 'tafheem' : 'default'}|ayah|${surahNumber}|${ayahNumber}|${edition || ''}`;
+  const slug = resolveEditionSlug(edition);
+  const cacheKey = `editions|ayah|${surahNumber}|${ayahNumber}|${slug}`;
 
   const cached = getCached(ayahCache, cacheKey);
   if (cached) return cached;
@@ -298,11 +360,16 @@ export const fetchTafsirAyah = async (
   if (existingRequest) return existingRequest;
 
   const request = (async () => {
-    const payload = await fetchJsonWithRecovery<any>(url, {
-      cacheTtlMs: 0,
-      timeoutMs: REQUEST_TIMEOUT_MS,
-      fallbackMessage: 'Failed to load tafsir for this ayah',
-    });
+    const payload = await fetchJsonWithRecovery<any>(
+      `${getEditionsApiUrl()}/${slug}/${surahNumber}/${ayahNumber}`,
+      {
+        cacheTtlMs: 0,
+        timeoutMs: REQUEST_TIMEOUT_MS,
+        maxRetries: 1,
+        retryOnStatuses: [429],
+        fallbackMessage: 'Failed to load tafsir for this ayah',
+      }
+    );
     const normalized = normalizeTafsirAyah(payload);
     setCached(ayahCache, cacheKey, normalized);
     return normalized;
@@ -486,39 +553,48 @@ export const fetchUnifiedAyah = async (
   surahNumber: number,
   ayahNumber: number
 ): Promise<UnifiedTafsirAyahResponse> => {
-  const runtimeIssue = getTafsirRuntimeIssue();
-  if (runtimeIssue) {
-    throw new Error(runtimeIssue);
-  }
+  const [bayan, maududi] = await Promise.all([
+    fetchTafsirAyah(surahNumber, ayahNumber, BAYAN_EDITION_SLUG),
+    fetchTafsirAyah(surahNumber, ayahNumber, MAUDUDI_URDU_SLUG),
+  ]);
 
-  const payload = await fetchJsonWithRecovery<any>(
-    getTafsirFeatureUrl(`/unified/surah/${surahNumber}/ayah/${ayahNumber}`),
-    {
-      cacheTtlMs: TAFSIR_CACHE_TTL_MS,
-      timeoutMs: REQUEST_TIMEOUT_MS,
-      fallbackMessage: 'Failed to load unified tafsir for this ayah',
-    }
-  );
-
-  return normalizeUnifiedAyah(payload, surahNumber, ayahNumber);
+  return {
+    surah: surahNumber,
+    ayah: ayahNumber,
+    bayan,
+    maududi,
+  };
 };
 
-export const fetchUnifiedSurah = async (surahNumber: number): Promise<UnifiedTafsirSurahResponse> => {
-  const runtimeIssue = getTafsirRuntimeIssue();
-  if (runtimeIssue) {
-    throw new Error(runtimeIssue);
+export const fetchUnifiedSurah = async (
+  surahNumber: number,
+  ayahCount?: number
+): Promise<UnifiedTafsirSurahResponse> => {
+  const [bayanSurah, maududiSurah] = await Promise.all([
+    fetchTafsirSurah(surahNumber, BAYAN_EDITION_SLUG, ayahCount),
+    fetchTafsirSurah(surahNumber, MAUDUDI_URDU_SLUG, ayahCount),
+  ]);
+
+  const maududiByAyah = new Map(maududiSurah.ayahs.map((ayah) => [ayah.ayah, ayah]));
+  const ayahs = bayanSurah.ayahs.map((bayan) => ({
+    surah: surahNumber,
+    ayah: bayan.ayah,
+    bayan,
+    maududi: maududiByAyah.get(bayan.ayah) || {
+      text: '',
+      ayah: bayan.ayah,
+      surah: surahNumber,
+    },
+  }));
+
+  if (ayahs.length === 0) {
+    throw new Error('No unified tafsir data found for this Surah');
   }
 
-  const payload = await fetchJsonWithRecovery<any>(
-    getTafsirFeatureUrl(`/unified/surah/${surahNumber}`),
-    {
-      cacheTtlMs: TAFSIR_CACHE_TTL_MS,
-      timeoutMs: REQUEST_TIMEOUT_MS,
-      fallbackMessage: 'Failed to load unified tafsir for this surah',
-    }
-  );
-
-  return normalizeUnifiedSurah(payload);
+  return {
+    surah_number: surahNumber,
+    ayahs,
+  };
 };
 
 export const searchTafsir = async (query: string): Promise<TafsirSearchHit[]> => {
@@ -537,6 +613,8 @@ export const searchTafsir = async (query: string): Promise<TafsirSearchHit[]> =>
     {
       cacheTtlMs: 30_000,
       timeoutMs: REQUEST_TIMEOUT_MS,
+      maxRetries: 1,
+      retryOnStatuses: [429],
       fallbackMessage: 'Failed to search tafsir',
     }
   );
@@ -553,6 +631,8 @@ export const fetchRandomTafsir = async (): Promise<RandomTafsirAyah> => {
   const payload = await fetchJsonWithRecovery<any>(getTafsirFeatureUrl('/random'), {
     cacheTtlMs: 0,
     timeoutMs: REQUEST_TIMEOUT_MS,
+    maxRetries: 1,
+    retryOnStatuses: [429],
     fallbackMessage: 'Failed to load tafsir of the day',
   });
 

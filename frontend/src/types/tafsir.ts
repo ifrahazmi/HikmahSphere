@@ -50,3 +50,12 @@ export interface RandomTafsirAyah {
   surah: number;
   ayah: number;
 }
+
+export interface TafsirEditionMeta {
+  id?: number;
+  slug: string;
+  name: string;
+  author_name: string;
+  language_name: 'english' | 'urdu' | 'hindi' | string;
+  source?: string;
+}

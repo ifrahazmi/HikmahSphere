@@ -80,12 +80,9 @@ export interface SearchResult {
   page: number;
 }
 
-export type TafsirEdition =
-  | 'bayan-ul-quran-dr-israr-ahmed'
-  | 'tafheem-ul-quran-syed-abu-ala-maududi'
-  | 'unified-bayan-maududi';
+export type TafsirEdition = string;
 
-export type TafsirTranslationPreferences = Record<TafsirEdition, string>;
+export type TafsirTranslationPreferences = Record<string, string>;
 
 export interface QuranSettings {
   selectedTranslations: string[];  // Single active translation identifier stored as a one-item array
@@ -244,14 +241,21 @@ export const DEFAULT_TRANSLATIONS = [
   { identifier: 'en.ahmedali', name: 'Ahmed Ali', language: 'English' },
   DEFAULT_URDU_TRANSLATION,
   { identifier: 'ur.junagarhi', name: 'Muhammad Junagarhi', language: 'Urdu' },
-  { identifier: 'ur.maududi', name: "Abul A'ala Maududi", language: 'Urdu' },
+  { identifier: 'ur-maududi', name: 'Tafheem-ul-Quran (Maududi)', language: 'Urdu' },
   { identifier: 'ur.ahmedali', name: 'Ahmed Ali', language: 'Urdu' },
+  { identifier: 'hi-farooq', name: 'Farooq Khan & Ahmed (Farooqi)', language: 'Hindi' },
 ];
 
+export const isQuranTranslationLanguage = (language: string): boolean => {
+  return language === 'English' || language === 'Urdu' || language === 'Hindi';
+};
+
 export const DEFAULT_TAFSIR_TRANSLATION_PREFERENCES: TafsirTranslationPreferences = {
-  'bayan-ul-quran-dr-israr-ahmed': DEFAULT_URDU_TRANSLATION.identifier,
-  'tafheem-ul-quran-syed-abu-ala-maududi': 'ur.maududi',
+  'ur-tafsir-bayan-ul-quran': DEFAULT_URDU_TRANSLATION.identifier,
+  'en-maududi': 'en.maududi',
   'unified-bayan-maududi': DEFAULT_URDU_TRANSLATION.identifier,
+  'bayan-ul-quran-dr-israr-ahmed': DEFAULT_URDU_TRANSLATION.identifier,
+  'tafheem-ul-quran-syed-abu-ala-maududi': 'ur-maududi',
 };
 
 // Available Reciters for Audio Playback
@@ -289,7 +293,7 @@ export const DEFAULT_QURAN_SETTINGS: QuranSettings = {
   audioEnabled: false,
   audioMode: 'ayah',
   translationAudioEnabled: false,
-  tafsirEdition: 'bayan-ul-quran-dr-israr-ahmed',
+  tafsirEdition: 'ur-tafsir-bayan-ul-quran',
   tafsirTranslationPreferences: { ...DEFAULT_TAFSIR_TRANSLATION_PREFERENCES },
   tafsirExtrasEnabled: false,
   tafsirFontSize: 26,

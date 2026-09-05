@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import {
@@ -11,12 +11,16 @@ import {
   MoonIcon,
   ShareIcon,
   SpeakerWaveIcon,
+  SpeakerXMarkIcon,
   StopIcon,
 } from '@heroicons/react/24/outline';
 import { BookmarkIcon as BookmarkSolidIcon } from '@heroicons/react/24/solid';
 import { toast } from 'react-hot-toast';
 import PageSEO from '../components/PageSEO';
+import TasbihBeadThread from '../components/TasbihBeadThread';
 import { API_URL } from '../config';
+import { applyTasbihStep, type TasbihHandedness } from '../utils/tasbihCounter';
+import { playTasbihClick } from '../utils/tasbihSound';
 import { useAuth } from '../hooks/useAuth';
 import { requestForToken, storePushToken, getPushDeviceId, getPushSupportInfo } from '../firebase';
 import {
@@ -275,6 +279,9 @@ const DhikrDua: React.FC = () => {
   const [selectedPresetId, setSelectedPresetId] = useState<string>(TASBIH_PRESETS[0].id);
   const [tasbihMode, setTasbihMode] = useState<TasbihMode>('stone');
   const [tasbihCount, setTasbihCount] = useState(0);
+  const [threadTicks, setThreadTicks] = useState(0);
+  const [tasbihHandedness, setTasbihHandedness] = useState<TasbihHandedness>('right');
+  const [tasbihSoundEnabled, setTasbihSoundEnabled] = useState(true);
   const [dailyTracker, setDailyTracker] = useState<DailyDhikrTracker>({
     date: getTodayKey(),
     counts: createEmptyDailyCounts(),
@@ -334,7 +341,11 @@ const DhikrDua: React.FC = () => {
   const listSectionRef = useRef<HTMLDivElement | null>(null);
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
-  const beadMotionRef = useRef<{ startY: number; lastDirection: 1 | -1; lastMoveY: number } | null>(null);
+  const tasbihCountRef = useRef(0);
+  const selectedPresetIdRef = useRef(selectedPresetId);
+  const dailyTrackerRef = useRef(dailyTracker);
+  const cycleCountsRef = useRef<Record<string, number>>({});
+  const tasbihSoundEnabledRef = useRef(true);
   const cardRefs = useRef<Record<string, HTMLElement | null>>({});
   const arabicSectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const isHydratingCloudStateRef = useRef(false);
@@ -506,6 +517,18 @@ const DhikrDua: React.FC = () => {
         if (typeof parsed?.presetId === 'string') setSelectedPresetId(parsed.presetId);
         if (typeof parsed?.count === 'number' && parsed.count >= 0) setTasbihCount(parsed.count);
         if (parsed?.mode === 'stone' || parsed?.mode === 'tap') setTasbihMode(parsed.mode);
+        if (parsed?.cycleCounts && typeof parsed.cycleCounts === 'object') {
+          cycleCountsRef.current = parsed.cycleCounts as Record<string, number>;
+        }
+        if (parsed?.handedness === 'left' || parsed?.handedness === 'right') {
+          setTasbihHandedness(parsed.handedness);
+        }
+        if (typeof parsed?.soundEnabled === 'boolean') {
+          setTasbihSoundEnabled(parsed.soundEnabled);
+        }
+        if (Number.isInteger(parsed?.threadTicks) && Number(parsed.threadTicks) >= 0) {
+          setThreadTicks(Number(parsed.threadTicks));
+        }
       }
 
       const savedDailyTracker = localStorage.getItem(DAILY_DHIKR_STORAGE_KEY);
@@ -561,9 +584,17 @@ const DhikrDua: React.FC = () => {
   useEffect(() => {
     localStorage.setItem(
       TASBIH_STORAGE_KEY,
-      JSON.stringify({ presetId: selectedPresetId, count: tasbihCount, mode: tasbihMode })
+      JSON.stringify({
+        presetId: selectedPresetId,
+        count: tasbihCount,
+        mode: tasbihMode,
+        cycleCounts: cycleCountsRef.current,
+        handedness: tasbihHandedness,
+        soundEnabled: tasbihSoundEnabled,
+        threadTicks,
+      })
     );
-  }, [selectedPresetId, tasbihCount, tasbihMode]);
+  }, [selectedPresetId, tasbihCount, tasbihMode, tasbihHandedness, tasbihSoundEnabled, threadTicks]);
 
   useEffect(() => {
     localStorage.setItem(DAILY_DHIKR_STORAGE_KEY, JSON.stringify(dailyTracker));
@@ -1170,53 +1201,82 @@ const DhikrDua: React.FC = () => {
     }
   };
 
+  tasbihCountRef.current = tasbihCount;
+  selectedPresetIdRef.current = selectedPresetId;
+  dailyTrackerRef.current = dailyTracker;
+  tasbihSoundEnabledRef.current = tasbihSoundEnabled;
+
+  const applyTasbihDirection = useCallback((direction: 1 | -1) => {
+    localMutatedDuringHydrationRef.current = true;
+    const currentPresetId = selectedPresetIdRef.current;
+    const result = applyTasbihStep({
+      presetId: currentPresetId,
+      count: tasbihCountRef.current,
+      dailyCounts: dailyTrackerRef.current.counts,
+      direction,
+      presets: TASBIH_PRESETS,
+    });
+
+    tasbihCountRef.current = result.count;
+    selectedPresetIdRef.current = result.presetId;
+    cycleCountsRef.current = {
+      ...cycleCountsRef.current,
+      [currentPresetId]: result.presetId === currentPresetId ? result.count : 0,
+      [result.presetId]: result.count,
+    };
+    dailyTrackerRef.current = {
+      date: getTodayKey(),
+      counts: result.dailyCounts,
+    };
+
+    setTasbihCount(result.count);
+    setSelectedPresetId(result.presetId);
+    setDailyTracker(dailyTrackerRef.current);
+    setThreadTicks((previous) => Math.max(0, previous + direction));
+    setBeadRotation((previous) => previous + direction * 18);
+
+    if (result.advanced && result.presetId !== currentPresetId) {
+      const nextLabel = TASBIH_PRESETS.find((preset) => preset.id === result.presetId)?.label;
+      if (nextLabel) {
+        toast.success(`Now: ${nextLabel}`, { duration: 1400 });
+      }
+    }
+
+    if (direction > 0 && tasbihSoundEnabledRef.current) {
+      playTasbihClick(result.checkpoint ? 'checkpoint' : 'bead');
+    }
+
+    if (direction > 0 && navigator.vibrate) {
+      navigator.vibrate(result.checkpoint ? [12, 30, 18] : 12);
+    }
+  }, []);
+
   const updatePreset = (presetId: string) => {
+    const currentPresetId = selectedPresetIdRef.current;
+    if (presetId === currentPresetId) return;
+    cycleCountsRef.current[currentPresetId] = tasbihCountRef.current;
+    const restored = cycleCountsRef.current[presetId] || 0;
+    selectedPresetIdRef.current = presetId;
+    tasbihCountRef.current = restored;
     setSelectedPresetId(presetId);
-    setTasbihCount(0);
+    setTasbihCount(restored);
   };
 
   const incrementTasbih = () => {
-    localMutatedDuringHydrationRef.current = true;
-    const nextCount = tasbihCount + 1;
-    const classicPresetIds = ['subhanallah', 'alhamdulillah', 'allahu-akbar'];
-    const classicPresetIndex = classicPresetIds.indexOf(selectedPreset.id);
-    const shouldAdvanceClassicPreset = classicPresetIndex >= 0 && nextCount >= selectedPreset.target;
-
-    setTasbihCount(shouldAdvanceClassicPreset ? 0 : (previous) => previous + 1);
-    setDailyTracker((previous) => ({
-      date: getTodayKey(),
-      counts: {
-        ...previous.counts,
-        [selectedPreset.id]: (previous.counts[selectedPreset.id] || 0) + 1,
-      },
-    }));
-
-    if (shouldAdvanceClassicPreset) {
-      const nextPresetId = classicPresetIds[(classicPresetIndex + 1) % classicPresetIds.length];
-      setSelectedPresetId(nextPresetId);
-    }
-
-    if (navigator.vibrate) {
-      navigator.vibrate(12);
-    }
+    applyTasbihDirection(1);
   };
 
   const decrementTasbih = () => {
-    localMutatedDuringHydrationRef.current = true;
-    setTasbihCount((previous) => Math.max(0, previous - 1));
-    setDailyTracker((previous) => ({
-      date: getTodayKey(),
-      counts: {
-        ...previous.counts,
-        [selectedPreset.id]: Math.max(0, (previous.counts[selectedPreset.id] || 0) - 1),
-      },
-    }));
+    applyTasbihDirection(-1);
   };
 
   const resetTasbih = () => {
     localMutatedDuringHydrationRef.current = true;
-    const presetId = selectedPreset.id;
+    const presetId = selectedPresetIdRef.current;
+    tasbihCountRef.current = 0;
+    cycleCountsRef.current[presetId] = 0;
     setTasbihCount(0);
+    setThreadTicks(0);
     setDailyTracker((previous) => ({
       date: getTodayKey(),
       counts: {
@@ -1224,15 +1284,6 @@ const DhikrDua: React.FC = () => {
         [presetId]: 0,
       },
     }));
-  };
-
-  const applyTasbihMotion = (direction: 1 | -1) => {
-    if (direction > 0) {
-      incrementTasbih();
-    } else {
-      decrementTasbih();
-    }
-    setBeadRotation((previous) => previous + direction * 18);
   };
 
   const focusDuaCard = (duaId: string, fromMobileProfile = false) => {
@@ -2558,7 +2609,6 @@ const DhikrDua: React.FC = () => {
                 onWheel={(event) => {
                   if (tasbihMode !== 'stone') return;
                   event.preventDefault();
-                  applyTasbihMotion(event.deltaY > 0 ? 1 : -1);
                 }}
               >
                 <div className="mx-auto flex h-full min-h-0 w-full max-w-md flex-col">
@@ -2590,6 +2640,50 @@ const DhikrDua: React.FC = () => {
                           );
                         })}
                       </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <div className={`grid grid-cols-2 overflow-hidden rounded-lg border ${isDarkMode ? 'border-slate-600/80' : 'border-emerald-100'}`}>
+                        {(['right', 'left'] as const).map((hand) => {
+                          const isActive = tasbihHandedness === hand;
+                          return (
+                            <button
+                              key={hand}
+                              type="button"
+                              onClick={() => setTasbihHandedness(hand)}
+                              aria-label={hand === 'right' ? 'Right thumb curve' : 'Left thumb curve'}
+                              className={`px-1.5 py-1 text-[9px] font-semibold uppercase tracking-wide ${
+                                isActive
+                                  ? isDarkMode
+                                    ? 'bg-emerald-500/20 text-emerald-200'
+                                    : 'bg-emerald-50 text-emerald-800'
+                                  : isDarkMode
+                                    ? 'text-slate-400'
+                                    : 'text-emerald-700'
+                              }`}
+                            >
+                              {hand === 'right' ? 'Right thumb' : 'Left thumb'}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setTasbihSoundEnabled((previous) => !previous)}
+                        aria-label={tasbihSoundEnabled ? 'Mute tasbeeh sound' : 'Enable tasbeeh sound'}
+                        className={`inline-flex items-center justify-center gap-1 rounded-lg border px-2 py-1 text-[9px] font-semibold uppercase tracking-wide ${
+                          isDarkMode
+                            ? 'border-slate-600/80 text-slate-200'
+                            : 'border-emerald-100 bg-white text-emerald-800'
+                        }`}
+                      >
+                        {tasbihSoundEnabled ? (
+                          <SpeakerWaveIcon className="h-3.5 w-3.5" />
+                        ) : (
+                          <SpeakerXMarkIcon className="h-3.5 w-3.5" />
+                        )}
+                        {tasbihSoundEnabled ? 'Sound on' : 'Muted'}
+                      </button>
                     </div>
 
                     <div className="relative min-w-0">
@@ -2658,53 +2752,29 @@ const DhikrDua: React.FC = () => {
 
                   {/* Soft tap circle — fills remaining space, never clipped */}
                   <div className="flex min-h-0 flex-1 flex-col items-center justify-center py-2 max-md:py-1">
+                    {tasbihMode === 'stone' ? (
+                      <div className="flex h-full min-h-0 w-full flex-col items-center justify-center">
+                        <TasbihBeadThread
+                          count={tasbihCount}
+                          threadTicks={threadTicks}
+                          isDark={isDarkMode}
+                          handedness={tasbihHandedness}
+                          onStep={applyTasbihDirection}
+                        />
+                        <p className={`mt-1 text-center text-[10px] font-medium ${mutedText}`}>
+                          {tasbihHandedness === 'right' ? 'Curve set for right thumb' : 'Curve set for left thumb'}
+                          {' · '}
+                          Gold hex bead appears at 33
+                        </p>
+                      </div>
+                    ) : (
                     <button
                       type="button"
-                      onPointerDown={(event) => {
-                        if (event.pointerType === 'mouse' && event.button !== 0) return;
-                        const target = event.currentTarget;
-                        target.setPointerCapture?.(event.pointerId);
-
-                        if (tasbihMode === 'stone') {
-                          beadMotionRef.current = { startY: event.clientY, lastDirection: 1, lastMoveY: event.clientY };
-                        }
-                      }}
-                      onPointerMove={(event) => {
-                        if (tasbihMode !== 'stone' || !beadMotionRef.current) return;
-
-                        const motion = beadMotionRef.current;
-                        const deltaY = event.clientY - motion.lastMoveY;
-                        if (Math.abs(deltaY) < 24) return;
-
-                        const direction = deltaY > 0 ? 1 : -1;
-                        if (direction === motion.lastDirection && Math.abs(deltaY) < 72) return;
-
-                        applyTasbihMotion(direction);
-                        motion.lastDirection = direction;
-                        motion.lastMoveY = event.clientY;
-                      }}
-                      onPointerUp={() => {
-                        beadMotionRef.current = null;
-                      }}
-                      onPointerLeave={() => {
-                        beadMotionRef.current = null;
-                      }}
-                      onTouchMove={(event) => {
-                        if (tasbihMode === 'stone') {
-                          event.preventDefault();
-                        }
-                      }}
-                      onClick={(event) => {
-                        if (tasbihMode === 'stone') {
-                          event.preventDefault();
-                          return;
-                        }
-                        incrementTasbih();
-                      }}
+                      onClick={() => incrementTasbih()}
                       onContextMenu={(event) => event.preventDefault()}
-                      aria-label={tasbihMode === 'stone' ? 'Stone / Scroll counter' : 'Tap counter'}
+                      aria-label="Tap counter"
                       className="group relative flex aspect-square w-[min(52vw,13.5rem)] shrink-0 select-none touch-manipulation items-center justify-center rounded-full transition-transform duration-150 active:scale-[0.96] sm:w-44"
-                      style={{ touchAction: 'none', overscrollBehavior: 'contain' }}
+                      style={{ touchAction: 'manipulation', overscrollBehavior: 'contain' }}
                     >
                       <span
                         aria-hidden="true"
@@ -2757,10 +2827,11 @@ const DhikrDua: React.FC = () => {
                           {tasbihCount}
                         </span>
                         <span className={`mt-0.5 text-[9px] font-semibold uppercase tracking-[0.15em] ${mutedText}`}>
-                          {tasbihMode === 'stone' ? 'Stone / Scroll' : 'Tap'}
+                          Tap
                         </span>
                       </span>
                     </button>
+                    )}
 
                     <p className={`mt-2 text-center text-[11px] font-medium tabular-nums max-md:mt-1.5 ${mutedText}`}>
                       {tasbihCount} / {selectedPreset.target}

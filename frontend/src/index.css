@@ -760,6 +760,15 @@ code {
   letter-spacing: 0.02em;
 }
 
+.font-hindi,
+.quran-hindi-translation {
+  font-family: 'Noto Sans Devanagari', 'Noto Sans', sans-serif;
+  direction: ltr;
+  text-align: left;
+  line-height: 1.9;
+  letter-spacing: 0.01em;
+}
+
 @font-face {
   font-family: 'Alvi Nastaleeq';
   src: local('Alvi Nastaleeq'), url('../public/Alvi Nastaleeq Regular.ttf') format('truetype');
