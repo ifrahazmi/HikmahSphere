@@ -33,6 +33,15 @@ import {
 } from '../utils/indopakV3Quran';
 import { getArabicDisplayModePatch } from '../utils/quranDisplayMode';
 import {
+  ENGLISH_READING_FONTS,
+  URDU_READING_FONTS,
+  getEnglishFontClass,
+  getUrduFontClass,
+  normalizeReadingText,
+  type EnglishReadingFont,
+  type UrduReadingFont,
+} from '../utils/quranReadingFonts';
+import {
   getBookmarkBackgroundClass as getThemeBookmarkBackgroundClass,
   getBookmarkHoverClass as getThemeBookmarkHoverClass,
   getBookmarkListClass as getThemeBookmarkListClass,
@@ -131,8 +140,6 @@ const QuranReader: React.FC = () => {
   const [selectedAyahForPlay, setSelectedAyahForPlay] = useState<{surah: number, ayah: number} | null>(null);
   const [pendingBookmarkTarget, setPendingBookmarkTarget] = useState<{ surahNumber: number; ayahNumber: number } | null>(null);
   const lockedScrollYRef = useRef<number | null>(null);
-  const mobileSettingsSwipeStartYRef = useRef<number | null>(null);
-  const mobileSettingsSwipeCurrentYRef = useRef<number | null>(null);
   
   // Enhanced mobile search state
   const [searchFilter, setSearchFilter] = useState<'all' | 'surah' | 'juz' | 'page'>('all');
@@ -339,34 +346,6 @@ const QuranReader: React.FC = () => {
   // Cancel mobile settings
   const cancelMobileSettings = () => {
     setShowMobileSettings(false);
-  };
-
-  const onMobileSettingsTouchStart = (event: React.TouchEvent) => {
-    const touch = event.touches[0];
-    mobileSettingsSwipeStartYRef.current = touch?.clientY ?? null;
-    mobileSettingsSwipeCurrentYRef.current = touch?.clientY ?? null;
-  };
-
-  const onMobileSettingsTouchMove = (event: React.TouchEvent) => {
-    const touch = event.touches[0];
-    if (mobileSettingsSwipeStartYRef.current === null || !touch) return;
-    mobileSettingsSwipeCurrentYRef.current = touch.clientY;
-  };
-
-  const onMobileSettingsTouchEnd = () => {
-    if (mobileSettingsSwipeStartYRef.current === null || mobileSettingsSwipeCurrentYRef.current === null) {
-      mobileSettingsSwipeStartYRef.current = null;
-      mobileSettingsSwipeCurrentYRef.current = null;
-      return;
-    }
-
-    const deltaY = mobileSettingsSwipeCurrentYRef.current - mobileSettingsSwipeStartYRef.current;
-    mobileSettingsSwipeStartYRef.current = null;
-    mobileSettingsSwipeCurrentYRef.current = null;
-
-    if (deltaY > 90) {
-      cancelMobileSettings();
-    }
   };
 
   const navigateToBookmark = (surahNumber: number, ayahNumber: number, closeMobile = false) => {
@@ -952,19 +931,19 @@ const QuranReader: React.FC = () => {
             style={{ fontSize: `${settings.translationFontSize}px` }}
             className={
               translation.isUrdu
-                ? `quran-urdu-translation ${
+                ? `quran-urdu-translation quran-reading-text ${getUrduFontClass(settings.urduFont)} ${
                     settings.theme === 'dark' ? 'text-gray-100' : 'text-gray-800'
                   }`
                 : translation.isHindi
-                ? `quran-hindi-translation font-hindi ${
+                ? `quran-hindi-translation font-hindi quran-reading-text ${
                     settings.theme === 'dark' ? 'text-gray-100' : 'text-gray-800'
                   }`
-                : `text-left leading-8 ${
+                : `text-left leading-8 quran-reading-text ${getEnglishFontClass(settings.englishFont)} ${
                     settings.theme === 'dark' ? 'text-gray-200' : 'text-gray-700'
                   }`
             }
           >
-            {translation.text}
+            {normalizeReadingText(translation.text)}
           </p>
         </div>
       );
@@ -1682,6 +1661,48 @@ const QuranReader: React.FC = () => {
                     <option value="cairo">Cairo - Modern Geometric</option>
                     <option value="lateef">Lateef - Elegant Cursive</option>
                     <option value="reem-kufi">Reem Kufi - Beautiful Kufic Style</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className={`block text-xs font-medium mb-1.5 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Urdu Font
+                  </label>
+                  <select
+                    value={settings.urduFont}
+                    onChange={(e) => updateSettings({ urduFont: e.target.value as UrduReadingFont })}
+                    className={`w-full p-2.5 text-sm rounded-lg border ${
+                      settings.theme === 'dark'
+                        ? 'bg-gray-700 border-gray-600 text-white'
+                        : 'bg-white border-gray-300 text-gray-900'
+                    }`}
+                  >
+                    {URDU_READING_FONTS.map((font) => (
+                      <option key={font.id} value={font.id}>
+                        {font.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className={`block text-xs font-medium mb-1.5 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                    English Font
+                  </label>
+                  <select
+                    value={settings.englishFont}
+                    onChange={(e) => updateSettings({ englishFont: e.target.value as EnglishReadingFont })}
+                    className={`w-full p-2.5 text-sm rounded-lg border ${
+                      settings.theme === 'dark'
+                        ? 'bg-gray-700 border-gray-600 text-white'
+                        : 'bg-white border-gray-300 text-gray-900'
+                    }`}
+                  >
+                    {ENGLISH_READING_FONTS.map((font) => (
+                      <option key={font.id} value={font.id}>
+                        {font.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -2583,15 +2604,11 @@ const QuranReader: React.FC = () => {
           {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm"
-            onClick={cancelMobileSettings}
           ></div>
 
           {/* Modal Content - Slide up from bottom */}
           <div
             className={`absolute bottom-0 left-0 right-0 ${settings.theme === 'dark' ? 'bg-gray-800' : 'bg-white'} rounded-t-2xl max-h-[85vh] overflow-hidden flex flex-col animate-slide-up`}
-            onTouchStart={onMobileSettingsTouchStart}
-            onTouchMove={onMobileSettingsTouchMove}
-            onTouchEnd={onMobileSettingsTouchEnd}
           >
             {/* Handle Bar */}
             <div className="flex items-center justify-center pt-3 pb-2">
@@ -2818,6 +2835,48 @@ const QuranReader: React.FC = () => {
                     <option value="cairo">Cairo - Modern Geometric</option>
                     <option value="lateef">Lateef - Elegant Cursive</option>
                     <option value="reem-kufi">Reem Kufi - Beautiful Kufic Style</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Urdu Font
+                  </label>
+                  <select
+                    value={tempSettings.urduFont}
+                    onChange={(e) => updateSingleSetting('urduFont', e.target.value as UrduReadingFont)}
+                    className={`w-full p-3 rounded-lg border ${
+                      settings.theme === 'dark'
+                        ? 'bg-gray-700 border-gray-600 text-white'
+                        : 'bg-white border-gray-300 text-gray-900'
+                    }`}
+                  >
+                    {URDU_READING_FONTS.map((font) => (
+                      <option key={`modal-${font.id}`} value={font.id}>
+                        {font.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                    English Font
+                  </label>
+                  <select
+                    value={tempSettings.englishFont}
+                    onChange={(e) => updateSingleSetting('englishFont', e.target.value as EnglishReadingFont)}
+                    className={`w-full p-3 rounded-lg border ${
+                      settings.theme === 'dark'
+                        ? 'bg-gray-700 border-gray-600 text-white'
+                        : 'bg-white border-gray-300 text-gray-900'
+                    }`}
+                  >
+                    {ENGLISH_READING_FONTS.map((font) => (
+                      <option key={`modal-${font.id}`} value={font.id}>
+                        {font.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
 

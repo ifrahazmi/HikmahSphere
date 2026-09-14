@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import User from '../models/User';
 import { authMiddleware } from '../middleware/auth';
 import { logAnonymousActivity, logUserActivity } from '../middleware/activityLogger';
+import { sendAccountBlocked } from '../utils/accountBlocked';
 
 const router = express.Router();
 
@@ -152,6 +153,10 @@ router.post('/login', [
     if (!isMatch) {
       await user.incrementLoginAttempts();
       return res.status(401).json({ status: 'error', message: 'Invalid credentials' });
+    }
+
+    if (user.isBlocked) {
+      return sendAccountBlocked(res);
     }
 
     if (user.isAccountLocked()) {

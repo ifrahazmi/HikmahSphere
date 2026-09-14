@@ -183,6 +183,13 @@ export interface IUser extends Document {
       };
       updatedAt?: Date;
     };
+    muhasabaReminder?: {
+      enabled: boolean;
+      time: string;
+      timezone?: string;
+      lastSentAt?: Date;
+      lastSentDate?: string;
+    };
   };
   community: {
     joinedGroups: mongoose.Types.ObjectId[];
@@ -534,6 +541,17 @@ const UserSchema = new Schema<IUser>({
         },
       },
       updatedAt: { type: Date, default: Date.now },
+    },
+    muhasabaReminder: {
+      enabled: { type: Boolean, default: false },
+      time: {
+        type: String,
+        default: '21:00',
+        match: [/^([01]\d|2[0-3]):([0-5]\d)$/, 'Reminder time must be HH:MM (24-hour).'],
+      },
+      timezone: { type: String, trim: true },
+      lastSentAt: { type: Date },
+      lastSentDate: { type: String, trim: true },
     },
   },
   community: {

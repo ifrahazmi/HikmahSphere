@@ -34,6 +34,9 @@ jest.mock('./hooks/useAuth', () => ({
     sessionStatus: 'ready',
     logout: jest.fn(),
     hasRole: () => false,
+    passwordChangeRequired: false,
+    requirePasswordChange: jest.fn(),
+    completePasswordChange: jest.fn(),
   }),
 }));
 
@@ -150,4 +153,5 @@ test('shows a clear tasbih input mode switch between stone/scroll and tap', () =
   expect(screen.getByRole('button', { name: 'Right thumb curve' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Left thumb curve' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Mute tasbeeh sound' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Turn off tasbeeh vibration' })).toBeInTheDocument();
 });

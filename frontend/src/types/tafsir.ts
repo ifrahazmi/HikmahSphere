@@ -9,11 +9,17 @@ export interface TafsirAyah {
   translationHtml?: string;
   translationPlain?: string;
   footnotes?: TafsirFootnoteMap;
+  volume?: number;
+  source_pages?: number[];
+  introduction?: string;
+  empty?: boolean;
 }
 
 export interface TafsirSurahResponse {
   surah_number: number;
   ayahs: TafsirAyah[];
+  introduction?: string;
+  emptyAyahs?: number[];
 }
 
 export interface TafsirAyahResponse {
@@ -23,6 +29,10 @@ export interface TafsirAyahResponse {
   translationHtml?: string;
   translationPlain?: string;
   footnotes?: TafsirFootnoteMap;
+  volume?: number;
+  source_pages?: number[];
+  introduction?: string;
+  empty?: boolean;
 }
 
 export interface UnifiedTafsirAyahResponse {

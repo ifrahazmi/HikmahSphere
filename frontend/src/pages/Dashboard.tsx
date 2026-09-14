@@ -1,168 +1,78 @@
-import React, { useState, useEffect } from 'react';
-import {
-  TrashIcon,
-  NoSymbolIcon,
-  CheckCircleIcon,
-  UserPlusIcon,
-  XMarkIcon,
-  BanknotesIcon,
-  ClockIcon,
-  UserCircleIcon,
-} from '@heroicons/react/24/outline';
+import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { API_URL } from '../config';
-import toast from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
+import PageSEO from '../components/PageSEO';
 import AdminNotificationPanel from '../components/Notifications/AdminNotificationPanel';
 import FundsManagement from '../components/Funds/FundsManagement';
-import PageSEO from '../components/PageSEO';
-
-interface ProfileFieldChange {
-    field: string;
-    before?: string;
-    after?: string;
-}
-
-interface ProfileAuditEntry {
-    editedAt: string;
-    actorName?: string;
-    changedFields: ProfileFieldChange[];
-}
-
-interface DashboardUser {
-    _id: string;
-    username: string;
-    email: string;
-    role: 'superadmin' | 'manager' | 'user';
-    isAdmin?: boolean;
-    isBlocked: boolean;
-    createdAt?: string;
-    profileEdited?: boolean;
-    profileEditedAt?: string | null;
-    profileEditCount?: number;
-    notificationPermission?: 'granted' | 'denied' | 'default' | 'unknown';
-    hasValidNotificationDevice?: boolean;
-    isNotificationLive?: boolean;
-    isNotificationActive?: boolean;
-    isNotificationRecentlySeen?: boolean;
-    notificationDeviceCount?: number;
-    notificationLastSeenAt?: string | null;
-    notificationLastActiveAt?: string | null;
-    notificationPreference?: {
-        prayers: boolean;
-        events: boolean;
-        community: boolean;
-    };
-    profileAudit?: {
-        history?: ProfileAuditEntry[];
-    };
-}
+import DashboardShell from '../components/Dashboard/DashboardShell';
+import OverviewPanel from '../components/Dashboard/OverviewPanel';
+import UserManagementPanel from '../components/Dashboard/UserManagementPanel';
+import { deriveDashboardStats } from '../components/Dashboard/dashboardUsers';
+import { ActivityLog, ActivityStats, DashboardTab, DashboardUser } from '../components/Dashboard/types';
 
 const Dashboard: React.FC = () => {
   const { user, hasRole } = useAuth();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('overview');
-    const [users, setUsers] = useState<DashboardUser[]>([]);
-    const [selectedUserProfile, setSelectedUserProfile] = useState<DashboardUser | null>(null);
-    const [loadingProfile, setLoadingProfile] = useState(false);
-
-  // Overview Stats
-  const [totalUsers, setTotalUsers] = useState(0);
-  
-  // Activity Logs
-  const [activityLogs, setActivityLogs] = useState<any[]>([]);
-  const [activityStats, setActivityStats] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<DashboardTab>('overview');
+  const [users, setUsers] = useState<DashboardUser[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+  const [activityStats, setActivityStats] = useState<ActivityStats | null>(null);
   const [loadingActivities, setLoadingActivities] = useState(false);
+  const [createUserOpen, setCreateUserOpen] = useState(false);
+  const hasLoadedDashboardDataRef = useRef(false);
 
-    const formatPermissionLabel = (permission?: string) => {
-        if (permission === 'granted') return 'Permission Granted';
-        if (permission === 'denied') return 'Permission Denied';
-        if (permission === 'default') return 'Permission Default';
-        return 'Permission Unknown';
-    };
+  const isSuperAdmin = hasRole(['superadmin']);
+  const canManageFunds = hasRole(['superadmin', 'manager']);
+  const canAccessDashboard = isSuperAdmin || canManageFunds;
+  const stats = deriveDashboardStats(users);
 
-    const formatActivityLabel = (u: DashboardUser) => {
-        if (u.isNotificationActive || u.isNotificationLive) return 'Active now';
-        if (u.isNotificationRecentlySeen) return 'Recently seen';
-        return 'Not recently seen';
-    };
-
-    const formatDateTime = (value?: string | null) => {
-        if (!value) return 'N/A';
-        const parsed = new Date(value);
-        if (Number.isNaN(parsed.getTime())) return 'N/A';
-        return parsed.toLocaleString('en-IN', {
-            day: 'numeric',
-            month: 'short',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-        });
-    };
-
-    const formatProfileChangeSummary = (changed: ProfileFieldChange) => {
-        if (changed.field === 'profile.avatar') {
-            return 'Profile picture updated';
-        }
-
-        const beforeValue = changed.before?.trim() ? changed.before : 'Empty';
-        const afterValue = changed.after?.trim() ? changed.after : 'Empty';
-        return `"${beforeValue}" -> "${afterValue}"`;
-    };
-
-  // User Creation State
-  const [showCreateUserModal, setShowCreateUserModal] = useState(false);
-  const [newUser, setNewUser] = useState({
-      username: '',
-      email: '',
-      password: '',
-      firstName: '',
-      lastName: '',
-      role: 'user'
-  });
-
-  // Admin: Fetch all users
-  const fetchUsers = async () => {
-      try {
-          const token = localStorage.getItem('token');
-          const response = await fetch(`${API_URL}/admin/users`, {
-              headers: { 'Authorization': `Bearer ${token}` }
-          });
-          const data = await response.json();
-          if (data.status === 'success') {
-              setUsers(data.data.users);
-              setTotalUsers(data.data.users.length);
-          } else {
-              // Fallback
-              const toolResponse = await fetch(`${API_URL}/tools/users`);
-              const toolData = await toolResponse.json();
-              if (Array.isArray(toolData)) {
-                  setUsers(toolData);
-                  setTotalUsers(toolData.length);
-              }
-          }
-      } catch (error) {
-          console.error('Failed to fetch users', error);
+  const fetchUsers = async (silent = false) => {
+    try {
+      if (!silent) {
+        setLoadingUsers(true);
       }
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/admin/users`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (data.status === 'success') {
+        setUsers(data.data.users);
+        return;
+      }
+
+      const toolResponse = await fetch(`${API_URL}/tools/users`);
+      const toolData = await toolResponse.json();
+      if (Array.isArray(toolData)) {
+        setUsers(toolData);
+      }
+    } catch (error) {
+      console.error('Failed to fetch users', error);
+    } finally {
+      setLoadingUsers(false);
+    }
   };
 
-  // Fetch activity logs
-  const fetchActivityLogs = async () => {
+  const fetchActivityLogs = async (silent = false) => {
     try {
-      setLoadingActivities(true);
+      if (!silent) {
+        setLoadingActivities(true);
+      }
       const token = localStorage.getItem('token');
       const [logsRes, statsRes] = await Promise.all([
         fetch(`${API_URL}/activity/recent?limit=15`, {
-          headers: { 'Authorization': `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
         }),
         fetch(`${API_URL}/activity/stats?days=7`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
+          headers: { Authorization: `Bearer ${token}` },
+        }),
       ]);
-      
+
       const logsData = await logsRes.json();
       const statsData = await statsRes.json();
-      
+
       if (logsData.status === 'success') {
         setActivityLogs(logsData.data.activities);
       }
@@ -176,607 +86,112 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const handleCreateUser = async (e: React.FormEvent) => {
-      e.preventDefault();
-      try {
-          const token = localStorage.getItem('token');
-          const response = await fetch(`${API_URL}/admin/users`, {
-              method: 'POST',
-              headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${token}`
-              },
-              body: JSON.stringify(newUser)
-          });
-          const data = await response.json();
-          if (data.status === 'success') {
-              toast.success('User created successfully');
-              setShowCreateUserModal(false);
-              fetchUsers();
-              setNewUser({ username: '', email: '', password: '', firstName: '', lastName: '', role: 'user' });
-          } else {
-              toast.error(data.message || 'Failed to create user');
-          }
-      } catch (error) {
-          toast.error('Error creating user');
-      }
-  };
+  useEffect(() => {
+    if (!isSuperAdmin) {
+      return;
+    }
 
-  const handleBlockUser = async (userId: string, currentStatus: boolean) => {
-      if (user?.id === userId) {
-          toast.error('You cannot block yourself.');
-          return;
-      }
-
-      try {
-          const token = localStorage.getItem('token');
-          setUsers(users.map(u => u._id === userId ? { ...u, isBlocked: !currentStatus } : u));
-          
-          await fetch(`${API_URL}/admin/users/${userId}/block`, {
-              method: 'PATCH',
-              headers: { 
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${token}` 
-              },
-              body: JSON.stringify({ isBlocked: !currentStatus })
-          });
-          toast.success(currentStatus ? 'User unblocked' : 'User blocked');
-      } catch (error) {
-          toast.error('Action failed');
-          fetchUsers(); // Revert
-      }
-  };
-
-  const handleDeleteUser = async (userId: string) => {
-      if (user?.id === userId) {
-          toast.error('You cannot delete yourself.');
-          return;
-      }
-
-      if (!window.confirm('Are you sure you want to delete this user?')) return;
-      try {
-          const token = localStorage.getItem('token');
-          setUsers(users.filter(u => u._id !== userId));
-
-          await fetch(`${API_URL}/admin/users/${userId}`, {
-              method: 'DELETE',
-              headers: { 'Authorization': `Bearer ${token}` }
-          });
-          toast.success('User deleted');
-      } catch (error) {
-          toast.error('Delete failed');
-          fetchUsers();
-      }
-  };
-
-  const handleViewProfile = async (userId: string) => {
-      try {
-          setLoadingProfile(true);
-          const token = localStorage.getItem('token');
-          const response = await fetch(`${API_URL}/admin/users/${userId}/profile`, {
-              headers: { 'Authorization': `Bearer ${token}` }
-          });
-          const data = await response.json();
-          if (data.status === 'success') {
-              setSelectedUserProfile(data.data.user);
-              return;
-          }
-          toast.error(data.message || 'Failed to load profile details');
-      } catch (error) {
-          toast.error('Failed to load profile details');
-      } finally {
-          setLoadingProfile(false);
-      }
-  };
-
-  // Super Admin gets the full dashboard; Manager gets Fund Management only.
-  const isSuperAdmin = hasRole(['superadmin']);
-  const canManageFunds = hasRole(['superadmin', 'manager']);
-  const canAccessDashboard = isSuperAdmin || canManageFunds;
+    const silent = hasLoadedDashboardDataRef.current;
+    void (async () => {
+      await Promise.all([fetchUsers(silent), fetchActivityLogs(silent)]);
+      hasLoadedDashboardDataRef.current = true;
+    })();
+  }, [user?.id, isSuperAdmin]);
 
   useEffect(() => {
-      if (isSuperAdmin) {
-          fetchUsers();
-          fetchActivityLogs();
-      }
-  }, [user, isSuperAdmin]);
-
-  // Managers can only see Fund Management, so land them on that tab.
-  useEffect(() => {
-      if (canAccessDashboard && !isSuperAdmin && activeTab !== 'zakat') {
-          setActiveTab('zakat');
-      }
+    if (canAccessDashboard && !isSuperAdmin && activeTab !== 'zakat') {
+      setActiveTab('zakat');
+    }
   }, [canAccessDashboard, isSuperAdmin, activeTab]);
 
+  const handleTabChange = (tab: DashboardTab) => {
+    setActiveTab(tab);
+  };
+
+  const handleCreateUserShortcut = () => {
+    setActiveTab('users');
+    setCreateUserOpen(true);
+  };
+
   if (!canAccessDashboard) {
-      return (
-          <>
-            <PageSEO
-                            title="My Islamic Dashboard & Personalized Hub"
-                            description="Access your personalized HikmahSphere dashboard. Manage your Islamic activities, track your daily Salah, view recent Quran reading history, and monitor your community engagement."
-              path="/dashboard"
-              noIndex
-              noFollow
-            />
-            <div className="min-h-screen pt-24 flex justify-center items-center flex-col">
-                <h2 className="text-2xl font-bold text-red-600 mb-2">Access Denied</h2>
-                <p className="text-gray-600">You do not have permission to view this dashboard.</p>
-                <button
-                    onClick={() => navigate('/')}
-                    className="mt-4 text-emerald-600 hover:text-emerald-700 font-medium"
-                >
-                    Go Home
-                </button>
-            </div>
-          </>
-      );
+    return (
+      <>
+        <PageSEO
+          title="Super Admin Control Center"
+          description="HikmahSphere admin control center for managing users, funds, and notifications."
+          path="/dashboard"
+          noIndex
+          noFollow
+        />
+        <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-teal-50 pt-24 dark:from-gray-950 dark:via-gray-900 dark:to-gray-800">
+          <h2 className="mb-2 text-2xl font-bold text-red-600">Access Denied</h2>
+          <p className="text-gray-600 dark:text-gray-300">You do not have permission to view this dashboard.</p>
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            className="mt-4 font-medium text-emerald-600 hover:text-emerald-700"
+          >
+            Go Home
+          </button>
+        </div>
+      </>
+    );
   }
 
   return (
     <>
       <PageSEO
-                title="My Islamic Dashboard & Personalized Hub"
-                description="Access your personalized HikmahSphere dashboard. Manage your Islamic activities, track your daily Salah, view recent Quran reading history, and monitor your community engagement."
+        title={isSuperAdmin ? 'Super Admin Control Center' : 'Fund Management'}
+        description="HikmahSphere admin control center for managing users, funds, and notifications."
         path="/dashboard"
         noIndex
         noFollow
       />
-      <div className="min-h-screen bg-gray-50 pt-16">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex items-center mb-8">
-          <div className="w-12 h-12 flex items-center justify-center overflow-hidden rounded-full bg-white shadow-md mr-4">
-            <img src="/logo.png" alt="HikmahSphere Logo" className="w-full h-full object-cover" />
-          </div>
-          <h1 className="text-3xl font-bold text-gray-900">{isSuperAdmin ? 'Super Admin Dashboard' : 'Fund Management'}</h1>
-        </div>
-        
-        <div className="bg-white rounded-lg shadow mb-8">
-            {/* Desktop Tab Navigation */}
-            <nav className="hidden md:flex border-b border-gray-200 overflow-x-auto">
-                {/* Overview only for Super Admin */}
-                {isSuperAdmin && (
-                    <button
-                        onClick={() => setActiveTab('overview')}
-                        className={`px-6 py-4 text-sm font-medium whitespace-nowrap ${activeTab === 'overview' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
-                    >
-                        Overview
-                    </button>
-                )}
-                {/* User Management only for Super Admin */}
-                {isSuperAdmin && (
-                    <button
-                        onClick={() => setActiveTab('users')}
-                        className={`px-6 py-4 text-sm font-medium whitespace-nowrap ${activeTab === 'users' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
-                    >
-                        User Management
-                    </button>
-                )}
-                {/* Funds Management for Super Admin and Manager */}
-                {canManageFunds && (
-                    <button
-                        onClick={() => setActiveTab('zakat')}
-                        className={`px-6 py-4 text-sm font-medium whitespace-nowrap flex items-center gap-2 ${activeTab === 'zakat' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
-                    >
-                        <BanknotesIcon className="w-5 h-5" />
-                        Funds Management
-                    </button>
-                )}
-                {/* Notifications only for Super Admin */}
-                {isSuperAdmin && (
-                    <button
-                        onClick={() => setActiveTab('notifications')}
-                        className={`px-6 py-4 text-sm font-medium whitespace-nowrap ${activeTab === 'notifications' ? 'border-b-2 border-emerald-500 text-emerald-600' : 'text-gray-500 hover:text-gray-700'}`}
-                    >
-                        Notifications
-                    </button>
-                )}
-            </nav>
-
-            {/* Mobile Tab Navigation - Non-scrollable */}
-            <div className="md:hidden p-3 border-b border-gray-200">
-                <div className="grid grid-cols-2 gap-2">
-                    {isSuperAdmin && (
-                        <button
-                            onClick={() => setActiveTab('overview')}
-                            className={`w-full px-3 py-2.5 text-xs sm:text-sm font-medium rounded-lg text-center leading-tight transition-colors ${
-                                activeTab === 'overview'
-                                    ? 'bg-emerald-500 text-white shadow-md'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
-                        >
-                            Overview
-                        </button>
-                    )}
-                    {isSuperAdmin && (
-                        <button
-                            onClick={() => setActiveTab('users')}
-                            className={`w-full px-3 py-2.5 text-xs sm:text-sm font-medium rounded-lg text-center leading-tight transition-colors ${
-                                activeTab === 'users'
-                                    ? 'bg-emerald-500 text-white shadow-md'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
-                        >
-                            User Management
-                        </button>
-                    )}
-                    {canManageFunds && (
-                        <button
-                            onClick={() => setActiveTab('zakat')}
-                            className={`w-full px-3 py-2.5 text-xs sm:text-sm font-medium rounded-lg text-center leading-tight transition-colors ${
-                                activeTab === 'zakat'
-                                    ? 'bg-emerald-500 text-white shadow-md'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
-                        >
-                            Funds Management
-                        </button>
-                    )}
-                    {isSuperAdmin && (
-                        <button
-                            onClick={() => setActiveTab('notifications')}
-                            className={`w-full px-3 py-2.5 text-xs sm:text-sm font-medium rounded-lg text-center leading-tight transition-colors ${
-                                activeTab === 'notifications'
-                                    ? 'bg-emerald-500 text-white shadow-md'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
-                        >
-                            Notifications
-                        </button>
-                    )}
-                </div>
-            </div>
-        </div>
-
+      <DashboardShell
+        isSuperAdmin={isSuperAdmin}
+        adminName={user?.name}
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        userCount={stats.totalUsers}
+        blockedCount={stats.blocked}
+        pushReadyCount={stats.pushReady}
+      >
         {isSuperAdmin && activeTab === 'overview' && (
-            <div className="space-y-6">
-                {/* Stats Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="bg-white p-6 rounded-lg shadow border-l-4 border-blue-500">
-                        <h3 className="text-gray-500 text-sm font-medium">Total Users</h3>
-                        <p className="text-3xl font-bold text-gray-900 mt-2">{totalUsers}</p>
-                    </div>
-                    {activityStats && (
-                        <>
-                            <div className="bg-white p-6 rounded-lg shadow border-l-4 border-emerald-500">
-                                <h3 className="text-gray-500 text-sm font-medium">Total Activities (7 days)</h3>
-                                <p className="text-3xl font-bold text-emerald-700 mt-2">{activityStats.totalActivities}</p>
-                            </div>
-                            <div className="bg-white p-6 rounded-lg shadow border-l-4 border-purple-500">
-                                <h3 className="text-gray-500 text-sm font-medium">Active Users (7 days)</h3>
-                                <p className="text-3xl font-bold text-purple-700 mt-2">{activityStats.uniqueUsers}</p>
-                            </div>
-                        </>
-                    )}
-                </div>
-
-                {/* Activity Logs Section */}
-                <div className="bg-white rounded-lg shadow">
-                    <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                        <h3 className="text-lg font-semibold text-gray-900">Recent User Activity</h3>
-                        <span className="text-sm text-gray-500">Last 15 activities</span>
-                    </div>
-                    <div className="overflow-x-auto">
-                        {loadingActivities ? (
-                            <div className="p-8 text-center text-gray-500">Loading activities...</div>
-                        ) : activityLogs.length === 0 ? (
-                            <div className="p-8 text-center text-gray-500">No activity logs found</div>
-                        ) : (
-                            <table className="min-w-full divide-y divide-gray-200">
-                                <thead className="bg-gray-50">
-                                    <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
-                                    {activityLogs.map((log, index) => (
-                                        <tr key={index} className="hover:bg-gray-50">
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="flex items-center">
-                                                    <UserCircleIcon className="w-8 h-8 text-gray-400 mr-3" />
-                                                    <div>
-                                                        <div className="text-sm font-medium text-gray-900">{log.userName}</div>
-                                                        <div className="text-xs text-gray-500">{log.userEmail}</div>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                                    log.action.includes('login') ? 'bg-green-100 text-green-800' :
-                                                    log.action.includes('register') ? 'bg-blue-100 text-blue-800' :
-                                                    log.action.includes('zakat') ? 'bg-yellow-100 text-yellow-800' :
-                                                    'bg-gray-100 text-gray-800'
-                                                }`}>
-                                                    {log.action.replace(/_/g, ' ')}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <span className="text-sm text-gray-600 capitalize">{log.category}</span>
-                                            </td>
-                                            <td className="px-6 py-4 text-sm text-gray-600 max-w-md truncate">
-                                                {log.description}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                <div className="flex items-center gap-1">
-                                                    <ClockIcon className="w-4 h-4" />
-                                                    {new Date(log.createdAt).toLocaleString('en-IN', {
-                                                        day: 'numeric',
-                                                        month: 'short',
-                                                        hour: '2-digit',
-                                                        minute: '2-digit'
-                                                    })}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        )}
-                    </div>
-                </div>
-            </div>
+          <OverviewPanel
+            users={users}
+            activityLogs={activityLogs}
+            activityStats={activityStats}
+            loadingActivities={loadingActivities}
+            onTabChange={handleTabChange}
+            onCreateUser={handleCreateUserShortcut}
+          />
         )}
 
-        {/* Funds Management Tab - Super Admin and Manager */}
+        {isSuperAdmin && activeTab === 'users' && (
+          <UserManagementPanel
+            users={users}
+            currentUserId={user?.id}
+            loading={loadingUsers}
+            onRefresh={fetchUsers}
+            createUserOpen={createUserOpen}
+            onCreateUserOpenChange={setCreateUserOpen}
+          />
+        )}
+
         {canManageFunds && activeTab === 'zakat' && (
+          <div className="rounded-2xl">
             <FundsManagement />
+          </div>
         )}
 
-        {/* Notifications Tab - Super Admin Only */}
         {isSuperAdmin && activeTab === 'notifications' && (
-            <div className="space-y-8">
-                <div className="max-w-4xl mx-auto">
-                    <AdminNotificationPanel />
-                </div>
+          <div className="mx-auto max-w-4xl">
+            <div className="overflow-hidden rounded-2xl shadow-sm">
+              <AdminNotificationPanel />
             </div>
+          </div>
         )}
-
-        {activeTab === 'users' && (
-            <div className="space-y-6">
-                <div className="flex justify-between items-center">
-                    <h3 className="text-lg font-medium text-gray-900">All Users</h3>
-                    <button 
-                        onClick={() => setShowCreateUserModal(true)}
-                        className="bg-emerald-600 text-white px-4 py-2 rounded-md hover:bg-emerald-700 flex items-center gap-2"
-                    >
-                        <UserPlusIcon className="h-5 w-5" />
-                        Create User
-                    </button>
-                </div>
-
-                <div className="bg-white shadow rounded-lg overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Notification</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Capability</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
-                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                                {users.map((u) => (
-                                    <tr key={u._id}>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="flex items-center">
-                                                <div className="ml-4">
-                                                    <div className="text-sm font-medium text-gray-900">{u.username}</div>
-                                                    <div className="text-sm text-gray-500">{u.email}</div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                                                ${u.role === 'superadmin' ? 'bg-purple-100 text-purple-800' : 
-                                                  u.role === 'manager' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
-                                                {u.role || (u.isAdmin ? 'superadmin' : 'user')}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${u.isBlocked ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'}`}>
-                                                {u.isBlocked ? 'Blocked' : 'Active'}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="flex flex-col gap-1">
-                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${u.notificationPermission === 'granted' ? 'bg-emerald-100 text-emerald-800' : u.notificationPermission === 'denied' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-700'}`}>
-                                                    {formatPermissionLabel(u.notificationPermission)}
-                                                </span>
-                                                <span className="text-xs text-gray-500">
-                                                    App Pref: {u.notificationPreference?.prayers || u.notificationPreference?.events || u.notificationPreference?.community ? 'Enabled' : 'Disabled'}
-                                                </span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="flex flex-col gap-1">
-                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${u.hasValidNotificationDevice ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'}`}>
-                                                    {u.hasValidNotificationDevice ? 'Push Ready' : 'Push Not Ready'}
-                                                </span>
-                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                                    u.isNotificationActive || u.isNotificationLive
-                                                        ? 'bg-green-100 text-green-800'
-                                                        : u.isNotificationRecentlySeen
-                                                          ? 'bg-amber-100 text-amber-800'
-                                                          : 'bg-gray-100 text-gray-700'
-                                                }`}>
-                                                    {formatActivityLabel(u)}
-                                                </span>
-                                                <span className="text-xs text-gray-500">
-                                                    Devices: {u.notificationDeviceCount || 0} | Last Seen: {formatDateTime(u.notificationLastSeenAt)}
-                                                </span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : 'N/A'}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                            <button
-                                                onClick={() => handleViewProfile(u._id)}
-                                                className="text-emerald-600 hover:text-emerald-800 mr-4"
-                                                title="View Profile Info"
-                                            >
-                                                View Profile
-                                            </button>
-                                            {/* Hide delete/block for self OR if target is superadmin (optional policy) */}
-                                            {u._id !== user?.id && (
-                                                <>
-                                                    <button 
-                                                        onClick={() => handleBlockUser(u._id, u.isBlocked)}
-                                                        className={`text-${u.isBlocked ? 'green' : 'red'}-600 hover:text-${u.isBlocked ? 'green' : 'red'}-900 mr-4`}
-                                                        title={u.isBlocked ? "Unblock User" : "Block User"}
-                                                    >
-                                                        {u.isBlocked ? <CheckCircleIcon className="h-5 w-5" /> : <NoSymbolIcon className="h-5 w-5" />}
-                                                    </button>
-                                                    <button 
-                                                        onClick={() => handleDeleteUser(u._id)}
-                                                        className="text-gray-600 hover:text-gray-900"
-                                                        title="Delete User"
-                                                    >
-                                                        <TrashIcon className="h-5 w-5" />
-                                                    </button>
-                                                </>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        )}
-
-        {selectedUserProfile && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-                <div className="bg-white rounded-lg w-full max-w-3xl max-h-[85vh] overflow-y-auto p-6">
-                    <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-lg font-semibold text-gray-900">User Profile Details</h3>
-                        <button
-                            onClick={() => setSelectedUserProfile(null)}
-                            className="text-gray-400 hover:text-gray-500"
-                        >
-                            <XMarkIcon className="h-6 w-6" />
-                        </button>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-6">
-                        <div><span className="font-medium text-gray-700">Username:</span> {selectedUserProfile.username}</div>
-                        <div><span className="font-medium text-gray-700">Email:</span> {selectedUserProfile.email}</div>
-                        <div><span className="font-medium text-gray-700">Role:</span> {selectedUserProfile.role}</div>
-                        <div><span className="font-medium text-gray-700">Permission:</span> {formatPermissionLabel(selectedUserProfile.notificationPermission)}</div>
-                        <div><span className="font-medium text-gray-700">Push:</span> {selectedUserProfile.hasValidNotificationDevice ? 'Push Ready' : 'Push Not Ready'}</div>
-                        <div><span className="font-medium text-gray-700">Activity:</span> {formatActivityLabel(selectedUserProfile)}</div>
-                        <div><span className="font-medium text-gray-700">Device Count:</span> {selectedUserProfile.notificationDeviceCount || 0}</div>
-                        <div><span className="font-medium text-gray-700">Last Seen:</span> {formatDateTime(selectedUserProfile.notificationLastSeenAt)}</div>
-                        <div><span className="font-medium text-gray-700">Profile Edited:</span> {selectedUserProfile.profileEdited ? 'Yes' : 'No'}</div>
-                        <div><span className="font-medium text-gray-700">Last Edit:</span> {formatDateTime(selectedUserProfile.profileEditedAt)}</div>
-                    </div>
-
-                    <div className="border rounded-lg">
-                        <div className="px-4 py-3 border-b bg-gray-50">
-                            <h4 className="font-medium text-gray-900">Profile Change History</h4>
-                        </div>
-                        <div className="p-4 space-y-4">
-                            {Array.isArray(selectedUserProfile.profileAudit?.history) && selectedUserProfile.profileAudit.history.length > 0 ? (
-                                selectedUserProfile.profileAudit.history.map((entry, index) => (
-                                    <div key={index} className="border rounded-md p-3">
-                                        <div className="text-xs text-gray-500 mb-2">
-                                            {formatDateTime(entry.editedAt)} by {entry.actorName || 'User'}
-                                        </div>
-                                        <div className="space-y-1">
-                                            {entry.changedFields.map((changed, changedIndex) => (
-                                                <div key={`${changed.field}-${changedIndex}`} className="text-sm text-gray-700">
-                                                    <span className="font-medium">{changed.field}</span>: {formatProfileChangeSummary(changed)}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                ))
-                            ) : (
-                                <div className="text-sm text-gray-500">No profile changes recorded yet.</div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        )}
-
-        {loadingProfile && (
-            <div className="fixed inset-0 z-40 bg-black/20 flex items-center justify-center">
-                <div className="bg-white px-4 py-3 rounded-lg shadow text-sm text-gray-700">Loading profile details...</div>
-            </div>
-        )}
-
-        {/* Create User Modal */}
-        {showCreateUserModal && (
-            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
-                <div className="bg-white rounded-lg max-w-md w-full p-6">
-                    <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-lg font-medium text-gray-900">Create New User</h3>
-                        <button onClick={() => setShowCreateUserModal(false)} className="text-gray-400 hover:text-gray-500">
-                            <XMarkIcon className="h-6 w-6" />
-                        </button>
-                    </div>
-                    
-                    <form onSubmit={handleCreateUser} className="space-y-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">First Name</label>
-                            <input type="text" required className="mt-1 block w-full border rounded-md p-2"
-                                value={newUser.firstName} onChange={e => setNewUser({...newUser, firstName: e.target.value})} />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Last Name</label>
-                            <input type="text" required className="mt-1 block w-full border rounded-md p-2"
-                                value={newUser.lastName} onChange={e => setNewUser({...newUser, lastName: e.target.value})} />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Username</label>
-                            <input type="text" required className="mt-1 block w-full border rounded-md p-2"
-                                value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Email</label>
-                            <input type="email" required className="mt-1 block w-full border rounded-md p-2"
-                                value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Password</label>
-                            <input type="password" required className="mt-1 block w-full border rounded-md p-2"
-                                value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Role</label>
-                            <select 
-                                className="mt-1 block w-full border rounded-md p-2"
-                                value={newUser.role}
-                                onChange={e => setNewUser({...newUser, role: e.target.value})}
-                            >
-                                <option value="user">User</option>
-                                <option value="manager">Manager</option>
-                            </select>
-                        </div>
-
-                        <div className="mt-6 flex justify-end gap-3">
-                            <button type="button" onClick={() => setShowCreateUserModal(false)}
-                                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200">Cancel</button>
-                            <button type="submit"
-                                className="px-4 py-2 text-white bg-emerald-600 rounded-md hover:bg-emerald-700">
-                                Create User
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        )}
-      </div>
-      </div>
+      </DashboardShell>
     </>
   );
 };

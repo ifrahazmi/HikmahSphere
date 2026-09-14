@@ -7,7 +7,7 @@ export interface IUserNotification extends Document {
   data?: Record<string, string>;
   read: boolean;
   readAt?: Date;
-  source: 'admin-direct' | 'admin-broadcast' | 'prayer-adhan' | 'dhikr-reminder';
+  source: 'admin-direct' | 'admin-broadcast' | 'prayer-adhan' | 'dhikr-reminder' | 'muhasaba-reminder';
   createdAt: Date;
   updatedAt: Date;
 }
@@ -45,7 +45,7 @@ const UserNotificationSchema = new Schema<IUserNotification>({
   },
   source: {
     type: String,
-    enum: ['admin-direct', 'admin-broadcast', 'prayer-adhan', 'dhikr-reminder'],
+    enum: ['admin-direct', 'admin-broadcast', 'prayer-adhan', 'dhikr-reminder', 'muhasaba-reminder'],
     required: true,
   },
 }, { timestamps: true });

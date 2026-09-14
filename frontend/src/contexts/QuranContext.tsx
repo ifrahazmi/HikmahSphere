@@ -31,6 +31,8 @@ import {
   isEditionsApiTranslation,
   migrateTafsirEdition,
 } from '../utils/tafsirEditions';
+import { resolveEnglishReadingFont, resolveUrduReadingFont } from '../utils/quranReadingFonts';
+import { triggerHaptic } from '../utils/hapticFeedback';
 
 const QuranContext = createContext<QuranContextType | undefined>(undefined);
 const TRANSLATION_AUDIO_SOURCES: Record<string, { baseUrl: string; label: string; provider: string }> = {
@@ -464,6 +466,8 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
     return {
       ...mergedSettings,
       arabicFont: normalizedArabicFont,
+      urduFont: resolveUrduReadingFont(mergedSettings.urduFont),
+      englishFont: resolveEnglishReadingFont(mergedSettings.englishFont),
       selectedTranslations: normalizeSelectedTranslations(mergedSettings.selectedTranslations),
       tafsirTranslationPreferences: normalizeTafsirTranslationPreferences(mergedSettings.tafsirTranslationPreferences),
       tafsirExtrasEnabled: extrasEnabled,
@@ -848,6 +852,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       saveBookmarksToLocal(updated);
       return updated;
     });
+    triggerHaptic('success');
   }, [surahs, saveBookmarksToLocal]);
 
   const removeBookmark = useCallback((id: string) => {
@@ -856,6 +861,7 @@ export const QuranProvider: React.FC<{children: React.ReactNode}> = ({ children 
       saveBookmarksToLocal(updated);
       return updated;
     });
+    triggerHaptic('success');
   }, [saveBookmarksToLocal]);
 
   // Last read

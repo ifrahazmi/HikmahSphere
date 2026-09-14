@@ -249,6 +249,16 @@ const buildAdhanTargetUrl = (payload) => {
   return `${base}${separator}playAdhan=1&prayer=${encodeURIComponent(prayer)}`;
 };
 
+const resolveNotificationTargetUrl = (payload) => {
+  const isAdhan = (payload?.data?.type || payload?.type) === 'adhan'
+    || payload?.data?.playAdhan === '1';
+  if (isAdhan) {
+    return buildAdhanTargetUrl(payload);
+  }
+  const url = payload?.data?.url;
+  return typeof url === 'string' && url.trim() ? url.trim() : '/';
+};
+
 const createNotificationPayload = (payload) => {
   const id = payload?.data?.notificationId || payload?.messageId || `sw-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   return {
@@ -301,7 +311,7 @@ messaging.onBackgroundMessage((payload) => {
     return;
   }
   const notificationTitle = normalizedPayload.title;
-  const targetUrl = buildAdhanTargetUrl(payload);
+  const targetUrl = resolveNotificationTargetUrl(payload);
   const isAdhan = (payload?.data?.type || normalizedPayload.type) === 'adhan'
     || payload?.data?.playAdhan === '1';
   const prayerName = payload?.data?.prayer || normalizedPayload.data?.prayer;
@@ -343,7 +353,7 @@ messaging.onBackgroundMessage((payload) => {
     badge: '/small_logo.jpeg',
     tag: normalizedPayload.id,
     renotify: false,
-    vibrate: [200, 100, 200],
+    vibrate: isAdhan ? [160, 80, 220] : [80, 40, 80],
     sound: isAdhan ? '/sounds/adhan.mp3' : undefined,
     data: {
       url: targetUrl,
@@ -478,7 +488,7 @@ self.addEventListener('push', (event) => {
   }
 
   const isAdhan = (payload?.data?.type || normalizedPayload.type) === 'adhan' || payload?.data?.playAdhan === '1';
-  const targetUrl = buildAdhanTargetUrl(payload);
+  const targetUrl = resolveNotificationTargetUrl(payload);
   const prayerName = payload?.data?.prayer || normalizedPayload.data?.prayer;
 
   if (isAdhan) {
@@ -494,7 +504,7 @@ self.addEventListener('push', (event) => {
         badge: '/small_logo.jpeg',
         tag: normalizedPayload.id,
         renotify: false,
-        vibrate: [200, 100, 200],
+        vibrate: isAdhan ? [160, 80, 220] : [80, 40, 80],
         sound: isAdhan ? '/sounds/adhan.mp3' : undefined,
         data: {
           url: targetUrl,

@@ -13,10 +13,19 @@ import { fetchJsonWithRecovery } from './fetchWithRecovery';
 import {
   BAYAN_EDITION_SLUG,
   FALLBACK_TAFSIR_EDITIONS,
-  MAUDUDI_URDU_SLUG,
+  MAUDUDI_SHORT_SLUG,
   filterCommentaryTafsirEditions,
+  isV2TafsirEdition,
+  mergeTafsirEditionCatalogs,
   resolveEditionsApiSlug,
 } from './tafsirEditions';
+import { normalizeReadingText } from './quranReadingFonts';
+import {
+  fetchTafsirV2Ayah,
+  fetchTafsirV2Editions,
+  fetchTafsirV2Surah,
+  getTafsirV2ApiUrl,
+} from './tafsirV2Api';
 
 const REQUEST_TIMEOUT_MS = Number(process.env.REACT_APP_TAFSIR_TIMEOUT_MS || 30000);
 const TAFSIR_CACHE_TTL_MS = Number(process.env.REACT_APP_TAFSIR_CACHE_TTL_MS || 300000);
@@ -72,7 +81,7 @@ const normalizeFootnotes = (value: unknown): Record<string, string> => {
 
   const entries = Object.entries(record)
     .filter(([key]) => key.trim().length > 0)
-    .map(([key, text]) => [key, String(text ?? '').trim()] as const)
+    .map(([key, text]) => [key, normalizeReadingText(String(text ?? ''))] as const)
     .filter(([, text]) => text.length > 0);
 
   return Object.fromEntries(entries);
@@ -95,9 +104,9 @@ const normalizeAyahEntry = (
   fallbackAyah: number
 ): TafsirAyahResponse => {
   const ayahRecord = toRecord(rawAyah) || {};
-  const translationHtml = String(ayahRecord.t ?? ayahRecord.translationHtml ?? '').trim();
-  const translationPlain = String(ayahRecord.translationPlain ?? ayahRecord.translation ?? '').trim();
-  const text = String(ayahRecord.text ?? ayahRecord.tafsir ?? '').trim();
+  const translationHtml = normalizeReadingText(String(ayahRecord.t ?? ayahRecord.translationHtml ?? ''));
+  const translationPlain = normalizeReadingText(String(ayahRecord.translationPlain ?? ayahRecord.translation ?? ''));
+  const text = normalizeReadingText(String(ayahRecord.text ?? ayahRecord.tafsir ?? ''));
 
   return {
     text,
@@ -115,7 +124,9 @@ export const getTafsirRuntimeIssue = (): string | null => {
   }
 
   const usesInsecureApi =
-    /^http:\/\//i.test(TAFSIR_API_URL) || /^http:\/\//i.test(MAUDUDI_API_URL);
+    /^http:\/\//i.test(TAFSIR_API_URL)
+    || /^http:\/\//i.test(MAUDUDI_API_URL)
+    || /^http:\/\//i.test(getTafsirV2ApiUrl());
   if (window.location.protocol === 'https:' && usesInsecureApi) {
     return 'Tafsir API is using HTTP while this site is HTTPS. Browser mixed-content protection blocks this request. Use HTTPS for the API or proxy this endpoint through your backend domain.';
   }
@@ -255,7 +266,7 @@ const getEditionsApiUrl = (): string => getTafsirEditionsApiUrl();
 
 const resolveEditionSlug = (edition?: string): string => resolveEditionsApiSlug(edition);
 
-export const fetchTafsirEditions = async (): Promise<TafsirEditionMeta[]> => {
+const fetchV1EditionCatalog = async (): Promise<TafsirEditionMeta[]> => {
   try {
     const payload = await fetchJsonWithRecovery<{ status?: string; data?: TafsirEditionMeta[] }>(
       getEditionsApiUrl(),
@@ -268,14 +279,19 @@ export const fetchTafsirEditions = async (): Promise<TafsirEditionMeta[]> => {
       }
     );
     const rows = filterCommentaryTafsirEditions(Array.isArray(payload?.data) ? payload.data : []);
-    if (rows.length > 0) {
-      return rows;
-    }
+    return rows.length > 0 ? rows : FALLBACK_TAFSIR_EDITIONS;
   } catch {
-    // Fall through to the local catalog so the picker still works offline.
+    return FALLBACK_TAFSIR_EDITIONS;
   }
+};
 
-  return FALLBACK_TAFSIR_EDITIONS;
+export const fetchTafsirEditions = async (): Promise<TafsirEditionMeta[]> => {
+  const [v1Editions, v2Editions] = await Promise.all([
+    fetchV1EditionCatalog(),
+    fetchTafsirV2Editions().catch(() => []),
+  ]);
+  const merged = mergeTafsirEditionCatalogs(v1Editions, v2Editions);
+  return merged.length > 0 ? merged : FALLBACK_TAFSIR_EDITIONS;
 };
 
 const fetchEditionAyahsInParallel = async (
@@ -316,6 +332,12 @@ export const fetchTafsirSurah = async (
 
   const request = (async () => {
     try {
+      if (isV2TafsirEdition(slug)) {
+        const normalized = await fetchTafsirV2Surah(surahNumber, slug, ayahCount);
+        setCached(surahCache, cacheKey, normalized);
+        return normalized;
+      }
+
       const payload = await fetchJsonWithRecovery<any>(`${getEditionsApiUrl()}/${slug}/${surahNumber}`, {
         cacheTtlMs: 0,
         timeoutMs: REQUEST_TIMEOUT_MS,
@@ -360,6 +382,12 @@ export const fetchTafsirAyah = async (
   if (existingRequest) return existingRequest;
 
   const request = (async () => {
+    if (isV2TafsirEdition(slug)) {
+      const normalized = await fetchTafsirV2Ayah(surahNumber, ayahNumber, slug);
+      setCached(ayahCache, cacheKey, normalized);
+      return normalized;
+    }
+
     const payload = await fetchJsonWithRecovery<any>(
       `${getEditionsApiUrl()}/${slug}/${surahNumber}/${ayahNumber}`,
       {
@@ -555,7 +583,7 @@ export const fetchUnifiedAyah = async (
 ): Promise<UnifiedTafsirAyahResponse> => {
   const [bayan, maududi] = await Promise.all([
     fetchTafsirAyah(surahNumber, ayahNumber, BAYAN_EDITION_SLUG),
-    fetchTafsirAyah(surahNumber, ayahNumber, MAUDUDI_URDU_SLUG),
+    fetchTafsirAyah(surahNumber, ayahNumber, MAUDUDI_SHORT_SLUG),
   ]);
 
   return {
@@ -572,7 +600,7 @@ export const fetchUnifiedSurah = async (
 ): Promise<UnifiedTafsirSurahResponse> => {
   const [bayanSurah, maududiSurah] = await Promise.all([
     fetchTafsirSurah(surahNumber, BAYAN_EDITION_SLUG, ayahCount),
-    fetchTafsirSurah(surahNumber, MAUDUDI_URDU_SLUG, ayahCount),
+    fetchTafsirSurah(surahNumber, MAUDUDI_SHORT_SLUG, ayahCount),
   ]);
 
   const maududiByAyah = new Map(maududiSurah.ayahs.map((ayah) => [ayah.ayah, ayah]));

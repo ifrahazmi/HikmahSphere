@@ -81,7 +81,10 @@
   "overrides": {
     "eslint": "^8.57.1",
     "brace-expansion": "1.1.18",
-    "minimatch": "3.1.5",
+    "minimatch@3": "3.1.5",
+    "minimatch@10": {
+      "brace-expansion": "5.0.2"
+    },
     "esbuild": "0.28.2"
   },
   "jest": {
@@ -106,7 +109,8 @@
     ],
     "ext": "ts,json",
     "ignore": [
-      "src/**/*.spec.ts"
+      "src/**/*.spec.ts",
+      "src/**/*.test.ts"
     ],
     "exec": "tsx src/index.ts"
   }

@@ -31,10 +31,7 @@ const fetchWithTimeout = async (input: RequestInfo | URL, init: RequestInit = {}
 const Auth: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
-  const [showPasswordChange, setShowPasswordChange] = useState(false);
-  const [passwordChangeToken, setPasswordChangeToken] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
   const [showRecoveryModal, setShowRecoveryModal] = useState(false);
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
   const [onboardingSaving, setOnboardingSaving] = useState(false);
@@ -43,7 +40,7 @@ const Auth: React.FC = () => {
     madhab: '',
   });
 
-  const { login, register, user } = useAuth();
+  const { login, register, user, passwordChangeRequired } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const redirectParam = searchParams.get('redirect');
@@ -52,7 +49,6 @@ const Auth: React.FC = () => {
     name: '',
     email: '',
     password: '',
-    newPassword: ''
   });
 
   React.useEffect(() => {
@@ -81,49 +77,19 @@ const Auth: React.FC = () => {
     const submittedName = String(submittedData.get('name') || formData.name).trim();
     const submittedEmail = String(submittedData.get('email') || formData.email).trim().toLowerCase();
     const submittedPassword = String(submittedData.get('password') || formData.password);
-    const submittedNewPassword = String(submittedData.get('newPassword') || formData.newPassword);
 
     setFormData(prev => ({
       ...prev,
       name: submittedName,
       email: submittedEmail,
       password: submittedPassword,
-      newPassword: submittedNewPassword,
     }));
 
     try {
-        if (showPasswordChange) {
-            // Handle Password Change
-          const response = await fetchWithTimeout(`${API_URL}/auth/change-password`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${passwordChangeToken}`
-                },
-                body: JSON.stringify({ newPassword: submittedNewPassword })
-            });
-            const data = await response.json();
-            if (data.status === 'success') {
-                toast.success('Password changed successfully. Please login.');
-                setShowPasswordChange(false);
-                setPasswordChangeToken('');
-                setFormData(prev => ({ ...prev, password: '', newPassword: '' }));
-                setShowNewPassword(false);
-                setIsLogin(true);
-            } else {
-                toast.error(data.message || 'Failed to change password');
-            }
-            setLoading(false);
-            return;
-        }
-
         if (isLogin) {
             const loginResult = await login(submittedEmail, submittedPassword);
             if (loginResult.passwordChangeRequired) {
-              toast.error('You must change your password to proceed.');
-              const temporaryToken = localStorage.getItem('token') || '';
-              setPasswordChangeToken(temporaryToken);
-              setShowPasswordChange(true);
+              setFormData(prev => ({ ...prev, password: '' }));
             } else {
               toast.success('Successfully logged in!');
               navigate(redirectParam || '/profile', { replace: true });
@@ -219,7 +185,7 @@ const Auth: React.FC = () => {
 
   const onboardingRequired = localStorage.getItem(ONBOARDING_REQUIRED_KEY) === '1';
 
-  if (user && !showOnboardingModal && !onboardingRequired) {
+  if (user && !showOnboardingModal && !onboardingRequired && !passwordChangeRequired) {
     return <Navigate to="/profile" replace />;
   }
 
@@ -318,46 +284,16 @@ const Auth: React.FC = () => {
                 <img src="/logo.png" alt="HikmahSphere Logo" className="h-full w-full object-cover rounded-full" />
               </div>
               <h2 className="text-center text-3xl font-bold text-gray-900">
-                {showPasswordChange ? 'Change Password' : (isLogin ? 'Welcome Back' : 'Create Account')}
+                {isLogin ? 'Welcome Back' : 'Create Account'}
               </h2>
               <p className="mt-2 text-center text-gray-600">
-                {showPasswordChange ? 'Set a new password for your account' : (isLogin ? 'Sign in to continue your journey' : 'Join our global Muslim community')}
+                {isLogin ? 'Sign in to continue your journey' : 'Join our global Muslim community'}
               </p>
             </div>
 
             <form className="mt-8 space-y-6" onSubmit={handleSubmit} autoComplete="on">
               <div className="space-y-5">
-
-                {showPasswordChange && (
-                  <div>
-                    <label htmlFor="newPassword" className="block text-sm font-semibold text-gray-700 mb-2">
-                      New Password
-                    </label>
-                    <div className="relative">
-                      <input
-                        id="newPassword"
-                        name="newPassword"
-                        type={showNewPassword ? 'text' : 'password'}
-                        autoComplete="new-password"
-                        required
-                        value={formData.newPassword}
-                        onChange={handleInputChange}
-                        onInput={handleInputChange}
-                        className="appearance-none relative block w-full px-4 pr-20 py-3 border-2 border-gray-200 placeholder-gray-400 text-gray-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
-                        placeholder="Enter new password"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowNewPassword(prev => !prev)}
-                        className="absolute inset-y-0 right-0 px-4 text-sm font-medium text-emerald-700 hover:text-emerald-800"
-                      >
-                        {showNewPassword ? 'Hide' : 'Show'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {!showPasswordChange && !isLogin && (
+                {!isLogin && (
                   <div>
                     <label htmlFor="name" className="block text-sm font-semibold text-gray-700 mb-2">
                       Full Name
@@ -379,58 +315,54 @@ const Auth: React.FC = () => {
                   </div>
                 )}
 
-                {!showPasswordChange && (
-                  <>
-                    <div>
-                      <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">
-                        Email Address
-                      </label>
-                      <div className="relative">
-                        <input
-                          id="email"
-                          name="email"
-                          type="email"
-                          autoComplete={isLogin ? 'username' : 'email'}
-                          autoCapitalize="none"
-                          autoCorrect="off"
-                          required
-                          value={formData.email}
-                          onChange={handleInputChange}
-                          onInput={handleInputChange}
-                          className="appearance-none relative block w-full px-4 py-3 border-2 border-gray-200 placeholder-gray-400 text-gray-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
-                          placeholder="Enter your email"
-                        />
-                      </div>
-                    </div>
+                <div>
+                  <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">
+                    Email Address
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="email"
+                      name="email"
+                      type="email"
+                      autoComplete={isLogin ? 'username' : 'email'}
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      required
+                      value={formData.email}
+                      onChange={handleInputChange}
+                      onInput={handleInputChange}
+                      className="appearance-none relative block w-full px-4 py-3 border-2 border-gray-200 placeholder-gray-400 text-gray-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+                      placeholder="Enter your email"
+                    />
+                  </div>
+                </div>
 
-                    <div>
-                      <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-2">
-                        Password
-                      </label>
-                      <div className="relative">
-                        <input
-                          id="password"
-                          name="password"
-                          type={showPassword ? 'text' : 'password'}
-                          autoComplete={isLogin ? 'current-password' : 'new-password'}
-                          required
-                          value={formData.password}
-                          onChange={handleInputChange}
-                          onInput={handleInputChange}
-                          className="appearance-none relative block w-full px-4 pr-20 py-3 border-2 border-gray-200 placeholder-gray-400 text-gray-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
-                          placeholder="Enter your password"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(prev => !prev)}
-                          className="absolute inset-y-0 right-0 px-4 text-sm font-medium text-emerald-700 hover:text-emerald-800"
-                        >
-                          {showPassword ? 'Hide' : 'Show'}
-                        </button>
-                      </div>
-                    </div>
-                  </>
-                )}
+                <div>
+                  <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-2">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="password"
+                      name="password"
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete={isLogin ? 'current-password' : 'new-password'}
+                      required
+                      value={formData.password}
+                      onChange={handleInputChange}
+                      onInput={handleInputChange}
+                      className="appearance-none relative block w-full px-4 pr-20 py-3 border-2 border-gray-200 placeholder-gray-400 text-gray-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+                      placeholder="Enter your password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(prev => !prev)}
+                      className="absolute inset-y-0 right-0 px-4 text-sm font-medium text-emerald-700 hover:text-emerald-800"
+                    >
+                      {showPassword ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                </div>
               </div>
 
               <div>
@@ -448,13 +380,12 @@ const Auth: React.FC = () => {
                       Processing...
                     </span>
                   ) : (
-                    showPasswordChange ? 'Update Password' : (isLogin ? 'Sign In' : 'Create Account')
+                    isLogin ? 'Sign In' : 'Create Account'
                   )}
                 </button>
               </div>
 
-              {!showPasswordChange && (
-                <div className="text-center">
+              <div className="text-center">
                   <button
                     type="button"
                     onClick={() => setIsLogin(!isLogin)}
@@ -463,7 +394,6 @@ const Auth: React.FC = () => {
                     {isLogin ? "Don't have an account? Create one" : "Already have an account? Sign in"}
                   </button>
                 </div>
-              )}
             </form>
 
             <div className="mt-8 pt-6 border-t border-gray-100">

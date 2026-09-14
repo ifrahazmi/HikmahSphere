@@ -9,6 +9,7 @@ import {
   smallestAngleDiff,
   tiltCompensatedHeading,
 } from '../utils/qiblaMath';
+import { triggerHaptic } from '../utils/hapticFeedback';
 
 interface GeolocationErrorLike {
   code?: number;
@@ -693,9 +694,7 @@ export const useQiblaCompass = () => {
     if (isAligned && !noCompassAvailable) {
       if (!alignedVibratedRef.current) {
         alignedVibratedRef.current = true;
-        if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-          navigator.vibrate(60);
-        }
+        triggerHaptic('align');
       }
     } else {
       alignedVibratedRef.current = false;

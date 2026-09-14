@@ -21,7 +21,7 @@ interface NavbarProps {
   user?: any;
 }
 
-const APP_VERSION_LABEL = `v1.0.2 ${process.env.NODE_ENV === 'production' ? 'Prod' : 'Dev'}`;
+const APP_VERSION_LABEL = `v1.1.0 ${process.env.NODE_ENV === 'production' ? 'Prod' : 'Dev'}`;
 
 const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
   const { user: authUser, logout, hasRole } = useAuth();

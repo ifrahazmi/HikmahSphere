@@ -16,22 +16,20 @@ const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/i;
 const LANGUAGE_SET = new Set<string>(ALLOWED_TAFSIR_LANGUAGES);
 
 export const TRANSLATION_ONLY_EDITION_SLUGS = new Set(['ur-maududi', 'hi-farooq']);
+export const HIDDEN_TAFSIR_SLUGS = new Set(['ur-tazkirul-quran', 'en-tazkirul-quran']);
+
+export const FEATURED_ENGLISH_TAFSIR_SLUGS = new Set([
+  'en-tafisr-ibn-kathir',
+  'en-tafsir-maarif-ul-quran',
+  'en-al-jalalayn',
+]);
 
 export const FALLBACK_TAFSIR_EDITIONS: TafsirEditionCatalogItem[] = [
   { slug: 'ur-tafsir-bayan-ul-quran', name: 'Tafsir Bayan ul Quran', author_name: 'Dr. Israr Ahmad', language_name: 'urdu' },
   { slug: 'ur-tafseer-ibn-e-kaseer', name: 'Tafsir Ibn Kathir', author_name: 'Hafiz Ibn Kathir', language_name: 'urdu' },
-  { slug: 'ur-tazkirul-quran', name: 'Tazkirul Quran (Maulana Wahiduddin Khan)', author_name: 'Maulana Wahid Uddin Khan', language_name: 'urdu' },
   { slug: 'en-tafisr-ibn-kathir', name: 'Tafsir Ibn Kathir (abridged)', author_name: 'Hafiz Ibn Kathir', language_name: 'english' },
   { slug: 'en-tafsir-maarif-ul-quran', name: 'Maarif-ul-Quran', author_name: 'Mufti Muhammad Shafi', language_name: 'english' },
-  { slug: 'en-tazkirul-quran', name: 'Tazkirul Quran (Maulana Wahiduddin Khan)', author_name: 'Maulana Wahid Uddin Khan', language_name: 'english' },
-  { slug: 'en-kashf-al-asrar-tafsir', name: 'Kashf Al-Asrar Tafsir', author_name: 'Kashf Al-Asrar Tafsir', language_name: 'english' },
-  { slug: 'en-al-qushairi-tafsir', name: 'Al Qushairi Tafsir', author_name: 'Al Qushairi Tafsir', language_name: 'english' },
-  { slug: 'en-kashani-tafsir', name: 'Kashani Tafsir', author_name: 'Kashani Tafsir', language_name: 'english' },
-  { slug: 'en-tafsir-al-tustari', name: 'Tafsir al-Tustari', author_name: 'Tafsir al-Tustari', language_name: 'english' },
-  { slug: 'en-asbab-al-nuzul-by-al-wahidi', name: 'Asbab Al-Nuzul by Al-Wahidi', author_name: 'Al-Wahidi', language_name: 'english' },
-  { slug: 'en-tafsir-ibn-abbas', name: "Tanwir al-Miqbas min Tafsir Ibn Abbas", author_name: "Tanwir al-Miqbas min Tafsir Ibn Abbas", language_name: 'english' },
   { slug: 'en-al-jalalayn', name: 'Al-Jalalayn', author_name: 'Al-Jalalayn', language_name: 'english' },
-  { slug: 'en-maududi', name: 'Towards Understanding the Quran (Maududi)', author_name: "Sayyid Abul A'ala Maududi", language_name: 'english' },
 ];
 
 export const getTafsirEditionsApiBase = (configured?: string | null): string => {
@@ -72,7 +70,10 @@ export const filterTafsirEditionsCatalog = (value: unknown): TafsirEditionCatalo
     const record = row as Record<string, unknown>;
     const slug = String(record.slug || '').trim();
     const language = normalizeLanguageName(record.language_name);
-    if (!isValidEditionSlug(slug) || !isAllowedTafsirLanguage(language) || TRANSLATION_ONLY_EDITION_SLUGS.has(slug)) {
+    if (!isValidEditionSlug(slug) || !isAllowedTafsirLanguage(language) || TRANSLATION_ONLY_EDITION_SLUGS.has(slug) || HIDDEN_TAFSIR_SLUGS.has(slug)) {
+      return;
+    }
+    if (language === 'english' && !FEATURED_ENGLISH_TAFSIR_SLUGS.has(slug)) {
       return;
     }
     if (seen.has(slug)) {

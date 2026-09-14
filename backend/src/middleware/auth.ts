@@ -1,6 +1,8 @@
 import jwt from 'jsonwebtoken';
 import { Request, Response, NextFunction } from 'express';
 import User from '../models/User';
+import { sendAccountBlocked } from '../utils/accountBlocked';
+import { isPasswordChangeRequest, sendPasswordChangeRequired } from '../utils/passwordChangeRequired';
 
 interface AuthRequest extends Request {
   user?: any;
@@ -30,12 +32,20 @@ export const authMiddleware = async (req: AuthRequest, res: Response, next: Next
       });
     }
 
-    const dbUser = await User.findById(decoded.userId).select('email firstName lastName username role isAdmin');
+    const dbUser = await User.findById(decoded.userId).select('email firstName lastName username role isAdmin isBlocked requiresPasswordChange');
     if (!dbUser) {
       return res.status(401).json({
         status: 'error',
         message: 'Token is not valid',
       });
+    }
+
+    if (dbUser.isBlocked) {
+      return sendAccountBlocked(res);
+    }
+
+    if (dbUser.requiresPasswordChange && !isPasswordChangeRequest(req)) {
+      return sendPasswordChangeRequired(res);
     }
 
     req.user = {

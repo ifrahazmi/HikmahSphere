@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
@@ -11,6 +11,7 @@ import {
 } from './firebase';
 import axios from 'axios'; // Import axios
 import { toast } from 'react-hot-toast';
+import { installToastHaptics } from './utils/installToastHaptics';
 
 // i18n initialization
 import './i18n/config';
@@ -24,6 +25,7 @@ import InstallAppPrompt from './components/InstallAppPrompt';
 import PrayerAdhanScheduler from './components/PrayerAdhanScheduler';
 import AdhanPlayPrompt from './components/AdhanPlayPrompt';
 import StartupReadinessScreen from './components/StartupReadinessScreen';
+import ForcePasswordChangeModal from './components/ForcePasswordChangeModal';
 
 // Pages
 import Home from './pages/Home';
@@ -56,9 +58,13 @@ import { NotificationProvider } from './contexts/NotificationContext'; // Import
 import { DarkModeProvider } from './contexts/DarkModeContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { API_URL } from './config';
+import { handleAxiosAccountBlocked } from './utils/accountBlocked';
+import { handleAxiosPasswordChangeRequired } from './utils/passwordChangeRequired';
 
 // Styles
 import './App.css';
+
+installToastHaptics();
 
 // Create a client
 const queryClient = new QueryClient({
@@ -78,11 +84,15 @@ const IOS_PUSH_GUIDE_SHOWN_KEY = 'iosPushGuideShown';
 const PUSH_PERMISSION_TOAST_KEY = 'pushPermissionToastShown';
 
 const AppContent: React.FC = () => {
-  const { user, loading, sessionStatus } = useAuth();
+  const { user, loading, sessionStatus, logout, passwordChangeRequired, requirePasswordChange } = useAuth();
   const startupReadiness = useStartupReadiness();
+  const logoutRef = useRef(logout);
+  logoutRef.current = logout;
+  const requirePasswordChangeRef = useRef(requirePasswordChange);
+  requirePasswordChangeRef.current = requirePasswordChange;
 
   useEffect(() => {
-    if (!user || sessionStatus !== 'ready') {
+    if (!user?.id || sessionStatus !== 'ready' || passwordChangeRequired) {
       return;
     }
 
@@ -109,6 +119,12 @@ const AppContent: React.FC = () => {
           headers: { Authorization: `Bearer ${authToken}` }
         });
       } catch (error) {
+        if (handleAxiosAccountBlocked(error, () => logoutRef.current())) {
+          return;
+        }
+        if (handleAxiosPasswordChangeRequired(error, () => requirePasswordChangeRef.current())) {
+          return;
+        }
         console.error('Heartbeat update failed:', error);
       }
     };
@@ -132,10 +148,10 @@ const AppContent: React.FC = () => {
       document.removeEventListener('visibilitychange', onVisibilityChange);
       window.removeEventListener('online', sendHeartbeat);
     };
-  }, [user, sessionStatus]);
+  }, [user?.id, sessionStatus, passwordChangeRequired]);
   
   useEffect(() => {
-    if (!user || sessionStatus !== 'ready') return;
+    if (!user?.id || sessionStatus !== 'ready' || passwordChangeRequired) return;
 
     let registrationInProgress = false;
 
@@ -174,6 +190,12 @@ const AppContent: React.FC = () => {
                 headers: { Authorization: `Bearer ${authToken}` },
               });
             } catch (apiError) {
+              if (handleAxiosAccountBlocked(apiError, () => logoutRef.current())) {
+                return;
+              }
+              if (handleAxiosPasswordChangeRequired(apiError, () => requirePasswordChangeRef.current())) {
+                return;
+              }
               console.error('❌ Failed to update notification presence:', apiError);
             }
           }
@@ -230,6 +252,12 @@ const AppContent: React.FC = () => {
                     );
                     console.log("✅ FCM Token saved to backend");
                 } catch (apiError) {
+                    if (handleAxiosAccountBlocked(apiError, () => logoutRef.current())) {
+                      return;
+                    }
+                    if (handleAxiosPasswordChangeRequired(apiError, () => requirePasswordChangeRef.current())) {
+                      return;
+                    }
                     console.error("❌ Failed to save FCM token to backend:", apiError);
                 }
             }
@@ -266,6 +294,12 @@ const AppContent: React.FC = () => {
                   headers: { Authorization: `Bearer ${authToken}` }
                 });
               } catch (apiError) {
+                if (handleAxiosAccountBlocked(apiError, () => logoutRef.current())) {
+                  return;
+                }
+                if (handleAxiosPasswordChangeRequired(apiError, () => requirePasswordChangeRef.current())) {
+                  return;
+                }
                 console.error('❌ Failed to update notification permission status:', apiError);
               }
             }
@@ -291,7 +325,7 @@ const AppContent: React.FC = () => {
       document.removeEventListener('visibilitychange', retryRegistration);
       window.removeEventListener('online', retryRegistration);
     };
-  }, [user, sessionStatus]);
+  }, [user?.id, sessionStatus, passwordChangeRequired]);
 
   if (
     startupReadiness.enabled
@@ -392,6 +426,7 @@ const AppContent: React.FC = () => {
 
       {/* Global Notifications */}
       <Toaster />
+      <ForcePasswordChangeModal />
     </div>
   );
 };

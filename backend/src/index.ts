@@ -8,6 +8,7 @@ import path from 'path';
 import fs from 'fs';
 import User from './models/User';
 import { authMiddleware, superAdminMiddleware } from './middleware/auth';
+import { resetUserPasswordHandler } from './routes/adminResetPassword';
 import {
   appLogger,
   requestLogger,
@@ -24,6 +25,7 @@ import { startMeetingNotificationScheduler, stopMeetingNotificationScheduler } f
 import { startPrayerNotificationScheduler, stopPrayerNotificationScheduler } from './services/prayerNotificationScheduler';
 import { startPrayerTimesCacheScheduler, stopPrayerTimesCacheScheduler } from './services/prayerTimesCacheScheduler';
 import { startDhikrReminderScheduler, stopDhikrReminderScheduler } from './services/dhikrReminderScheduler';
+import { startMuhasabaReminderScheduler, stopMuhasabaReminderScheduler } from './services/muhasabaReminderScheduler';
 import { logZohoMailStatus } from './services/zohoMail';
 import { logObjectStorageStatus } from './services/objectStorage';
 
@@ -31,6 +33,7 @@ import { logObjectStorageStatus } from './services/objectStorage';
 import authRoutes from './routes/auth';
 import prayerRoutes from './routes/prayers';
 import quranRoutes from './routes/quran';
+import tafsirV2Routes from './routes/tafsirV2';
 import dhikrRoutes from './routes/dhikr';
 import zakatRoutes from './routes/zakat';
 import maktabRoutes from './routes/maktab';
@@ -443,6 +446,7 @@ app.get('/api/tools/users', async (req, res) => {
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/prayers', prayerRoutes);
+app.use('/api/quran/tafsir-v2', quranLimiter, tafsirV2Routes);
 app.use('/api/quran', quranLimiter, quranRoutes);
 app.use('/api/dhikr', dhikrRoutes);
 app.use('/api/zakat', zakatRoutes);
@@ -562,6 +566,9 @@ app.patch('/api/admin/users/:id/block', authMiddleware, superAdminMiddleware, as
         res.status(500).json({ status: 'error', message: error.message });
     }
 });
+
+// Reset a user's password to a temporary value they must change on next login.
+app.patch('/api/admin/users/:id/reset-password', authMiddleware, superAdminMiddleware, resetUserPasswordHandler);
 
 // Delete User
 app.delete('/api/admin/users/:id', authMiddleware, superAdminMiddleware, async (req: any, res: any) => {
@@ -711,7 +718,7 @@ const startServer = async () => {
     await connectDB();
 
     // Listen on 0.0.0.0 to allow access from other interfaces (required for VMs/external access)
-    app.listen(PORT, '0.0.0.0', () => {
+    const server = app.listen(PORT, '0.0.0.0', () => {
       logStartup(PORT, {
         database: `${summarizeMongoUri(resolveMongoUri()).host} / ${mongoose.connection.name || 'hikmahsphere'}`,
         redis: redisClient.isOpen ? 'connected' : 'unavailable',
@@ -720,6 +727,19 @@ const startServer = async () => {
       startPrayerNotificationScheduler();
       startPrayerTimesCacheScheduler();
       startDhikrReminderScheduler();
+      startMuhasabaReminderScheduler();
+    });
+
+    server.on('error', (error: NodeJS.ErrnoException) => {
+      appLogger.error('server_listen_failed', {
+        error,
+        port: PORT,
+        code: error.code,
+      });
+      if (error.code === 'EADDRINUSE') {
+        console.error(`Port ${PORT} is already in use. Stop the other process before starting the API.`);
+      }
+      process.exit(1);
     });
   } catch (error) {
     appLogger.error('server_start_failed', { error });
@@ -739,19 +759,26 @@ process.on('uncaughtException', (err: Error) => {
   process.exit(1);
 });
 
-// Graceful shutdown
-process.on('SIGTERM', async () => {
-  appLogger.info('shutdown_started', { signal: 'SIGTERM' });
+const shutdown = async (signal: string) => {
+  appLogger.info('shutdown_started', { signal });
   stopMeetingNotificationScheduler();
   stopPrayerNotificationScheduler();
   stopPrayerTimesCacheScheduler();
   stopDhikrReminderScheduler();
+  stopMuhasabaReminderScheduler();
   await mongoose.connection.close();
   if (redisClient.isOpen) {
       await redisClient.quit();
   }
-  appLogger.info('shutdown_completed', { signal: 'SIGTERM' });
+  appLogger.info('shutdown_completed', { signal });
   process.exit(0);
+};
+
+process.on('SIGTERM', () => {
+  void shutdown('SIGTERM');
+});
+process.on('SIGINT', () => {
+  void shutdown('SIGINT');
 });
 
 startServer();

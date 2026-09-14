@@ -3,6 +3,7 @@ import html2canvas from 'html2canvas';
 import toast from 'react-hot-toast';
 import {
   ArrowPathIcon,
+  BellAlertIcon,
   BookOpenIcon,
   CalendarDaysIcon,
   CheckCircleIcon,
@@ -20,6 +21,7 @@ import {
 import PageSEO from '../components/PageSEO';
 import { useAuth } from '../hooks/useAuth';
 import { API_URL } from '../config';
+import { useMuhasabaReminder } from '../hooks/useMuhasabaReminder';
 import {
   PRAYER_KEYS,
   PRAYER_EXEMPTION_REASON_LABEL,
@@ -298,6 +300,14 @@ const SalahTracker: React.FC = () => {
     salahHeatmap: true,
     quranHeatmap: true,
   });
+  const {
+    isSignedIn: isReminderSignedIn,
+    enabled: reminderEnabled,
+    time: reminderTime,
+    isSaving: isReminderSaving,
+    toggle: handleReminderToggle,
+    changeTime: handleReminderTimeChange,
+  } = useMuhasabaReminder();
 
   const storageKey = useMemo(() => {
     return getSalahTrackerStorageKey(authUser ? { id: authUser.id, email: authUser.email } : null);
@@ -1143,6 +1153,56 @@ const SalahTracker: React.FC = () => {
               </div>
             </div>
           </section>
+
+          {isReminderSignedIn && (
+            <section className="mt-6 rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm sm:p-5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
+                    <BellAlertIcon className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <h2 className="text-base font-semibold text-gray-900">Daily reminder</h2>
+                    <p className="mt-1 text-sm text-gray-600">
+                      Fires once per day at your chosen local time, even if today is already logged.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3 sm:justify-end">
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                    Time
+                    <input
+                      type="time"
+                      value={reminderTime}
+                      disabled={isReminderSaving}
+                      onChange={(event) => handleReminderTimeChange(event.target.value)}
+                      className="rounded-lg border border-emerald-200 bg-white px-2 py-1.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-emerald-400 disabled:opacity-60"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={reminderEnabled}
+                    aria-label="Enable daily Muhasabah reminder"
+                    disabled={isReminderSaving}
+                    onClick={() => {
+                      void handleReminderToggle();
+                    }}
+                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 ${
+                      reminderEnabled ? 'bg-emerald-500' : 'bg-gray-300'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        reminderEnabled ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+            </section>
+          )}
 
           <section className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <article className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
