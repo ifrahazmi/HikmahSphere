@@ -50,7 +50,7 @@ describe('Navbar layout', () => {
   it('stacks the version badge under the name without taking extra width', () => {
     renderNavbar();
 
-    const version = screen.getByText(/v1\.0\.2/);
+    const version = screen.getByText(/v1\.1\.0/);
     expect(version).not.toHaveClass('hidden');
 
     const brandText = screen.getByText('HikmahSphere').closest('div');

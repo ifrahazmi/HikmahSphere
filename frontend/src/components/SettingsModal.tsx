@@ -6,8 +6,10 @@ import { useNotificationPreferences } from '../hooks/useNotificationPreferences'
 import { useNotification } from '../contexts/NotificationContext';
 import { useAuth } from '../hooks/useAuth';
 import { useUserPreferences } from '../hooks/useUserPreferences';
+import { useMuhasabaReminder } from '../hooks/useMuhasabaReminder';
 import { playAdhanFromUserGesture } from '../utils/adhanAudio';
 import toast from 'react-hot-toast';
+import { canVibrate, isHapticEnabled, setHapticEnabled, triggerHaptic } from '../utils/hapticFeedback';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -22,6 +24,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
   const { preferences: userPrefs, updatePreference: updateUserPref } = useUserPreferences();
   const { hasRole } = useAuth();
   const [saving, setSaving] = useState(false);
+  const [hapticsEnabled, setHapticsEnabled] = useState(() => isHapticEnabled());
+  const {
+    isSignedIn: isReminderSignedIn,
+    enabled: reminderEnabled,
+    time: reminderTime,
+    isSaving: isReminderSaving,
+    toggle: toggleMuhasabaReminder,
+    changeTime: changeMuhasabaReminderTime,
+  } = useMuhasabaReminder({ hydrate: isOpen });
 
   if (!isOpen) return null;
 
@@ -118,6 +129,79 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
               On phone, Adhan plays automatically when the app is open. From background,
               tap the prayer notification, then tap Play Adhan on the prompt.
             </p>
+            <div className="mb-3 flex items-center justify-between rounded-lg bg-gray-50 p-3 dark:bg-gray-800">
+              <div>
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Haptic feedback</p>
+                <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  In-app taps (tasbih, toasts) use the Vibration API, which iPhone Safari does not support.
+                  Incoming push notifications can still use iPhone&apos;s Taptic Engine.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !hapticsEnabled;
+                  setHapticEnabled(next);
+                  setHapticsEnabled(next);
+                  if (next) {
+                    if (!canVibrate()) {
+                      toast('In-app vibration is not supported here. iPhone can still tap for incoming notifications.');
+                    } else {
+                      triggerHaptic('notify');
+                    }
+                  }
+                }}
+                className={`px-3 py-1 rounded text-sm font-medium transition ${
+                  hapticsEnabled
+                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-200'
+                    : 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                }`}
+              >
+                {hapticsEnabled ? t('settings.enable') : t('settings.disable')}
+              </button>
+            </div>
+            <div className="mb-3 rounded-lg bg-gray-50 p-3 dark:bg-gray-800">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Muhasabah daily reminder</p>
+                  <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                    Once per day at your chosen local time, even if today is already logged.
+                  </p>
+                </div>
+                {isReminderSignedIn ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void toggleMuhasabaReminder();
+                    }}
+                    disabled={isReminderSaving}
+                    className={`px-3 py-1 rounded text-sm font-medium transition disabled:opacity-60 ${
+                      reminderEnabled
+                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-200'
+                        : 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                    }`}
+                  >
+                    {reminderEnabled ? t('settings.enable') : t('settings.disable')}
+                  </button>
+                ) : null}
+              </div>
+              {isReminderSignedIn ? (
+                <label className="mt-3 flex items-center justify-between gap-3 text-sm text-gray-700 dark:text-gray-300">
+                  Time
+                  <input
+                    type="time"
+                    value={reminderTime}
+                    disabled={isReminderSaving}
+                    onChange={(event) => changeMuhasabaReminderTime(event.target.value)}
+                    className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-emerald-400 disabled:opacity-60 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+                  />
+                </label>
+              ) : (
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                  Sign in to schedule a daily Muhasabah reminder.
+                </p>
+              )}
+            </div>
             <div className="space-y-3">
               {(['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'] as const).map((prayer) => (
                 <div key={prayer} className="flex items-center justify-between rounded-lg bg-gray-50 p-3 dark:bg-gray-800">
@@ -174,8 +258,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                         'info',
                         { type: 'adhan-test' }
                       );
-  
-                      toast.success('Test successful: Notification displayed!');
+                      triggerHaptic('notify');
+
+                      toast('Test successful: Notification displayed!');
                       if (anySound) {
                         try {
                           playAdhanFromUserGesture();

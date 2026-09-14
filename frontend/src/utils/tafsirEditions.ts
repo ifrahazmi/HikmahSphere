@@ -4,8 +4,27 @@ import type { TafsirEditionMeta } from '../types/tafsir';
 export const BAYAN_EDITION_SLUG = 'ur-tafsir-bayan-ul-quran';
 export const MAUDUDI_URDU_SLUG = 'ur-maududi';
 export const MAUDUDI_ENGLISH_SLUG = 'en-maududi';
+export const MAUDUDI_SHORT_SLUG = 'ur-al-maududi-short';
+export const MAUDUDI_FULL_SLUG = 'ur-al-maududi-full';
+export const IBN_KATHIR_ENGLISH_SLUG = 'en-tafisr-ibn-kathir';
 export const FAROOQI_SLUG = 'hi-farooq';
 export const UNIFIED_TAFSIR_EDITION = 'unified-bayan-maududi';
+
+export const TAFSIR_V2_EDITION_SLUGS = new Set([
+  MAUDUDI_SHORT_SLUG,
+  MAUDUDI_FULL_SLUG,
+]);
+
+export const FEATURED_ENGLISH_TAFSIR_SLUGS = new Set([
+  IBN_KATHIR_ENGLISH_SLUG,
+  'en-tafsir-maarif-ul-quran',
+  'en-al-jalalayn',
+]);
+
+export const HIDDEN_TAFSIR_SLUGS = new Set([
+  'ur-tazkirul-quran',
+  'en-tazkirul-quran',
+]);
 
 export const EDITIONS_API_TRANSLATIONS = [
   {
@@ -37,24 +56,16 @@ export const TRANSLATION_STYLE_SLUGS = new Set([
 
 export const LEGACY_TAFSIR_EDITION_MAP: Record<string, string> = {
   'bayan-ul-quran-dr-israr-ahmed': BAYAN_EDITION_SLUG,
-  'tafheem-ul-quran-syed-abu-ala-maududi': BAYAN_EDITION_SLUG,
+  'tafheem-ul-quran-syed-abu-ala-maududi': MAUDUDI_SHORT_SLUG,
 };
 
 export const FALLBACK_TAFSIR_EDITIONS: TafsirEditionMeta[] = [
   { slug: BAYAN_EDITION_SLUG, name: 'Tafsir Bayan ul Quran', author_name: 'Dr. Israr Ahmad', language_name: 'urdu' },
+  { slug: MAUDUDI_SHORT_SLUG, name: 'Tafhim-ul-Quran (Short)', author_name: 'Syed Abul Ala Maududi', language_name: 'urdu' },
   { slug: 'ur-tafseer-ibn-e-kaseer', name: 'Tafsir Ibn Kathir', author_name: 'Hafiz Ibn Kathir', language_name: 'urdu' },
-  { slug: 'ur-tazkirul-quran', name: 'Tazkirul Quran (Maulana Wahiduddin Khan)', author_name: 'Maulana Wahid Uddin Khan', language_name: 'urdu' },
-  { slug: 'en-tafisr-ibn-kathir', name: 'Tafsir Ibn Kathir (abridged)', author_name: 'Hafiz Ibn Kathir', language_name: 'english' },
+  { slug: IBN_KATHIR_ENGLISH_SLUG, name: 'Tafsir Ibn Kathir (abridged)', author_name: 'Hafiz Ibn Kathir', language_name: 'english' },
   { slug: 'en-tafsir-maarif-ul-quran', name: 'Maarif-ul-Quran', author_name: 'Mufti Muhammad Shafi', language_name: 'english' },
-  { slug: 'en-tazkirul-quran', name: 'Tazkirul Quran (Maulana Wahiduddin Khan)', author_name: 'Maulana Wahid Uddin Khan', language_name: 'english' },
-  { slug: 'en-kashf-al-asrar-tafsir', name: 'Kashf Al-Asrar Tafsir', author_name: 'Kashf Al-Asrar Tafsir', language_name: 'english' },
-  { slug: 'en-al-qushairi-tafsir', name: 'Al Qushairi Tafsir', author_name: 'Al Qushairi Tafsir', language_name: 'english' },
-  { slug: 'en-kashani-tafsir', name: 'Kashani Tafsir', author_name: 'Kashani Tafsir', language_name: 'english' },
-  { slug: 'en-tafsir-al-tustari', name: 'Tafsir al-Tustari', author_name: 'Tafsir al-Tustari', language_name: 'english' },
-  { slug: 'en-asbab-al-nuzul-by-al-wahidi', name: 'Asbab Al-Nuzul by Al-Wahidi', author_name: 'Al-Wahidi', language_name: 'english' },
-  { slug: 'en-tafsir-ibn-abbas', name: "Tanwir al-Miqbas min Tafsir Ibn Abbas", author_name: "Tanwir al-Miqbas min Tafsir Ibn Abbas", language_name: 'english' },
   { slug: 'en-al-jalalayn', name: 'Al-Jalalayn', author_name: 'Al-Jalalayn', language_name: 'english' },
-  { slug: MAUDUDI_ENGLISH_SLUG, name: 'Towards Understanding the Quran (Maududi)', author_name: "Sayyid Abul A'ala Maududi", language_name: 'english' },
 ];
 
 export const isEditionsApiTranslation = (identifier?: string): boolean => {
@@ -66,7 +77,15 @@ export const isTranslationStyleEdition = (slug?: string): boolean => {
 };
 
 export const filterCommentaryTafsirEditions = (editions: TafsirEditionMeta[]): TafsirEditionMeta[] => {
-  return editions.filter((edition) => !isEditionsApiTranslation(edition.slug));
+  return editions.filter((edition) => {
+    if (isEditionsApiTranslation(edition.slug) || HIDDEN_TAFSIR_SLUGS.has(edition.slug)) {
+      return false;
+    }
+    if (edition.language_name === 'english' && !FEATURED_ENGLISH_TAFSIR_SLUGS.has(edition.slug)) {
+      return false;
+    }
+    return true;
+  });
 };
 
 export const getRetiredTafsirTranslation = (edition: unknown): string | null => {
@@ -83,6 +102,65 @@ export const getRetiredTafsirTranslation = (edition: unknown): string | null => 
 
 export const isUnifiedTafsirEdition = (slug?: string): boolean => {
   return (slug || '').trim() === UNIFIED_TAFSIR_EDITION;
+};
+
+export const isV2TafsirEdition = (slug?: string): boolean => {
+  return TAFSIR_V2_EDITION_SLUGS.has((slug || '').trim());
+};
+
+export const isMaududiShortEdition = (slug?: string): boolean => {
+  const raw = (slug || '').trim();
+  return raw === MAUDUDI_SHORT_SLUG || raw === 'tafheem-ul-quran-syed-abu-ala-maududi';
+};
+
+export const isMaududiFullEdition = (slug?: string): boolean => {
+  return (slug || '').trim() === MAUDUDI_FULL_SLUG;
+};
+
+const V2_PICKER_ORDER = [MAUDUDI_SHORT_SLUG, MAUDUDI_FULL_SLUG];
+
+export const mergeTafsirEditionCatalogs = (
+  v1Editions: TafsirEditionMeta[],
+  v2Editions: TafsirEditionMeta[]
+): TafsirEditionMeta[] => {
+  const v1Filtered = filterCommentaryTafsirEditions(v1Editions);
+  const v2BySlug = new Map<string, TafsirEditionMeta>();
+  v2Editions.forEach((edition) => {
+    if (isV2TafsirEdition(edition.slug) && edition.slug !== BAYAN_EDITION_SLUG) {
+      v2BySlug.set(edition.slug, edition);
+    }
+  });
+
+  const merged: TafsirEditionMeta[] = [];
+  const seen = new Set<string>();
+
+  const bayan = v1Filtered.find((edition) => edition.slug === BAYAN_EDITION_SLUG);
+  if (bayan) {
+    merged.push(bayan);
+    seen.add(BAYAN_EDITION_SLUG);
+  }
+
+  V2_PICKER_ORDER.forEach((slug) => {
+    if (slug === MAUDUDI_FULL_SLUG && !v2BySlug.has(slug)) {
+      return;
+    }
+    const edition = v2BySlug.get(slug) || v1Filtered.find((item) => item.slug === slug);
+    if (!edition || seen.has(slug)) {
+      return;
+    }
+    merged.push(edition);
+    seen.add(slug);
+  });
+
+  v1Filtered.forEach((edition) => {
+    if (seen.has(edition.slug)) {
+      return;
+    }
+    merged.push(edition);
+    seen.add(edition.slug);
+  });
+
+  return merged;
 };
 
 const EDITION_SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/i;
@@ -102,7 +180,16 @@ export const migrateTafsirEdition = (edition: unknown, extrasEnabled = false): s
   }
 
   const mapped = LEGACY_TAFSIR_EDITION_MAP[raw] || raw;
-  return EDITION_SLUG_RE.test(mapped) ? mapped : BAYAN_EDITION_SLUG;
+  if (!EDITION_SLUG_RE.test(mapped)) {
+    return BAYAN_EDITION_SLUG;
+  }
+  if (HIDDEN_TAFSIR_SLUGS.has(mapped)) {
+    return mapped.startsWith('en-') ? IBN_KATHIR_ENGLISH_SLUG : BAYAN_EDITION_SLUG;
+  }
+  if (mapped.startsWith('en-') && !FEATURED_ENGLISH_TAFSIR_SLUGS.has(mapped)) {
+    return IBN_KATHIR_ENGLISH_SLUG;
+  }
+  return mapped;
 };
 
 export const resolveEditionsApiSlug = (edition?: string): string => {
@@ -185,20 +272,20 @@ export const getTranslationDisplayStyle = (
     return {
       dir: 'rtl',
       lang: 'ur',
-      className: 'quran-urdu-translation font-jameel-noori text-right',
+      className: 'quran-urdu-translation text-right',
     };
   }
   if (language === 'Hindi') {
     return {
       dir: 'ltr',
       lang: 'hi',
-      className: 'quran-hindi-translation font-hindi text-left leading-8',
+      className: 'quran-hindi-translation font-hindi text-left leading-8 quran-reading-text',
     };
   }
   return {
     dir: 'ltr',
     lang: 'en',
-    className: 'text-left leading-8 whitespace-pre-wrap',
+    className: 'text-left leading-8 whitespace-pre-wrap quran-reading-text',
   };
 };
 
@@ -227,6 +314,24 @@ export const getEditionDisplayLabel = (edition: TafsirEditionMeta | { slug: stri
   return edition.author_name && !name.includes(edition.author_name)
     ? `${name} — ${edition.author_name}`
     : name;
+};
+
+export const getEditionPickerCopy = (
+  edition: TafsirEditionMeta | { slug: string; name?: string; author_name?: string; language_name?: string }
+): { title: string; author: string; language: string } => {
+  if (edition.slug === UNIFIED_TAFSIR_EDITION) {
+    return { title: 'Both (Bayan + Tafheem)', author: 'Dr. Israr Ahmad and Maududi', language: 'Urdu' };
+  }
+  const language = edition.language_name === 'english'
+    ? 'English'
+    : edition.language_name === 'hindi'
+      ? 'Hindi'
+      : 'Urdu';
+  return {
+    title: edition.name || edition.slug,
+    author: edition.author_name || '',
+    language,
+  };
 };
 
 export const groupEditionsByLanguage = (editions: TafsirEditionMeta[]) => {

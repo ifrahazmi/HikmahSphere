@@ -1,6 +1,11 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { toast } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './useAuth';
+
+jest.mock('react-hot-toast', () => ({
+  toast: { error: jest.fn(), success: jest.fn() },
+}));
 
 jest.mock('../firebase', () => ({
   getPushDeviceId: () => 'test-device',
@@ -29,7 +34,7 @@ const LOGIN_USER = {
 const PROFILE_USER = { ...LOGIN_USER, profile: { ...LOGIN_USER.profile, bio: 'Profile bio' } };
 
 const Harness: React.FC = () => {
-  const { user, loading, login, logout, sessionStatus } = useAuth();
+  const { user, loading, login, logout, sessionStatus, passwordChangeRequired } = useAuth();
   const [loadingDuringLogin, setLoadingDuringLogin] = React.useState<string>('unknown');
   const seenLoading = React.useRef(false);
 
@@ -45,6 +50,7 @@ const Harness: React.FC = () => {
       <div data-testid="phone">{user?.phoneNumber ?? '-'}</div>
       <div data-testid="auth-loading">{String(loading)}</div>
       <div data-testid="session-status">{sessionStatus}</div>
+      <div data-testid="password-change-required">{String(passwordChangeRequired)}</div>
       <div data-testid="loading-during-login">{loadingDuringLogin}</div>
       <button
         onClick={async () => {
@@ -90,6 +96,7 @@ describe('useAuth login hydration', () => {
     localStorage.clear();
     jest.restoreAllMocks();
     jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    (toast.error as jest.Mock).mockClear();
   });
 
   it('renders profile details from the login response without a refresh', async () => {
@@ -212,6 +219,7 @@ describe('useAuth login hydration', () => {
     expect(screen.getByTestId('name').textContent).toBe('Aisha Rahman');
     expect(localStorage.getItem('token')).toBe(TOKEN);
     expect(screen.getByTestId('session-status').textContent).toBe('reconnecting');
+    expect(screen.getByTestId('password-change-required').textContent).toBe('false');
     unmount();
   });
 
@@ -231,6 +239,7 @@ describe('useAuth login hydration', () => {
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
     expect(localStorage.getItem('token')).toBe(TOKEN);
     expect(screen.getByTestId('name').textContent).toBe('Aisha Rahman');
+    expect(screen.getByTestId('password-change-required').textContent).toBe('false');
     unmount();
   });
 
@@ -282,6 +291,114 @@ describe('useAuth login hydration', () => {
     expect(localStorage.getItem('token')).toBeNull();
   });
 
+  it('clears the session after an ACCOUNT_BLOCKED profile response', async () => {
+    localStorage.setItem('token', TOKEN);
+    localStorage.setItem('user', JSON.stringify(LOGIN_USER));
+    (global as any).fetch = jest.fn(() => Promise.resolve({
+      ok: false,
+      status: 403,
+      json: () => Promise.resolve({
+        status: 'error',
+        code: 'ACCOUNT_BLOCKED',
+        message: 'Your account has been blocked.',
+      }),
+    }));
+
+    render(
+      <AuthProvider>
+        <Harness />
+      </AuthProvider>
+    );
+
+    await waitFor(() => expect(screen.getByTestId('name').textContent).toBe('-'));
+    expect(localStorage.getItem('token')).toBeNull();
+    expect(toast.error).toHaveBeenCalledWith('Your account has been blocked.', { id: 'account-blocked' });
+  });
+
+  it('keeps the session after a generic 403 profile response', async () => {
+    localStorage.setItem('token', TOKEN);
+    localStorage.setItem('user', JSON.stringify(LOGIN_USER));
+    (global as any).fetch = jest.fn(() => Promise.resolve({
+      ok: false,
+      status: 403,
+      json: () => Promise.resolve({ status: 'error', message: 'Access denied. Super Admin only.' }),
+    }));
+
+    const { unmount } = render(
+      <AuthProvider>
+        <Harness />
+      </AuthProvider>
+    );
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    expect(screen.getByTestId('name').textContent).toBe('Aisha Rahman');
+    expect(localStorage.getItem('token')).toBe(TOKEN);
+    unmount();
+  });
+
+  it('keeps the token and requires a password change after PASSWORD_CHANGE_REQUIRED', async () => {
+    localStorage.setItem('token', TOKEN);
+    localStorage.setItem('user', JSON.stringify(LOGIN_USER));
+    (global as any).fetch = jest.fn(() => Promise.resolve({
+      ok: false,
+      status: 403,
+      json: () => Promise.resolve({
+        status: 'error',
+        code: 'PASSWORD_CHANGE_REQUIRED',
+        message: 'Please set a new password to continue.',
+      }),
+    }));
+
+    render(
+      <AuthProvider>
+        <Harness />
+      </AuthProvider>
+    );
+
+    await waitFor(() => expect(screen.getByTestId('password-change-required').textContent).toBe('true'));
+    expect(localStorage.getItem('token')).toBe(TOKEN);
+    expect(screen.getByTestId('name').textContent).toBe('Aisha Rahman');
+  });
+
+  it('requires a password change after a temp-password login without hydrating the user', async () => {
+    (global as any).fetch = jest.fn((input: any) => {
+      const url = String(input);
+      if (url.includes('/auth/login')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            status: 'success',
+            passwordChangeRequired: true,
+            token: TOKEN,
+            user: { id: 'user1', email: 'user@example.com' },
+          }),
+        });
+      }
+      return Promise.resolve({
+        ok: false,
+        status: 403,
+        json: () => Promise.resolve({
+          status: 'error',
+          code: 'PASSWORD_CHANGE_REQUIRED',
+          message: 'Please set a new password to continue.',
+        }),
+      });
+    });
+
+    render(
+      <AuthProvider>
+        <Harness />
+      </AuthProvider>
+    );
+    await waitFor(() => expect(screen.getByTestId('name').textContent).toBe('-'));
+
+    screen.getByText('log in').click();
+
+    await waitFor(() => expect(screen.getByTestId('password-change-required').textContent).toBe('true'));
+    expect(localStorage.getItem('token')).toBe(TOKEN);
+    expect(screen.getByTestId('name').textContent).toBe('-');
+  });
+
   it('clears an already expired JWT without calling the backend', async () => {
     const expiredToken = `${b64({ alg: 'HS256' })}.${b64({
       userId: 'user1',
@@ -312,5 +429,89 @@ describe('useAuth login hydration', () => {
 
     expect(localStorage.getItem('token')).toBeNull();
     await waitFor(() => expect(screen.getByTestId('name').textContent).toBe('-'));
+  });
+
+  it('polls the profile every 10 seconds while the tab is visible', async () => {
+    jest.useFakeTimers();
+    localStorage.setItem('token', TOKEN);
+    localStorage.setItem('user', JSON.stringify(LOGIN_USER));
+    let visibility: DocumentVisibilityState = 'visible';
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => visibility,
+    });
+    (global as any).fetch = jest.fn(() => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ status: 'success', data: { user: PROFILE_USER } }),
+    }));
+
+    const { unmount } = render(
+      <AuthProvider>
+        <Harness />
+      </AuthProvider>
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const afterBoot = (global.fetch as jest.Mock).mock.calls.length;
+    expect(afterBoot).toBeGreaterThan(0);
+
+    await act(async () => {
+      jest.advanceTimersByTime(10_000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect((global.fetch as jest.Mock).mock.calls.length).toBeGreaterThan(afterBoot);
+
+    const afterVisiblePoll = (global.fetch as jest.Mock).mock.calls.length;
+    visibility = 'hidden';
+    await act(async () => {
+      jest.advanceTimersByTime(10_000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect((global.fetch as jest.Mock).mock.calls.length).toBe(afterVisiblePoll);
+
+    unmount();
+    jest.clearAllTimers();
+    jest.useRealTimers();
+  });
+
+  it('keeps session ready during later profile polls', async () => {
+    jest.useFakeTimers();
+    localStorage.setItem('token', TOKEN);
+    localStorage.setItem('user', JSON.stringify(LOGIN_USER));
+    (global as any).fetch = jest.fn(() => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ status: 'success', data: { user: PROFILE_USER } }),
+    }));
+
+    const { unmount } = render(
+      <AuthProvider>
+        <Harness />
+      </AuthProvider>
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('session-status').textContent).toBe('ready');
+
+    await act(async () => {
+      jest.advanceTimersByTime(10_000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('session-status').textContent).toBe('ready');
+    expect(screen.getByTestId('name').textContent).toBe('Aisha Rahman');
+
+    unmount();
+    jest.clearAllTimers();
+    jest.useRealTimers();
   });
 });

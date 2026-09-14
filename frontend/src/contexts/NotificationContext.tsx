@@ -6,6 +6,7 @@ import { API_URL } from '../config';
 import { useAuth } from '../hooks/useAuth';
 import { setupAdhanAudioUnlock } from '../utils/adhanAudio';
 import { queueAdhanPlayback } from '../utils/adhanPlayback';
+import { resolveForegroundPushHaptic, resolveOsNotificationVibrate, resolveSystemNotificationHaptic, triggerHaptic } from '../utils/hapticFeedback';
 
 export interface Notification {
   id: string;
@@ -278,11 +279,13 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
 
     if (Notification.permission === 'granted') {
       const title = payload.notification?.title || payload.data?.title || 'New Notification';
+      const includeVibrate = typeof document === 'undefined' || document.visibilityState !== 'visible';
       const options: NotificationOptions = {
         body: payload.notification?.body || payload.data?.body || '',
         icon: '/small_logo.jpeg',
         tag: payload.data?.notificationId || payload.messageId || undefined,
-        data: payload.data
+        data: payload.data,
+        ...(includeVibrate ? { vibrate: resolveOsNotificationVibrate(false) } : {}),
       };
       try {
         new Notification(title, options);
@@ -379,6 +382,15 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
       if (!isAdhanPayload(payload)) {
         playNotificationSound();
         showNativeNotification(payload);
+      }
+
+      const foregroundHaptic = resolveForegroundPushHaptic(
+        false,
+        isAdhanPayload(payload),
+        document.visibilityState === 'visible'
+      );
+      if (foregroundHaptic) {
+        triggerHaptic(foregroundHaptic);
       }
 
       if (document.visibilityState !== 'visible') {
@@ -552,6 +564,12 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     shouldProcessNotification(notification);
     addNotification(notification);
 
+    const isVisible = typeof document === 'undefined' || document.visibilityState === 'visible';
+    const systemHaptic = resolveSystemNotificationHaptic(data?.type, isVisible);
+    if (systemHaptic) {
+      triggerHaptic(systemHaptic);
+    }
+
     // Skip OS tray for Adhan — FCM/service worker owns the single system popup.
     // This prevents "Chrome notification + mobile notification" doubles.
     if (data?.type === 'adhan') {
@@ -564,7 +582,8 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
           body,
           icon: '/small_logo.jpeg',
           tag: stableId,
-          data
+          data,
+          ...(isVisible ? {} : { vibrate: resolveOsNotificationVibrate(false) }),
         });
       } catch (e) {
         console.error('Native notification failed:', e);

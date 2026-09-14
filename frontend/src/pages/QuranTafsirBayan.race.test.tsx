@@ -43,6 +43,10 @@ jest.mock('../utils/tafsirBayanApi', () => ({
   fetchRandomTafsir: jest.fn(),
 }));
 
+jest.mock('../utils/tafsirV2Api', () => ({
+  fetchTafsirV2Introduction: jest.fn().mockResolvedValue(''),
+}));
+
 const BAYAN: TafsirEdition = 'ur-tafsir-bayan-ul-quran';
 const IBN_KATHIR: TafsirEdition = 'ur-tafseer-ibn-e-kaseer';
 const BAYAN_BODY = 'bayan tafsir body';

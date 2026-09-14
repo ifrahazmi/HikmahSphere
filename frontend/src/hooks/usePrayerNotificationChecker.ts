@@ -105,7 +105,7 @@ export const usePrayerNotificationChecker = (
                 { type: 'adhan', prayer, notificationId: adhanNotificationId }
               );
 
-              toast.success(`Time for ${copy.toastLabel}`);
+              toast(`Time for ${copy.toastLabel}`);
 
               // Play audio if enabled (only works while the app is open)
               if (prefs.sound) {

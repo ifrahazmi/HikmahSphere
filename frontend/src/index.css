@@ -748,12 +748,12 @@ code {
   font-display: swap;
 }
 
-.font-jameel-noori {
-  font-family: 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif;
+.font-jameel-noori,
+.font-urdu-jameel-noori {
+  font-family: 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', 'Noto Naskh Arabic', serif;
 }
 
 .quran-urdu-translation {
-  font-family: 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif;
   direction: rtl;
   text-align: right;
   line-height: 2.2;
@@ -777,12 +777,42 @@ code {
   font-display: swap;
 }
 
-.font-alvi-nastaleeq {
-  font-family: 'Alvi Nastaleeq', 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif;
+.font-alvi-nastaleeq,
+.font-urdu-alvi-nastaleeq {
+  font-family: 'Alvi Nastaleeq', 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', 'Noto Naskh Arabic', serif;
+}
+
+.font-urdu-noto-nastaliq {
+  font-family: 'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', 'Noto Naskh Arabic', serif;
+}
+
+.font-urdu-lateef {
+  font-family: 'Lateef', 'Noto Naskh Arabic', 'Noto Nastaliq Urdu', serif;
+}
+
+.font-en-noto-serif {
+  font-family: 'Noto Serif', 'Noto Naskh Arabic', Georgia, serif;
+}
+
+.font-en-merriweather {
+  font-family: 'Merriweather', 'Noto Naskh Arabic', Georgia, serif;
+}
+
+.font-en-lora {
+  font-family: 'Lora', 'Noto Naskh Arabic', Georgia, serif;
+}
+
+.font-en-source-serif {
+  font-family: 'Source Serif 4', 'Noto Naskh Arabic', Georgia, serif;
+}
+
+.quran-reading-text {
+  text-rendering: optimizeLegibility;
+  font-variant-ligatures: common-ligatures contextual;
+  font-feature-settings: "liga" 1, "clig" 1, "calt" 1, "mark" 1, "mkmk" 1, "kern" 1;
 }
 
 .quran-urdu-tafsir {
-  font-family: 'Alvi Nastaleeq', 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif;
   direction: rtl;
   text-align: right;
   line-height: 2.2;

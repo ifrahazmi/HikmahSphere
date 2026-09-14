@@ -1,5 +1,7 @@
 // Quran Data Types and Interfaces
 
+import type { EnglishReadingFont, UrduReadingFont } from '../utils/quranReadingFonts';
+
 export interface Surah {
   number: number;
   name: string;              // Arabic name
@@ -81,6 +83,7 @@ export interface SearchResult {
 }
 
 export type TafsirEdition = string;
+export type { EnglishReadingFont, UrduReadingFont };
 
 export type TafsirTranslationPreferences = Record<string, string>;
 
@@ -93,6 +96,8 @@ export interface QuranSettings {
   transliterationFontSize: number; // 12-28px
   theme: 'light' | 'dark';
   arabicFont: 'al-mushaf' | 'indopak-nastaleeq-v3' | 'amiri' | 'scheherazade' | 'noto-naskh' | 'cairo' | 'lateef' | 'reem-kufi';
+  urduFont: UrduReadingFont;
+  englishFont: EnglishReadingFont;
   fontColor: 'default' | 'emerald' | 'blue' | 'amber' | 'rose';
   readerBackground: 'default' | 'white' | 'cream' | 'blue' | 'green';
   lineSpacing: number;             // 1.5-3.0
@@ -237,7 +242,6 @@ export const DEFAULT_TRANSLATIONS = [
   { identifier: 'en.yusufali', name: 'Yusuf Ali', language: 'English' },
   { identifier: 'en.maududi', name: 'Abul Ala Maududi', language: 'English' },
   { identifier: 'en.hilali', name: 'Hilali & Khan', language: 'English' },
-  { identifier: 'en.wahiduddin', name: 'Wahiduddin Khan', language: 'English' },
   { identifier: 'en.ahmedali', name: 'Ahmed Ali', language: 'English' },
   DEFAULT_URDU_TRANSLATION,
   { identifier: 'ur.junagarhi', name: 'Muhammad Junagarhi', language: 'Urdu' },
@@ -282,6 +286,8 @@ export const DEFAULT_QURAN_SETTINGS: QuranSettings = {
   transliterationFontSize: 16,
   theme: 'light',
   arabicFont: 'indopak-nastaleeq-v3',
+  urduFont: 'jameel-noori',
+  englishFont: 'noto-serif',
   fontColor: 'default',
   readerBackground: 'default',
   lineSpacing: 2.0,

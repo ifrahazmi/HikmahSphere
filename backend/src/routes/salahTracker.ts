@@ -2,6 +2,12 @@ import express, { Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import { authMiddleware } from '../middleware/auth';
 import SalahTracker from '../models/SalahTracker';
+import User from '../models/User';
+import {
+  DEFAULT_MUHASABA_REMINDER_TIME,
+  MUHASABA_REMINDER_TIME_PATTERN,
+  normalizeMuhasabaReminderTime,
+} from '../utils/muhasabaReminder';
 
 const router = express.Router();
 
@@ -219,6 +225,132 @@ router.put(
       return res.status(500).json({
         status: 'error',
         message: 'Failed to save Salah Tracker data',
+      });
+    }
+  }
+);
+
+const mapReminder = (user: any) => ({
+  enabled: Boolean(user?.religious?.muhasabaReminder?.enabled),
+  time: normalizeMuhasabaReminderTime(user?.religious?.muhasabaReminder?.time),
+  timezone:
+    typeof user?.religious?.muhasabaReminder?.timezone === 'string' && user.religious.muhasabaReminder.timezone.trim()
+      ? user.religious.muhasabaReminder.timezone.trim()
+      : typeof user?.prayerPush?.timezone === 'string' && user.prayerPush.timezone.trim()
+        ? user.prayerPush.timezone.trim()
+        : null,
+});
+
+const isValidTimezone = (value: string): boolean => {
+  try {
+    Intl.DateTimeFormat('en-US', { timeZone: value }).format(new Date());
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * @route   GET /api/salah-tracker/reminder
+ * @desc    Get daily Muhasabah reminder settings
+ * @access  Private
+ */
+router.get('/reminder', authMiddleware, async (req: any, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+    const user = await User.findById(userId).select('religious.muhasabaReminder prayerPush.timezone');
+    if (!user) {
+      return res.status(404).json({ status: 'error', message: 'User not found' });
+    }
+
+    return res.json({
+      status: 'success',
+      data: mapReminder(user),
+    });
+  } catch (error: any) {
+    console.error('Get Muhasabah reminder error:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch reminder settings',
+    });
+  }
+});
+
+/**
+ * @route   PATCH /api/salah-tracker/reminder
+ * @desc    Update daily Muhasabah reminder time and enablement
+ * @access  Private
+ */
+router.patch(
+  '/reminder',
+  authMiddleware,
+  [
+    body('enabled').optional().isBoolean().withMessage('enabled must be a boolean'),
+    body('time').optional().matches(MUHASABA_REMINDER_TIME_PATTERN).withMessage('time must be HH:MM (24-hour)'),
+    body('timezone').optional().isString().trim().isLength({ min: 1, max: 80 }),
+  ],
+  async (req: any, res: Response) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Validation failed',
+          errors: errors.array(),
+        });
+      }
+
+      const userId = req.user?.userId;
+      const user = await User.findById(userId).select('religious.muhasabaReminder prayerPush.timezone');
+      if (!user) {
+        return res.status(404).json({ status: 'error', message: 'User not found' });
+      }
+
+      const current = mapReminder(user);
+      const nextEnabled = typeof req.body.enabled === 'boolean' ? req.body.enabled : current.enabled;
+      const nextTime = typeof req.body.time === 'string'
+        ? normalizeMuhasabaReminderTime(req.body.time)
+        : current.time;
+      const requestedTimezone = typeof req.body.timezone === 'string' ? req.body.timezone.trim() : '';
+      const nextTimezone = requestedTimezone || current.timezone || '';
+
+      if (requestedTimezone && !isValidTimezone(requestedTimezone)) {
+        return res.status(400).json({ status: 'error', message: 'timezone is invalid' });
+      }
+
+      if (nextEnabled && !nextTimezone) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'timezone is required to enable reminders',
+        });
+      }
+
+      if (nextEnabled && !isValidTimezone(nextTimezone)) {
+        return res.status(400).json({ status: 'error', message: 'timezone is invalid' });
+      }
+
+      await User.updateOne(
+        { _id: userId },
+        {
+          $set: {
+            'religious.muhasabaReminder.enabled': nextEnabled,
+            'religious.muhasabaReminder.time': nextTime || DEFAULT_MUHASABA_REMINDER_TIME,
+            ...(nextTimezone ? { 'religious.muhasabaReminder.timezone': nextTimezone } : {}),
+          },
+        }
+      );
+
+      const updated = await User.findById(userId).select('religious.muhasabaReminder prayerPush.timezone');
+      return res.json({
+        status: 'success',
+        message: 'Reminder settings saved',
+        data: mapReminder(updated),
+      });
+    } catch (error: any) {
+      console.error('Save Muhasabah reminder error:', error);
+      return res.status(500).json({
+        status: 'error',
+        message: 'Failed to save reminder settings',
       });
     }
   }

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Bell, Check, Trash2, MailOpen, X, ArrowLeft, User, Calendar } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useNotification, Notification } from '../../contexts/NotificationContext';
 import { toast } from 'react-hot-toast';
@@ -8,6 +9,7 @@ const NotificationBell: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
+  const navigate = useNavigate();
 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
@@ -42,6 +44,15 @@ const NotificationBell: React.FC = () => {
   
   const openNotificationDetail = (notification: Notification) => {
       markAsRead(notification.id);
+      const type = typeof notification.data?.type === 'string' ? notification.data.type : '';
+      const url = typeof notification.data?.url === 'string' ? notification.data.url.trim() : '';
+      if (type === 'muhasaba-reminder' || url === '/salah-tracker') {
+        setIsOpen(false);
+        setShowHistory(false);
+        setSelectedNotification(null);
+        navigate('/salah-tracker');
+        return;
+      }
       setSelectedNotification(notification);
       // If we are in the dropdown, close it and open history modal
       if (isOpen) {

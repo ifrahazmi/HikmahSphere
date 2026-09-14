@@ -1,6 +1,8 @@
 import { useState, useEffect, createContext, useContext, ReactNode, useRef, useCallback } from 'react';
 import { API_URL } from '../config';
 import { getPushDeviceId, getStoredPushToken, storePushToken } from '../firebase';
+import { ACCOUNT_BLOCKED_CODE, notifyAccountBlocked } from '../utils/accountBlocked';
+import { PASSWORD_CHANGE_REQUIRED_CODE } from '../utils/passwordChangeRequired';
 
 interface User {
   id: string;
@@ -32,6 +34,9 @@ interface AuthContextType {
   isAuthenticated: boolean;
   hasRole: (roles: string[]) => boolean; // Add role check helper definition
   sessionStatus: 'ready' | 'reconnecting';
+  passwordChangeRequired: boolean;
+  requirePasswordChange: () => void;
+  completePasswordChange: (newPassword: string) => Promise<void>;
 }
 
 // Render Free cold starts commonly take close to a minute. Profile validation
@@ -39,14 +44,22 @@ interface AuthContextType {
 // cached UI or converting a timeout into a logout.
 const AUTH_FETCH_TIMEOUT_MS = 75000;
 const PROFILE_RETRY_DELAYS_MS = [0, 2000] as const;
+const ACCOUNT_BLOCK_POLL_MS = 10_000;
+
+const delay = (ms: number) =>
+  new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
 
 class ProfileRequestError extends Error {
   status?: number;
+  code?: string;
 
-  constructor(message: string, status?: number) {
+  constructor(message: string, status?: number, code?: string) {
     super(message);
     this.name = 'ProfileRequestError';
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -97,12 +110,35 @@ const isJwtExpired = (token: string, clockSkewMs = 30_000): boolean => {
   return Date.now() >= expiryMs - clockSkewMs;
 };
 
+const isAccountBlockedFailure = (error: unknown): boolean =>
+  error instanceof ProfileRequestError
+  && error.status === 403
+  && error.code === ACCOUNT_BLOCKED_CODE;
+
+const isPasswordChangeRequiredFailure = (error: unknown): boolean =>
+  error instanceof ProfileRequestError
+  && error.status === 403
+  && error.code === PASSWORD_CHANGE_REQUIRED_CODE;
+
 const isDefinitiveAuthFailure = (error: unknown): boolean =>
   error instanceof ProfileRequestError
-  && (error.status === 401 || error.status === 403);
+  && (error.status === 401 || isAccountBlockedFailure(error));
 
-const delay = (ms: number): Promise<void> =>
-  new Promise((resolve) => window.setTimeout(resolve, ms));
+const usersMatch = (current: User | null, next: User): boolean => {
+  if (!current) return false;
+  return current.id === next.id
+    && current.name === next.name
+    && current.email === next.email
+    && current.avatar === next.avatar
+    && current.isAdmin === next.isAdmin
+    && current.role === next.role
+    && current.createdAt === next.createdAt
+    && current.gender === next.gender
+    && current.phoneNumber === next.phoneNumber
+    && current.madhab === next.madhab
+    && current.bio === next.bio
+    && JSON.stringify(current.address || null) === JSON.stringify(next.address || null);
+};
 
 const AUTH_BOOTSTRAP_MAX_WAIT_MS = 30_000;
 
@@ -114,7 +150,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // spinner while this is true, so sign-in requests must not toggle it.
   const [loading, setLoading] = useState(true);
   const [sessionStatus, setSessionStatus] = useState<'ready' | 'reconnecting'>('ready');
+  const [passwordChangeRequired, setPasswordChangeRequired] = useState(false);
   const profileSyncRef = useRef<Promise<boolean> | null>(null);
+  const sessionConfirmedRef = useRef(false);
 
   useEffect(() => {
     // Never keep the startup surface spinning beyond its global readiness
@@ -154,7 +192,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const persistUser = useCallback((apiUser: any) => {
     const mappedUser = mapUser(apiUser);
-    setUser(mappedUser);
+    sessionConfirmedRef.current = true;
+    setUser((current) => (usersMatch(current, mappedUser) ? current : mappedUser));
     try {
       // Cache the compact UI shape rather than the full API document. Large
       // profile payloads previously exceeded localStorage and removed warm start.
@@ -172,8 +211,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const clearSession = useCallback(() => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    sessionConfirmedRef.current = false;
     setUser(null);
     setSessionStatus('ready');
+    setPasswordChangeRequired(false);
   }, []);
 
   const fetchProfile = useCallback(async (): Promise<boolean> => {
@@ -187,7 +228,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     if (!response.ok) {
-      throw new ProfileRequestError(`Profile request failed (${response.status})`, response.status);
+      let code: string | undefined;
+      try {
+        const payload = await response.json();
+        if (payload && typeof payload === 'object' && typeof payload.code === 'string') {
+          code = payload.code;
+        }
+      } catch {
+        // Ignore malformed error bodies; status alone still drives recovery.
+      }
+      throw new ProfileRequestError(`Profile request failed (${response.status})`, response.status, code);
     }
 
     const data = await response.json();
@@ -202,6 +252,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     persistUser(data.data.user);
+    setPasswordChangeRequired(false);
     return true;
   }, [persistUser]);
 
@@ -211,7 +262,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     const syncPromise = (async () => {
-      setSessionStatus('reconnecting');
+      // First confirmation after a cached/offline start can show reconnecting.
+      // Later background polls must not, or the dashboard/app remounts every 10s.
+      if (!sessionConfirmedRef.current) {
+        setSessionStatus('reconnecting');
+      }
       let lastError: unknown;
 
       for (let attempt = 0; attempt < PROFILE_RETRY_DELAYS_MS.length; attempt += 1) {
@@ -227,12 +282,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         try {
           const refreshed = await fetchProfile();
+          sessionConfirmedRef.current = true;
           setSessionStatus('ready');
           return refreshed;
         } catch (error) {
           lastError = error;
           if (isDefinitiveAuthFailure(error)) {
+            if (isAccountBlockedFailure(error)) {
+              notifyAccountBlocked();
+            }
             clearSession();
+            return false;
+          }
+          if (isPasswordChangeRequiredFailure(error)) {
+            setPasswordChangeRequired(true);
+            setSessionStatus('ready');
             return false;
           }
         }
@@ -306,6 +370,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   }, [syncProfileWithRecovery]);
 
+  useEffect(() => {
+    if (!user || passwordChangeRequired) {
+      return;
+    }
+
+    const pollWhileVisible = () => {
+      if (document.visibilityState !== 'visible' || !navigator.onLine) {
+        return;
+      }
+
+      const currentToken = localStorage.getItem('token');
+      if (!currentToken || isJwtExpired(currentToken)) {
+        return;
+      }
+
+      void syncProfileWithRecovery();
+    };
+
+    const pollInterval = window.setInterval(pollWhileVisible, ACCOUNT_BLOCK_POLL_MS);
+    return () => window.clearInterval(pollInterval);
+  }, [user, passwordChangeRequired, syncProfileWithRecovery]);
+
   const login = async (email: string, password: string): Promise<{ passwordChangeRequired: boolean }> => {
     try {
       const normalizedEmail = email.trim().toLowerCase();
@@ -324,10 +410,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           if (data.token) {
             localStorage.setItem('token', data.token);
           }
+          setPasswordChangeRequired(true);
           return { passwordChangeRequired: true };
         }
 
         localStorage.setItem('token', data.token);
+        setPasswordChangeRequired(false);
 
         if (data.user) {
           persistUser(data.user);
@@ -388,7 +476,35 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const logout = () => {
+  const requirePasswordChange = useCallback(() => {
+    setPasswordChangeRequired(true);
+  }, []);
+
+  const completePasswordChange = useCallback(async (newPassword: string) => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      throw new Error('Your session expired. Please log in with the temporary password.');
+    }
+
+    const response = await fetchWithTimeout(`${API_URL}/auth/change-password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ newPassword }),
+    });
+    const data = await response.json();
+    if (!response.ok || data.status !== 'success') {
+      throw new Error(data.message || 'Failed to change password');
+    }
+
+    await fetchProfile();
+    setPasswordChangeRequired(false);
+    setSessionStatus('ready');
+  }, [fetchProfile]);
+
+  const logout = useCallback(() => {
     const authToken = localStorage.getItem('token');
     const pushToken = getStoredPushToken();
     const deviceId = getPushDeviceId();
@@ -414,7 +530,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     localStorage.removeItem('user');
     setUser(null);
     setSessionStatus('ready');
-  };
+    setPasswordChangeRequired(false);
+  }, []);
 
   // Implement hasRole helper
   const hasRole = (roles: string[]) => {
@@ -431,6 +548,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     isAuthenticated: !!user,
     hasRole,
     sessionStatus,
+    passwordChangeRequired,
+    requirePasswordChange,
+    completePasswordChange,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -21,7 +21,11 @@ describe('tafsir editions API helpers', () => {
     const filtered = filterTafsirEditionsCatalog([
       { slug: 'ur-maududi', name: 'Maududi', author_name: 'Maududi', language_name: 'urdu' },
       { slug: 'ur-tafseer-ibn-e-kaseer', name: 'Ibn Kathir Urdu', author_name: 'Ibn Kathir', language_name: 'urdu' },
+      { slug: 'ur-tazkirul-quran', name: 'Tazkirul', author_name: 'Wahiduddin Khan', language_name: 'urdu' },
       { slug: 'en-tafisr-ibn-kathir', name: 'Ibn Kathir', author_name: 'Ibn Kathir', language_name: 'english' },
+      { slug: 'en-al-jalalayn', name: 'Jalalayn', author_name: 'Jalalayn', language_name: 'english' },
+      { slug: 'en-kashani-tafsir', name: 'Kashani', author_name: 'Kashani', language_name: 'english' },
+      { slug: 'en-maududi', name: 'Maududi English', author_name: 'Maududi', language_name: 'english' },
       { slug: 'hi-farooq', name: 'Farooqi', author_name: 'Farooq', language_name: 'hindi' },
       { slug: 'ar-tafsir-ibn-kathir', name: 'Arabic Ibn Kathir', author_name: 'Ibn Kathir', language_name: 'arabic' },
       { slug: 'bn-tafisr-fathul-majid', name: 'Bengali', author_name: 'X', language_name: 'bengali' },
@@ -30,6 +34,7 @@ describe('tafsir editions API helpers', () => {
 
     expect(filtered.map((item) => item.slug)).toEqual([
       'en-tafisr-ibn-kathir',
+      'en-al-jalalayn',
       'ur-tafseer-ibn-e-kaseer',
     ]);
   });

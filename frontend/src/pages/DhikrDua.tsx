@@ -10,6 +10,7 @@ import {
   MagnifyingGlassIcon,
   MoonIcon,
   ShareIcon,
+  DevicePhoneMobileIcon,
   SpeakerWaveIcon,
   SpeakerXMarkIcon,
   StopIcon,
@@ -21,6 +22,7 @@ import TasbihBeadThread from '../components/TasbihBeadThread';
 import { API_URL } from '../config';
 import { applyTasbihStep, type TasbihHandedness } from '../utils/tasbihCounter';
 import { playTasbihClick } from '../utils/tasbihSound';
+import { canVibrate, vibrateTasbihClick } from '../utils/tasbihHaptic';
 import { useAuth } from '../hooks/useAuth';
 import { requestForToken, storePushToken, getPushDeviceId, getPushSupportInfo } from '../firebase';
 import {
@@ -282,6 +284,7 @@ const DhikrDua: React.FC = () => {
   const [threadTicks, setThreadTicks] = useState(0);
   const [tasbihHandedness, setTasbihHandedness] = useState<TasbihHandedness>('right');
   const [tasbihSoundEnabled, setTasbihSoundEnabled] = useState(true);
+  const [tasbihHapticEnabled, setTasbihHapticEnabled] = useState(true);
   const [dailyTracker, setDailyTracker] = useState<DailyDhikrTracker>({
     date: getTodayKey(),
     counts: createEmptyDailyCounts(),
@@ -346,6 +349,7 @@ const DhikrDua: React.FC = () => {
   const dailyTrackerRef = useRef(dailyTracker);
   const cycleCountsRef = useRef<Record<string, number>>({});
   const tasbihSoundEnabledRef = useRef(true);
+  const tasbihHapticEnabledRef = useRef(true);
   const cardRefs = useRef<Record<string, HTMLElement | null>>({});
   const arabicSectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const isHydratingCloudStateRef = useRef(false);
@@ -526,6 +530,9 @@ const DhikrDua: React.FC = () => {
         if (typeof parsed?.soundEnabled === 'boolean') {
           setTasbihSoundEnabled(parsed.soundEnabled);
         }
+        if (typeof parsed?.hapticEnabled === 'boolean') {
+          setTasbihHapticEnabled(parsed.hapticEnabled);
+        }
         if (Number.isInteger(parsed?.threadTicks) && Number(parsed.threadTicks) >= 0) {
           setThreadTicks(Number(parsed.threadTicks));
         }
@@ -591,10 +598,11 @@ const DhikrDua: React.FC = () => {
         cycleCounts: cycleCountsRef.current,
         handedness: tasbihHandedness,
         soundEnabled: tasbihSoundEnabled,
+        hapticEnabled: tasbihHapticEnabled,
         threadTicks,
       })
     );
-  }, [selectedPresetId, tasbihCount, tasbihMode, tasbihHandedness, tasbihSoundEnabled, threadTicks]);
+  }, [selectedPresetId, tasbihCount, tasbihMode, tasbihHandedness, tasbihSoundEnabled, tasbihHapticEnabled, threadTicks]);
 
   useEffect(() => {
     localStorage.setItem(DAILY_DHIKR_STORAGE_KEY, JSON.stringify(dailyTracker));
@@ -1205,6 +1213,7 @@ const DhikrDua: React.FC = () => {
   selectedPresetIdRef.current = selectedPresetId;
   dailyTrackerRef.current = dailyTracker;
   tasbihSoundEnabledRef.current = tasbihSoundEnabled;
+  tasbihHapticEnabledRef.current = tasbihHapticEnabled;
 
   const applyTasbihDirection = useCallback((direction: 1 | -1) => {
     localMutatedDuringHydrationRef.current = true;
@@ -1246,8 +1255,8 @@ const DhikrDua: React.FC = () => {
       playTasbihClick(result.checkpoint ? 'checkpoint' : 'bead');
     }
 
-    if (direction > 0 && navigator.vibrate) {
-      navigator.vibrate(result.checkpoint ? [12, 30, 18] : 12);
+    if (direction > 0 && tasbihHapticEnabledRef.current) {
+      vibrateTasbihClick(result.checkpoint ? 'checkpoint' : 'bead');
     }
   }, []);
 
@@ -2642,7 +2651,7 @@ const DhikrDua: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-1.5">
+                    <div className="space-y-1.5">
                       <div className={`grid grid-cols-2 overflow-hidden rounded-lg border ${isDarkMode ? 'border-slate-600/80' : 'border-emerald-100'}`}>
                         {(['right', 'left'] as const).map((hand) => {
                           const isActive = tasbihHandedness === hand;
@@ -2667,6 +2676,7 @@ const DhikrDua: React.FC = () => {
                           );
                         })}
                       </div>
+                      <div className="grid grid-cols-2 gap-1.5">
                       <button
                         type="button"
                         onClick={() => setTasbihSoundEnabled((previous) => !previous)}
@@ -2684,6 +2694,30 @@ const DhikrDua: React.FC = () => {
                         )}
                         {tasbihSoundEnabled ? 'Sound on' : 'Muted'}
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTasbihHapticEnabled((previous) => {
+                            const next = !previous;
+                            if (next && !canVibrate()) {
+                              toast('In-app vibration is not supported on iPhone Safari. Incoming notifications can still tap.');
+                            } else if (next) {
+                              vibrateTasbihClick('bead');
+                            }
+                            return next;
+                          });
+                        }}
+                        aria-label={tasbihHapticEnabled ? 'Turn off tasbeeh vibration' : 'Turn on tasbeeh vibration'}
+                        className={`inline-flex items-center justify-center gap-1 rounded-lg border px-2 py-1 text-[9px] font-semibold uppercase tracking-wide ${
+                          isDarkMode
+                            ? 'border-slate-600/80 text-slate-200'
+                            : 'border-emerald-100 bg-white text-emerald-800'
+                        }`}
+                      >
+                        <DevicePhoneMobileIcon className="h-3.5 w-3.5" />
+                        {tasbihHapticEnabled ? 'Vibrate on' : 'Vibrate off'}
+                      </button>
+                      </div>
                     </div>
 
                     <div className="relative min-w-0">
