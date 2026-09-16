@@ -10,7 +10,6 @@ import {
   storePushToken,
 } from './firebase';
 import axios from 'axios'; // Import axios
-import { toast } from 'react-hot-toast';
 import { installToastHaptics } from './utils/installToastHaptics';
 
 // i18n initialization
@@ -22,6 +21,7 @@ import Footer from './components/Footer';
 import LoadingSpinner from './components/LoadingSpinner';
 import ProtectedRoute from './components/ProtectedRoute'; // Import ProtectedRoute
 import InstallAppPrompt from './components/InstallAppPrompt';
+import NotificationPermissionPrompt from './components/NotificationPermissionPrompt';
 import PrayerAdhanScheduler from './components/PrayerAdhanScheduler';
 import AdhanPlayPrompt from './components/AdhanPlayPrompt';
 import StartupReadinessScreen from './components/StartupReadinessScreen';
@@ -60,6 +60,7 @@ import { LanguageProvider } from './contexts/LanguageContext';
 import { API_URL } from './config';
 import { handleAxiosAccountBlocked } from './utils/accountBlocked';
 import { handleAxiosPasswordChangeRequired } from './utils/passwordChangeRequired';
+import { PUSH_REGISTER_EVENT } from './utils/dailyPromptSnooze';
 
 // Styles
 import './App.css';
@@ -79,9 +80,6 @@ const queryClient = new QueryClient({
     },
   },
 });
-
-const IOS_PUSH_GUIDE_SHOWN_KEY = 'iosPushGuideShown';
-const PUSH_PERMISSION_TOAST_KEY = 'pushPermissionToastShown';
 
 const AppContent: React.FC = () => {
   const { user, loading, sessionStatus, logout, passwordChangeRequired, requirePasswordChange } = useAuth();
@@ -202,30 +200,7 @@ const AppContent: React.FC = () => {
           return;
         }
 
-        if (!pushSupport.supported && pushSupport.isIOS && !pushSupport.isStandalone) {
-          const alreadyShown = sessionStorage.getItem(IOS_PUSH_GUIDE_SHOWN_KEY);
-          if (!alreadyShown) {
-            toast((t) => (
-              <div className="flex items-start gap-3">
-                <p className="text-sm leading-snug">
-                  For iPhone notifications, install HikmahSphere to Home Screen, then allow notifications.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => toast.dismiss(t.id)}
-                  className="shrink-0 rounded-md border border-gray-200 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
-                >
-                  Close
-                </button>
-              </div>
-            ), {
-              duration: 7000,
-              icon: 'i'
-            });
-            sessionStorage.setItem(IOS_PUSH_GUIDE_SHOWN_KEY, '1');
-          }
-        }
-
+        // Token only — never prompt here. The OS dialog must come from Enable/Allow clicks.
         const token = await requestForToken();
 
         if (token) {
@@ -268,14 +243,6 @@ const AppContent: React.FC = () => {
             if (pushSupport.isIOS) {
               console.log("iOS detected - ensure PWA is installed to Home Screen and permission granted");
             }
-            if (
-              typeof Notification !== 'undefined' &&
-              Notification.permission === 'denied' &&
-              !sessionStorage.getItem(PUSH_PERMISSION_TOAST_KEY)
-            ) {
-              toast.error('Notifications are blocked. Enable them in your browser site settings, then reopen HikmahSphere.');
-              sessionStorage.setItem(PUSH_PERMISSION_TOAST_KEY, '1');
-            }
             const authToken = localStorage.getItem('token');
             if (authToken) {
               try {
@@ -311,7 +278,7 @@ const AppContent: React.FC = () => {
       }
     };
 
-    void registerToken(true);
+    void registerToken(false);
 
     const retryRegistration = () => {
       if (document.visibilityState === 'visible' && navigator.onLine) {
@@ -320,10 +287,12 @@ const AppContent: React.FC = () => {
     };
     document.addEventListener('visibilitychange', retryRegistration);
     window.addEventListener('online', retryRegistration);
+    window.addEventListener(PUSH_REGISTER_EVENT, retryRegistration);
 
     return () => {
       document.removeEventListener('visibilitychange', retryRegistration);
       window.removeEventListener('online', retryRegistration);
+      window.removeEventListener(PUSH_REGISTER_EVENT, retryRegistration);
     };
   }, [user?.id, sessionStatus, passwordChangeRequired]);
 
@@ -442,6 +411,7 @@ const App: React.FC = () => {
                 {/* Mount outside AppContent so a slow authentication check or sleeping
                     backend cannot delay/cancel the browser's install opportunity. */}
                 <InstallAppPrompt />
+                <NotificationPermissionPrompt />
                 <AppContent />
               </Router>
             </LanguageProvider>

@@ -5,9 +5,11 @@ import { useAuth } from '../hooks/useAuth';
 import toast from 'react-hot-toast';
 import PageSEO from '../components/PageSEO';
 import { API_URL } from '../config';
+import AccountRecoveryModal from '../components/AccountRecoveryModal';
 
 const ONBOARDING_REQUIRED_KEY = 'onboardingRequiredAfterRegister';
 const AUTH_FETCH_TIMEOUT_MS = 15000;
+const LOGIN_CREDENTIALS_ERROR = 'Incorrect email or password.';
 
 const fetchWithTimeout = async (input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = AUTH_FETCH_TIMEOUT_MS): Promise<Response> => {
   const controller = new AbortController();
@@ -32,7 +34,8 @@ const Auth: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [showRecoveryModal, setShowRecoveryModal] = useState(false);
+  const [showAccountRecovery, setShowAccountRecovery] = useState(false);
+  const [loginError, setLoginError] = useState('');
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
   const [onboardingSaving, setOnboardingSaving] = useState(false);
   const [onboardingData, setOnboardingData] = useState({
@@ -72,6 +75,7 @@ const Auth: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
+    setLoginError('');
 
     const submittedData = new FormData(e.currentTarget);
     const submittedName = String(submittedData.get('name') || formData.name).trim();
@@ -109,12 +113,15 @@ const Auth: React.FC = () => {
         console.error('Authentication error:', error);
         const normalizedMessage = typeof error?.message === 'string' ? error.message : '';
         if (isLogin) {
-          const shouldShowRecovery = /invalid user|invalid credentials|user not found|account not found|no user/i.test(normalizedMessage);
-          if (shouldShowRecovery) {
-            setShowRecoveryModal(true);
-          }
+          const isCredentialError = /invalid user|invalid credentials|user not found|account not found|no user|login failed/i.test(normalizedMessage);
+          const displayMessage = isCredentialError
+            ? LOGIN_CREDENTIALS_ERROR
+            : (normalizedMessage || LOGIN_CREDENTIALS_ERROR);
+          setLoginError(displayMessage);
+          toast.error(displayMessage);
+        } else {
+          toast.error(normalizedMessage || 'Authentication failed. Please try again.');
         }
-        toast.error(normalizedMessage || 'Authentication failed. Please try again.');
     } finally {
         setLoading(false);
     }
@@ -365,6 +372,12 @@ const Auth: React.FC = () => {
                 </div>
               </div>
 
+              {isLogin && loginError ? (
+                <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800" role="alert">
+                  {loginError}
+                </p>
+              ) : null}
+
               <div>
                 <button
                   type="submit"
@@ -385,10 +398,22 @@ const Auth: React.FC = () => {
                 </button>
               </div>
 
-              <div className="text-center">
+              <div className="text-center space-y-2">
+                  {isLogin ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowAccountRecovery(true)}
+                      className="block w-full text-sm font-semibold text-emerald-700 hover:text-emerald-600"
+                    >
+                      Forgot email or password?
+                    </button>
+                  ) : null}
                   <button
                     type="button"
-                    onClick={() => setIsLogin(!isLogin)}
+                    onClick={() => {
+                      setIsLogin(!isLogin);
+                      setLoginError('');
+                    }}
                     className="text-emerald-600 hover:text-emerald-500 font-semibold transition-colors"
                   >
                     {isLogin ? "Don't have an account? Create one" : "Already have an account? Sign in"}
@@ -407,24 +432,10 @@ const Auth: React.FC = () => {
       </div>
       </div>
 
-      {showRecoveryModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 sm:px-6">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" aria-hidden="true"></div>
-          <div className="relative w-full max-w-lg rounded-2xl bg-white shadow-2xl p-6 sm:p-8 text-center space-y-4">
-            <h3 className="text-2xl font-bold text-gray-900">We are really sorry</h3>
-            <p className="text-sm sm:text-base text-gray-700 leading-relaxed">
-              Last Saturday, a technical issue caused a server crash and we lost all saved credentials. If you had already registered, please create your account again so we can keep you connected. If you are signing up for the first time, you can safely continue to register now.
-            </p>
-            <button
-              type="button"
-              onClick={() => { setIsLogin(false); setShowRecoveryModal(false); }}
-              className="w-full inline-flex justify-center items-center rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-3 text-sm sm:text-base font-semibold text-white shadow-lg hover:from-emerald-600 hover:to-teal-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500"
-            >
-              Go to registration
-            </button>
-          </div>
-        </div>
-      )}
+      <AccountRecoveryModal
+        open={showAccountRecovery}
+        onClose={() => setShowAccountRecovery(false)}
+      />
 
       {showOnboardingModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4 sm:px-6">

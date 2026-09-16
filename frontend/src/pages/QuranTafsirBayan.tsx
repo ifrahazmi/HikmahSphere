@@ -415,6 +415,8 @@ const QuranTafsirBayan: React.FC = () => {
     [tafsirEdition, tafsirEditionMeta]
   );
   const tafsirLanguage = getTafsirLanguageFromSlug(tafsirEdition, visibleTafsirEditionOptions);
+  const isUrduTafsir = tafsirLanguage === 'urdu';
+  const isEnglishTafsir = tafsirLanguage === 'english';
   const tafsirTextDirection = getTafsirTextDirection(tafsirLanguage);
   const isTafheemEdition = isMaududiShortEdition(tafsirEdition);
   const isFullMaududiEdition = isMaududiFullEdition(tafsirEdition);
@@ -2213,13 +2215,14 @@ const QuranTafsirBayan: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className={`block text-xs font-medium mb-1 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                      <label className={`block text-xs font-medium mb-1 ${!isUrduTafsir ? 'opacity-50' : ''} ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
                         Urdu Font
                       </label>
                       <select
                         value={settings.urduFont}
+                        disabled={!isUrduTafsir}
                         onChange={(event) => updateSettings({ urduFont: event.target.value as UrduReadingFont })}
-                        className={`w-full rounded-md border px-2 py-2 text-xs ${settings.theme === 'dark' ? 'border-gray-600 bg-gray-700 text-white' : 'border-gray-300 bg-white text-gray-900'}`}
+                        className={`w-full rounded-md border px-2 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50 ${settings.theme === 'dark' ? 'border-gray-600 bg-gray-700 text-white' : 'border-gray-300 bg-white text-gray-900'}`}
                       >
                         {URDU_READING_FONTS.map((font) => (
                           <option key={font.id} value={font.id}>
@@ -2230,13 +2233,14 @@ const QuranTafsirBayan: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className={`block text-xs font-medium mb-1 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                      <label className={`block text-xs font-medium mb-1 ${!isEnglishTafsir ? 'opacity-50' : ''} ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
                         English Font
                       </label>
                       <select
                         value={settings.englishFont}
+                        disabled={!isEnglishTafsir}
                         onChange={(event) => updateSettings({ englishFont: event.target.value as EnglishReadingFont })}
-                        className={`w-full rounded-md border px-2 py-2 text-xs ${settings.theme === 'dark' ? 'border-gray-600 bg-gray-700 text-white' : 'border-gray-300 bg-white text-gray-900'}`}
+                        className={`w-full rounded-md border px-2 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50 ${settings.theme === 'dark' ? 'border-gray-600 bg-gray-700 text-white' : 'border-gray-300 bg-white text-gray-900'}`}
                       >
                         {ENGLISH_READING_FONTS.map((font) => (
                           <option key={font.id} value={font.id}>
@@ -2826,13 +2830,14 @@ const QuranTafsirBayan: React.FC = () => {
               </div>
 
               <div>
-                <label className={`block text-sm font-medium mb-1 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                <label className={`block text-sm font-medium mb-1 ${!isUrduTafsir ? 'opacity-50' : ''} ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
                   Urdu Font
                 </label>
                 <select
                   value={settings.urduFont}
+                  disabled={!isUrduTafsir}
                   onChange={(event) => updateSettings({ urduFont: event.target.value as UrduReadingFont })}
-                  className={`w-full rounded-lg border px-3 py-3 text-sm ${settings.theme === 'dark' ? 'border-gray-600 bg-gray-700 text-white' : 'border-gray-300 bg-white text-gray-900'}`}
+                  className={`w-full rounded-lg border px-3 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-50 ${settings.theme === 'dark' ? 'border-gray-600 bg-gray-700 text-white' : 'border-gray-300 bg-white text-gray-900'}`}
                 >
                   {URDU_READING_FONTS.map((font) => (
                     <option key={`m-${font.id}`} value={font.id}>
@@ -2843,13 +2848,14 @@ const QuranTafsirBayan: React.FC = () => {
               </div>
 
               <div>
-                <label className={`block text-sm font-medium mb-1 ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                <label className={`block text-sm font-medium mb-1 ${!isEnglishTafsir ? 'opacity-50' : ''} ${settings.theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
                   English Font
                 </label>
                 <select
                   value={settings.englishFont}
+                  disabled={!isEnglishTafsir}
                   onChange={(event) => updateSettings({ englishFont: event.target.value as EnglishReadingFont })}
-                  className={`w-full rounded-lg border px-3 py-3 text-sm ${settings.theme === 'dark' ? 'border-gray-600 bg-gray-700 text-white' : 'border-gray-300 bg-white text-gray-900'}`}
+                  className={`w-full rounded-lg border px-3 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-50 ${settings.theme === 'dark' ? 'border-gray-600 bg-gray-700 text-white' : 'border-gray-300 bg-white text-gray-900'}`}
                 >
                   {ENGLISH_READING_FONTS.map((font) => (
                     <option key={`m-${font.id}`} value={font.id}>
