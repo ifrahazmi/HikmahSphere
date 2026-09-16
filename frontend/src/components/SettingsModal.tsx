@@ -7,6 +7,8 @@ import { useNotification } from '../contexts/NotificationContext';
 import { useAuth } from '../hooks/useAuth';
 import { useUserPreferences } from '../hooks/useUserPreferences';
 import { useMuhasabaReminder } from '../hooks/useMuhasabaReminder';
+import { requestNotificationPermissionFromUserGesture } from '../firebase';
+import { PUSH_REGISTER_EVENT } from '../utils/dailyPromptSnooze';
 import { playAdhanFromUserGesture } from '../utils/adhanAudio';
 import toast from 'react-hot-toast';
 import { canVibrate, isHapticEnabled, setHapticEnabled, triggerHaptic } from '../utils/hapticFeedback';
@@ -191,9 +193,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                   <input
                     type="time"
                     value={reminderTime}
-                    disabled={isReminderSaving}
+                    disabled={!reminderEnabled || isReminderSaving}
                     onChange={(event) => changeMuhasabaReminderTime(event.target.value)}
-                    className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-emerald-400 disabled:opacity-60 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+                    className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-emerald-400 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
                   />
                 </label>
               ) : (
@@ -210,9 +212,24 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                   </span>
                   <div className="flex gap-2">
                     <button
-                      onClick={() =>
-                        handleNotificationToggle(prayer, !notifPrefs[prayer]?.enabled)
-                      }
+                      onClick={() => {
+                        const nextEnabled = !notifPrefs[prayer]?.enabled;
+                        if (
+                          nextEnabled
+                          && typeof Notification !== 'undefined'
+                          && Notification.permission === 'default'
+                        ) {
+                          const permissionRequest = requestNotificationPermissionFromUserGesture();
+                          void Promise.resolve(permissionRequest).then((result) => {
+                            void handleNotificationToggle(prayer, nextEnabled);
+                            if (result === 'granted') {
+                              window.dispatchEvent(new Event(PUSH_REGISTER_EVENT));
+                            }
+                          });
+                          return;
+                        }
+                        void handleNotificationToggle(prayer, nextEnabled);
+                      }}
                       className={`px-3 py-1 rounded text-sm font-medium transition ${
                         notifPrefs[prayer]?.enabled
                           ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-200'
@@ -246,9 +263,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                     const anySound = Object.values(notifPrefs).some(p => p.sound);
                     
                     if (anyEnabled) {
-                      // Request notification permission if needed
-                      if ('Notification' in window && Notification.permission === 'default') {
-                        Notification.requestPermission();
+                      if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+                        void requestNotificationPermissionFromUserGesture().then((result) => {
+                          if (result === 'granted') {
+                            window.dispatchEvent(new Event(PUSH_REGISTER_EVENT));
+                          }
+                        });
                       }
   
                       // Add to in-app bell and show system push

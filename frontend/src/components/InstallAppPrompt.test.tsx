@@ -56,7 +56,7 @@ describe('InstallAppPrompt', () => {
     jest.useRealTimers();
   });
 
-  it('shows iOS instructions again on the next visit after dismissal', () => {
+  it('does not show again the same day after dismissal', () => {
     setNavigator(
       'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1',
       'iPhone'
@@ -69,11 +69,12 @@ describe('InstallAppPrompt', () => {
     fireEvent.click(screen.getByLabelText('Close install prompt'));
     expect(screen.queryByText('Install HikmahSphere App')).not.toBeInTheDocument();
     expect(localStorage.getItem('hs_app_installed')).toBeNull();
+    expect(localStorage.getItem('hs_install_prompt_dismissed_on')).toBeTruthy();
 
     firstVisit.unmount();
     render(<InstallAppPrompt />);
     revealPrompt();
-    expect(screen.getByText('Add to iPhone Home Screen')).toBeInTheDocument();
+    expect(screen.queryByText('Add to iPhone Home Screen')).not.toBeInTheDocument();
   });
 
   it('stops prompting after an iOS user confirms manual installation', () => {

@@ -108,11 +108,6 @@ const Dashboard: React.FC = () => {
     setActiveTab(tab);
   };
 
-  const handleCreateUserShortcut = () => {
-    setActiveTab('users');
-    setCreateUserOpen(true);
-  };
-
   if (!canAccessDashboard) {
     return (
       <>
@@ -162,8 +157,6 @@ const Dashboard: React.FC = () => {
             activityLogs={activityLogs}
             activityStats={activityStats}
             loadingActivities={loadingActivities}
-            onTabChange={handleTabChange}
-            onCreateUser={handleCreateUserShortcut}
           />
         )}
 

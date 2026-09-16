@@ -126,7 +126,29 @@ export const getPushSupportInfo = async (): Promise<PushSupportInfo> => {
   return { supported, isIOS, isStandalone, limitations };
 };
 
-// Request permission and get token
+/**
+ * Ask the OS/browser to allow notifications. Must be called from a click or tap
+ * so Chrome, Edge, Firefox, Safari, Windows, and Android can show the system dialog.
+ */
+export const requestNotificationPermissionFromUserGesture = (): Promise<NotificationPermission> => {
+  if (typeof Notification === 'undefined') {
+    return Promise.resolve('denied');
+  }
+
+  if (Notification.permission !== 'default') {
+    return Promise.resolve(Notification.permission);
+  }
+
+  try {
+    return Promise.resolve(Notification.requestPermission());
+  } catch (error) {
+    console.error('Permission request failed:', error);
+    return Promise.resolve(Notification.permission);
+  }
+};
+
+// Get an FCM token when the browser has already granted notification permission.
+// Do not prompt here — a background call would consume or hide the OS permission dialog.
 export const requestForToken = async () => {
   console.log('Checking messaging support...');
   const supportInfo = await getPushSupportInfo();
@@ -144,19 +166,9 @@ export const requestForToken = async () => {
     return null;
   }
 
-  let permission = Notification.permission;
-  if (permission === 'default') {
-    console.log('Requesting notification permission...');
-    try {
-      permission = await Notification.requestPermission();
-    } catch (e) {
-      console.error('Permission request failed:', e);
-      return null;
-    }
-  }
-
+  const permission = Notification.permission;
   if (permission !== 'granted') {
-    console.warn('Notification permission is denied. Enable it in the browser site settings.');
+    console.warn('Notification permission is not granted yet. Waiting for the user to allow it.');
     return null;
   }
 

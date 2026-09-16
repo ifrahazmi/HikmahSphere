@@ -1,12 +1,32 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
+import rateLimit from 'express-rate-limit';
 import { requestLogger } from '../middleware/logger';
 import { sendMail } from '../services/zohoMail';
+import {
+    ACCOUNT_RECOVERY_SUCCESS_MESSAGE,
+    normalizeAccountRecoveryInput,
+    sendAccountRecoveryEmail,
+} from '../utils/accountRecovery';
 
 const router = express.Router();
 
 const getMailTo = () =>
     process.env.SMTP_TO || process.env.ZOHO_FROM || 'info@hikmahsphere.site';
+
+const accountRecoveryLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+        status: 'error',
+        message: 'Too many recovery requests. Please try again later.',
+    },
+    validate: {
+        xForwardedForHeader: false,
+    },
+});
 
 const escapeHtml = (value: unknown): string =>
     String(value ?? '')
@@ -411,6 +431,47 @@ router.post('/subscribe', [
         }
 
         res.status(500).json({ status: 'error', message: 'Failed to subscribe' });
+    }
+});
+
+/**
+ * @route   POST /api/support/account-recovery
+ * @desc    Email admins a forgot-password / forgot-email request
+ * @access  Public
+ */
+router.post('/account-recovery', [
+    accountRecoveryLimiter,
+    requestLogger,
+    body('name').trim().notEmpty().withMessage('Name is required'),
+    body('email').isEmail().withMessage('Valid email is required'),
+    body('phone').trim().isLength({ min: 6, max: 30 }).withMessage('Contact number is required'),
+    body('message').optional({ checkFalsy: true }).isString().isLength({ max: 2000 }),
+], async (req: any, res: any) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ status: 'error', message: 'Please provide your name, email, and contact number.', errors: errors.array() });
+    }
+
+    const payload = normalizeAccountRecoveryInput(req.body);
+
+    try {
+        await sendAccountRecoveryEmail(payload);
+        return res.status(200).json({
+            status: 'success',
+            message: ACCOUNT_RECOVERY_SUCCESS_MESSAGE,
+        });
+    } catch (error: any) {
+        console.error('Account recovery email error:', error.message);
+
+        if (process.env.NODE_ENV === 'development' || error.code === 'ECONNREFUSED' || error.code === 'ESOCKET') {
+            console.log('MOCK ACCOUNT RECOVERY REQUEST:', payload);
+            return res.status(200).json({
+                status: 'success',
+                message: ACCOUNT_RECOVERY_SUCCESS_MESSAGE,
+            });
+        }
+
+        return res.status(500).json({ status: 'error', message: 'Failed to send recovery request' });
     }
 });
 

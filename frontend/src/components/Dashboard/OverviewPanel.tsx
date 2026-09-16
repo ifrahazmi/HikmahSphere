@@ -7,10 +7,9 @@ import {
   ShieldExclamationIcon,
   SignalIcon,
   UserGroupIcon,
-  UserPlusIcon,
   UsersIcon,
 } from '@heroicons/react/24/outline';
-import { ActivityLog, ActivityStats, DashboardTab, DashboardUser } from './types';
+import { ActivityLog, ActivityStats, DashboardUser } from './types';
 import { deriveDashboardStats, formatRelativeTime } from './dashboardUsers';
 
 interface OverviewPanelProps {
@@ -18,8 +17,6 @@ interface OverviewPanelProps {
   activityLogs: ActivityLog[];
   activityStats: ActivityStats | null;
   loadingActivities: boolean;
-  onTabChange: (tab: DashboardTab) => void;
-  onCreateUser: () => void;
 }
 
 const StatTile: React.FC<{
@@ -46,8 +43,6 @@ const OverviewPanel: React.FC<OverviewPanelProps> = ({
   activityLogs,
   activityStats,
   loadingActivities,
-  onTabChange,
-  onCreateUser,
 }) => {
   const stats = deriveDashboardStats(users);
 
@@ -108,31 +103,6 @@ const OverviewPanel: React.FC<OverviewPanelProps> = ({
           tone="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
         />
       </motion.div>
-
-      <div className="flex flex-wrap gap-3">
-        <button
-          type="button"
-          onClick={onCreateUser}
-          className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700"
-        >
-          <UserPlusIcon className="h-5 w-5" />
-          Create user
-        </button>
-        <button
-          type="button"
-          onClick={() => onTabChange('users')}
-          className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-gray-900 dark:text-emerald-300"
-        >
-          Open users
-        </button>
-        <button
-          type="button"
-          onClick={() => onTabChange('notifications')}
-          className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
-        >
-          Send a notification
-        </button>
-      </div>
 
       <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
         <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4 dark:border-gray-800">

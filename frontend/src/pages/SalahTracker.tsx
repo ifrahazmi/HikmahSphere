@@ -22,6 +22,7 @@ import PageSEO from '../components/PageSEO';
 import { useAuth } from '../hooks/useAuth';
 import { API_URL } from '../config';
 import { useMuhasabaReminder } from '../hooks/useMuhasabaReminder';
+import { fetchSavedUserLocation } from '../utils/savedUserLocation';
 import {
   PRAYER_KEYS,
   PRAYER_EXEMPTION_REASON_LABEL,
@@ -921,46 +922,47 @@ const SalahTracker: React.FC = () => {
   };
 
   const syncPrayerTimes = useCallback(async () => {
-    if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      setTimeSource('Using default prayer windows. Browser geolocation is unavailable.');
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    if (!authUser?.id || !token) {
+      setTimeSource('Using default prayer windows. Sign in and open Prayer Times once to save your location.');
       return;
     }
 
     setIsSyncingTimes(true);
 
     try {
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 1000 * 60 * 10,
-        });
-      });
+      const savedLocation = await fetchSavedUserLocation(authUser.id, token);
+      if (!savedLocation) {
+        setTimeSource('Using default prayer windows. Open Prayer Times once so we can use your saved location.');
+        return;
+      }
 
-      const school = authUser?.madhab === 'hanafi' ? '2' : '1';
-      const calculationMethod = parseInt(localStorage.getItem('prayerCalculationMethod') || '2', 10);
+      const school = savedLocation.school
+        ?? (authUser.madhab === 'hanafi' ? 2 : 1);
+      const calculationMethod = savedLocation.method
+        ?? parseInt(localStorage.getItem('prayerCalculationMethod') || '2', 10);
       const response = await fetch(
-        `${API_URL}/prayers/times?latitude=${position.coords.latitude}&longitude=${position.coords.longitude}&method=${calculationMethod}&school=${school}`,
+        `${API_URL}/prayers/times?latitude=${savedLocation.latitude}&longitude=${savedLocation.longitude}&method=${calculationMethod}&school=${school}`,
       );
       const payload = await response.json();
 
       if (payload?.status === 'success') {
         setPrayerTimings(extractPrayerTimings(payload));
 
-        const city = payload?.data?.location?.city;
-        const country = payload?.data?.location?.country;
-        const fallbackCoords = `${position.coords.latitude.toFixed(2)}, ${position.coords.longitude.toFixed(2)}`;
+        const city = payload?.data?.location?.city || savedLocation.city;
+        const country = payload?.data?.location?.country || savedLocation.country;
+        const fallbackCoords = `${savedLocation.latitude.toFixed(2)}, ${savedLocation.longitude.toFixed(2)}`;
         setTimeSource(`Live prayer windows from ${city && country ? `${city}, ${country}` : fallbackCoords}.`);
       } else {
         setTimeSource('Using default prayer windows. Could not fetch live prayer times.');
       }
     } catch (error) {
       console.error('Failed to sync prayer times:', error);
-      setTimeSource('Using default prayer windows. Allow location access to sync live times.');
+      setTimeSource('Using default prayer windows. Open Prayer Times once so we can use your saved location.');
     } finally {
       setIsSyncingTimes(false);
     }
-  }, [authUser?.madhab]);
+  }, [authUser?.id, authUser?.madhab]);
 
   useEffect(() => {
     syncPrayerTimes();
@@ -1175,9 +1177,9 @@ const SalahTracker: React.FC = () => {
                     <input
                       type="time"
                       value={reminderTime}
-                      disabled={isReminderSaving}
+                      disabled={!reminderEnabled || isReminderSaving}
                       onChange={(event) => handleReminderTimeChange(event.target.value)}
-                      className="rounded-lg border border-emerald-200 bg-white px-2 py-1.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-emerald-400 disabled:opacity-60"
+                      className="rounded-lg border border-emerald-200 bg-white px-2 py-1.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
                     />
                   </label>
                   <button
@@ -1390,11 +1392,12 @@ const SalahTracker: React.FC = () => {
                               ? 'Prayer notes are paused while this day is marked exempt.'
                               : 'Optional note (jama\'ah, late due to travel, etc.)'
                           }
-                          className={`w-full rounded-xl border px-3 py-2 text-sm outline-none transition ${
+                          className={`w-full rounded-xl border px-3 py-2 text-base outline-none transition ${
                             isSelectedPrayerExempt
                               ? 'cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400'
                               : 'border-gray-200 text-gray-700 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100'
                           }`}
+                          style={{ fontSize: 16 }}
                         />
                       </div>
                     </article>

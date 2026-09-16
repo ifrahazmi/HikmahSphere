@@ -58,11 +58,6 @@ export const usePrayerNotificationChecker = (
       return;
     }
 
-    // Ask for notification permission ahead of time and prepare audio so the
-    // Adhan can fire automatically the moment a prayer time arrives.
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission().catch(() => undefined);
-    }
     setupAdhanAudioUnlock();
 
     const checkUpcomingPrayers = () => {
@@ -90,11 +85,6 @@ export const usePrayerNotificationChecker = (
             const prefs = notificationPrefs[prayer.toLowerCase()];
             if (prefs?.enabled) {
               const copy = getPrayerNotificationCopy(prayer, friday);
-
-              // Request notification permission if needed
-              if ('Notification' in window && Notification.permission === 'default') {
-                Notification.requestPermission();
-              }
 
               // Add to in-app bell immediately so the panel updates without a refresh.
               const adhanNotificationId = `adhan-${today}-${prayer.toLowerCase()}`;

@@ -12,7 +12,7 @@ let mockStartupReadiness: any = {
 
 jest.mock('./firebase', () => ({
   requestForToken: jest.fn().mockResolvedValue(null),
-  getPushSupportInfo: jest.fn().mockResolvedValue({
+  getPushSupportInfo: () => Promise.resolve({
     supported: false,
     isIOS: false,
     isStandalone: false,

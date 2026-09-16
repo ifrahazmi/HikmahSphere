@@ -6,28 +6,15 @@ import {
   DevicePhoneMobileIcon,
   SparklesIcon,
 } from '@heroicons/react/24/outline';
-
-const INSTALLED_KEY = 'hs_app_installed';
-
-const readInstalledMarker = (): boolean => {
-  try {
-    return localStorage.getItem(INSTALLED_KEY) === '1';
-  } catch {
-    return false;
-  }
-};
-
-const writeInstalledMarker = (): void => {
-  try {
-    localStorage.setItem(INSTALLED_KEY, '1');
-  } catch {
-    // Standalone detection still prevents the prompt when storage is unavailable.
-  }
-};
-
-const detectStandalone = (): boolean =>
-  window.matchMedia('(display-mode: standalone)').matches ||
-  window.navigator.standalone === true;
+import {
+  INSTALL_PROMPT_SNOOZE_KEY,
+  detectStandalonePwa,
+  dismissDailyPrompt,
+  emitInstallPromptClosed,
+  isAppInstalled,
+  markAppInstalled,
+  shouldOfferPwaInstall,
+} from '../utils/dailyPromptSnooze';
 
 const InstallAppPrompt: React.FC = () => {
   const [visible, setVisible] = useState(false);
@@ -35,8 +22,8 @@ const InstallAppPrompt: React.FC = () => {
     () => (typeof window !== 'undefined' ? window.deferredInstallPrompt ?? null : null)
   );
   const [installing, setInstalling] = useState(false);
-  const [installedAlready, setInstalledAlready] = useState(readInstalledMarker);
-  const [isStandalone, setIsStandalone] = useState(detectStandalone);
+  const [installedAlready, setInstalledAlready] = useState(isAppInstalled);
+  const [isStandalone, setIsStandalone] = useState(detectStandalonePwa);
 
   const ua = navigator.userAgent || '';
 
@@ -56,15 +43,18 @@ const InstallAppPrompt: React.FC = () => {
   const shouldShowIosGuide = isIOS && !isStandalone;
 
   useEffect(() => {
-    // A dismissal is intentionally not persisted: every new website visit prompts
-    // again until installation has been confirmed or the app runs standalone.
-    if (isStandalone || installedAlready) {
+    if (isStandalone || installedAlready || !shouldOfferPwaInstall()) {
       setVisible(false);
+      emitInstallPromptClosed();
       return;
     }
 
     let revealTimer: number | undefined;
     const revealPrompt = (delayMs = 1400) => {
+      if (!shouldOfferPwaInstall()) {
+        emitInstallPromptClosed();
+        return;
+      }
       if (revealTimer) window.clearTimeout(revealTimer);
       revealTimer = window.setTimeout(() => setVisible(true), delayMs);
     };
@@ -77,7 +67,6 @@ const InstallAppPrompt: React.FC = () => {
       revealPrompt();
     };
 
-    // Fired by the early capture in index.tsx if the event already fired before mount.
     const handleInstallAvailable = () => {
       if (window.deferredInstallPrompt) {
         setDeferredPrompt(window.deferredInstallPrompt);
@@ -86,20 +75,22 @@ const InstallAppPrompt: React.FC = () => {
     };
 
     const handleAppInstalled = () => {
-      writeInstalledMarker();
+      markAppInstalled();
       setInstalledAlready(true);
       window.deferredInstallPrompt = null;
       setVisible(false);
       setDeferredPrompt(null);
+      emitInstallPromptClosed();
     };
 
     const refreshDisplayMode = () => {
-      const standalone = detectStandalone();
+      const standalone = detectStandalonePwa();
       setIsStandalone(standalone);
       if (standalone) {
-        writeInstalledMarker();
+        markAppInstalled();
         setInstalledAlready(true);
         setVisible(false);
+        emitInstallPromptClosed();
       }
     };
 
@@ -111,14 +102,10 @@ const InstallAppPrompt: React.FC = () => {
     document.addEventListener('visibilitychange', refreshDisplayMode);
     displayModeQuery.addEventListener?.('change', refreshDisplayMode);
 
-    // If the prompt was already captured before this component mounted, use it now.
     if (window.deferredInstallPrompt) {
       setDeferredPrompt(window.deferredInstallPrompt);
     }
 
-    // Always reveal when not installed. Desktop (Windows), Android and iOS all
-    // get the prompt: a native one-click button when the browser supports it,
-    // otherwise platform-specific manual steps.
     revealPrompt();
 
     return () => {
@@ -133,15 +120,16 @@ const InstallAppPrompt: React.FC = () => {
   }, [installedAlready, isStandalone]);
 
   const dismiss = () => {
-    // Hide for the current view only; it reappears on the next visit/reload
-    // until the app is actually installed.
+    dismissDailyPrompt(INSTALL_PROMPT_SNOOZE_KEY);
     setVisible(false);
+    emitInstallPromptClosed();
   };
 
   const confirmManualInstall = () => {
-    writeInstalledMarker();
+    markAppInstalled();
     setInstalledAlready(true);
     setVisible(false);
+    emitInstallPromptClosed();
   };
 
   const install = async () => {
@@ -151,15 +139,16 @@ const InstallAppPrompt: React.FC = () => {
       await deferredPrompt.prompt();
       const choice = await deferredPrompt.userChoice;
       if (choice.outcome === 'accepted') {
-        writeInstalledMarker();
+        markAppInstalled();
         setInstalledAlready(true);
         setVisible(false);
+        emitInstallPromptClosed();
       } else {
-        setVisible(false);
+        dismiss();
       }
     } catch (error) {
       console.error('Install prompt failed:', error);
-      setVisible(false);
+      dismiss();
     } finally {
       window.deferredInstallPrompt = null;
       setDeferredPrompt(null);
@@ -189,7 +178,9 @@ const InstallAppPrompt: React.FC = () => {
 
         <div className="space-y-3 px-4 py-3">
           <p className="text-sm text-slate-200">
-            Add this app to your home screen for faster launch, full-screen experience, and better offline reliability.
+            Add HikmahSphere to your Home Screen so prayer alerts, Muhasabah reminders, and Dhikr
+            notifications can reach you even when this tab is closed. On iPhone this is required
+            for notifications.
           </p>
 
           {canUseNativeInstall && (
@@ -232,7 +223,7 @@ const InstallAppPrompt: React.FC = () => {
                 </li>
                 <li className="flex items-start gap-2.5">
                   <span className="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-emerald-500 text-[11px] font-bold text-white">3</span>
-                  <span>Tap <span className="font-semibold">Add</span> in the top corner — that's it!</span>
+                  <span>Tap <span className="font-semibold">Add</span> in the top corner — that&apos;s it!</span>
                 </li>
               </ol>
               <button
