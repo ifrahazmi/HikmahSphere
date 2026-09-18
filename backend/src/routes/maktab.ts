@@ -1,13 +1,23 @@
 import express from 'express';
 import { body, query, validationResult } from 'express-validator';
+import mongoose from 'mongoose';
 import multer from 'multer';
 import path from 'path';
-import * as XLSX from 'xlsx';
 import { authMiddleware, adminMiddleware } from '../middleware/auth';
 import MaktabPayment from '../models/MaktabPayment';
 import MaktabContributor, { IMaktabContributor } from '../models/MaktabContributor';
 import User from '../models/User';
 import { logUserActivity } from '../middleware/activityLogger';
+import {
+  isoToLocalDate,
+  MAX_IMPORT_ROWS,
+  MAKTAB_SPENDING_CATEGORIES,
+  normalizeMaktabFileRow,
+  normalizeMaktabImportInput,
+  parseImportRows,
+  summarizePreviewRows,
+  type MaktabPreviewRow,
+} from '../utils/fundsImport';
 import maktabWeeklyRoutes from './maktabWeekly';
 import {
   createObjectKey,
@@ -43,6 +53,83 @@ const MaktabContributorModel = MaktabContributor as typeof MaktabContributor & {
 const router = express.Router();
 
 router.use(maktabWeeklyRoutes);
+
+const NARRATION_BANK_CODES: Record<string, string> = {
+  ICIC: 'ICICI',
+  HDFC: 'HDFC',
+  SBIN: 'SBI',
+  UTIB: 'Axis Bank',
+  BARB: 'Bank of Baroda',
+  UBIN: 'Union Bank',
+  INDB: 'IndusInd',
+  KKBK: 'Kotak',
+  CITI: 'Citi',
+  YESB: 'Yes Bank',
+  PUNB: 'PNB',
+  CNRB: 'Canara',
+  IDFB: 'IDFC First',
+  IOBA: 'Indian Overseas',
+  BKID: 'Bank of India',
+  MAHB: 'Bank of Maharashtra',
+  FDRL: 'Federal Bank',
+  AIRP: 'Airtel Payments',
+  PYTM: 'Paytm Payments',
+};
+
+const bankFromNotes = (notes?: string): string => {
+  if (!notes) return '';
+  const parts = notes.toUpperCase().split(/[^A-Z0-9]+/);
+  for (const part of parts) {
+    const name = NARRATION_BANK_CODES[part];
+    if (name) return name;
+  }
+  return '';
+};
+
+const publicBankName = (row: { bankName?: string; notes?: string; paymentMethod?: string }): string => {
+  const stored = typeof row.bankName === 'string' ? row.bankName.trim() : '';
+  if (stored && stored.toLowerCase() !== 'imported') return stored;
+
+  const fromNotes = bankFromNotes(typeof row.notes === 'string' ? row.notes : '');
+  if (fromNotes) return fromNotes;
+
+  const method = row.paymentMethod;
+  if (method === 'UPI Transfer' || method === 'QR Scanner' || method === 'Bank Transfer') {
+    return stored || 'Bank';
+  }
+  return stored;
+};
+
+/**
+ * @route   GET /api/maktab/public/recent-gifts
+ * @desc    Latest Maktab collections for public display (date, amount, bank, method only)
+ * @access  Public
+ */
+router.get('/public/recent-gifts', async (_req: any, res: any) => {
+  try {
+    const rows = await MaktabPayment.find({ type: 'collection' })
+      .sort({ paymentDate: -1, createdAt: -1 })
+      .limit(10)
+      .select({ paymentDate: 1, amount: 1, bankName: 1, paymentMethod: 1, notes: 1, _id: 0 })
+      .lean();
+
+    const gifts = rows.map((row) => ({
+      paymentDate: row.paymentDate,
+      amount: row.amount,
+      bankName: publicBankName(row),
+      paymentMethod: typeof row.paymentMethod === 'string' ? row.paymentMethod : '',
+    }));
+
+    return res.json({
+      status: 'success',
+      data: { gifts },
+    });
+  } catch (error) {
+    console.error('Get public maktab gifts error:', error);
+    return res.status(500).json({ status: 'error', message: 'Failed to load recent gifts' });
+  }
+});
+
 
 // Multer Storage for Maktab Proofs
 const upload = multer({
@@ -82,47 +169,7 @@ const importUpload = multer({
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
 });
 
-// ==================== IMPORT HELPERS ====================
-const parseImportRows = (file: Express.Multer.File): any[] => {
-  const name = (file.originalname || '').toLowerCase();
-  const buf = file.buffer;
-
-  if (name.endsWith('.json') || file.mimetype === 'application/json') {
-    const parsed = JSON.parse(buf.toString('utf-8'));
-    if (Array.isArray(parsed)) return parsed;
-    if (parsed && Array.isArray(parsed.data)) return parsed.data;
-    return [];
-  }
-
-  const workbook = XLSX.read(buf, { type: 'buffer' });
-  const sheetName = workbook.SheetNames[0];
-  if (!sheetName) return [];
-  const sheet = workbook.Sheets[sheetName];
-  if (!sheet) return [];
-  return XLSX.utils.sheet_to_json(sheet, { defval: '' });
-};
-
-const pickField = (row: any, keys: string[]): string => {
-  const lowerMap: Record<string, any> = {};
-  Object.keys(row || {}).forEach((k) => {
-    lowerMap[k.toLowerCase().trim()] = row[k];
-  });
-  for (const k of keys) {
-    const v = lowerMap[k.toLowerCase().trim()];
-    if (v !== undefined && v !== null && String(v).trim() !== '') {
-      return String(v).trim();
-    }
-  }
-  return '';
-};
-
-const VALID_METHODS = ['Bank Transfer', 'UPI Transfer', 'Cash', 'Cheque', 'QR Scanner'];
-const normalizeMethod = (raw: string): string => {
-  const match = VALID_METHODS.find((m) => m.toLowerCase() === raw.toLowerCase().trim());
-  return match || 'Cash';
-};
-
-const SPENDING_CATEGORIES = ['Teacher Salary', 'Books/Stationery', 'Uniform', 'Rent', 'Utilities', 'Other'];
+const SPENDING_CATEGORIES = [...MAKTAB_SPENDING_CATEGORIES];
 
 // ==================== CONTRIBUTOR SEARCH API ====================
 /**
@@ -422,7 +469,9 @@ router.post('/transaction', [
       paymentDate: payDate,
       paymentMethod,
       transactionRefId: (paymentMethod !== 'Cash' && paymentMethod !== 'Cheque') ? transactionRefId : undefined,
-      bankName: paymentMethod === 'Bank Transfer' ? bankName?.trim() : undefined,
+      bankName: (paymentMethod === 'Bank Transfer' || paymentMethod === 'UPI Transfer' || paymentMethod === 'QR Scanner')
+        ? (bankName?.trim() || undefined)
+        : undefined,
       senderUpiId: paymentMethod === 'UPI Transfer' ? senderUpiId?.trim() : undefined,
       chequeNumber: paymentMethod === 'Cheque' ? chequeNumber?.trim() : undefined,
       proofFilePath: uploadedProof,
@@ -496,130 +545,146 @@ router.get('/stats', authMiddleware, adminMiddleware, async (req: any, res: any)
   }
 });
 
+const insertMaktabPreviewRow = async (row: MaktabPreviewRow, userId: string) => {
+  const paymentDate = isoToLocalDate(row.paymentDate);
+  const amount = typeof row.amount === 'number' ? row.amount : 0;
+  const doc: any = {
+    userId,
+    type: row.type,
+    amount,
+    currency: 'INR',
+    paymentDate,
+    paymentMethod: row.paymentMethod,
+    notes: row.notes || undefined,
+    recordedBy: userId,
+  };
+
+  if (row.paymentMethod === 'Bank Transfer') {
+    doc.bankName = row.bankName || 'Imported';
+    if (row.transactionRefId) doc.transactionRefId = row.transactionRefId;
+    if (row.senderUpiId) doc.senderUpiId = row.senderUpiId;
+  } else if (row.paymentMethod === 'Cheque') {
+    doc.chequeNumber = row.chequeNumber || row.transactionRefId || 'IMPORTED';
+  } else if (row.paymentMethod === 'UPI Transfer' || row.paymentMethod === 'QR Scanner') {
+    if (row.bankName) doc.bankName = row.bankName;
+    if (row.transactionRefId) doc.transactionRefId = row.transactionRefId;
+    if (row.senderUpiId) doc.senderUpiId = row.senderUpiId;
+  }
+
+  if (row.type === 'collection') {
+    const contributorType = row.partyType || 'Individual';
+    doc.contributorName = row.partyName;
+    doc.contributorType = contributorType;
+    doc.contributionFrequency = row.contributionFrequency || 'One-time';
+    const contributor = await MaktabContributorModel.findOrCreateContributor(row.partyName, contributorType as any);
+    contributor.totalContributed += amount;
+    contributor.contributionCount += 1;
+    contributor.lastContributionDate = paymentDate;
+    await contributor.save();
+    doc.contributorId = contributor._id;
+  } else {
+    doc.recipientName = row.partyName;
+    doc.recipientType = row.partyType || 'Other';
+    doc.category = row.category || 'Other';
+    if (typeof row.studentCount === 'number') {
+      doc.studentCount = row.studentCount;
+    }
+  }
+
+  await new MaktabPayment(doc).save();
+};
+
 /**
- * @route   POST /api/maktab/import
- * @desc    Bulk-import Maktab transactions from CSV / Excel / JSON
+ * @route   POST /api/maktab/import/preview
+ * @desc    Parse a Maktab import file without writing to the database
  * @access  Private (Admin/Manager)
  */
-router.post('/import', authMiddleware, adminMiddleware, importUpload.single('file'), async (req: any, res: any) => {
+router.post('/import/preview', authMiddleware, adminMiddleware, importUpload.single('file'), async (req: any, res: any) => {
   try {
     if (!req.file) {
       return res.status(400).json({ status: 'error', message: 'No file uploaded' });
     }
 
-    let rows: any[];
+    let rawRows: any[];
     try {
-      rows = parseImportRows(req.file);
+      rawRows = parseImportRows(req.file);
     } catch (parseErr: any) {
       return res.status(400).json({ status: 'error', message: `Could not read file: ${parseErr.message}` });
     }
 
-    if (!Array.isArray(rows) || rows.length === 0) {
+    if (!Array.isArray(rawRows) || rawRows.length === 0) {
       return res.status(400).json({ status: 'error', message: 'No rows found in the file' });
     }
+    if (rawRows.length > MAX_IMPORT_ROWS) {
+      return res.status(400).json({
+        status: 'error',
+        message: `File has ${rawRows.length} rows. Import at most ${MAX_IMPORT_ROWS} at a time.`,
+      });
+    }
 
-    let inserted = 0;
-    let skipped = 0;
-    const errors: { row: number; reason: string }[] = [];
+    const rows = rawRows.map((row, index) => normalizeMaktabFileRow(row, index + 2));
+    return res.json({
+      status: 'success',
+      data: {
+        fileName: req.file.originalname,
+        ...summarizePreviewRows(rows),
+        rows,
+      },
+    });
+  } catch (error: any) {
+    console.error('Maktab import preview error:', error);
+    return res.status(500).json({ status: 'error', message: error.message || 'Could not preview file' });
+  }
+});
 
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      const rowNum = i + 2;
-      try {
-        const typeRaw = pickField(row, ['Type', 'type']).toLowerCase();
-        const type = typeRaw === 'spending' ? 'spending' : typeRaw === 'collection' ? 'collection' : '';
-        if (type !== 'collection' && type !== 'spending') {
-          throw new Error(`Invalid type "${typeRaw || '(empty)'}"`);
-        }
+/**
+ * @route   POST /api/maktab/import/confirm
+ * @desc    Insert previously previewed/edited Maktab rows
+ * @access  Private (Admin/Manager)
+ */
+router.post('/import/confirm', authMiddleware, adminMiddleware, async (req: any, res: any) => {
+  try {
+    const incoming = Array.isArray(req.body?.rows) ? req.body.rows : [];
+    if (incoming.length === 0) {
+      return res.status(400).json({ status: 'error', message: 'No transactions to import' });
+    }
+    if (incoming.length > MAX_IMPORT_ROWS) {
+      return res.status(400).json({
+        status: 'error',
+        message: `Cannot import more than ${MAX_IMPORT_ROWS} transactions at once`,
+      });
+    }
 
-        const amount = parseFloat(pickField(row, ['Amount', 'amount']).replace(/[^0-9.-]/g, ''));
-        if (!amount || amount <= 0) {
-          throw new Error('Amount must be greater than 0');
-        }
+    const rows = incoming.map((row: any, index: number) =>
+      normalizeMaktabImportInput(row, Number(row?.rowNumber) || index + 1)
+    );
+    const invalid = rows.filter((row: MaktabPreviewRow) => row.errors.length > 0);
+    if (invalid.length > 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: `Fix or remove ${invalid.length} row${invalid.length === 1 ? '' : 's'} with errors before importing`,
+        data: { rows: invalid.slice(0, 50) },
+      });
+    }
 
-        const partyName = pickField(row, ['Party Name', 'partyName', 'contributorName', 'recipientName', 'Name']);
-        if (!partyName) {
-          throw new Error('Party name is required');
-        }
-
-        const partyTypeRaw = pickField(row, ['Party Type', 'partyType', 'contributorType', 'recipientType']);
-        const tag = pickField(row, ['Category/Frequency', 'category', 'contributionFrequency', 'Category', 'Frequency']);
-
-        const dateRaw = pickField(row, ['Date', 'paymentDate', 'date']);
-        let paymentDate = dateRaw ? new Date(dateRaw) : new Date();
-        if (isNaN(paymentDate.getTime())) paymentDate = new Date();
-        if (paymentDate > new Date()) paymentDate = new Date();
-
-        const method = normalizeMethod(pickField(row, ['Method', 'paymentMethod', 'method']));
-        const refId = pickField(row, ['Reference ID', 'transactionRefId', 'Reference', 'refId']);
-        const notes = pickField(row, ['Notes', 'notes']);
-
-        const doc: any = {
-          userId: req.user.userId,
-          type,
-          amount,
-          currency: 'INR',
-          paymentDate,
-          paymentMethod: method,
-          notes: notes || undefined,
-          recordedBy: req.user.userId,
-        };
-
-        if (method === 'Bank Transfer') {
-          doc.bankName = pickField(row, ['Bank Name', 'bankName']) || 'Imported';
-          if (refId) doc.transactionRefId = refId;
-        } else if (method === 'Cheque') {
-          doc.chequeNumber = pickField(row, ['Cheque Number', 'chequeNumber']) || refId || 'IMPORTED';
-        } else if (method === 'UPI Transfer' || method === 'QR Scanner') {
-          if (/^\d{6,}$/.test(refId)) doc.transactionRefId = refId;
-        }
-
-        if (type === 'collection') {
-          const contributorType = ['Individual', 'Organization', 'Charity'].includes(partyTypeRaw)
-            ? partyTypeRaw
-            : 'Individual';
-          doc.contributorName = partyName;
-          doc.contributorType = contributorType;
-          doc.contributionFrequency = tag.toLowerCase() === 'monthly' ? 'Monthly' : 'One-time';
-          const contributor = await MaktabContributorModel.findOrCreateContributor(partyName, contributorType as any);
-          contributor.totalContributed += amount;
-          contributor.contributionCount += 1;
-          contributor.lastContributionDate = paymentDate;
-          await contributor.save();
-          doc.contributorId = contributor._id;
-        } else {
-          const recipientType = ['Teacher', 'Student', 'Supplier', 'Other'].includes(partyTypeRaw)
-            ? partyTypeRaw
-            : 'Other';
-          doc.recipientName = partyName;
-          doc.recipientType = recipientType;
-          doc.category = SPENDING_CATEGORIES.includes(tag) ? tag : 'Other';
-        }
-
-        await new MaktabPayment(doc).save();
-        inserted++;
-      } catch (rowErr: any) {
-        skipped++;
-        if (errors.length < 50) {
-          errors.push({ row: rowNum, reason: rowErr.message || 'Invalid row' });
-        }
-      }
+    for (const row of rows) {
+      await insertMaktabPreviewRow(row, req.user.userId);
     }
 
     await logUserActivity(
       req,
-      'maktab_import',
+      'other',
       'system',
-      `Imported ${inserted} Maktab transactions (${skipped} skipped) by ${req.user.email}`,
-      { inserted, skipped, total: rows.length }
+      `Imported ${rows.length} Maktab transactions by ${req.user.email}`,
+      { inserted: rows.length, total: rows.length }
     );
 
     return res.json({
       status: 'success',
-      data: { inserted, skipped, total: rows.length, errors },
+      data: { inserted: rows.length, skipped: 0, total: rows.length },
     });
   } catch (error: any) {
-    console.error('Maktab import error:', error);
+    console.error('Maktab import confirm error:', error);
     return res.status(500).json({ status: 'error', message: error.message || 'Import failed' });
   }
 });
@@ -849,6 +914,84 @@ router.put('/payment/:id', [
     await deleteProofQuietly(uploadedProof);
 
     console.error('Update maktab payment error:', error);
+    res.status(500).json({ status: 'error', message: 'Server Error' });
+  }
+});
+
+const parseBulkDeleteIds = (raw: unknown): string[] => {
+  if (!Array.isArray(raw)) return [];
+  const unique = new Set<string>();
+  for (const value of raw) {
+    if (typeof value !== 'string') continue;
+    const id = value.trim();
+    if (mongoose.Types.ObjectId.isValid(id)) unique.add(id);
+  }
+  return Array.from(unique);
+};
+
+/**
+ * @route   POST /api/maktab/payments/bulk-delete
+ * @desc    Delete multiple Maktab transactions at once
+ * @access  Private (Super Admin only)
+ */
+router.post('/payments/bulk-delete', authMiddleware, async (req: any, res: any) => {
+  try {
+    const user = await User.findById(req.user.userId);
+    if (!user || (user.role !== 'superadmin' && !user.isAdmin)) {
+      return res.status(403).json({ status: 'error', message: 'Access denied. Admin only.' });
+    }
+
+    const ids = parseBulkDeleteIds(req.body?.ids);
+    if (ids.length === 0) {
+      return res.status(400).json({ status: 'error', message: 'Select at least one valid transaction' });
+    }
+    if (ids.length > 500) {
+      return res.status(400).json({ status: 'error', message: 'Cannot delete more than 500 transactions at once' });
+    }
+
+    const payments = await MaktabPayment.find({ _id: { $in: ids } });
+    if (payments.length === 0) {
+      return res.status(404).json({ status: 'error', message: 'No matching transactions found' });
+    }
+
+    const contributorDeltas = new Map<string, { amount: number; count: number }>();
+    const proofs: string[] = [];
+
+    for (const payment of payments) {
+      if (payment.proofFilePath) proofs.push(payment.proofFilePath);
+      if (payment.type === 'collection' && payment.contributorId) {
+        const key = payment.contributorId.toString();
+        const prev = contributorDeltas.get(key) || { amount: 0, count: 0 };
+        contributorDeltas.set(key, { amount: prev.amount + payment.amount, count: prev.count + 1 });
+      }
+    }
+
+    await MaktabPayment.deleteMany({ _id: { $in: payments.map((p) => p._id) } });
+
+    for (const [contributorId, delta] of contributorDeltas) {
+      const contributor = await MaktabContributor.findById(contributorId);
+      if (!contributor) continue;
+      const remainingContributions = Math.max(0, contributor.contributionCount - delta.count);
+      if (remainingContributions === 0) {
+        await MaktabContributor.findByIdAndDelete(contributor._id);
+      } else {
+        contributor.totalContributed = Math.max(0, contributor.totalContributed - delta.amount);
+        contributor.contributionCount = remainingContributions;
+        await contributor.save();
+      }
+    }
+
+    await Promise.all(proofs.map((proof) => deleteProofQuietly(proof)));
+
+    const updatedTotals = await MaktabPaymentModel.getTotals();
+
+    res.json({
+      status: 'success',
+      message: `${payments.length} transaction${payments.length === 1 ? '' : 's'} deleted successfully`,
+      data: { deletedCount: payments.length, totals: updatedTotals },
+    });
+  } catch (error) {
+    console.error('Bulk delete maktab payments error:', error);
     res.status(500).json({ status: 'error', message: 'Server Error' });
   }
 });

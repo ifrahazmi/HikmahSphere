@@ -1,13 +1,22 @@
 import express from 'express';
 import { body, query, validationResult } from 'express-validator';
+import mongoose from 'mongoose';
 import multer from 'multer';
 import path from 'path';
-import * as XLSX from 'xlsx';
 import { authMiddleware, optionalAuthMiddleware, adminMiddleware } from '../middleware/auth';
 import ZakatPayment from '../models/ZakatPayment';
 import Donor, { IDonor } from '../models/Donor';
 import User from '../models/User';
 import { logUserActivity } from '../middleware/activityLogger';
+import {
+  isoToLocalDate,
+  MAX_IMPORT_ROWS,
+  normalizeZakatFileRow,
+  normalizeZakatImportInput,
+  parseImportRows,
+  summarizePreviewRows,
+  type ZakatPreviewRow,
+} from '../utils/fundsImport';
 import {
   createObjectKey,
   deleteStoredObject,
@@ -82,49 +91,6 @@ const importUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
 });
-
-// ==================== IMPORT HELPERS ====================
-// Read an uploaded file (CSV / XLSX / JSON) into an array of row objects.
-const parseImportRows = (file: Express.Multer.File): any[] => {
-  const name = (file.originalname || '').toLowerCase();
-  const buf = file.buffer;
-
-  if (name.endsWith('.json') || file.mimetype === 'application/json') {
-    const parsed = JSON.parse(buf.toString('utf-8'));
-    if (Array.isArray(parsed)) return parsed;
-    if (parsed && Array.isArray(parsed.data)) return parsed.data;
-    return [];
-  }
-
-  // CSV and Excel are both handled by SheetJS
-  const workbook = XLSX.read(buf, { type: 'buffer' });
-  const sheetName = workbook.SheetNames[0];
-  if (!sheetName) return [];
-  const sheet = workbook.Sheets[sheetName];
-  if (!sheet) return [];
-  return XLSX.utils.sheet_to_json(sheet, { defval: '' });
-};
-
-// Case-insensitive lookup of the first non-empty value among candidate keys.
-const pickField = (row: any, keys: string[]): string => {
-  const lowerMap: Record<string, any> = {};
-  Object.keys(row || {}).forEach((k) => {
-    lowerMap[k.toLowerCase().trim()] = row[k];
-  });
-  for (const k of keys) {
-    const v = lowerMap[k.toLowerCase().trim()];
-    if (v !== undefined && v !== null && String(v).trim() !== '') {
-      return String(v).trim();
-    }
-  }
-  return '';
-};
-
-const VALID_METHODS = ['Bank Transfer', 'UPI Transfer', 'Cash', 'Cheque', 'QR Scanner'];
-const normalizeMethod = (raw: string): string => {
-  const match = VALID_METHODS.find((m) => m.toLowerCase() === raw.toLowerCase().trim());
-  return match || 'Cash';
-};
 
 // ==================== ZAKAT CALCULATION ====================
 const ZAKAT_RATES = {
@@ -880,132 +846,141 @@ router.get('/stats/split', authMiddleware, adminMiddleware, async (req: any, res
   }
 });
 
+const insertZakatPreviewRow = async (row: ZakatPreviewRow, userId: string) => {
+  const paymentDate = isoToLocalDate(row.paymentDate);
+  const amount = typeof row.amount === 'number' ? row.amount : 0;
+  const doc: any = {
+    userId,
+    type: row.type,
+    purpose: row.purpose || 'Zakat',
+    amount,
+    currency: 'INR',
+    paymentDate,
+    paymentMethod: row.paymentMethod,
+    notes: row.notes || undefined,
+    recordedBy: userId,
+  };
+
+  if (row.paymentMethod === 'Bank Transfer') {
+    doc.bankName = row.bankName || 'Imported';
+    if (row.transactionRefId) doc.transactionRefId = row.transactionRefId;
+    if (row.senderUpiId) doc.senderUpiId = row.senderUpiId;
+  } else if (row.paymentMethod === 'Cheque') {
+    doc.chequeNumber = row.chequeNumber || row.transactionRefId || 'IMPORTED';
+  } else if (row.paymentMethod === 'UPI Transfer' || row.paymentMethod === 'QR Scanner') {
+    if (row.transactionRefId) doc.transactionRefId = row.transactionRefId;
+    if (row.senderUpiId) doc.senderUpiId = row.senderUpiId;
+  }
+
+  if (row.type === 'collection') {
+    const donorType = row.partyType || 'Individual';
+    doc.donorName = row.partyName;
+    doc.donorType = donorType;
+    const donor = await DonorModel.findOrCreateDonor(row.partyName, donorType as any);
+    donor.totalDonated += amount;
+    donor.donationCount += 1;
+    donor.lastDonationDate = paymentDate;
+    await donor.save();
+    doc.donorId = donor._id;
+  } else {
+    doc.recipientName = row.partyName;
+    doc.recipientType = row.partyType || 'Other';
+  }
+
+  await new ZakatPayment(doc).save();
+};
+
 /**
- * @route   POST /api/zakat/import
- * @desc    Bulk-import Zakat/Sadaqah transactions from CSV / Excel / JSON
+ * @route   POST /api/zakat/import/preview
+ * @desc    Parse a Zakat/Sadaqah import file without writing to the database
  * @access  Private (Admin/Manager)
  */
-router.post('/import', authMiddleware, adminMiddleware, importUpload.single('file'), async (req: any, res: any) => {
+router.post('/import/preview', authMiddleware, adminMiddleware, importUpload.single('file'), async (req: any, res: any) => {
   try {
     if (!req.file) {
       return res.status(400).json({ status: 'error', message: 'No file uploaded' });
     }
 
-    let rows: any[];
+    let rawRows: any[];
     try {
-      rows = parseImportRows(req.file);
+      rawRows = parseImportRows(req.file);
     } catch (parseErr: any) {
       return res.status(400).json({ status: 'error', message: `Could not read file: ${parseErr.message}` });
     }
 
-    if (!Array.isArray(rows) || rows.length === 0) {
+    if (!Array.isArray(rawRows) || rawRows.length === 0) {
       return res.status(400).json({ status: 'error', message: 'No rows found in the file' });
     }
+    if (rawRows.length > MAX_IMPORT_ROWS) {
+      return res.status(400).json({
+        status: 'error',
+        message: `File has ${rawRows.length} rows. Import at most ${MAX_IMPORT_ROWS} at a time.`,
+      });
+    }
 
-    let inserted = 0;
-    let skipped = 0;
-    const errors: { row: number; reason: string }[] = [];
+    const rows = rawRows.map((row, index) => normalizeZakatFileRow(row, index + 2));
+    return res.json({
+      status: 'success',
+      data: {
+        fileName: req.file.originalname,
+        ...summarizePreviewRows(rows),
+        rows,
+      },
+    });
+  } catch (error: any) {
+    console.error('Zakat import preview error:', error);
+    return res.status(500).json({ status: 'error', message: error.message || 'Could not preview file' });
+  }
+});
 
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      const rowNum = i + 2; // account for header row in spreadsheets
-      try {
-        const typeRaw = pickField(row, ['Type', 'type']).toLowerCase();
-        const type = typeRaw === 'spending' ? 'spending' : typeRaw === 'collection' ? 'collection' : '';
-        if (type !== 'collection' && type !== 'spending') {
-          throw new Error(`Invalid type "${typeRaw || '(empty)'}"`);
-        }
+/**
+ * @route   POST /api/zakat/import/confirm
+ * @desc    Insert previously previewed/edited Zakat/Sadaqah rows
+ * @access  Private (Admin/Manager)
+ */
+router.post('/import/confirm', authMiddleware, adminMiddleware, async (req: any, res: any) => {
+  try {
+    const incoming = Array.isArray(req.body?.rows) ? req.body.rows : [];
+    if (incoming.length === 0) {
+      return res.status(400).json({ status: 'error', message: 'No transactions to import' });
+    }
+    if (incoming.length > MAX_IMPORT_ROWS) {
+      return res.status(400).json({
+        status: 'error',
+        message: `Cannot import more than ${MAX_IMPORT_ROWS} transactions at once`,
+      });
+    }
 
-        const amount = parseFloat(pickField(row, ['Amount', 'amount']).replace(/[^0-9.-]/g, ''));
-        if (!amount || amount <= 0) {
-          throw new Error('Amount must be greater than 0');
-        }
+    const rows = incoming.map((row: any, index: number) =>
+      normalizeZakatImportInput(row, Number(row?.rowNumber) || index + 1)
+    );
+    const invalid = rows.filter((row: ZakatPreviewRow) => row.errors.length > 0);
+    if (invalid.length > 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: `Fix or remove ${invalid.length} row${invalid.length === 1 ? '' : 's'} with errors before importing`,
+        data: { rows: invalid.slice(0, 50) },
+      });
+    }
 
-        const partyName = pickField(row, ['Party Name', 'partyName', 'donorName', 'recipientName', 'Name']);
-        if (!partyName) {
-          throw new Error('Party name is required');
-        }
-
-        const purposeRaw = pickField(row, ['Purpose', 'purpose']);
-        const purpose = purposeRaw.toLowerCase() === 'sadaqah' ? 'Sadaqah' : 'Zakat';
-
-        const partyTypeRaw = pickField(row, ['Party Type', 'partyType', 'donorType', 'recipientType']);
-
-        const dateRaw = pickField(row, ['Date', 'paymentDate', 'date']);
-        let paymentDate = dateRaw ? new Date(dateRaw) : new Date();
-        if (isNaN(paymentDate.getTime())) paymentDate = new Date();
-        if (paymentDate > new Date()) paymentDate = new Date();
-
-        const method = normalizeMethod(pickField(row, ['Method', 'paymentMethod', 'method']));
-        const refId = pickField(row, ['Reference ID', 'transactionRefId', 'Reference', 'refId']);
-        const notes = pickField(row, ['Notes', 'notes']);
-
-        const doc: any = {
-          userId: req.user.userId,
-          type,
-          purpose,
-          amount,
-          currency: 'INR',
-          paymentDate,
-          paymentMethod: method,
-          notes: notes || undefined,
-          recordedBy: req.user.userId,
-        };
-
-        // Satisfy method-specific pre-save requirements without rejecting historical rows
-        if (method === 'Bank Transfer') {
-          doc.bankName = pickField(row, ['Bank Name', 'bankName']) || 'Imported';
-          if (refId) doc.transactionRefId = refId;
-        } else if (method === 'Cheque') {
-          doc.chequeNumber = pickField(row, ['Cheque Number', 'chequeNumber']) || refId || 'IMPORTED';
-        } else if (method === 'UPI Transfer' || method === 'QR Scanner') {
-          if (/^\d{6,}$/.test(refId)) doc.transactionRefId = refId;
-        }
-
-        if (type === 'collection') {
-          const donorType = ['Individual', 'Organization', 'Charity'].includes(partyTypeRaw)
-            ? partyTypeRaw
-            : 'Individual';
-          doc.donorName = partyName;
-          doc.donorType = donorType;
-          const donor = await DonorModel.findOrCreateDonor(partyName, donorType as any);
-          donor.totalDonated += amount;
-          donor.donationCount += 1;
-          donor.lastDonationDate = paymentDate;
-          await donor.save();
-          doc.donorId = donor._id;
-        } else {
-          const recipientType = ['Individual', 'Family', 'Mosque', 'Madrasa', 'NGO', 'Other'].includes(partyTypeRaw)
-            ? partyTypeRaw
-            : 'Other';
-          doc.recipientName = partyName;
-          doc.recipientType = recipientType;
-        }
-
-        await new ZakatPayment(doc).save();
-        inserted++;
-      } catch (rowErr: any) {
-        skipped++;
-        if (errors.length < 50) {
-          errors.push({ row: rowNum, reason: rowErr.message || 'Invalid row' });
-        }
-      }
+    for (const row of rows) {
+      await insertZakatPreviewRow(row, req.user.userId);
     }
 
     await logUserActivity(
       req,
-      'zakat_import',
+      'other',
       'zakat',
-      `Imported ${inserted} Zakat/Sadaqah transactions (${skipped} skipped) by ${req.user.email}`,
-      { inserted, skipped, total: rows.length }
+      `Imported ${rows.length} Zakat/Sadaqah transactions by ${req.user.email}`,
+      { inserted: rows.length, total: rows.length }
     );
 
     return res.json({
       status: 'success',
-      data: { inserted, skipped, total: rows.length, errors },
+      data: { inserted: rows.length, skipped: 0, total: rows.length },
     });
   } catch (error: any) {
-    console.error('Zakat import error:', error);
+    console.error('Zakat import confirm error:', error);
     return res.status(500).json({ status: 'error', message: error.message || 'Import failed' });
   }
 });
@@ -1229,6 +1204,84 @@ router.put('/payment/:id', [
     await deleteProofQuietly(uploadedProof);
 
     console.error('Update payment error:', error);
+    res.status(500).json({ status: 'error', message: 'Server Error' });
+  }
+});
+
+const parseBulkDeleteIds = (raw: unknown): string[] => {
+  if (!Array.isArray(raw)) return [];
+  const unique = new Set<string>();
+  for (const value of raw) {
+    if (typeof value !== 'string') continue;
+    const id = value.trim();
+    if (mongoose.Types.ObjectId.isValid(id)) unique.add(id);
+  }
+  return Array.from(unique);
+};
+
+/**
+ * @route   POST /api/zakat/payments/bulk-delete
+ * @desc    Delete multiple Zakat transactions at once
+ * @access  Private (Super Admin only)
+ */
+router.post('/payments/bulk-delete', authMiddleware, async (req: any, res: any) => {
+  try {
+    const user = await User.findById(req.user.userId);
+    if (!user || (user.role !== 'superadmin' && !user.isAdmin)) {
+      return res.status(403).json({ status: 'error', message: 'Access denied. Admin only.' });
+    }
+
+    const ids = parseBulkDeleteIds(req.body?.ids);
+    if (ids.length === 0) {
+      return res.status(400).json({ status: 'error', message: 'Select at least one valid transaction' });
+    }
+    if (ids.length > 500) {
+      return res.status(400).json({ status: 'error', message: 'Cannot delete more than 500 transactions at once' });
+    }
+
+    const payments = await ZakatPayment.find({ _id: { $in: ids } });
+    if (payments.length === 0) {
+      return res.status(404).json({ status: 'error', message: 'No matching transactions found' });
+    }
+
+    const donorDeltas = new Map<string, { amount: number; count: number }>();
+    const proofs: string[] = [];
+
+    for (const payment of payments) {
+      if (payment.proofFilePath) proofs.push(payment.proofFilePath);
+      if (payment.type === 'collection' && payment.donorId) {
+        const key = payment.donorId.toString();
+        const prev = donorDeltas.get(key) || { amount: 0, count: 0 };
+        donorDeltas.set(key, { amount: prev.amount + payment.amount, count: prev.count + 1 });
+      }
+    }
+
+    await ZakatPayment.deleteMany({ _id: { $in: payments.map((p) => p._id) } });
+
+    for (const [donorId, delta] of donorDeltas) {
+      const donor = await Donor.findById(donorId);
+      if (!donor) continue;
+      const remainingDonations = Math.max(0, donor.donationCount - delta.count);
+      if (remainingDonations === 0) {
+        await Donor.findByIdAndDelete(donor._id);
+      } else {
+        donor.totalDonated = Math.max(0, donor.totalDonated - delta.amount);
+        donor.donationCount = remainingDonations;
+        await donor.save();
+      }
+    }
+
+    await Promise.all(proofs.map((proof) => deleteProofQuietly(proof)));
+
+    const updatedTotals = await ZakatPaymentModel.getTotals();
+
+    res.json({
+      status: 'success',
+      message: `${payments.length} transaction${payments.length === 1 ? '' : 's'} deleted successfully`,
+      data: { deletedCount: payments.length, totals: updatedTotals },
+    });
+  } catch (error) {
+    console.error('Bulk delete zakat payments error:', error);
     res.status(500).json({ status: 'error', message: 'Server Error' });
   }
 });

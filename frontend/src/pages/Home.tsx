@@ -10,6 +10,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../hooks/useAuth';
 import PageSEO from '../components/PageSEO';
+import RecentPublicGifts from '../components/Maktab/RecentPublicGifts';
 import {
   getHomeFeatures,
   HOME_FAQ,
@@ -392,6 +393,8 @@ const Home: React.FC = () => {
             </div>
           </div>
         </section>
+
+        <RecentPublicGifts tone="dark" ctaHref="/maktab#sponsor" />
 
         {/* Pillars + trust once */}
         <section
