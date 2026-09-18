@@ -112,9 +112,13 @@ const MaktabManagement: React.FC<MaktabManagementProps> = ({
   const [filterCategory, setFilterCategory] = useState<'all' | SpendingCategory>('all');
   const [filterFrequency, setFilterFrequency] = useState<'all' | 'One-time' | 'Monthly'>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   const [showExportOptions, setShowExportOptions] = useState(false);
   const exportDropdownRef = useRef<HTMLDivElement>(null);
+  const selectAllDesktopRef = useRef<HTMLInputElement>(null);
+  const selectAllMobileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -169,12 +173,49 @@ const MaktabManagement: React.FC<MaktabManagementProps> = ({
       const data = await response.json();
       if (data.status === 'success') {
         toast.success('Transaction deleted successfully');
+        setSelectedIds((prev) => prev.filter((selectedId) => selectedId !== id));
         fetchMaktabData();
+        window.dispatchEvent(new CustomEvent('funds-data-changed'));
       } else {
         toast.error(data.message || 'Delete failed');
       }
     } catch (error) {
       toast.error('Delete failed');
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0 || isBulkDeleting) return;
+    const count = selectedIds.length;
+    if (!window.confirm(`Are you sure you want to delete ${count} selected transaction${count === 1 ? '' : 's'}? This action cannot be undone.`)) {
+      return;
+    }
+
+    setIsBulkDeleting(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/maktab/payments/bulk-delete`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ids: selectedIds }),
+      });
+      const data = await response.json();
+      if (data.status === 'success') {
+        const deletedCount = data.data?.deletedCount ?? count;
+        toast.success(`${deletedCount} transaction${deletedCount === 1 ? '' : 's'} deleted successfully`);
+        setSelectedIds([]);
+        fetchMaktabData();
+        window.dispatchEvent(new CustomEvent('funds-data-changed'));
+      } else {
+        toast.error(data.message || 'Delete failed');
+      }
+    } catch (error) {
+      toast.error('Delete failed');
+    } finally {
+      setIsBulkDeleting(false);
     }
   };
 
@@ -250,7 +291,7 @@ const MaktabManagement: React.FC<MaktabManagementProps> = ({
       const proofStatus = t.proofFilePath ? 'Image is present' : 'No';
       return {
         paymentDate: t.paymentDate
-          ? new Date(t.paymentDate).toLocaleDateString('en-IN')
+          ? new Date(t.paymentDate).toLocaleDateString('en-CA')
           : '',
         recordedAt: t.createdAt
           ? new Date(t.createdAt).toLocaleString('en-IN')
@@ -390,6 +431,27 @@ const MaktabManagement: React.FC<MaktabManagementProps> = ({
   const canDelete = isAdmin && showDelete;
   const canExport = isAdmin && showExport;
   const canViewStats = isAdmin && showStats;
+  const visibleIds = filteredTransactions.map((t) => t._id);
+  const selectedVisibleCount = visibleIds.filter((id) => selectedIds.includes(id)).length;
+  const allVisibleSelected = visibleIds.length > 0 && selectedVisibleCount === visibleIds.length;
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((selectedId) => selectedId !== id) : [...prev, id]));
+  };
+
+  const toggleSelectAllVisible = () => {
+    if (allVisibleSelected) {
+      setSelectedIds((prev) => prev.filter((id) => !visibleIds.includes(id)));
+    } else {
+      setSelectedIds((prev) => Array.from(new Set([...prev, ...visibleIds])));
+    }
+  };
+
+  useEffect(() => {
+    const indeterminate = selectedVisibleCount > 0 && !allVisibleSelected;
+    if (selectAllDesktopRef.current) selectAllDesktopRef.current.indeterminate = indeterminate;
+    if (selectAllMobileRef.current) selectAllMobileRef.current.indeterminate = indeterminate;
+  }, [selectedVisibleCount, allVisibleSelected]);
 
   const getPaymentDetails = (t: MaktabTransaction) => {
     const details: string[] = [];
@@ -672,14 +734,56 @@ const MaktabManagement: React.FC<MaktabManagementProps> = ({
 
       {/* Transactions Table */}
       <div className="bg-white shadow-md rounded-xl overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
-          <h3 className="text-lg font-semibold text-gray-900">
-            Transactions Database
-          </h3>
+        <div className="px-6 py-4 border-b border-gray-200 flex flex-wrap justify-between items-center gap-3 bg-gray-50">
+          <div className="flex items-center gap-3">
+            {canDelete && filteredTransactions.length > 0 && (
+              <label className="md:hidden inline-flex items-center gap-2 text-sm text-gray-600">
+                <input
+                  ref={selectAllMobileRef}
+                  type="checkbox"
+                  checked={allVisibleSelected}
+                  onChange={toggleSelectAllVisible}
+                  className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                  aria-label="Select all visible transactions"
+                />
+                Select all
+              </label>
+            )}
+            <h3 className="text-lg font-semibold text-gray-900">
+              Transactions Database
+            </h3>
+          </div>
           <span className="text-sm text-gray-500">
             Showing {filteredTransactions.length} of {maktabTransactions.length} records
           </span>
         </div>
+
+        {canDelete && selectedIds.length > 0 && (
+          <div className="px-6 py-3 border-b border-red-100 bg-red-50 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm font-medium text-red-800">
+              {selectedIds.length} transaction{selectedIds.length === 1 ? '' : 's'} selected
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedIds([])}
+                disabled={isBulkDeleting}
+                className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-60"
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleBulkDelete()}
+                disabled={isBulkDeleting}
+                className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-60"
+              >
+                <TrashIcon className="h-4 w-4" />
+                {isBulkDeleting ? 'Deleting...' : 'Delete selected'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {filteredTransactions.length === 0 ? (
           <div className="p-12 text-center">
@@ -696,6 +800,18 @@ const MaktabManagement: React.FC<MaktabManagementProps> = ({
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
+                    {canDelete && (
+                      <th className="px-4 py-3 text-left">
+                        <input
+                          ref={selectAllDesktopRef}
+                          type="checkbox"
+                          checked={allVisibleSelected}
+                          onChange={toggleSelectAllVisible}
+                          className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                          aria-label="Select all visible transactions"
+                        />
+                      </th>
+                    )}
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category / Frequency</th>
@@ -707,7 +823,18 @@ const MaktabManagement: React.FC<MaktabManagementProps> = ({
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {filteredTransactions.map((t) => (
-                    <tr key={t._id} className="hover:bg-gray-50 transition-colors">
+                    <tr key={t._id} className={`${selectedIds.includes(t._id) ? 'bg-indigo-50/70' : ''} hover:bg-gray-50 transition-colors`}>
+                      {canDelete && (
+                        <td className="px-4 py-4">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(t._id)}
+                            onChange={() => toggleSelected(t._id)}
+                            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                            aria-label={`Select transaction from ${t.type === 'collection' ? t.contributorName : t.recipientName}`}
+                          />
+                        </td>
+                      )}
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">
                           {new Date(t.paymentDate).toLocaleDateString('en-IN', {
@@ -808,10 +935,22 @@ const MaktabManagement: React.FC<MaktabManagementProps> = ({
               {filteredTransactions.map((t) => (
                 <div
                   key={t._id}
-                  className="bg-white rounded-xl shadow-md border border-gray-200 p-4 hover:shadow-lg transition-shadow"
+                  className={`bg-white rounded-xl shadow-md border p-4 hover:shadow-lg transition-shadow ${
+                    selectedIds.includes(t._id) ? 'border-indigo-300 bg-indigo-50/40' : 'border-gray-200'
+                  }`}
                 >
                   <div className="flex justify-between items-start mb-3">
-                    <div>
+                    <div className="flex items-start gap-3">
+                      {canDelete && (
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(t._id)}
+                          onChange={() => toggleSelected(t._id)}
+                          className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                          aria-label={`Select transaction from ${t.type === 'collection' ? t.contributorName : t.recipientName}`}
+                        />
+                      )}
+                      <div>
                       <span className={`px-2.5 py-1 inline-flex text-xs font-semibold rounded-full ${
                         t.type === 'collection'
                           ? 'bg-green-100 text-green-800'
@@ -831,6 +970,7 @@ const MaktabManagement: React.FC<MaktabManagementProps> = ({
                           year: 'numeric'
                         })}
                       </p>
+                      </div>
                     </div>
                     <p className={`text-lg font-bold ${
                       t.type === 'collection' ? 'text-green-600' : 'text-red-600'

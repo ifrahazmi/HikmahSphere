@@ -19,6 +19,7 @@ import {
 import PageSEO from '../components/PageSEO';
 import MaktabLifeGallery from '../components/Maktab/MaktabLifeGallery';
 import MaktabWeeklyProgress from '../components/Maktab/MaktabWeeklyProgress';
+import RecentPublicGifts from '../components/Maktab/RecentPublicGifts';
 import { API_URL } from '../config';
 
 const PROGRAMS = [
@@ -1211,21 +1212,26 @@ const Maktab: React.FC = () => {
           data-maktab-reveal="trust"
           className={`py-16 px-4 sm:px-6 lg:px-8 bg-white ${revealClass('trust')}`}
         >
-          <div className="max-w-3xl mx-auto flex flex-col sm:flex-row gap-5 items-start sm:items-center">
-            <div className="shrink-0 w-12 h-12 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
-              <ShieldCheckIcon className="w-7 h-7" />
+          <div className="max-w-6xl mx-auto flex flex-col lg:flex-row gap-10 lg:gap-12 items-start">
+            <div className="w-full max-w-3xl flex flex-col sm:flex-row gap-5 items-start sm:items-center lg:max-w-md lg:shrink-0">
+              <div className="shrink-0 w-12 h-12 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                <ShieldCheckIcon className="w-7 h-7" />
+              </div>
+              <div>
+                <h2
+                  className="text-xl text-slate-900 mb-2"
+                  style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 600 }}
+                >
+                  Tracked with care
+                </h2>
+                <p className="text-slate-600 leading-relaxed">
+                  Maktab funds are managed inside HikmahSphere’s fund tools — the same platform used for transparent
+                  Zakat and Sadaqah records — so contributions can be followed with accountability as the program grows.
+                </p>
+              </div>
             </div>
-            <div>
-              <h2
-                className="text-xl text-slate-900 mb-2"
-                style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 600 }}
-              >
-                Tracked with care
-              </h2>
-              <p className="text-slate-600 leading-relaxed">
-                Maktab funds are managed inside HikmahSphere’s fund tools — the same platform used for transparent
-                Zakat and Sadaqah records — so contributions can be followed with accountability as the program grows.
-              </p>
+            <div className="w-full min-w-0 flex-1">
+              <RecentPublicGifts tone="light" />
             </div>
           </div>
         </section>

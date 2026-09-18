@@ -15,6 +15,7 @@ import { API_URL } from '../../config';
 import toast from 'react-hot-toast';
 import ZakatManagement from '../Zakat/ZakatManagement';
 import MaktabManagement from '../Maktab/MaktabManagement';
+import FundsImportModal, { ImportDestination } from './FundsImportModal';
 import { useAuth } from '../../hooks/useAuth';
 
 interface CategoryTotals {
@@ -147,10 +148,9 @@ const FundsManagement: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [section, setSection] = useState<'zakat' | 'maktab'>('zakat');
   const [showExportOptions, setShowExportOptions] = useState(false);
-  const [importing, setImporting] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const exportRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchTotals = useCallback(async () => {
     setLoading(true);
@@ -201,6 +201,14 @@ const FundsManagement: React.FC = () => {
     fetchTotals();
   }, [fetchTotals]);
 
+  useEffect(() => {
+    const refresh = () => {
+      void fetchTotals();
+    };
+    window.addEventListener('funds-data-changed', refresh);
+    return () => window.removeEventListener('funds-data-changed', refresh);
+  }, [fetchTotals]);
+
   const grand: CategoryTotals = {
     collected: totals.zakat.collected + totals.sadaqah.collected + totals.maktab.collected,
     spent: totals.zakat.spent + totals.sadaqah.spent + totals.maktab.spent,
@@ -224,38 +232,11 @@ const FundsManagement: React.FC = () => {
     setShowExportOptions(false);
   };
 
-  const handleImportClick = () => fileInputRef.current?.click();
-
-  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setImporting(true);
-    try {
-      const token = localStorage.getItem('token');
-      const formData = new FormData();
-      formData.append('file', file);
-      const endpoint = section === 'zakat' ? 'zakat' : 'maktab';
-      const response = await fetch(`${API_URL}/${endpoint}/import`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
-      const data = await response.json();
-      if (response.ok && data.status === 'success') {
-        const { inserted, skipped } = data.data;
-        toast.success(`Imported ${inserted} record${inserted === 1 ? '' : 's'}${skipped ? `, skipped ${skipped}` : ''}`);
-        setRefreshKey((k) => k + 1);
-        fetchTotals();
-      } else {
-        toast.error(data.message || 'Import failed');
-      }
-    } catch (error) {
-      console.error('Import error:', error);
-      toast.error('Import failed. Please check the file format.');
-    } finally {
-      setImporting(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
+  const handleImported = (destination: ImportDestination) => {
+    setShowImportModal(false);
+    setSection(destination);
+    setRefreshKey((k) => k + 1);
+    fetchTotals();
   };
 
   return (
@@ -328,21 +309,13 @@ const FundsManagement: React.FC = () => {
 
             {/* Import */}
             <button
-              onClick={handleImportClick}
-              disabled={importing}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 transition-colors font-medium text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-              title="Import CSV, Excel or JSON"
+              onClick={() => setShowImportModal(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 transition-colors font-medium text-sm"
+              title="Import CSV or JSON"
             >
               <ArrowUpTrayIcon className="w-5 h-5" />
-              {importing ? 'Importing...' : 'Import'}
+              Import
             </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv,.xlsx,.xls,.json"
-              onChange={handleImportFile}
-              className="hidden"
-            />
 
             {/* Refresh */}
             <button
@@ -467,6 +440,12 @@ const FundsManagement: React.FC = () => {
           showFilters={true}
         />
       </div>
+
+      <FundsImportModal
+        open={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onImported={handleImported}
+      />
     </div>
   );
 };
