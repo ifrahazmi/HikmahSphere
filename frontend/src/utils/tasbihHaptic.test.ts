@@ -23,8 +23,8 @@ describe('tasbih haptic', () => {
   });
 
   it('uses a short pulse for beads and a double pulse at checkpoints', () => {
-    expect(getTasbihHapticPattern('bead')).toBe(36);
-    expect(getTasbihHapticPattern('checkpoint')).toEqual([24, 36, 52]);
+    expect(getTasbihHapticPattern('bead')).toEqual([80]);
+    expect(getTasbihHapticPattern('checkpoint')).toEqual([70, 45, 120]);
   });
 
   it('returns false when the Vibration API is missing', () => {
@@ -42,7 +42,7 @@ describe('tasbih haptic', () => {
 
     expect(canVibrate()).toBe(true);
     expect(vibrateTasbihClick('checkpoint')).toBe(true);
-    expect(vibrate).toHaveBeenCalledWith([24, 36, 52]);
+    expect(vibrate).toHaveBeenCalledWith([70, 45, 120]);
   });
 
   it('stays silent when the global haptic setting is off', () => {

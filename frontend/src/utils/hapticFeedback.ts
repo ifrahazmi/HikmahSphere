@@ -9,21 +9,45 @@ export type HapticKind =
   | 'prayer'
   | 'align';
 
-export const HAPTIC_PATTERNS: Record<HapticKind, number | number[]> = {
-  bead: 36,
-  checkpoint: [24, 36, 52],
-  success: 45,
-  error: [30, 40, 50],
-  notify: [80, 40, 80],
-  prayer: [160, 80, 220],
-  align: 60,
+/**
+ * Android vibrator motors (Samsung, Pixel, Xiaomi) routinely ignore pulses
+ * under ~70ms even when navigator.vibrate returns true. Keep every ON segment
+ * at or above that floor. Always store arrays — some Android WebViews reject
+ * a bare number.
+ */
+export const HAPTIC_PATTERNS: Record<HapticKind, number[]> = {
+  bead: [80],
+  checkpoint: [70, 45, 120],
+  success: [90],
+  error: [60, 50, 100],
+  notify: [100, 50, 120],
+  prayer: [180, 80, 240],
+  align: [100],
+};
+
+type VibrateFn = (pattern: number | number[]) => boolean;
+
+const getVibrateFn = (): VibrateFn | null => {
+  if (typeof navigator === 'undefined') {
+    return null;
+  }
+
+  const nav = navigator as Navigator & {
+    webkitVibrate?: VibrateFn;
+    mozVibrate?: VibrateFn;
+  };
+  const fn = nav.vibrate || nav.webkitVibrate || nav.mozVibrate;
+  if (typeof fn !== 'function') {
+    return null;
+  }
+  return (pattern) => fn.call(nav, pattern);
 };
 
 /** Vibration API only. iPhone Safari never implements navigator.vibrate; iOS
  *  Taptic Engine still fires for OS/web-push notifications independently. */
-export const canVibrate = (): boolean => {
-  return typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
-};
+/** Vibration API only. iPhone Safari never implements navigator.vibrate; iOS
+ *  Taptic Engine still fires for OS/web-push notifications independently. */
+export const canVibrate = (): boolean => Boolean(getVibrateFn());
 
 const readStoredEnabled = (): boolean => {
   if (typeof localStorage === 'undefined') {
@@ -63,19 +87,32 @@ export const setHapticEnabled = (enabled: boolean): void => {
   }
 };
 
-export const getHapticPattern = (kind: HapticKind): number | number[] => {
+export const getHapticPattern = (kind: HapticKind): number[] => {
   return HAPTIC_PATTERNS[kind];
 };
 
 export const triggerHaptic = (kind: HapticKind): boolean => {
-  if (!isHapticEnabled() || !canVibrate()) {
+  if (!isHapticEnabled()) {
     return false;
   }
 
-  try {
-    return Boolean(navigator.vibrate(getHapticPattern(kind)));
-  } catch {
+  const vibrate = getVibrateFn();
+  if (!vibrate) {
     return false;
+  }
+
+  const pattern = getHapticPattern(kind);
+
+  try {
+    // Replace any in-flight pulse so rapid tasbih taps still fire on Android.
+    vibrate(0);
+    return Boolean(vibrate(pattern));
+  } catch {
+    try {
+      return Boolean(vibrate(pattern));
+    } catch {
+      return false;
+    }
   }
 };
 
@@ -110,6 +147,6 @@ export const resolveSystemNotificationHaptic = (
   return 'notify';
 };
 
-export const resolveOsNotificationVibrate = (isAdhan: boolean): number | number[] => {
+export const resolveOsNotificationVibrate = (isAdhan: boolean): number[] => {
   return isAdhan ? HAPTIC_PATTERNS.prayer : HAPTIC_PATTERNS.notify;
 };

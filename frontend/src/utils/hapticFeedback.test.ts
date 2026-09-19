@@ -34,13 +34,13 @@ describe('haptic feedback', () => {
   });
 
   it('exposes distinct patterns for alerts and tasbeeh', () => {
-    expect(getHapticPattern('bead')).toBe(36);
-    expect(getHapticPattern('checkpoint')).toEqual([24, 36, 52]);
-    expect(getHapticPattern('success')).toBe(45);
-    expect(getHapticPattern('error')).toEqual([30, 40, 50]);
-    expect(getHapticPattern('notify')).toEqual([80, 40, 80]);
-    expect(getHapticPattern('prayer')).toEqual([160, 80, 220]);
-    expect(getHapticPattern('align')).toBe(60);
+    expect(getHapticPattern('bead')).toEqual([80]);
+    expect(getHapticPattern('checkpoint')).toEqual([70, 45, 120]);
+    expect(getHapticPattern('success')).toEqual([90]);
+    expect(getHapticPattern('error')).toEqual([60, 50, 100]);
+    expect(getHapticPattern('notify')).toEqual([100, 50, 120]);
+    expect(getHapticPattern('prayer')).toEqual([180, 80, 240]);
+    expect(getHapticPattern('align')).toEqual([100]);
     expect(HAPTIC_PATTERNS.prayer).not.toEqual(HAPTIC_PATTERNS.notify);
   });
 
@@ -69,8 +69,30 @@ describe('haptic feedback', () => {
   it('sends the named pattern when enabled', () => {
     const vibrate = navigator.vibrate as jest.Mock;
     expect(triggerHaptic('prayer')).toBe(true);
-    expect(vibrate).toHaveBeenCalledTimes(1);
-    expect(vibrate).toHaveBeenCalledWith([160, 80, 220]);
+    expect(vibrate).toHaveBeenNthCalledWith(1, 0);
+    expect(vibrate).toHaveBeenNthCalledWith(2, [180, 80, 240]);
+  });
+
+  it('falls back to webkitVibrate when navigator.vibrate is missing', () => {
+    const webkitVibrate = jest.fn(() => true);
+    Object.defineProperty(navigator, 'vibrate', {
+      configurable: true,
+      value: undefined,
+    });
+    Object.defineProperty(navigator, 'webkitVibrate', {
+      configurable: true,
+      value: webkitVibrate,
+    });
+
+    expect(canVibrate()).toBe(true);
+    expect(triggerHaptic('bead')).toBe(true);
+    expect(webkitVibrate).toHaveBeenNthCalledWith(1, 0);
+    expect(webkitVibrate).toHaveBeenNthCalledWith(2, [80]);
+
+    Object.defineProperty(navigator, 'webkitVibrate', {
+      configurable: true,
+      value: undefined,
+    });
   });
 
   it('avoids a second buzz for seen, background, or in-app Adhan pushes', () => {
@@ -85,7 +107,7 @@ describe('haptic feedback', () => {
     expect(resolveSystemNotificationHaptic('adhan', false)).toBeNull();
     expect(resolveSystemNotificationHaptic('adhan-test', true)).toBeNull();
     expect(resolveSystemNotificationHaptic('admin', true)).toBe('notify');
-    expect(resolveOsNotificationVibrate(true)).toEqual([160, 80, 220]);
-    expect(resolveOsNotificationVibrate(false)).toEqual([80, 40, 80]);
+    expect(resolveOsNotificationVibrate(true)).toEqual([180, 80, 240]);
+    expect(resolveOsNotificationVibrate(false)).toEqual([100, 50, 120]);
   });
 });

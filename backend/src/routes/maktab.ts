@@ -18,6 +18,7 @@ import {
   summarizePreviewRows,
   type MaktabPreviewRow,
 } from '../utils/fundsImport';
+import { attachResolvedBankName, bankFromNarration, resolveStoredBankName } from '../utils/bankFromNarration';
 import maktabWeeklyRoutes from './maktabWeekly';
 import {
   createObjectKey,
@@ -54,52 +55,6 @@ const router = express.Router();
 
 router.use(maktabWeeklyRoutes);
 
-const NARRATION_BANK_CODES: Record<string, string> = {
-  ICIC: 'ICICI',
-  HDFC: 'HDFC',
-  SBIN: 'SBI',
-  UTIB: 'Axis Bank',
-  BARB: 'Bank of Baroda',
-  UBIN: 'Union Bank',
-  INDB: 'IndusInd',
-  KKBK: 'Kotak',
-  CITI: 'Citi',
-  YESB: 'Yes Bank',
-  PUNB: 'PNB',
-  CNRB: 'Canara',
-  IDFB: 'IDFC First',
-  IOBA: 'Indian Overseas',
-  BKID: 'Bank of India',
-  MAHB: 'Bank of Maharashtra',
-  FDRL: 'Federal Bank',
-  AIRP: 'Airtel Payments',
-  PYTM: 'Paytm Payments',
-};
-
-const bankFromNotes = (notes?: string): string => {
-  if (!notes) return '';
-  const parts = notes.toUpperCase().split(/[^A-Z0-9]+/);
-  for (const part of parts) {
-    const name = NARRATION_BANK_CODES[part];
-    if (name) return name;
-  }
-  return '';
-};
-
-const publicBankName = (row: { bankName?: string; notes?: string; paymentMethod?: string }): string => {
-  const stored = typeof row.bankName === 'string' ? row.bankName.trim() : '';
-  if (stored && stored.toLowerCase() !== 'imported') return stored;
-
-  const fromNotes = bankFromNotes(typeof row.notes === 'string' ? row.notes : '');
-  if (fromNotes) return fromNotes;
-
-  const method = row.paymentMethod;
-  if (method === 'UPI Transfer' || method === 'QR Scanner' || method === 'Bank Transfer') {
-    return stored || 'Bank';
-  }
-  return stored;
-};
-
 /**
  * @route   GET /api/maktab/public/recent-gifts
  * @desc    Latest Maktab collections for public display (date, amount, bank, method only)
@@ -113,12 +68,19 @@ router.get('/public/recent-gifts', async (_req: any, res: any) => {
       .select({ paymentDate: 1, amount: 1, bankName: 1, paymentMethod: 1, notes: 1, _id: 0 })
       .lean();
 
-    const gifts = rows.map((row) => ({
-      paymentDate: row.paymentDate,
-      amount: row.amount,
-      bankName: publicBankName(row),
-      paymentMethod: typeof row.paymentMethod === 'string' ? row.paymentMethod : '',
-    }));
+    const gifts = rows.map((row) => {
+      const stored = resolveStoredBankName(row.bankName, row.notes);
+      const method = typeof row.paymentMethod === 'string' ? row.paymentMethod : '';
+      const bankName =
+        stored ||
+        (method === 'UPI Transfer' || method === 'QR Scanner' || method === 'Bank Transfer' ? 'Bank' : '');
+      return {
+        paymentDate: row.paymentDate,
+        amount: row.amount,
+        bankName,
+        paymentMethod: method,
+      };
+    });
 
     return res.json({
       status: 'success',
@@ -560,13 +522,14 @@ const insertMaktabPreviewRow = async (row: MaktabPreviewRow, userId: string) => 
   };
 
   if (row.paymentMethod === 'Bank Transfer') {
-    doc.bankName = row.bankName || 'Imported';
+    doc.bankName = row.bankName || bankFromNarration(row.notes) || 'Imported';
     if (row.transactionRefId) doc.transactionRefId = row.transactionRefId;
     if (row.senderUpiId) doc.senderUpiId = row.senderUpiId;
   } else if (row.paymentMethod === 'Cheque') {
     doc.chequeNumber = row.chequeNumber || row.transactionRefId || 'IMPORTED';
   } else if (row.paymentMethod === 'UPI Transfer' || row.paymentMethod === 'QR Scanner') {
-    if (row.bankName) doc.bankName = row.bankName;
+    const bankName = row.bankName || bankFromNarration(row.notes);
+    if (bankName) doc.bankName = bankName;
     if (row.transactionRefId) doc.transactionRefId = row.transactionRefId;
     if (row.senderUpiId) doc.senderUpiId = row.senderUpiId;
   }
@@ -718,7 +681,7 @@ router.get('/payments', authMiddleware, adminMiddleware, async (req: any, res: a
     res.json({
       status: 'success',
       data: {
-        payments,
+        payments: payments.map(attachResolvedBankName),
         pagination: {
           total,
           page: parseInt(page, 10),
@@ -749,7 +712,7 @@ router.get('/payment/:id', authMiddleware, adminMiddleware, async (req: any, res
 
     res.json({
       status: 'success',
-      data: { payment }
+      data: { payment: attachResolvedBankName(payment) }
     });
   } catch (error: any) {
     if (error.kind === 'ObjectId') {

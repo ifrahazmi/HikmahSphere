@@ -47,6 +47,3 @@ export const resolveBackendUrl = (path: string): string => {
 };
 
 export const UPLOADS_BASE_URL = getBackendOrigin();
-
-// Public client key — set via REACT_APP_GOOGLE_MAPS_API_KEY (never commit real keys as fallbacks)
-export const GOOGLE_MAPS_API_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY || '';

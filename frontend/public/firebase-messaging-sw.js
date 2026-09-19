@@ -104,7 +104,7 @@ self.addEventListener('fetch', (event) => {
   if (/\.(mp3|m4a|aac|ogg|opus|wav|webm|mp4|m4v|flac)(\?|$)/i.test(url.pathname)) return;
 
   // Tile requests: cache-first so offline map works after pre-cache.
-  if (url.hostname.includes('basemaps.cartocdn.com')) {
+  if (url.hostname.includes('basemaps.cartocdn.com') || url.hostname === 'tile.openstreetmap.org') {
     event.respondWith(
       caches.open(TILE_CACHE).then((cache) =>
         cache.match(request).then((cached) => {
@@ -353,7 +353,7 @@ messaging.onBackgroundMessage((payload) => {
     badge: '/small_logo.jpeg',
     tag: normalizedPayload.id,
     renotify: false,
-    vibrate: isAdhan ? [160, 80, 220] : [80, 40, 80],
+    vibrate: isAdhan ? [180, 80, 240] : [100, 50, 120],
     sound: isAdhan ? '/sounds/adhan.mp3' : undefined,
     data: {
       url: targetUrl,
@@ -504,7 +504,7 @@ self.addEventListener('push', (event) => {
         badge: '/small_logo.jpeg',
         tag: normalizedPayload.id,
         renotify: false,
-        vibrate: isAdhan ? [160, 80, 220] : [80, 40, 80],
+        vibrate: isAdhan ? [180, 80, 240] : [100, 50, 120],
         sound: isAdhan ? '/sounds/adhan.mp3' : undefined,
         data: {
           url: targetUrl,

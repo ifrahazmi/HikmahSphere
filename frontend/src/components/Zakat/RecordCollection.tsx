@@ -14,6 +14,7 @@ import { CheckCircleIcon as CheckCircleSolidIcon } from '@heroicons/react/24/sol
 import { API_URL } from '../../config';
 import toast from 'react-hot-toast';
 import { MAX_UPLOAD_SIZE_BYTES, optimizeImageForUpload, readFileAsDataUrl } from '../../utils/imageUpload';
+import BankNameField from '../Funds/BankNameField';
 
 interface DonorSuggestion {
   id: string;
@@ -281,8 +282,13 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
       formDataToSend.append('paymentDate', formData.paymentDate);
       formDataToSend.append('paymentMethod', formData.paymentMethod);
       
-      if (formData.paymentMethod === 'Bank Transfer') {
-        formDataToSend.append('bankName', formData.bankName);
+      if (
+        (formData.paymentMethod === 'Bank Transfer' ||
+          formData.paymentMethod === 'UPI Transfer' ||
+          formData.paymentMethod === 'QR Scanner') &&
+        formData.bankName.trim()
+      ) {
+        formDataToSend.append('bankName', formData.bankName.trim());
       }
       if (formData.paymentMethod === 'UPI Transfer') {
         formDataToSend.append('senderUpiId', formData.senderUpiId);
@@ -611,19 +617,12 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
           {/* Payment Method Specific Fields */}
           {isBankTransfer && (
             <>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Bank Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={formData.bankName}
-                  onChange={(e) => handleInputChange('bankName', e.target.value)}
-                  placeholder="e.g., State Bank of India, HDFC Bank"
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                  required
-                />
-              </div>
+              <BankNameField
+                value={formData.bankName}
+                onChange={(value) => handleInputChange('bankName', value)}
+                required
+                tone="emerald"
+              />
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Transaction Ref ID (Minimum 6 Digits)
@@ -645,6 +644,11 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
 
           {isUpiTransfer && (
             <>
+              <BankNameField
+                value={formData.bankName}
+                onChange={(value) => handleInputChange('bankName', value)}
+                tone="emerald"
+              />
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Sender UPI ID <span className="text-red-500">*</span>
@@ -695,7 +699,13 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
           )}
 
           {isQRScanner && (
-            <div>
+            <>
+              <BankNameField
+                value={formData.bankName}
+                onChange={(value) => handleInputChange('bankName', value)}
+                tone="emerald"
+              />
+              <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Transaction Ref ID (Minimum 6 Digits) <span className="text-red-500">*</span>
               </label>
@@ -712,6 +722,7 @@ const RecordCollection: React.FC<RecordCollectionProps> = ({ onSuccess, onClose 
                 required
               />
             </div>
+            </>
           )}
 
           {/* Proof of Payment Upload (Optional) */}

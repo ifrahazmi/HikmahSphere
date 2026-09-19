@@ -241,7 +241,7 @@ const RecentPublicGifts: React.FC<RecentPublicGiftsProps> = ({ tone, ctaHref }) 
           Recent public gifts
         </h3>
         <p className={`mt-1 text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-          Latest support for the Maktab, shown without names or UPI.
+          Sadaqah arriving for the Maktab. The gift is shared; the giver stays unnamed.
         </p>
       </div>
       <span

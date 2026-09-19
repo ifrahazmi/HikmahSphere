@@ -10,6 +10,7 @@ import {
   generateTileUrls,
   greatCirclePath,
 } from '../../utils/qiblaMath';
+import { OSM_RASTER_ATTRIBUTION, OSM_RASTER_TILE_URL } from '../../utils/osmBasemap';
 
 interface QiblaMapProps {
   userLat: number | null;
@@ -57,9 +58,9 @@ const QiblaMap: React.FC<QiblaMapProps> = ({ userLat, userLng, currentHeading, n
     const map = L.map('qibla-map', { zoomControl: false, attributionControl: false }).setView([userLat, userLng], 16);
     mapRef.current = map;
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-      maxZoom: 18,
-      subdomains: 'abcd',
+    L.tileLayer(OSM_RASTER_TILE_URL, {
+      maxZoom: 19,
+      attribution: OSM_RASTER_ATTRIBUTION,
     }).addTo(map);
 
     L.marker([KAABA_LAT, KAABA_LNG], {
