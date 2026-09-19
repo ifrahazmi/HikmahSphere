@@ -1238,6 +1238,12 @@ const DhikrDua: React.FC = () => {
       counts: result.dailyCounts,
     };
 
+    // Vibrate before React state updates so Android Chrome still has the
+    // user-activation token from the pointer/tap gesture.
+    if (direction > 0 && tasbihHapticEnabledRef.current) {
+      vibrateTasbihClick(result.checkpoint ? 'checkpoint' : 'bead');
+    }
+
     setTasbihCount(result.count);
     setSelectedPresetId(result.presetId);
     setDailyTracker(dailyTrackerRef.current);
@@ -1253,10 +1259,6 @@ const DhikrDua: React.FC = () => {
 
     if (direction > 0 && tasbihSoundEnabledRef.current) {
       playTasbihClick(result.checkpoint ? 'checkpoint' : 'bead');
-    }
-
-    if (direction > 0 && tasbihHapticEnabledRef.current) {
-      vibrateTasbihClick(result.checkpoint ? 'checkpoint' : 'bead');
     }
   }, []);
 

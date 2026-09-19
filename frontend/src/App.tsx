@@ -26,6 +26,7 @@ import PrayerAdhanScheduler from './components/PrayerAdhanScheduler';
 import AdhanPlayPrompt from './components/AdhanPlayPrompt';
 import StartupReadinessScreen from './components/StartupReadinessScreen';
 import ForcePasswordChangeModal from './components/ForcePasswordChangeModal';
+import ScrollManager from './components/ScrollManager';
 
 // Pages
 import Home from './pages/Home';
@@ -408,6 +409,7 @@ const App: React.FC = () => {
           <DarkModeProvider>
             <LanguageProvider>
               <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                <ScrollManager />
                 {/* Mount outside AppContent so a slow authentication check or sleeping
                     backend cannot delay/cancel the browser's install opportunity. */}
                 <InstallAppPrompt />

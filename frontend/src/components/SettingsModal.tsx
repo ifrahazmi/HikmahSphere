@@ -135,8 +135,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
               <div>
                 <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Haptic feedback</p>
                 <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                  In-app taps (tasbih, toasts) use the Vibration API, which iPhone Safari does not support.
-                  Incoming push notifications can still use iPhone&apos;s Taptic Engine.
+                  In-app taps (tasbih, toasts) use the Vibration API. That works on Android when
+                  system vibration is on; iPhone Safari does not support it. Incoming push
+                  notifications can still use iPhone&apos;s Taptic Engine.
                 </p>
               </div>
               <button

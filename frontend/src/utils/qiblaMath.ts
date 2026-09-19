@@ -1,3 +1,5 @@
+import { osmRasterTileUrl } from './osmBasemap';
+
 export const KAABA_LAT = 21.4225;
 export const KAABA_LNG = 39.8262;
 
@@ -210,7 +212,6 @@ export const generateTileUrls = (
   radiusKm: number
 ): string[] => {
   const urls = new Set<string>();
-  const subdomains = ['a', 'b', 'c', 'd'];
 
   zoomLevels.forEach((z) => {
     const tileWidthKm = (40075 * Math.cos(toRad(lat))) / 2 ** z;
@@ -223,8 +224,7 @@ export const generateTileUrls = (
         const tx = ((center.x + dx) % n + n) % n;
         const ty = center.y + dy;
         if (ty < 0 || ty >= n) continue;
-        const sub = subdomains[(tx + ty) % subdomains.length];
-        urls.add(`https://${sub}.basemaps.cartocdn.com/light_all/${z}/${tx}/${ty}.png`);
+        urls.add(osmRasterTileUrl(z, tx, ty));
       }
     }
   });
@@ -235,16 +235,14 @@ export const generateTileUrls = (
     const n = 2 ** z;
     pathPoints.forEach(([pLat, pLng]) => {
       const tile = latLngToTile(pLat, pLng, z);
-      const sub = subdomains[(tile.x + tile.y) % subdomains.length];
-      urls.add(`https://${sub}.basemaps.cartocdn.com/light_all/${z}/${tile.x}/${tile.y}.png`);
+      urls.add(osmRasterTileUrl(z, tile.x, tile.y));
 
       for (let dx = -1; dx <= 1; dx += 1) {
         for (let dy = -1; dy <= 1; dy += 1) {
           const nx = ((tile.x + dx) % n + n) % n;
           const ny = tile.y + dy;
           if (ny < 0 || ny >= n) continue;
-          const neighborSub = subdomains[(nx + ny) % subdomains.length];
-          urls.add(`https://${neighborSub}.basemaps.cartocdn.com/light_all/${z}/${nx}/${ny}.png`);
+          urls.add(osmRasterTileUrl(z, nx, ny));
         }
       }
     });

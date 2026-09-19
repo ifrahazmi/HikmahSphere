@@ -29,9 +29,10 @@ describe('toast haptic wrapper', () => {
     toast.success('Saved');
     toast.error('Failed');
     toast.success('Coming Soon!');
-    expect(vibrate).toHaveBeenCalledTimes(2);
-    expect(vibrate).toHaveBeenNthCalledWith(1, 45);
-    expect(vibrate).toHaveBeenNthCalledWith(2, [30, 40, 50]);
+    expect(vibrate).toHaveBeenNthCalledWith(1, 0);
+    expect(vibrate).toHaveBeenNthCalledWith(2, [90]);
+    expect(vibrate).toHaveBeenNthCalledWith(3, 0);
+    expect(vibrate).toHaveBeenNthCalledWith(4, [60, 50, 100]);
   });
 
   it('does not vibrate toasts when haptics are muted', () => {

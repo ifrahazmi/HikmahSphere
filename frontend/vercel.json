@@ -4,6 +4,15 @@
   "outputDirectory": "build",
   "headers": [
     {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Permissions-Policy",
+          "value": "vibrate=(self)"
+        }
+      ]
+    },
+    {
       "source": "/online-check.txt",
       "headers": [
         {

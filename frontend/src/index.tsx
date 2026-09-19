@@ -6,6 +6,19 @@ import './theme.css';
 
 import App from './App';
 import reportWebVitals from './reportWebVitals';
+import { disableBrowserScrollRestoration, pinWindowToTop } from './components/ScrollManager';
+
+if (typeof window !== 'undefined') {
+  disableBrowserScrollRestoration();
+  window.addEventListener('beforeunload', () => {
+    pinWindowToTop();
+  });
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) {
+      pinWindowToTop();
+    }
+  });
+}
 
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement

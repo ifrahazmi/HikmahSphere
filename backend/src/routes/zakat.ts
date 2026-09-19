@@ -17,6 +17,7 @@ import {
   summarizePreviewRows,
   type ZakatPreviewRow,
 } from '../utils/fundsImport';
+import { attachResolvedBankName, bankFromNarration } from '../utils/bankFromNarration';
 import {
   createObjectKey,
   deleteStoredObject,
@@ -753,7 +754,9 @@ router.post('/transaction', [
       paymentDate: payDate,
       paymentMethod,
       transactionRefId: (paymentMethod !== 'Cash' && paymentMethod !== 'Cheque') ? transactionRefId : undefined,
-      bankName: paymentMethod === 'Bank Transfer' ? bankName?.trim() : undefined,
+      bankName: (paymentMethod === 'Bank Transfer' || paymentMethod === 'UPI Transfer' || paymentMethod === 'QR Scanner')
+        ? (bankName?.trim() || undefined)
+        : undefined,
       senderUpiId: paymentMethod === 'UPI Transfer' ? senderUpiId?.trim() : undefined,
       chequeNumber: paymentMethod === 'Cheque' ? chequeNumber?.trim() : undefined,
       proofFilePath: uploadedProof,
@@ -862,12 +865,14 @@ const insertZakatPreviewRow = async (row: ZakatPreviewRow, userId: string) => {
   };
 
   if (row.paymentMethod === 'Bank Transfer') {
-    doc.bankName = row.bankName || 'Imported';
+    doc.bankName = row.bankName || bankFromNarration(row.notes) || 'Imported';
     if (row.transactionRefId) doc.transactionRefId = row.transactionRefId;
     if (row.senderUpiId) doc.senderUpiId = row.senderUpiId;
   } else if (row.paymentMethod === 'Cheque') {
     doc.chequeNumber = row.chequeNumber || row.transactionRefId || 'IMPORTED';
   } else if (row.paymentMethod === 'UPI Transfer' || row.paymentMethod === 'QR Scanner') {
+    const bankName = row.bankName || bankFromNarration(row.notes);
+    if (bankName) doc.bankName = bankName;
     if (row.transactionRefId) doc.transactionRefId = row.transactionRefId;
     if (row.senderUpiId) doc.senderUpiId = row.senderUpiId;
   }
@@ -1014,7 +1019,7 @@ router.get('/payments', authMiddleware, adminMiddleware, async (req: any, res: a
     res.json({
       status: 'success',
       data: { 
-        payments,
+        payments: payments.map(attachResolvedBankName),
         pagination: {
           total,
           page: parseInt(page, 10),
@@ -1045,7 +1050,7 @@ router.get('/payment/:id', authMiddleware, adminMiddleware, async (req: any, res
 
     res.json({
       status: 'success',
-      data: { payment }
+      data: { payment: attachResolvedBankName(payment) }
     });
   } catch (error: any) {
     if (error.kind === 'ObjectId') {

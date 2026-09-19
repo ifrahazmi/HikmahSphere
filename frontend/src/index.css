@@ -1228,13 +1228,49 @@ code {
   }
 }
 
-/* ============================================
-   Mosque Finder place search (gmpx-place-picker)
-   Keep the shadow-DOM input at >=16px so iOS Safari
-   does not auto-zoom the page when it gains focus.
-   ============================================ */
-gmpx-place-picker {
-  --gmpx-font-size-base: 1rem;
+/* Mosque Finder Leaflet map — keep tiles under page chrome. */
+.mosque-finder-map.leaflet-container,
+.mosque-finder-map .leaflet-container {
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  font-size: 12px;
+}
+
+.mosque-finder-map .leaflet-div-icon.mosque-map-pin {
+  background: transparent;
+  border: none;
+}
+
+.mosque-finder-map .mosque-map-pin svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 2px 3px rgba(15, 23, 42, 0.4));
+}
+
+.mosque-finder-map .mosque-map-pin.is-selected svg {
+  filter: drop-shadow(0 3px 6px rgba(180, 83, 9, 0.5));
+}
+
+.mosque-finder-map .mosque-user-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #2563eb;
+  border: 2.5px solid #fff;
+  box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.22), 0 0 10px rgba(37, 99, 235, 0.5);
+}
+
+/* iOS Safari / Chrome Android zoom the page when a focused field is under 16px.
+   Keep every text field at 16px on phones so the keyboard opens without zoom. */
+@media (max-width: 767px) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='hidden']):not([type='button']):not([type='submit']):not([type='reset']):not([type='image']):not([type='color']),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
 }
 
 /* ============================================

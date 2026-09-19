@@ -18,6 +18,14 @@ import { MAX_UPLOAD_SIZE_BYTES, optimizeImageForUpload, readFileAsDataUrl } from
 import RecordCollection from './RecordCollection';
 import RecordSpending from './RecordSpending';
 import DonorSummary from './DonorSummary';
+import {
+  DetailGrid,
+  DetailTile,
+  TransactionAmountHeader,
+  TransactionViewPanel,
+} from '../Funds/TransactionViewPanel';
+import BankNameField from '../Funds/BankNameField';
+
 
 interface ZakatTransaction {
   _id: string;
@@ -844,12 +852,12 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
         ) : (
           <>
             {/* Desktop Table View */}
-            <div className="hidden md:block overflow-x-auto rounded-xl border border-gray-200">
-              <table className="min-w-full divide-y divide-gray-200">
+            <div className="hidden md:block overflow-x-hidden rounded-xl border border-gray-200">
+              <table className="w-full table-fixed divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
                     {canDelete && (
-                      <th className="px-4 py-3 text-left">
+                      <th className="w-10 px-2 py-3 text-left">
                         <input
                           ref={selectAllDesktopRef}
                           type="checkbox"
@@ -860,20 +868,22 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                         />
                       </th>
                     )}
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Purpose</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Party</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment Details</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    <th className="w-[6.75rem] px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                    <th className="w-[7.5rem] px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                    <th className="hidden lg:table-cell w-[6.5rem] px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Purpose</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Party</th>
+                    <th className="hidden xl:table-cell w-[9.5rem] px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment</th>
+                    <th className="w-[6.25rem] px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                    <th className="sticky right-0 z-10 w-[6.5rem] bg-gray-50 px-2 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider shadow-[-6px_0_8px_-6px_rgba(15,23,42,0.18)]">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {filteredTransactions.map((t) => (
-                    <tr key={t._id} className={`${selectedIds.includes(t._id) ? 'bg-emerald-50/70' : ''} hover:bg-gray-50 transition-colors`}>
+                    <tr key={t._id} className={`group ${selectedIds.includes(t._id) ? 'bg-emerald-50/70' : ''} hover:bg-gray-50 transition-colors`}>
                       {canDelete && (
-                        <td className="px-4 py-4">
+                        <td className="px-2 py-3">
                           <input
                             type="checkbox"
                             checked={selectedIds.includes(t._id)}
@@ -883,7 +893,7 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                           />
                         </td>
                       )}
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-3 py-3">
                         <div className="text-sm font-medium text-gray-900">
                           {new Date(t.paymentDate).toLocaleDateString('en-IN', {
                             day: 'numeric',
@@ -895,8 +905,8 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                           Rec: {t.createdAt ? new Date(t.createdAt).toLocaleDateString('en-IN') : '-'}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                      <td className="px-3 py-3">
+                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
                           t.type === 'collection'
                             ? 'bg-green-100 text-green-800'
                             : 'bg-red-100 text-red-800'
@@ -904,44 +914,46 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                           {t.type === 'collection' ? 'Collection' : 'Spending'}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                      <td className="hidden lg:table-cell px-3 py-3">
+                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
                           t.purpose === 'Sadaqah' ? 'bg-cyan-100 text-cyan-800' : 'bg-emerald-100 text-emerald-800'
                         }`}>
                           {t.purpose || 'Zakat'}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">
+                      <td className="px-3 py-3 min-w-0">
+                        <div className="text-sm font-medium text-gray-900 break-words [overflow-wrap:anywhere]">
                           {t.type === 'collection' ? t.donorName : t.recipientName}
                         </div>
-                        <div className="text-xs text-gray-500">
+                        <div className="text-xs text-gray-500 break-words">
                           {t.type === 'collection' ? t.donorType : t.recipientType}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        <div className="flex flex-col gap-1">
+                      <td className="hidden xl:table-cell px-3 py-3 min-w-0 text-sm text-gray-600">
+                        <div className="flex flex-col gap-1 min-w-0">
                           <span className="font-medium">{t.paymentMethod}</span>
                           {getPaymentDetails(t) !== t.paymentMethod && (
-                            <span className="text-xs text-gray-500">{getPaymentDetails(t)}</span>
+                            <span className="text-xs text-gray-500 break-all [overflow-wrap:anywhere]">{getPaymentDetails(t)}</span>
                           )}
                           {t.proofFilePath && isAdmin && (
                             <span
                               onClick={(e) => void handleProofClick(e, t._id)}
-                              className="text-xs text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer inline-flex items-center gap-1 font-medium px-2.5 py-1.5 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors"
+                              className="text-xs text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer inline-flex items-center gap-1 font-medium px-2 py-1 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors w-fit"
                             >
-                              📎 View Proof
+                              View Proof
                             </span>
                           )}
                         </div>
                       </td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-right text-sm font-bold ${
+                      <td className={`px-3 py-3 text-right text-sm font-bold tabular-nums ${
                         t.type === 'collection' ? 'text-green-600' : 'text-red-600'
                       }`}>
                         {t.type === 'collection' ? '+' : '-'}₹{t.amount.toLocaleString('en-IN')}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex justify-end gap-2">
+                      <td className={`sticky right-0 z-10 px-2 py-3 text-right text-sm font-medium shadow-[-6px_0_8px_-6px_rgba(15,23,42,0.18)] ${
+                        selectedIds.includes(t._id) ? 'bg-emerald-50' : 'bg-white group-hover:bg-gray-50'
+                      }`}>
+                        <div className="flex justify-end gap-1">
                           <button
                             onClick={() => { setViewingTransaction(t); setShowViewModal(true); }}
                             className="text-blue-600 hover:text-blue-900 p-1 hover:bg-blue-50 rounded transition-colors"
@@ -1114,135 +1126,58 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
 
       {/* View Transaction Modal */}
       {showViewModal && viewingTransaction && (
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-gray-900/50 p-3 sm:items-center sm:p-4"
-          onClick={() => setShowViewModal(false)}
-        >
-          <div
-            className="my-3 w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl max-h-[92dvh]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-white/95 p-4 backdrop-blur sm:p-6">
-              <h3 className="text-xl font-bold text-gray-900">Transaction Details</h3>
-              <button
-                onClick={() => setShowViewModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-                aria-label="Close transaction details"
-              >
-                <XMarkIcon className="w-6 h-6" />
-              </button>
-            </div>
-            <div className="max-h-[calc(92dvh-10rem)] overflow-y-auto p-4 space-y-4 sm:max-h-[calc(92dvh-11rem)] sm:p-6">
-              <div className="flex items-center gap-3">
-                <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                  viewingTransaction.type === 'collection' 
-                    ? 'bg-green-100 text-green-800' 
-                    : 'bg-red-100 text-red-800'
-                }`}>
-                  {viewingTransaction.type === 'collection' ? 'Collection' : 'Spending'}
-                </span>
-                <span className="text-2xl font-bold text-gray-900">
-                  {viewingTransaction.type === 'collection' ? '+' : '-'}₹{viewingTransaction.amount.toLocaleString('en-IN')}
-                </span>
-              </div>
-              
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <p className="text-sm text-gray-500">Date</p>
-                  <p className="font-medium">
-                    {new Date(viewingTransaction.paymentDate).toLocaleDateString('en-IN')}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Payment Method</p>
-                  <p className="font-medium">{viewingTransaction.paymentMethod}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">
-                    {viewingTransaction.type === 'collection' ? 'Donor' : 'Recipient'}
-                  </p>
-                  <p className="font-medium">
-                    {viewingTransaction.type === 'collection' 
-                      ? viewingTransaction.donorName 
-                      : viewingTransaction.recipientName}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Type</p>
-                  <p className="font-medium">
-                    {viewingTransaction.type === 'collection' 
-                      ? viewingTransaction.donorType 
-                      : viewingTransaction.recipientType}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Purpose</p>
-                  <p className="font-medium">{viewingTransaction.purpose || 'Zakat'}</p>
-                </div>
-                {viewingTransaction.bankName && (
-                  <div>
-                    <p className="text-sm text-gray-500">Bank Name</p>
-                    <p className="font-medium">{viewingTransaction.bankName}</p>
-                  </div>
-                )}
-                {viewingTransaction.senderUpiId && (
-                  <div className="min-w-0">
-                    <p className="text-sm text-gray-500">Sender UPI ID</p>
-                    <p className="font-medium break-all">{viewingTransaction.senderUpiId}</p>
-                  </div>
-                )}
-                {viewingTransaction.chequeNumber && (
-                  <div>
-                    <p className="text-sm text-gray-500">Cheque Number</p>
-                    <p className="font-medium">{viewingTransaction.chequeNumber}</p>
-                  </div>
-                )}
-                {viewingTransaction.transactionRefId && (
-                  <div className="min-w-0">
-                    <p className="text-sm text-gray-500">Reference ID</p>
-                    <p className="font-mono font-medium break-all text-sm sm:text-base">{viewingTransaction.transactionRefId}</p>
-                  </div>
-                )}
-                <div>
-                  <p className="text-sm text-gray-500">Recorded</p>
-                  <p className="font-medium">
-                    {viewingTransaction.createdAt 
-                      ? new Date(viewingTransaction.createdAt).toLocaleDateString('en-IN')
-                      : '-'}
-                  </p>
-                </div>
-              </div>
-              
-              {viewingTransaction.notes && (
-                <div>
-                  <p className="text-sm text-gray-500 mb-1">Notes</p>
-                  <p className="text-gray-700 bg-gray-50 p-3 rounded-lg">{viewingTransaction.notes}</p>
-                </div>
-              )}
-              
-              {viewingTransaction.proofFilePath && isAdmin && (
-                <div>
-                  <p className="text-sm text-gray-500 mb-1">Proof of Payment</p>
-                  <button
-                    onClick={() => void handleDownloadProof(viewingTransaction._id)}
-                    className="text-emerald-600 hover:text-emerald-700 underline inline-flex items-center gap-1 cursor-pointer font-medium"
-                  >
-                    <DocumentArrowDownIcon className="w-4 h-4" />
-                    Download Document
-                  </button>
-                </div>
-              )}
-            </div>
-            <div className="sticky bottom-0 border-t bg-gray-50 p-4 sm:rounded-b-2xl sm:p-6">
-              <button
-                onClick={() => setShowViewModal(false)}
-                className="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-colors font-medium"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
+        <TransactionViewPanel onClose={() => setShowViewModal(false)}>
+          <TransactionAmountHeader
+            tone={viewingTransaction.type === 'collection' ? 'in' : 'out'}
+            label={viewingTransaction.type === 'collection' ? 'Collection' : 'Spending'}
+            amount={`${viewingTransaction.type === 'collection' ? '+' : '-'}₹${viewingTransaction.amount.toLocaleString('en-IN')}`}
+          />
+          <DetailGrid>
+            <DetailTile label="Date">
+              {new Date(viewingTransaction.paymentDate).toLocaleDateString('en-IN')}
+            </DetailTile>
+            <DetailTile label="Payment Method">{viewingTransaction.paymentMethod}</DetailTile>
+            <DetailTile label={viewingTransaction.type === 'collection' ? 'Donor' : 'Recipient'}>
+              {viewingTransaction.type === 'collection'
+                ? viewingTransaction.donorName
+                : viewingTransaction.recipientName}
+            </DetailTile>
+            <DetailTile label="Type">
+              {viewingTransaction.type === 'collection'
+                ? viewingTransaction.donorType
+                : viewingTransaction.recipientType}
+            </DetailTile>
+            <DetailTile label="Purpose">{viewingTransaction.purpose || 'Zakat'}</DetailTile>
+            <DetailTile label="Bank">{viewingTransaction.bankName}</DetailTile>
+            <DetailTile label="Sender UPI ID" mono>
+              {viewingTransaction.senderUpiId}
+            </DetailTile>
+            <DetailTile label="Cheque Number">{viewingTransaction.chequeNumber}</DetailTile>
+            <DetailTile label="Reference ID" mono>
+              {viewingTransaction.transactionRefId}
+            </DetailTile>
+            <DetailTile label="Recorded">
+              {viewingTransaction.createdAt
+                ? new Date(viewingTransaction.createdAt).toLocaleDateString('en-IN')
+                : '—'}
+            </DetailTile>
+            <DetailTile label="Notes" full>
+              {viewingTransaction.notes}
+            </DetailTile>
+            {viewingTransaction.proofFilePath && isAdmin ? (
+              <DetailTile label="Proof of Payment" full>
+                <button
+                  type="button"
+                  onClick={() => void handleDownloadProof(viewingTransaction._id)}
+                  className="inline-flex items-center gap-1 font-medium text-emerald-600 hover:text-emerald-700"
+                >
+                  <DocumentArrowDownIcon className="h-4 w-4" />
+                  Download document
+                </button>
+              </DetailTile>
+            ) : null}
+          </DetailGrid>
+        </TransactionViewPanel>
       )}
 
       {/* Edit Transaction Modal */}
@@ -1321,16 +1256,16 @@ const ZakatManagement: React.FC<ZakatManagementProps> = ({
                 </select>
               </div>
 
-              {editingTransaction.paymentMethod === 'Bank Transfer' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Bank Name</label>
-                  <input
-                    type="text"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                    value={editingTransaction.bankName || ''}
-                    onChange={e => setEditingTransaction({...editingTransaction, bankName: e.target.value})}
-                  />
-                </div>
+              {(editingTransaction.paymentMethod === 'Bank Transfer' ||
+                editingTransaction.paymentMethod === 'UPI Transfer' ||
+                editingTransaction.paymentMethod === 'QR Scanner') && (
+                <BankNameField
+                  compact
+                  required={editingTransaction.paymentMethod === 'Bank Transfer'}
+                  value={editingTransaction.bankName || ''}
+                  onChange={(value) => setEditingTransaction({ ...editingTransaction, bankName: value })}
+                  tone="emerald"
+                />
               )}
 
               {editingTransaction.paymentMethod === 'UPI Transfer' && (
