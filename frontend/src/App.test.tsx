@@ -42,6 +42,7 @@ jest.mock('./hooks/useAuth', () => ({
 
 jest.mock('./hooks/useStartupReadiness', () => ({
   useStartupReadiness: () => mockStartupReadiness,
+  isMobilePhoneUa: () => false,
 }));
 
 beforeEach(() => {
@@ -86,7 +87,7 @@ test('renders the HikmahSphere application shell', () => {
   expect(screen.getAllByText('HikmahSphere').length).toBeGreaterThan(0);
 });
 
-test('blocks the installed PWA shell until startup checks pass', () => {
+test('blocks the mobile startup shell until startup checks pass', () => {
   mockStartupReadiness = {
     enabled: true,
     state: {

@@ -28,10 +28,10 @@ const signedIn = {
   passwordChangeRequired: false,
 };
 
-const renderPrompt = (path = '/profile') =>
+const renderPrompt = (path = '/profile', startupGateClear = true) =>
   render(
     <MemoryRouter initialEntries={[path]}>
-      <NotificationPermissionPrompt />
+      <NotificationPermissionPrompt startupGateClear={startupGateClear} />
     </MemoryRouter>
   );
 
@@ -92,6 +92,14 @@ describe('NotificationPermissionPrompt', () => {
 
   it('does not show on the auth screen', () => {
     renderPrompt('/auth');
+    act(() => {
+      jest.advanceTimersByTime(1700);
+    });
+    expect(screen.queryByText('Never miss Salah, Muhasabah, or Dhikr')).not.toBeInTheDocument();
+  });
+
+  it('waits until the mobile startup gate finishes', () => {
+    renderPrompt('/profile', false);
     act(() => {
       jest.advanceTimersByTime(1700);
     });

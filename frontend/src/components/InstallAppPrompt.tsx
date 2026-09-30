@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   ArrowDownTrayIcon,
   ShareIcon,
@@ -7,22 +8,25 @@ import {
   SparklesIcon,
 } from '@heroicons/react/24/outline';
 import {
-  INSTALL_PROMPT_SNOOZE_KEY,
+  INSTALL_PROMPT_SESSION_SNOOZE_KEY,
   detectStandalonePwa,
-  dismissDailyPrompt,
+  dismissSessionPrompt,
   emitInstallPromptClosed,
-  isAppInstalled,
   markAppInstalled,
   shouldOfferPwaInstall,
 } from '../utils/dailyPromptSnooze';
 
-const InstallAppPrompt: React.FC = () => {
+type InstallAppPromptProps = {
+  startupGateClear: boolean;
+};
+
+const InstallAppPrompt: React.FC<InstallAppPromptProps> = ({ startupGateClear }) => {
+  const location = useLocation();
   const [visible, setVisible] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(
     () => (typeof window !== 'undefined' ? window.deferredInstallPrompt ?? null : null)
   );
   const [installing, setInstalling] = useState(false);
-  const [installedAlready, setInstalledAlready] = useState(isAppInstalled);
   const [isStandalone, setIsStandalone] = useState(detectStandalonePwa);
 
   const ua = navigator.userAgent || '';
@@ -41,17 +45,18 @@ const InstallAppPrompt: React.FC = () => {
 
   const canUseNativeInstall = !!deferredPrompt && !isIOS;
   const shouldShowIosGuide = isIOS && !isStandalone;
+  const canShowForRoute = location.pathname !== '/auth';
 
   useEffect(() => {
-    if (isStandalone || installedAlready || !shouldOfferPwaInstall()) {
+    if (isStandalone || !canShowForRoute || !startupGateClear || !shouldOfferPwaInstall()) {
       setVisible(false);
       emitInstallPromptClosed();
       return;
     }
 
     let revealTimer: number | undefined;
-    const revealPrompt = (delayMs = 1400) => {
-      if (!shouldOfferPwaInstall()) {
+    const revealPrompt = (delayMs = 1200) => {
+      if (!shouldOfferPwaInstall() || !canShowForRoute || !startupGateClear) {
         emitInstallPromptClosed();
         return;
       }
@@ -64,7 +69,7 @@ const InstallAppPrompt: React.FC = () => {
       e.preventDefault();
       window.deferredInstallPrompt = e;
       setDeferredPrompt(e);
-      revealPrompt();
+      revealPrompt(800);
     };
 
     const handleInstallAvailable = () => {
@@ -76,10 +81,10 @@ const InstallAppPrompt: React.FC = () => {
 
     const handleAppInstalled = () => {
       markAppInstalled();
-      setInstalledAlready(true);
       window.deferredInstallPrompt = null;
       setVisible(false);
       setDeferredPrompt(null);
+      setIsStandalone(detectStandalonePwa());
       emitInstallPromptClosed();
     };
 
@@ -88,7 +93,6 @@ const InstallAppPrompt: React.FC = () => {
       setIsStandalone(standalone);
       if (standalone) {
         markAppInstalled();
-        setInstalledAlready(true);
         setVisible(false);
         emitInstallPromptClosed();
       }
@@ -117,19 +121,16 @@ const InstallAppPrompt: React.FC = () => {
       document.removeEventListener('visibilitychange', refreshDisplayMode);
       displayModeQuery.removeEventListener?.('change', refreshDisplayMode);
     };
-  }, [installedAlready, isStandalone]);
+  }, [canShowForRoute, isStandalone, startupGateClear]);
 
-  const dismiss = () => {
-    dismissDailyPrompt(INSTALL_PROMPT_SNOOZE_KEY);
+  const dismissForSession = () => {
+    dismissSessionPrompt(INSTALL_PROMPT_SESSION_SNOOZE_KEY);
     setVisible(false);
     emitInstallPromptClosed();
   };
 
   const confirmManualInstall = () => {
-    markAppInstalled();
-    setInstalledAlready(true);
-    setVisible(false);
-    emitInstallPromptClosed();
+    dismissForSession();
   };
 
   const install = async () => {
@@ -140,15 +141,14 @@ const InstallAppPrompt: React.FC = () => {
       const choice = await deferredPrompt.userChoice;
       if (choice.outcome === 'accepted') {
         markAppInstalled();
-        setInstalledAlready(true);
         setVisible(false);
         emitInstallPromptClosed();
       } else {
-        dismiss();
+        dismissForSession();
       }
     } catch (error) {
       console.error('Install prompt failed:', error);
-      dismiss();
+      dismissForSession();
     } finally {
       window.deferredInstallPrompt = null;
       setDeferredPrompt(null);
@@ -156,31 +156,47 @@ const InstallAppPrompt: React.FC = () => {
     }
   };
 
-  if (!visible || isStandalone || installedAlready) return null;
+  if (!visible || isStandalone || !canShowForRoute) return null;
 
   return (
-    <div className="fixed inset-x-3 bottom-3 z-[80] sm:inset-x-auto sm:bottom-5 sm:right-5 sm:max-w-md">
-      <div className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-900/95 shadow-[0_22px_55px_rgba(0,0,0,0.55)] ring-1 ring-black/50 backdrop-blur-xl">
-        <div className="flex items-start justify-between border-b border-slate-700 bg-slate-900/85 px-4 py-3">
-          <div className="flex items-center gap-2">
-            <SparklesIcon className="h-5 w-5 text-emerald-400" />
-            <p className="text-sm font-semibold text-slate-100">Install HikmahSphere App</p>
+    <div className="fixed inset-0 z-[105] flex items-center justify-center px-4 sm:px-6">
+      <div className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm" aria-hidden="true" />
+      <div
+        role="dialog"
+        aria-labelledby="install-app-title"
+        className="relative w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl dark:bg-slate-900"
+      >
+        <div className="bg-gradient-to-r from-slate-800 via-slate-900 to-emerald-900 px-6 py-5 text-white">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <span className="mt-0.5 rounded-2xl bg-white/15 p-2">
+                <SparklesIcon className="h-7 w-7 text-emerald-300" />
+              </span>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200">
+                  Install the app
+                </p>
+                <h2 id="install-app-title" className="mt-1 text-2xl font-bold leading-tight">
+                  Install HikmahSphere
+                </h2>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={dismissForSession}
+              className="rounded-lg p-1 text-white/80 transition hover:bg-white/10 hover:text-white"
+              aria-label="Close install prompt"
+            >
+              <XMarkIcon className="h-6 w-6" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={dismiss}
-            className="rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-200"
-            aria-label="Close install prompt"
-          >
-            <XMarkIcon className="h-5 w-5" />
-          </button>
         </div>
 
-        <div className="space-y-3 px-4 py-3">
-          <p className="text-sm text-slate-200">
-            Add HikmahSphere to your Home Screen so prayer alerts, Muhasabah reminders, and Dhikr
-            notifications can reach you even when this tab is closed. On iPhone this is required
-            for notifications.
+        <div className="space-y-4 px-6 py-5">
+          <p className="text-sm leading-6 text-gray-700 dark:text-slate-200">
+            Add HikmahSphere to your Home Screen or desktop so prayer alerts, Muhasabah reminders,
+            and Dhikr notifications reach you even when this browser tab is closed. On iPhone,
+            installing from Safari is required for notifications.
           </p>
 
           {canUseNativeInstall && (
@@ -188,64 +204,57 @@ const InstallAppPrompt: React.FC = () => {
               type="button"
               onClick={install}
               disabled={installing}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-70"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white shadow-md transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-70"
             >
-              <ArrowDownTrayIcon className="h-4 w-4" />
-              {installing ? 'Preparing…' : 'Install in One Click'}
+              <ArrowDownTrayIcon className="h-5 w-5" />
+              {installing ? 'Preparing…' : 'Install in one click'}
             </button>
           )}
 
           {!canUseNativeInstall && shouldShowIosGuide && (
-            <div className="rounded-xl border border-slate-600 bg-slate-800/90 p-3">
-              <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-emerald-300">
-                <DevicePhoneMobileIcon className="h-4 w-4" />
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-950 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-100">
+              <p className="mb-2 flex items-center gap-1.5 font-semibold">
+                <DevicePhoneMobileIcon className="h-5 w-5" />
                 Add to iPhone Home Screen
               </p>
 
               {!isSafari && (
-                <p className="mb-3 rounded-lg bg-slate-700/70 px-3 py-2 text-sm text-slate-100">
+                <p className="mb-3 rounded-lg bg-amber-100/80 px-3 py-2 dark:bg-amber-900/50">
                   Open this site in <span className="font-semibold">Safari</span> first — iPhone can only add apps from Safari.
                 </p>
               )}
 
-              <ol className="space-y-2.5 text-sm text-slate-200">
+              <ol className="space-y-2.5">
                 <li className="flex items-start gap-2.5">
                   <span className="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-emerald-500 text-[11px] font-bold text-white">1</span>
                   <span className="flex flex-wrap items-center gap-1">
                     Tap the
-                    <ShareIcon className="h-4 w-4 text-emerald-300" />
-                    <span className="font-semibold">Share</span> button in the Safari toolbar.
+                    <ShareIcon className="h-4 w-4 text-emerald-600" />
+                    <span className="font-semibold">Share</span> button in Safari.
                   </span>
                 </li>
                 <li className="flex items-start gap-2.5">
                   <span className="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-emerald-500 text-[11px] font-bold text-white">2</span>
-                  <span>Scroll down and tap <span className="font-semibold">Add to Home Screen</span>.</span>
+                  <span>Tap <span className="font-semibold">Add to Home Screen</span>.</span>
                 </li>
                 <li className="flex items-start gap-2.5">
                   <span className="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-emerald-500 text-[11px] font-bold text-white">3</span>
-                  <span>Tap <span className="font-semibold">Add</span> in the top corner — that&apos;s it!</span>
+                  <span>Tap <span className="font-semibold">Add</span> to finish.</span>
                 </li>
               </ol>
-              <button
-                type="button"
-                onClick={confirmManualInstall}
-                className="mt-3 w-full rounded-lg border border-emerald-500/60 px-3 py-2 text-sm font-semibold text-emerald-200 transition-colors hover:bg-emerald-500/10"
-              >
-                I have installed the app
-              </button>
             </div>
           )}
 
           {!canUseNativeInstall && !shouldShowIosGuide && isAndroid && (
-            <div className="rounded-xl border border-slate-600 bg-slate-800/90 p-3">
-              <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-emerald-300">
-                <DevicePhoneMobileIcon className="h-4 w-4" />
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800/90 dark:text-slate-100">
+              <p className="mb-2 flex items-center gap-1.5 font-semibold text-emerald-700 dark:text-emerald-300">
+                <DevicePhoneMobileIcon className="h-5 w-5" />
                 Add to Android Home Screen
               </p>
-              <ol className="space-y-2.5 text-sm text-slate-200">
+              <ol className="space-y-2.5">
                 <li className="flex items-start gap-2.5">
                   <span className="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-emerald-500 text-[11px] font-bold text-white">1</span>
-                  <span>Tap the browser menu (three dots) in the top corner.</span>
+                  <span>Tap the browser menu (three dots).</span>
                 </li>
                 <li className="flex items-start gap-2.5">
                   <span className="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-emerald-500 text-[11px] font-bold text-white">2</span>
@@ -253,41 +262,49 @@ const InstallAppPrompt: React.FC = () => {
                 </li>
                 <li className="flex items-start gap-2.5">
                   <span className="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-emerald-500 text-[11px] font-bold text-white">3</span>
-                  <span>Tap <span className="font-semibold">Install</span> to confirm.</span>
+                  <span>Confirm with <span className="font-semibold">Install</span>.</span>
                 </li>
               </ol>
-              <button
-                type="button"
-                onClick={confirmManualInstall}
-                className="mt-3 w-full rounded-lg border border-emerald-500/60 px-3 py-2 text-sm font-semibold text-emerald-200 transition-colors hover:bg-emerald-500/10"
-              >
-                I have installed the app
-              </button>
             </div>
           )}
 
           {!canUseNativeInstall && !shouldShowIosGuide && !isAndroid && (
-            <div className="rounded-xl border border-slate-600 bg-slate-800/90 p-3">
-              <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-emerald-300">
-                <ArrowDownTrayIcon className="h-4 w-4" />
-                Install on Windows / Desktop
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800/90 dark:text-slate-100">
+              <p className="mb-2 flex items-center gap-1.5 font-semibold text-emerald-700 dark:text-emerald-300">
+                <ArrowDownTrayIcon className="h-5 w-5" />
+                Install on desktop
               </p>
-              <ol className="space-y-2.5 text-sm text-slate-200">
+              <ol className="space-y-2.5">
                 <li className="flex items-start gap-2.5">
                   <span className="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-emerald-500 text-[11px] font-bold text-white">1</span>
-                  <span>Click the install icon on the right side of the address bar.</span>
+                  <span>Click the install icon in the address bar.</span>
                 </li>
                 <li className="flex items-start gap-2.5">
                   <span className="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-emerald-500 text-[11px] font-bold text-white">2</span>
-                  <span>Or open the browser menu (three dots) → <span className="font-semibold">Install HikmahSphere</span>.</span>
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <span className="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-emerald-500 text-[11px] font-bold text-white">3</span>
-                  <span>Click <span className="font-semibold">Install</span> to add it as a desktop app.</span>
+                  <span>Or use the browser menu → <span className="font-semibold">Install HikmahSphere</span>.</span>
                 </li>
               </ol>
             </div>
           )}
+
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={dismissForSession}
+              className="rounded-xl px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              Continue in browser
+            </button>
+            {!canUseNativeInstall && (
+              <button
+                type="button"
+                onClick={confirmManualInstall}
+                className="rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:from-emerald-600 hover:to-teal-600"
+              >
+                I installed the app
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

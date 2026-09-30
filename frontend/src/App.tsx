@@ -51,7 +51,8 @@ import HajjGuide from './pages/HajjGuide';
 
 // Hooks
 import { useAuth, AuthProvider } from './hooks/useAuth';
-import { useStartupReadiness } from './hooks/useStartupReadiness';
+import { isMobilePhoneUa, useStartupReadiness } from './hooks/useStartupReadiness';
+import { warmBootstrapCache } from './utils/pwaBootstrap';
 
 // Contexts
 import { QuranProvider } from './contexts/QuranContext';
@@ -82,13 +83,38 @@ const queryClient = new QueryClient({
   },
 });
 
-const AppContent: React.FC = () => {
+type StartupReadinessController = ReturnType<typeof useStartupReadiness>;
+
+const AppContent: React.FC<{ startupReadiness: StartupReadinessController }> = ({
+  startupReadiness,
+}) => {
   const { user, loading, sessionStatus, logout, passwordChangeRequired, requirePasswordChange } = useAuth();
-  const startupReadiness = useStartupReadiness();
+  const bootstrapWarmedRef = useRef(false);
   const logoutRef = useRef(logout);
   logoutRef.current = logout;
   const requirePasswordChangeRef = useRef(requirePasswordChange);
   requirePasswordChangeRef.current = requirePasswordChange;
+
+  useEffect(() => {
+    if (
+      !bootstrapWarmedRef.current
+      && isMobilePhoneUa()
+      && startupReadiness.state.outcome === 'ready'
+    ) {
+      bootstrapWarmedRef.current = true;
+      void warmBootstrapCache();
+    }
+  }, [startupReadiness.state.outcome]);
+
+  useEffect(() => {
+    const retryWarm = () => {
+      if (navigator.onLine && isMobilePhoneUa()) {
+        void warmBootstrapCache();
+      }
+    };
+    window.addEventListener('online', retryWarm);
+    return () => window.removeEventListener('online', retryWarm);
+  }, []);
 
   useEffect(() => {
     if (!user?.id || sessionStatus !== 'ready' || passwordChangeRequired) {
@@ -401,6 +427,23 @@ const AppContent: React.FC = () => {
   );
 };
 
+const AppShell: React.FC = () => {
+  const startupReadiness = useStartupReadiness();
+  const startupGateClear =
+    !startupReadiness.enabled || startupReadiness.state.outcome === 'ready';
+
+  return (
+    <>
+      <ScrollManager />
+      {/* Mount outside AppContent so a slow authentication check or sleeping
+          backend cannot delay/cancel the browser's install opportunity. */}
+      <InstallAppPrompt startupGateClear={startupGateClear} />
+      <NotificationPermissionPrompt startupGateClear={startupGateClear} />
+      <AppContent startupReadiness={startupReadiness} />
+    </>
+  );
+};
+
 const App: React.FC = () => {
   return (
     <QueryClientProvider client={queryClient}>
@@ -409,12 +452,7 @@ const App: React.FC = () => {
           <DarkModeProvider>
             <LanguageProvider>
               <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-                <ScrollManager />
-                {/* Mount outside AppContent so a slow authentication check or sleeping
-                    backend cannot delay/cancel the browser's install opportunity. */}
-                <InstallAppPrompt />
-                <NotificationPermissionPrompt />
-                <AppContent />
+                <AppShell />
               </Router>
             </LanguageProvider>
           </DarkModeProvider>

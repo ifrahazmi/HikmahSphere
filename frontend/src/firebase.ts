@@ -140,7 +140,17 @@ export const requestNotificationPermissionFromUserGesture = (): Promise<Notifica
   }
 
   try {
-    return Promise.resolve(Notification.requestPermission());
+    const result = Notification.requestPermission();
+    if (result && typeof (result as Promise<NotificationPermission>).then === 'function') {
+      return result as Promise<NotificationPermission>;
+    }
+
+    return new Promise<NotificationPermission>((resolve) => {
+      const legacyRequest = Notification.requestPermission as (
+        callback: (permission: NotificationPermission) => void
+      ) => void;
+      legacyRequest((permission) => resolve(permission));
+    });
   } catch (error) {
     console.error('Permission request failed:', error);
     return Promise.resolve(Notification.permission);
