@@ -4,8 +4,9 @@
 // Version 10.x adds iOS 16.4+ web push (APNs) support.
 importScripts('https://www.gstatic.com/firebasejs/10.7.2/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.2/firebase-messaging-compat.js');
+importScripts('/sw-bootstrap.js');
 
-const CACHE_NAME = 'hikmahsphere-app-v8';
+const CACHE_NAME = 'hikmahsphere-app-v9';
 const TILE_CACHE = 'hikmahsphere-tiles-v1';
 const IS_LOCAL_DEV = ['localhost', '127.0.0.1', '[::1]'].includes(self.location.hostname);
 const APP_SHELL = ['/', '/index.html', '/manifest.json', '/logo.png', '/disconnect.png', '/favicon.ico', '/sounds/adhan.mp3'];
@@ -69,20 +70,49 @@ const messaging = firebase.messaging();
 const APP_MESSAGE_TYPE = 'HIKMAH_BACKGROUND_NOTIFICATION';
 const RECENT_NOTIFICATION_TTL_MS = 60 * 1000;
 const recentNotificationIds = new Map();
+let bootstrapManifestUrls = null;
+let bootstrapCacheName = HS_BOOTSTRAP_CACHE_DEFAULT;
+
+const refreshBootstrapManifestState = async () => {
+  const manifest = await loadBootstrapManifestFromCache() || await loadBootstrapManifest();
+  if (!manifest || !Array.isArray(manifest.urls)) {
+    return;
+  }
+  bootstrapManifestUrls = manifest.urls;
+  bootstrapCacheName = manifest.cacheName || HS_BOOTSTRAP_CACHE_DEFAULT;
+};
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    cacheAppShell().catch(() => undefined)
+    Promise.all([
+      installBootstrapCache().then(async (result) => {
+        if (result.urls) {
+          bootstrapManifestUrls = result.urls;
+          bootstrapCacheName = result.cacheName || HS_BOOTSTRAP_CACHE_DEFAULT;
+        }
+        return result;
+      }),
+      cacheAppShell().catch(() => undefined),
+    ]).catch(() => undefined)
   );
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches
-      .keys()
+    refreshBootstrapManifestState()
+      .then(() => pruneBootstrapCaches(bootstrapCacheName))
+      .then(() => caches.keys())
       .then((keys) =>
-        Promise.all(keys.filter((key) => key !== CACHE_NAME && key !== TILE_CACHE).map((key) => caches.delete(key)))
+        Promise.all(
+          keys
+            .filter((key) => (
+              key !== CACHE_NAME
+              && key !== TILE_CACHE
+              && key.indexOf(HS_BOOTSTRAP_CACHE_PREFIX) !== 0
+            ))
+            .map((key) => caches.delete(key))
+        )
       )
       .then(() => self.clients.claim())
   );
@@ -93,8 +123,8 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
 
   // Local dev: stay registered so push can be tested, but never serve cached
-  // app code, otherwise source edits only appear after clearing site storage.
-  if (IS_LOCAL_DEV) return;
+  // app code unless bootstrap debug mode is enabled from the client.
+  if (!isHsBootstrapFetchEnabled(IS_LOCAL_DEV)) return;
 
   const url = new URL(request.url);
 
@@ -136,17 +166,82 @@ self.addEventListener('fetch', (event) => {
   // corruption or "Failed to fetch" errors inside pdfjs / web workers.
   if (url.pathname.endsWith('.pdf') || url.pathname.endsWith('.mjs')) return;
 
-  if (request.mode === 'navigate') {
+  if (url.pathname === HS_BOOTSTRAP_MANIFEST_PATH) {
     event.respondWith(
       fetch(request)
-        .then((response) => {
-          if (response && response.status === 200) {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', copy)).catch(() => undefined);
+        .then(async (response) => {
+          if (response && response.ok) {
+            const cache = await caches.open(bootstrapCacheName);
+            await cache.put(HS_BOOTSTRAP_MANIFEST_PATH, response.clone());
+            try {
+              bootstrapManifestUrls = (await response.clone().json()).urls;
+            } catch (_error) {
+              // Ignore malformed manifest payloads.
+            }
           }
           return response;
         })
-        .catch(() => getNavigationFallback())
+        .catch(async () => {
+          const cached = await caches.match(HS_BOOTSTRAP_MANIFEST_PATH);
+          return cached || getGenericFallback();
+        })
+    );
+    return;
+  }
+
+  if (!bootstrapManifestUrls) {
+    event.waitUntil(refreshBootstrapManifestState());
+  }
+
+  if (bootstrapManifestUrls && isBootstrapAssetUrl(url.pathname, bootstrapManifestUrls)) {
+    event.respondWith(
+      caches.open(bootstrapCacheName).then(async (cache) => {
+        const cached = await cache.match(request);
+        if (cached) {
+          hsBootstrapLog('Serving bootstrap resource from cache ' + url.pathname);
+          return cached;
+        }
+
+        return fetch(request)
+          .then(async (response) => {
+            if (response && response.status === 200) {
+              await cache.put(request, response.clone());
+            }
+            return response;
+          })
+          .catch(() => getGenericFallback());
+      })
+    );
+    return;
+  }
+
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      (async () => {
+        const cache = await caches.open(bootstrapCacheName);
+        const cached = await cache.match('/index.html');
+        const networkRefresh = fetch(request)
+          .then(async (response) => {
+            if (response && response.status === 200) {
+              await cache.put('/index.html', response.clone());
+              caches.open(CACHE_NAME).then((appCache) => appCache.put('/index.html', response.clone())).catch(() => undefined);
+            }
+            return response;
+          })
+          .catch(() => null);
+
+        if (cached) {
+          networkRefresh.catch(() => undefined);
+          return cached;
+        }
+
+        const network = await networkRefresh;
+        if (network) {
+          return network;
+        }
+
+        return getNavigationFallback();
+      })()
     );
     return;
   }
@@ -186,6 +281,35 @@ self.addEventListener('message', (event) => {
   if (data.type === 'GET_TILE_CACHE_SIZE') {
     getTileCacheSize().then((info) => {
       event.source.postMessage({ type: 'TILE_CACHE_SIZE', count: info.count, bytes: info.bytes });
+    });
+  }
+
+  if (data.type === 'BOOTSTRAP_DEBUG_ON') {
+    enableHsBootstrapDebug();
+    event.source.postMessage({ type: 'BOOTSTRAP_DEBUG_ON' });
+  }
+
+  if (data.type === 'CACHE_BOOTSTRAP') {
+    mergeBootstrapUrls(data.urls || [])
+      .then(async (result) => {
+        await refreshBootstrapManifestState();
+        const status = await getBootstrapStatus();
+        event.source.postMessage({
+          type: 'BOOTSTRAP_CACHE_RESULT',
+          ready: status.ready,
+          cached: result.cached,
+          failed: result.failed,
+          status,
+        });
+      })
+      .catch(() => {
+        event.source.postMessage({ type: 'BOOTSTRAP_CACHE_RESULT', ready: false, cached: [], failed: data.urls || [] });
+      });
+  }
+
+  if (data.type === 'GET_BOOTSTRAP_STATUS') {
+    getBootstrapStatus().then((status) => {
+      event.source.postMessage({ type: 'BOOTSTRAP_STATUS', status });
     });
   }
 });

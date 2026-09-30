@@ -7,6 +7,7 @@ import './theme.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 import { disableBrowserScrollRestoration, pinWindowToTop } from './components/ScrollManager';
+import { registerPwaServiceWorker } from './utils/pwaBootstrap';
 
 if (typeof window !== 'undefined') {
   disableBrowserScrollRestoration();
@@ -40,6 +41,9 @@ if (typeof window !== 'undefined') {
   window.addEventListener('error', (event) => {
     const message = event?.message || '';
     if (message.includes('Loading chunk') || message.includes('ChunkLoadError')) {
+      if (!navigator.onLine) {
+        return;
+      }
       window.location.reload();
     }
   });
@@ -63,25 +67,4 @@ if (typeof window !== 'undefined') {
   });
 }
 
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker
-      .register('/firebase-messaging-sw.js')
-      .then(async () => {
-        // Clean up legacy app-shell workers to avoid stale cached bundles.
-        // Keep only the Firebase messaging service worker.
-        const registrations = await navigator.serviceWorker.getRegistrations();
-        await Promise.all(
-          registrations
-            .filter((registration) => {
-              const scriptUrl = registration.active?.scriptURL || registration.installing?.scriptURL || registration.waiting?.scriptURL || '';
-              return !scriptUrl.includes('/firebase-messaging-sw.js');
-            })
-            .map((registration) => registration.unregister())
-        );
-      })
-      .catch((error) => {
-        console.error('Service worker registration failed:', error);
-      });
-  });
-}
+registerPwaServiceWorker();

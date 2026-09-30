@@ -16,35 +16,74 @@ import {
   shouldShowDailyPrompt,
 } from '../utils/dailyPromptSnooze';
 
-const NotificationPermissionPrompt: React.FC = () => {
+type NotificationPermissionPromptProps = {
+  startupGateClear: boolean;
+};
+
+const NotificationPermissionPrompt: React.FC<NotificationPermissionPromptProps> = ({
+  startupGateClear,
+}) => {
   const { user, loading, sessionStatus, passwordChangeRequired } = useAuth();
   const location = useLocation();
   const [visible, setVisible] = useState(false);
-  const [installBlocking, setInstallBlocking] = useState(shouldOfferPwaInstall);
+  const [installBlocking, setInstallBlocking] = useState(() => shouldOfferPwaInstall());
   const [isIOSBrowser, setIsIOSBrowser] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
-
-  const permission = typeof Notification !== 'undefined' ? Notification.permission : 'denied';
+  const [permission, setPermission] = useState<NotificationPermission | 'unsupported'>(() =>
+    typeof Notification !== 'undefined' ? Notification.permission : 'unsupported'
+  );
   const alreadyGranted = permission === 'granted';
   const browserBlocked = permission === 'denied';
 
   const canShowForRoute = location.pathname !== '/auth';
   const signedIn = Boolean(user?.id) && !loading && sessionStatus === 'ready' && !passwordChangeRequired;
-
   const shouldConsider = useMemo(
-    () => signedIn && canShowForRoute && !alreadyGranted && typeof Notification !== 'undefined',
-    [alreadyGranted, canShowForRoute, signedIn]
+    () => (
+      signedIn
+      && canShowForRoute
+      && startupGateClear
+      && !alreadyGranted
+      && permission !== 'unsupported'
+    ),
+    [alreadyGranted, canShowForRoute, permission, signedIn, startupGateClear]
   );
 
   useEffect(() => {
-    if (!shouldOfferPwaInstall()) {
-      setInstallBlocking(false);
-      return;
-    }
+    const syncPermission = () => {
+      if (typeof Notification === 'undefined') {
+        setPermission('unsupported');
+        return;
+      }
+      setPermission(Notification.permission);
+      if (Notification.permission === 'granted') {
+        setVisible(false);
+        window.dispatchEvent(new Event(PUSH_REGISTER_EVENT));
+      }
+    };
 
+    window.addEventListener('focus', syncPermission);
+    document.addEventListener('visibilitychange', syncPermission);
+    window.addEventListener('pageshow', syncPermission);
+    return () => {
+      window.removeEventListener('focus', syncPermission);
+      document.removeEventListener('visibilitychange', syncPermission);
+      window.removeEventListener('pageshow', syncPermission);
+    };
+  }, []);
+
+  useEffect(() => {
+    const syncInstallBlocking = () => {
+      setInstallBlocking(shouldOfferPwaInstall());
+    };
+
+    syncInstallBlocking();
     const onClosed = () => setInstallBlocking(false);
     window.addEventListener(INSTALL_PROMPT_CLOSED_EVENT, onClosed);
-    return () => window.removeEventListener(INSTALL_PROMPT_CLOSED_EVENT, onClosed);
+    window.addEventListener('pageshow', syncInstallBlocking);
+    return () => {
+      window.removeEventListener(INSTALL_PROMPT_CLOSED_EVENT, onClosed);
+      window.removeEventListener('pageshow', syncInstallBlocking);
+    };
   }, []);
 
   useEffect(() => {
@@ -68,15 +107,27 @@ const NotificationPermissionPrompt: React.FC = () => {
 
     const timer = window.setTimeout(() => setVisible(true), 1600);
     return () => window.clearTimeout(timer);
-  }, [installBlocking, shouldConsider]);
+  }, [installBlocking, shouldConsider, startupGateClear]);
 
   const closeForToday = () => {
     dismissDailyPrompt(NOTIFY_PROMPT_SNOOZE_KEY);
     setVisible(false);
   };
 
+  const needsHomeScreen = isIOSBrowser && !isStandalone;
+
   const enableNotifications = () => {
-    if (typeof Notification === 'undefined' || Notification.permission === 'denied') {
+    if (typeof Notification === 'undefined') {
+      closeForToday();
+      return;
+    }
+
+    if (Notification.permission === 'denied') {
+      closeForToday();
+      return;
+    }
+
+    if (needsHomeScreen) {
       closeForToday();
       return;
     }
@@ -88,6 +139,7 @@ const NotificationPermissionPrompt: React.FC = () => {
 
     void permissionRequest
       .then((result) => {
+        setPermission(result);
         if (result === 'granted') {
           window.dispatchEvent(new Event(PUSH_REGISTER_EVENT));
           return;
@@ -103,10 +155,8 @@ const NotificationPermissionPrompt: React.FC = () => {
     return null;
   }
 
-  const needsHomeScreen = isIOSBrowser && !isStandalone;
-
   return (
-    <div className="fixed inset-0 z-[85] flex items-center justify-center px-4 sm:px-6">
+    <div className="fixed inset-0 z-[110] flex items-center justify-center px-4 sm:px-6">
       <div className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm" aria-hidden="true" />
       <div
         role="dialog"
@@ -190,11 +240,14 @@ const NotificationPermissionPrompt: React.FC = () => {
             <button
               type="button"
               onClick={enableNotifications}
-              className="rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:from-emerald-600 hover:to-teal-600"
+              disabled={needsHomeScreen}
+              className="rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:from-emerald-600 hover:to-teal-600 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {browserBlocked
                 ? 'I will enable it in settings'
-                : 'Enable notifications'}
+                : needsHomeScreen
+                  ? 'Add to Home Screen first'
+                  : 'Enable notifications'}
             </button>
           </div>
         </div>

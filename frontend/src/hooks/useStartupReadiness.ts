@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getBackendReadinessUrl } from '../config';
+import { isBootstrapReady } from '../utils/pwaBootstrap';
 
 export type StartupStepKey = 'internet' | 'frontend' | 'backend' | 'database';
 export type StartupStepStatus = 'waiting' | 'checking' | 'slow' | 'success' | 'error';
@@ -29,6 +30,18 @@ const initialSteps = (): Record<StartupStepKey, StartupStep> => ({
   database: { status: 'waiting', message: 'Waiting for the server…' },
 });
 
+export const isMobilePhoneUa = (): boolean => {
+  if (typeof navigator === 'undefined') {
+    return false;
+  }
+  const userAgent = navigator.userAgent || '';
+  const iPadOs =
+    navigator.platform === 'MacIntel'
+    && typeof navigator.maxTouchPoints === 'number'
+    && navigator.maxTouchPoints > 1;
+  return /Android|iPhone|iPad|iPod/i.test(userAgent) || iPadOs;
+};
+
 export const isInstalledMobilePwa = (): boolean => {
   if (typeof window === 'undefined' || typeof navigator === 'undefined') {
     return false;
@@ -37,15 +50,12 @@ export const isInstalledMobilePwa = (): boolean => {
   const standalone =
     window.matchMedia?.('(display-mode: standalone)').matches === true
     || (navigator as Navigator & { standalone?: boolean }).standalone === true;
-  const userAgent = navigator.userAgent || '';
-  const iPadOs =
-    navigator.platform === 'MacIntel'
-    && typeof navigator.maxTouchPoints === 'number'
-    && navigator.maxTouchPoints > 1;
-  const mobile = /Android|iPhone|iPad|iPod/i.test(userAgent) || iPadOs;
 
-  return standalone && mobile;
+  return standalone && isMobilePhoneUa();
 };
+
+export const shouldRunStartupGate = (): boolean =>
+  isMobilePhoneUa() && typeof navigator !== 'undefined' && 'serviceWorker' in navigator;
 
 const isReadinessPayload = (value: unknown): value is {
   services: { backend: 'operational'; database: 'operational' | 'unavailable' };
@@ -58,7 +68,17 @@ const isReadinessPayload = (value: unknown): value is {
     && (typed.database === 'operational' || typed.database === 'unavailable');
 };
 
-export const useStartupReadiness = (enabled = isInstalledMobilePwa()) => {
+const offlineStartupState = (): StartupReadinessState => ({
+  outcome: 'offline',
+  steps: {
+    internet: { status: 'error', message: 'Internet is unavailable' },
+    frontend: { status: 'waiting', message: 'Waiting for internet' },
+    backend: { status: 'waiting', message: 'Waiting for internet' },
+    database: { status: 'waiting', message: 'Waiting for internet' },
+  },
+});
+
+export const useStartupReadiness = (enabled = shouldRunStartupGate()) => {
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<StartupReadinessState>(() => ({
     outcome: enabled ? 'checking' : 'ready',
@@ -212,6 +232,17 @@ export const useStartupReadiness = (enabled = isInstalledMobilePwa()) => {
     };
 
     setState({ outcome: 'checking', steps: initialSteps() });
+
+    if (!navigator.onLine) {
+      void isBootstrapReady().then((bootstrapReady) => {
+        if (stopped || terminal || !bootstrapReady) return;
+        terminal = true;
+        controller.abort();
+        timers.forEach((timer) => window.clearTimeout(timer));
+        timers.clear();
+        setState(offlineStartupState());
+      });
+    }
 
     schedule(() => {
       if (terminal) return;

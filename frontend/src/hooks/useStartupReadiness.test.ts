@@ -1,5 +1,17 @@
 import { act, renderHook } from '@testing-library/react';
-import { isInstalledMobilePwa, useStartupReadiness } from './useStartupReadiness';
+import {
+  isInstalledMobilePwa,
+  isMobilePhoneUa,
+  shouldRunStartupGate,
+  useStartupReadiness,
+} from './useStartupReadiness';
+
+const mockIsBootstrapReady = jest.fn(() => Promise.resolve(false));
+
+jest.mock('../utils/pwaBootstrap', () => ({
+  __esModule: true,
+  isBootstrapReady: () => mockIsBootstrapReady(),
+}));
 
 jest.mock('../config', () => ({
   getBackendReadinessUrl: () => 'https://api.example.test/health/ready',
@@ -61,6 +73,7 @@ describe('useStartupReadiness', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     setOnline(true);
+    mockIsBootstrapReady.mockImplementation(() => Promise.resolve(false));
   });
 
   afterEach(() => {
@@ -113,6 +126,18 @@ describe('useStartupReadiness', () => {
     });
 
     expect(result.current.state.outcome).toBe('ready');
+  });
+
+  it('shows offline immediately when bootstrap is ready and device is offline', async () => {
+    mockIsBootstrapReady.mockImplementationOnce(() => Promise.resolve(true));
+    setOnline(false);
+    (global as any).fetch = jest.fn();
+    const { result } = renderHook(() => useStartupReadiness(true));
+    await flush();
+
+    expect(result.current.state.outcome).toBe('offline');
+    expect(result.current.state.steps.internet.status).toBe('error');
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
   it('stops dependent checks after fifteen seconds without internet', () => {
@@ -248,6 +273,38 @@ describe('useStartupReadiness', () => {
     unmount();
 
     expect(capturedSignal?.aborted).toBe(true);
+  });
+});
+
+describe('shouldRunStartupGate', () => {
+  it('enables the gate for mobile browsers with service worker support', () => {
+    Object.defineProperty(window.navigator, 'userAgent', {
+      configurable: true,
+      value: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) Mobile',
+    });
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: {},
+    });
+    expect(shouldRunStartupGate()).toBe(true);
+  });
+
+  it('skips the gate on desktop', () => {
+    Object.defineProperty(window.navigator, 'userAgent', {
+      configurable: true,
+      value: 'Mozilla/5.0 (X11; Linux x86_64)',
+    });
+    expect(shouldRunStartupGate()).toBe(false);
+  });
+});
+
+describe('isMobilePhoneUa', () => {
+  it('detects phone user agents', () => {
+    Object.defineProperty(window.navigator, 'userAgent', {
+      configurable: true,
+      value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)',
+    });
+    expect(isMobilePhoneUa()).toBe(true);
   });
 });
 

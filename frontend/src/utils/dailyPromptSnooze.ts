@@ -1,7 +1,9 @@
 import { getLocalDateKey } from './adhanStorage';
 
 export const INSTALLED_APP_KEY = 'hs_app_installed';
+/** @deprecated Install prompt uses session snooze; kept for legacy reads only. */
 export const INSTALL_PROMPT_SNOOZE_KEY = 'hs_install_prompt_dismissed_on';
+export const INSTALL_PROMPT_SESSION_SNOOZE_KEY = 'hs_install_prompt_dismissed_session';
 export const NOTIFY_PROMPT_SNOOZE_KEY = 'hs_notify_prompt_dismissed_on';
 export const INSTALL_PROMPT_CLOSED_EVENT = 'hs-install-prompt-closed';
 export const PUSH_REGISTER_EVENT = 'hs-push-register';
@@ -31,17 +33,24 @@ export const detectStandalonePwa = (): boolean => {
     || window.navigator.standalone === true;
 };
 
-export const isAppInstalled = (): boolean => {
-  if (detectStandalonePwa()) {
+export const shouldShowSessionPrompt = (storageKey: string): boolean => {
+  try {
+    return sessionStorage.getItem(storageKey) !== '1';
+  } catch {
     return true;
   }
+};
 
+export const dismissSessionPrompt = (storageKey: string): void => {
   try {
-    return localStorage.getItem(INSTALLED_APP_KEY) === '1';
+    sessionStorage.setItem(storageKey, '1');
   } catch {
-    return false;
+    // If session storage is unavailable, the prompt may reappear on navigation.
   }
 };
+
+/** True only when the app is running as an installed PWA (not a browser tab). */
+export const isAppInstalled = (): boolean => detectStandalonePwa();
 
 export const markAppInstalled = (): void => {
   try {
@@ -51,9 +60,13 @@ export const markAppInstalled = (): void => {
   }
 };
 
-export const shouldOfferPwaInstall = (now: Date = new Date()): boolean => {
-  return !isAppInstalled() && shouldShowDailyPrompt(INSTALL_PROMPT_SNOOZE_KEY, now);
-};
+/**
+ * Offer install in the browser on each new visit/session until the user opens
+ * the standalone PWA. Dismissing the prompt only snoozes for the current session.
+ */
+export const shouldOfferPwaInstall = (): boolean =>
+  !detectStandalonePwa()
+  && shouldShowSessionPrompt(INSTALL_PROMPT_SESSION_SNOOZE_KEY);
 
 export const emitInstallPromptClosed = (): void => {
   if (typeof window === 'undefined') {
