@@ -10,7 +10,7 @@ const mockIsBootstrapReady = jest.fn(() => Promise.resolve(false));
 
 jest.mock('../utils/pwaBootstrap', () => ({
   __esModule: true,
-  isBootstrapReady: (...args: unknown[]) => mockIsBootstrapReady(...args),
+  isBootstrapReady: () => mockIsBootstrapReady(),
 }));
 
 jest.mock('../config', () => ({
