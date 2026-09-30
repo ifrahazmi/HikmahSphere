@@ -52,20 +52,6 @@ export const fetchBootstrapManifest = async (): Promise<{
   }
 };
 
-const getActiveServiceWorker = (): ServiceWorker | null => {
-  if (!('serviceWorker' in navigator)) return null;
-  return navigator.serviceWorker.controller;
-};
-
-const postMessageToSw = (message: Record<string, unknown>): Promise<void> => {
-  const worker = getActiveServiceWorker();
-  if (!worker) {
-    return Promise.resolve();
-  }
-  worker.postMessage(message);
-  return Promise.resolve();
-};
-
 const waitForSwMessage = <T>(
   type: string,
   timeoutMs = 8_000
