@@ -46,6 +46,135 @@ export interface HalalCheckResult {
 	message?: string | undefined;
 }
 
+export type HalalApiKeyStatusCode =
+	| 'working'
+	| 'unsubscribed'
+	| 'invalid_key'
+	| 'quota_exceeded'
+	| 'network_error'
+	| 'not_configured';
+
+export interface HalalApiKeyStatus {
+	configured: boolean;
+	keyMasked?: string;
+	working: boolean;
+	status: HalalApiKeyStatusCode;
+	httpStatus?: number;
+	message: string;
+	checkedAt: string;
+}
+
+let cachedKeyStatus: HalalApiKeyStatus | null = null;
+let lastStatusCheckTime = 0;
+const STATUS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+export const maskApiKey = (key: string): string => {
+	if (key.length <= 8) return '****';
+	return `${key.slice(0, 4)}...${key.slice(-4)}`;
+};
+
+export const checkHalalApiKeyStatus = async (forceRefresh = false): Promise<HalalApiKeyStatus> => {
+	const now = Date.now();
+	if (!forceRefresh && cachedKeyStatus && now - lastStatusCheckTime < STATUS_CACHE_TTL_MS) {
+		return cachedKeyStatus;
+	}
+
+	const apiKey = process.env.HALALCHECK_RAPIDAPI_KEY || process.env.RAPIDAPI_KEY;
+	if (!apiKey) {
+		const status: HalalApiKeyStatus = {
+			configured: false,
+			working: false,
+			status: 'not_configured',
+			message: 'HALALCHECK_RAPIDAPI_KEY is not configured in environment',
+			checkedAt: new Date().toISOString(),
+		};
+		cachedKeyStatus = status;
+		lastStatusCheckTime = now;
+		return status;
+	}
+
+	const keyMasked = maskApiKey(apiKey);
+	const controller = new AbortController();
+	const timeout = setTimeout(() => controller.abort(), 8000);
+
+	try {
+		const response = await fetch(HALAL_CHECK_URL, {
+			method: 'POST',
+			signal: controller.signal,
+			headers: {
+				'Content-Type': 'application/json',
+				'X-RapidAPI-Key': apiKey,
+				'X-RapidAPI-Host': 'halalcheck-api.p.rapidapi.com',
+			},
+			body: JSON.stringify({ query: '3017620422003', type: 'barcode', fetch_detail: false }),
+		});
+
+		const bodyText = await response.text();
+		let parsed: Record<string, unknown> = {};
+		try {
+			parsed = JSON.parse(bodyText) as Record<string, unknown>;
+		} catch {
+			// Non-json response
+		}
+
+		let statusCode: HalalApiKeyStatusCode = 'working';
+		let working = false;
+		let message = 'RapidAPI key is valid and responding.';
+
+		if (response.status === 200 || response.status === 404) {
+			working = true;
+			statusCode = 'working';
+			message = 'RapidAPI HalalCheck service is reachable and key is valid.';
+		} else if (response.status === 403) {
+			statusCode = 'unsubscribed';
+			message = typeof parsed.message === 'string'
+				? parsed.message
+				: 'Forbidden: API key is not subscribed to HalalCheck API on RapidAPI.';
+		} else if (response.status === 401) {
+			statusCode = 'invalid_key';
+			message = typeof parsed.message === 'string'
+				? parsed.message
+				: 'Unauthorized: Invalid RapidAPI key.';
+		} else if (response.status === 429) {
+			statusCode = 'quota_exceeded';
+			message = typeof parsed.message === 'string'
+				? parsed.message
+				: 'Too Many Requests: RapidAPI rate limit or quota exceeded.';
+		} else {
+			statusCode = 'network_error';
+			message = `Unexpected response from RapidAPI (HTTP ${response.status}).`;
+		}
+
+		const result: HalalApiKeyStatus = {
+			configured: true,
+			keyMasked,
+			working,
+			status: statusCode,
+			httpStatus: response.status,
+			message,
+			checkedAt: new Date().toISOString(),
+		};
+
+		cachedKeyStatus = result;
+		lastStatusCheckTime = now;
+		return result;
+	} catch (error) {
+		const result: HalalApiKeyStatus = {
+			configured: true,
+			keyMasked,
+			working: false,
+			status: 'network_error',
+			message: error instanceof Error ? error.message : 'Failed to reach RapidAPI host.',
+			checkedAt: new Date().toISOString(),
+		};
+		cachedKeyStatus = result;
+		lastStatusCheckTime = now;
+		return result;
+	} finally {
+		clearTimeout(timeout);
+	}
+};
+
 type OpenFoodFactsProduct = {
 	code?: string;
 	product_name?: string;

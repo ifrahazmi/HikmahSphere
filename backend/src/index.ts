@@ -28,6 +28,7 @@ import { startDhikrReminderScheduler, stopDhikrReminderScheduler } from './servi
 import { startMuhasabaReminderScheduler, stopMuhasabaReminderScheduler } from './services/muhasabaReminderScheduler';
 import { logZohoMailStatus } from './services/zohoMail';
 import { logObjectStorageStatus } from './services/objectStorage';
+import { checkHalalApiKeyStatus } from './services/halalVerifier';
 
 // Import routes
 import authRoutes from './routes/auth';
@@ -353,6 +354,8 @@ app.get(['/health', '/api/health'], async (req, res) => {
       redisStatus = 'error';
   }
 
+  const halalStatus = await checkHalalApiKeyStatus();
+
   res.status(200).json({
     status: 'success',
     message: 'HikmahSphere API is running! 🕌',
@@ -360,7 +363,14 @@ app.get(['/health', '/api/health'], async (req, res) => {
     version: '1.0.0',
     services: {
         database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
-        redis: redisStatus
+        redis: redisStatus,
+        halalCheckRapidApi: {
+          configured: halalStatus.configured,
+          status: halalStatus.status,
+          working: halalStatus.working,
+          message: halalStatus.message,
+          keyMasked: halalStatus.keyMasked,
+        }
     }
   });
 });
@@ -730,6 +740,15 @@ const startServer = async () => {
       startPrayerTimesCacheScheduler();
       startDhikrReminderScheduler();
       startMuhasabaReminderScheduler();
+      void checkHalalApiKeyStatus().then((status) => {
+        if (!status.configured) {
+          console.log('ℹ️  [HalalCheck RapidAPI] Key not configured in environment (HALALCHECK_RAPIDAPI_KEY)');
+        } else if (status.working) {
+          console.log(`✅ [HalalCheck RapidAPI] Key configured (${status.keyMasked}) & verified working`);
+        } else {
+          console.warn(`⚠️  [HalalCheck RapidAPI] Key configured (${status.keyMasked}) but status is "${status.status}": ${status.message}`);
+        }
+      });
     });
 
     server.on('error', (error: NodeJS.ErrnoException) => {

@@ -25,6 +25,7 @@ import NotificationPermissionPrompt from './components/NotificationPermissionPro
 import PrayerAdhanScheduler from './components/PrayerAdhanScheduler';
 import AdhanPlayPrompt from './components/AdhanPlayPrompt';
 import StartupReadinessScreen from './components/StartupReadinessScreen';
+import ServerStatusModal from './components/ServerStatusModal';
 import ForcePasswordChangeModal from './components/ForcePasswordChangeModal';
 import ScrollManager from './components/ScrollManager';
 
@@ -351,6 +352,14 @@ const AppContent: React.FC<{ startupReadiness: StartupReadinessController }> = (
           Reconnecting to the server…
         </div>
       )}
+      <ServerStatusModal
+        serverHasIssue={sessionStatus === 'reconnecting'}
+        issueDescription={
+          sessionStatus === 'reconnecting'
+            ? 'We are having trouble reaching the HikmahSphere server. Real-time updates and incident reports are available on our status page.'
+            : undefined
+        }
+      />
       {/* Navigation */}
       <Navbar user={user} />
 

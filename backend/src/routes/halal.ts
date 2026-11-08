@@ -1,8 +1,20 @@
 import express, { Request, Response } from 'express';
 import { param, validationResult } from 'express-validator';
-import { getProductByBarcode } from '../services/halalVerifier';
+import { checkHalalApiKeyStatus, getProductByBarcode } from '../services/halalVerifier';
 
 const router = express.Router();
+
+router.get('/status', async (_req: Request, res: Response) => {
+  try {
+    const status = await checkHalalApiKeyStatus();
+    return res.json({ status: 'success', data: status });
+  } catch (error) {
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to retrieve HalalCheck RapidAPI status',
+    });
+  }
+});
 
 router.get(
   '/product/:barcode',
