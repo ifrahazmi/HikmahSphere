@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": "20.x"
+    "node": "26.x"
   },
   "proxy": "http://127.0.0.1:5000",
   "dependencies": {
