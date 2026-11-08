@@ -8,7 +8,7 @@ describe('SystemStatus Page', () => {
     jest.resetAllMocks();
   });
 
-  it('renders HikmahSphere branded header and operational status when backend is healthy', async () => {
+  it('renders System Pulse header and operational status when backend is healthy', async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -28,14 +28,16 @@ describe('SystemStatus Page', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText('HikmahSphere')).toBeInTheDocument();
-    expect(screen.getByText('System Status')).toBeInTheDocument();
+    expect(screen.getByText('System Pulse')).toBeInTheDocument();
+    expect(screen.getByText('Live Monitor')).toBeInTheDocument();
 
     await waitFor(() => {
       expect(screen.getByText('All Systems Operational')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('HikmahSphere Core API')).toBeInTheDocument();
+    expect(screen.getByText('Frontend Web App')).toBeInTheDocument();
+    expect(screen.getByText('Cloudflare R2 Storage')).toBeInTheDocument();
+    expect(screen.getByText('Core REST API')).toBeInTheDocument();
     expect(screen.getByText('MongoDB Primary Database')).toBeInTheDocument();
     expect(screen.getByText('Redis In-Memory Cache')).toBeInTheDocument();
     expect(screen.queryByText(/powered by pingzo/i)).not.toBeInTheDocument();

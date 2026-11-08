@@ -26,8 +26,8 @@ import { startPrayerNotificationScheduler, stopPrayerNotificationScheduler } fro
 import { startPrayerTimesCacheScheduler, stopPrayerTimesCacheScheduler } from './services/prayerTimesCacheScheduler';
 import { startDhikrReminderScheduler, stopDhikrReminderScheduler } from './services/dhikrReminderScheduler';
 import { startMuhasabaReminderScheduler, stopMuhasabaReminderScheduler } from './services/muhasabaReminderScheduler';
-import { logZohoMailStatus } from './services/zohoMail';
-import { logObjectStorageStatus } from './services/objectStorage';
+import { isZohoMailConfigured, logZohoMailStatus } from './services/zohoMail';
+import { isR2Configured, logObjectStorageStatus } from './services/objectStorage';
 import { checkHalalApiKeyStatus } from './services/halalVerifier';
 
 // Import routes
@@ -261,20 +261,41 @@ const quranLimiter = rateLimit({
 // CORS configuration — honor CORS_ORIGIN when set (comma-separated allowlist).
 // When unset, reflect the request origin (local Docker / IDX development).
 const corsOriginEnv = process.env.CORS_ORIGIN?.trim();
-const allowedOrigins = corsOriginEnv
+const configuredOrigins = corsOriginEnv
   ? corsOriginEnv.split(',').map((origin) => origin.trim()).filter(Boolean)
   : [];
 
+const isAllowedOrigin = (origin: string | undefined): boolean => {
+  if (!origin) return true;
+  if (configuredOrigins.length === 0) return true;
+  if (configuredOrigins.includes(origin)) return true;
+  // Local development
+  if (/^http:\/\/localhost(:\d+)?$/i.test(origin) || /^http:\/\/127\.0\.0\.1(:\d+)?$/i.test(origin)) {
+    return true;
+  }
+  // All Vercel deployments (production, staging, preview branches)
+  if (/^https:\/\/([a-z0-9_-]+\.)*vercel\.app$/i.test(origin)) {
+    return true;
+  }
+  // HikmahSphere official domains
+  if (/^https:\/\/([a-z0-9_-]+\.)*hikmahsphere\.(site|com)$/i.test(origin)) {
+    return true;
+  }
+  return false;
+};
+
+// Permissive CORS for public health inspection so monitoring and status checks are never blocked
+const publicHealthCors = cors({ origin: '*' });
+app.options(['/health', '/api/health', '/health/ready', '/api/health/ready', '/health/keepalive'], publicHealthCors);
+
 app.use(cors({
-  origin: allowedOrigins.length > 0
-    ? (origin, callback) => {
-        if (!origin || allowedOrigins.includes(origin)) {
-          callback(null, true);
-          return;
-        }
-        callback(null, false);
-      }
-    : true,
+  origin: (origin, callback) => {
+    if (isAllowedOrigin(origin)) {
+      callback(null, true);
+      return;
+    }
+    callback(null, false);
+  },
   credentials: true,
 }));
 
@@ -343,7 +364,7 @@ app.get(['/api', '/api/'], (req, res) => {
 });
 
 // Health check endpoint (supports both /health and /api/health)
-app.get(['/health', '/api/health'], async (req, res) => {
+app.get(['/health', '/api/health'], publicHealthCors, async (req, res) => {
   let redisStatus = 'disconnected';
   try {
       if (redisClient.isOpen) {
@@ -355,6 +376,10 @@ app.get(['/health', '/api/health'], async (req, res) => {
   }
 
   const halalStatus = await checkHalalApiKeyStatus();
+  const r2Configured = isR2Configured();
+  const zohoConfigured = isZohoMailConfigured();
+  const tafsirConfigured = Boolean(process.env.TAFSIR_API_URL?.trim() || process.env.TAFSIR_V2_API_URL?.trim());
+  const islamicApiConfigured = Boolean(process.env.ISLAMIC_API_KEY?.trim());
 
   res.status(200).json({
     status: 'success',
@@ -362,8 +387,27 @@ app.get(['/health', '/api/health'], async (req, res) => {
     timestamp: new Date().toISOString(),
     version: '1.0.0',
     services: {
+        backend: 'operational',
         database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
         redis: redisStatus,
+        r2Storage: {
+          configured: r2Configured,
+          status: r2Configured ? 'operational' : 'not_configured',
+          publicBucket: process.env.R2_PUBLIC_BUCKET || 'hikmahsphere-uploads',
+          endpoint: 'Cloudflare R2',
+        },
+        zohoMail: {
+          configured: zohoConfigured,
+          status: zohoConfigured ? 'operational' : 'not_configured',
+        },
+        tafsirApi: {
+          configured: tafsirConfigured,
+          status: tafsirConfigured ? 'operational' : 'not_configured',
+        },
+        islamicApi: {
+          configured: islamicApiConfigured,
+          status: islamicApiConfigured ? 'operational' : 'not_configured',
+        },
         halalCheckRapidApi: {
           configured: halalStatus.configured,
           status: halalStatus.status,

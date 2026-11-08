@@ -70,3 +70,4 @@ describe('backendHealth utility', () => {
     expect(result.message).toContain('Network offline');
   });
 });
+
