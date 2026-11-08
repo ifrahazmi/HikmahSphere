@@ -13,6 +13,7 @@ import {
   setGlobalHijriAdjustment,
 } from '../services/hijriDateService';
 import type { HijriAdjustmentValue } from '../models/HijriAdjustment';
+import { appLogger } from '../middleware/logger';
 
 const router = express.Router();
 
@@ -33,6 +34,7 @@ const CACHE_TTL = {
   FASTING_TIMES: cacheTtlSeconds(process.env.FASTING_TIMES_CACHE_TTL, 15),
   RAMADAN_TIMES: cacheTtlSeconds(process.env.RAMADAN_TIMES_CACHE_TTL, 60),
   WEATHER: cacheTtlSeconds(process.env.WEATHER_CACHE_TTL, 30),
+  WEATHER_STALE: cacheTtlSeconds(process.env.WEATHER_STALE_CACHE_TTL, 360),
 };
 
 // Mecca/Kaaba coordinates
@@ -1665,6 +1667,7 @@ router.get('/weather', [
     query('latitude').isFloat({ min: -90, max: 90 }),
     query('longitude').isFloat({ min: -180, max: 180 }),
   ], async (req: Request, res: Response) => {
+      let staleCachedData: string | null = null;
       try {
           const errors = validationResult(req);
           if (!errors.isEmpty()) {
@@ -1675,22 +1678,24 @@ router.get('/weather', [
 
           // Generate cache key
           const cacheKey = `weather:${latitude}:${longitude}`;
+          const staleCacheKey = `${cacheKey}:stale`;
 
           // Try to get from cache first
           try {
             const cachedData = await redisClient.get(cacheKey);
             if (cachedData) {
-              console.log(`✅ Cache hit for weather (${latitude}, ${longitude})`);
+              appLogger.info('weather_cache_hit', { latitude, longitude, stale: false });
               return res.json(JSON.parse(cachedData));
             }
+            staleCachedData = await redisClient.get(staleCacheKey);
           } catch (cacheError) {
-            console.warn('⚠️ Redis cache read error:', cacheError);
+            appLogger.warn('weather_cache_read_failed', { latitude, longitude, error: cacheError });
           }
 
           // Open-Meteo URL with comprehensive weather data
           const apiUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m&hourly=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&timezone=auto`;
 
-          console.log(`Fetching weather from: ${apiUrl}`);
+          appLogger.info('weather_upstream_request', { provider: 'open-meteo', latitude, longitude });
 
             const response = await fetchWithTimeout(apiUrl, 9000);
           if (!response.ok) {
@@ -1701,24 +1706,45 @@ router.get('/weather', [
 
           const responseData = {
                status: 'success',
-               data: data
+            data,
+            meta: { provider: 'open-meteo', stale: false, fetchedAt: new Date().toISOString() },
           };
 
           // Store in cache
           try {
             await redisClient.setEx(cacheKey, CACHE_TTL.WEATHER, JSON.stringify(responseData));
-            console.log(`💾 Cached weather for ${CACHE_TTL.WEATHER / 60} minutes`);
+            await redisClient.setEx(staleCacheKey, CACHE_TTL.WEATHER_STALE, JSON.stringify(responseData));
+            appLogger.info('weather_upstream_success', {
+              provider: 'open-meteo',
+              latitude,
+              longitude,
+              freshCacheMinutes: CACHE_TTL.WEATHER / 60,
+              staleCacheMinutes: CACHE_TTL.WEATHER_STALE / 60,
+            });
           } catch (cacheError) {
-            console.warn('⚠️ Redis cache write error:', cacheError);
+            appLogger.warn('weather_cache_write_failed', { latitude, longitude, error: cacheError });
           }
 
           return res.json(responseData);
         } catch (error: any) {
+          if (staleCachedData) {
+            appLogger.warn('weather_stale_fallback_used', {
+              latitude: req.query.latitude,
+              longitude: req.query.longitude,
+              provider: 'open-meteo',
+              error,
+            });
+            const staleResponse = JSON.parse(staleCachedData);
+            return res.json({
+              ...staleResponse,
+              meta: { ...(staleResponse.meta || {}), stale: true, fallbackReason: error?.name === 'AbortError' ? 'timeout' : 'upstream_error' },
+            });
+          }
           if (error?.name === 'AbortError') {
-            console.warn('Weather API timeout:', error.message);
+            appLogger.warn('weather_upstream_timeout', { latitude: req.query.latitude, longitude: req.query.longitude, error });
             return res.status(504).json({ status: 'error', message: 'Weather service timeout. Please try again.' });
           }
-          console.error('Weather API error:', error.message);
+          appLogger.error('weather_upstream_failed', { latitude: req.query.latitude, longitude: req.query.longitude, error });
           return res.status(500).json({ status: 'error', message: 'Failed to fetch weather info' });
       }
   });

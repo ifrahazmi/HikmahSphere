@@ -15,6 +15,7 @@ import {
   ArrowRightOnRectangleIcon,
   SunIcon,
   MoonIcon,
+  ShieldCheckIcon,
 } from '@heroicons/react/24/outline';
 
 interface NavbarProps {
@@ -404,6 +405,19 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                         <CalendarDaysIcon className="h-4 w-4 mr-2" />
                         Muhasabah Tracker
                       </Link>
+
+                      <Link
+                        to="/halal-check"
+                        className={`flex items-center px-4 py-2 text-sm ${
+                          isDark
+                            ? 'text-gray-300 hover:bg-gray-600'
+                            : 'text-gray-700 hover:bg-gray-100'
+                        }`}
+                        onClick={() => setIsProfileOpen(false)}
+                      >
+                        <ShieldCheckIcon className="h-4 w-4 mr-2" />
+                        Halal Check
+                      </Link>
                       
                       {/* Dashboard for Super Admin (full) and Manager (funds only) */}
                       {canAccessDashboard && (
@@ -681,6 +695,17 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                     onClick={() => setIsOpen(false)}
                   >
                     Muhasabah Tracker
+                  </Link>
+                  <Link
+                    to="/halal-check"
+                    className={`block px-3 py-2 text-base font-medium transition-colors duration-200 ${
+                      isDark
+                        ? 'text-gray-300 hover:text-emerald-400 hover:bg-gray-700'
+                        : 'text-gray-700 hover:text-emerald-600 hover:bg-emerald-50'
+                    }`}
+                    onClick={() => setIsOpen(false)}
+                  >
+                    Halal Check
                   </Link>
                   {canAccessDashboard && (
                     <Link

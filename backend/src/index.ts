@@ -45,6 +45,7 @@ import salahTrackerRoutes from './routes/salahTracker';
 import hajjGuideRoutes from './routes/hajjGuide';
 import gamesRoutes from './routes/games';
 import userRoutes from './routes/users';
+import halalRoutes from './routes/halal';
 
 // Load environment variables
 // Use __dirname to resolve paths correctly regardless of whether running from src/ or dist/
@@ -459,6 +460,7 @@ app.use('/api/salah-tracker', salahTrackerRoutes);
 app.use('/api/hajj-guide', hajjGuideRoutes);
 app.use('/api/games', gamesRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/halal', halalRoutes);
 
 // Admin Routes for User Management (Restricted to Super Admin)
 // Get All Users

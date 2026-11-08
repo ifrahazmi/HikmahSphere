@@ -48,6 +48,7 @@ import About from './pages/About';
 import Contact from './pages/Contact'; // Import Contact page
 import Maktab from './pages/Maktab';
 import HajjGuide from './pages/HajjGuide';
+import HalalCheck from './pages/HalalCheck';
 
 // Hooks
 import { useAuth, AuthProvider } from './hooks/useAuth';
@@ -363,6 +364,7 @@ const AppContent: React.FC<{ startupReadiness: StartupReadinessController }> = (
           <Route path="/maktab" element={<Maktab />} />
           <Route path="/contact" element={<Contact />} /> {/* Add Contact Route */}
           <Route path="/hajj-guide" element={<HajjGuide />} />
+          <Route path="/halal-check" element={<HalalCheck />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/prayers" element={<PrayerTimes />} />
           <Route path="/prayers/qibla" element={<QiblaDirection />} />
