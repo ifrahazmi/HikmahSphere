@@ -43,3 +43,4 @@ describe('ServerStatusModal', () => {
     expect(screen.queryByText('Server Status Alert')).not.toBeInTheDocument();
   });
 });
+
