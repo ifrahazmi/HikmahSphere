@@ -54,6 +54,8 @@ temp/
 backup/
 
 # Host-machine artifacts outside the project
+.dotnet/
+.gitconfig
 .bash_history
 .bash_logout
 .bashrc

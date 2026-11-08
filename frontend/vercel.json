@@ -1,6 +1,6 @@
 {
   "framework": "create-react-app",
-  "buildCommand": "rm -rf build && CI=false npm run build",
+  "buildCommand": "rm -rf build && NODE_OPTIONS=--openssl-legacy-provider CI=false npm run build",
   "outputDirectory": "build",
   "headers": [
     {
