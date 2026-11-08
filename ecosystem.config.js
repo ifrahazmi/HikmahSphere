@@ -3,7 +3,7 @@ module.exports = {
     {
       name: 'hikmah-backend',
       script: 'dist/index.js',
-      cwd: '/home/ifrahazmi/HikmahSphere/backend',
+      cwd: '/home/ubuntu/backend',
       instances: 1,
       autorestart: true,
       watch: false,
@@ -17,8 +17,8 @@ module.exports = {
         PORT: 5000,
       },
       // Log configuration
-      error_file: '/home/ifrahazmi/.pm2/logs/hikmah-backend-error.log',
-      out_file: '/home/ifrahazmi/.pm2/logs/hikmah-backend-out.log',
+      error_file: '/home/ubuntu/.pm2/logs/hikmah-backend-error.log',
+      out_file: '/home/ubuntu/.pm2/logs/hikmah-backend-out.log',
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
     },
   ],

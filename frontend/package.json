@@ -2,6 +2,9 @@
   "name": "frontend",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.0.0 <=24.x"
+  },
   "proxy": "http://127.0.0.1:5000",
   "dependencies": {
     "@heroicons/react": "^2.0.18",

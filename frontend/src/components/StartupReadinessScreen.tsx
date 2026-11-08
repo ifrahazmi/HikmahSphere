@@ -17,6 +17,8 @@ import type {
   StartupStep,
   StartupStepKey,
 } from '../hooks/useStartupReadiness';
+import PingzoStatusWidget from './PingzoStatusWidget';
+import ServerStatusModal from './ServerStatusModal';
 
 type StartupReadinessScreenProps = {
   state: StartupReadinessState;
@@ -114,6 +116,10 @@ const StartupReadinessScreen: React.FC<StartupReadinessScreenProps> = ({
             <p id="startup-description" className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600 dark:text-slate-300">
               {description}
             </p>
+
+            <div className="mt-4 flex justify-center">
+              <PingzoStatusWidget variant="badge" />
+            </div>
           </div>
 
           <div
@@ -185,6 +191,15 @@ const StartupReadinessScreen: React.FC<StartupReadinessScreenProps> = ({
               This check stops automatically after 30 seconds.
             </p>
           )}
+
+          <ServerStatusModal
+            serverHasIssue={isFailure || state.steps.backend.status === 'error'}
+            issueDescription={
+              state.steps.backend.status === 'error'
+                ? 'HikmahSphere server could not be reached during startup. Real-time updates and incident reports are available on our status page.'
+                : undefined
+            }
+          />
         </section>
       </main>
     </div>

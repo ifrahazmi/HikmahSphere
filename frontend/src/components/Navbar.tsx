@@ -15,6 +15,8 @@ import {
   ArrowRightOnRectangleIcon,
   SunIcon,
   MoonIcon,
+  ShieldCheckIcon,
+  WrenchScrewdriverIcon,
 } from '@heroicons/react/24/outline';
 
 interface NavbarProps {
@@ -32,6 +34,8 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
   const [isPrayerMenuOpen, setIsPrayerMenuOpen] = useState(false);
   const [isQuranMenuOpen, setIsQuranMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isToolsOpen, setIsToolsOpen] = useState(false);
+  const [isMobileToolsOpen, setIsMobileToolsOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const profileMenuRef = useRef<HTMLDivElement>(null);
@@ -59,6 +63,9 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
     setIsPrayerMenuOpen(false);
     setIsQuranMenuOpen(false);
     setIsOpen(false);
+    setIsProfileOpen(false);
+    setIsToolsOpen(false);
+    setIsMobileToolsOpen(false);
   }, [location.pathname]);
 
   // Check if we're on Quran page and get theme from localStorage
@@ -120,6 +127,8 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
     navigate('/');
     setIsOpen(false);
     setIsProfileOpen(false);
+    setIsToolsOpen(false);
+    setIsMobileToolsOpen(false);
   };
 
   // Close profile menu when clicking outside
@@ -127,6 +136,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
     const handleClickOutside = (event: MouseEvent) => {
       if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
         setIsProfileOpen(false);
+        setIsToolsOpen(false);
       }
 
       const clickedInsideDesktopPrayer = prayerDesktopMenuRef.current?.contains(event.target as Node);
@@ -152,6 +162,26 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
     };
   }, [isProfileOpen, isPrayerMenuOpen, isQuranMenuOpen]);
 
+  // Lock body scroll and listen for Escape key when mobile menu is open
+  useEffect(() => {
+    if (isOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+
+      const handleKeyDown = (event: KeyboardEvent) => {
+        if (event.key === 'Escape') {
+          setIsOpen(false);
+        }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+
+      return () => {
+        document.body.style.overflow = originalOverflow;
+        window.removeEventListener('keydown', handleKeyDown);
+      };
+    }
+  }, [isOpen]);
+
   // Check for Super Admin Role
   const isSuperAdmin = hasRole && hasRole(['superadmin']);
   // Super Admins get the full dashboard; Managers get Fund Management only.
@@ -162,9 +192,18 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
 
   return (
     <>
+      {/* Mobile Menu Backdrop: completely blurs the background in mobile mode only */}
+      {isOpen && (
+        <div
+          data-testid="mobile-menu-backdrop"
+          className="xl:hidden fixed inset-0 top-16 bg-black/60 backdrop-blur-2xl z-40 transition-opacity duration-200"
+          onClick={() => setIsOpen(false)}
+          aria-hidden="true"
+        />
+      )}
       <nav className={`shadow-lg fixed top-0 left-0 right-0 z-50 transition-colors duration-200 ${
-      isDark ? 'bg-gray-800' : 'bg-white'
-    }`}>
+        isDark ? 'bg-gray-800/95 backdrop-blur-md' : 'bg-white/95 backdrop-blur-md'
+      }`}>
       <div className="max-w-[90rem] mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center h-16 gap-2 min-w-0">
           {/* Natural width only: a growing brand would starve the centered menu,
@@ -392,18 +431,61 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                         Profile
                       </Link>
 
-                      <Link
-                        to="/salah-tracker"
-                        className={`flex items-center px-4 py-2 text-sm ${
-                          isDark
-                            ? 'text-gray-300 hover:bg-gray-600'
-                            : 'text-gray-700 hover:bg-gray-100'
-                        }`}
-                        onClick={() => setIsProfileOpen(false)}
-                      >
-                        <CalendarDaysIcon className="h-4 w-4 mr-2" />
-                        Muhasabah Tracker
-                      </Link>
+                      {/* Tools dropdown item */}
+                      <div>
+                        <button
+                          type="button"
+                          onClick={() => setIsToolsOpen((prev) => !prev)}
+                          className={`flex items-center justify-between w-full px-4 py-2 text-sm transition-colors duration-150 ${
+                            isDark
+                              ? 'text-gray-300 hover:bg-gray-600'
+                              : 'text-gray-700 hover:bg-gray-100'
+                          }`}
+                          aria-expanded={isToolsOpen}
+                        >
+                          <span className="flex items-center">
+                            <WrenchScrewdriverIcon className="h-4 w-4 mr-2" />
+                            Tools
+                          </span>
+                          <ChevronDownIcon className={`h-3.5 w-3.5 transition-transform duration-200 ${isToolsOpen ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {isToolsOpen && (
+                          <div className={`py-1 space-y-0.5 ${isDark ? 'bg-gray-800/70' : 'bg-gray-50'}`}>
+                            <Link
+                              to="/salah-tracker"
+                              className={`flex items-center pl-8 pr-4 py-1.5 text-xs font-medium transition-colors duration-150 ${
+                                isDark
+                                  ? 'text-gray-300 hover:bg-gray-600/80 hover:text-emerald-400'
+                                  : 'text-gray-700 hover:bg-gray-100 hover:text-emerald-600'
+                              }`}
+                              onClick={() => {
+                                setIsProfileOpen(false);
+                                setIsToolsOpen(false);
+                              }}
+                            >
+                              <CalendarDaysIcon className="h-3.5 w-3.5 mr-2" />
+                              Muhasabah Tracker
+                            </Link>
+
+                            <Link
+                              to="/halal-check"
+                              className={`flex items-center pl-8 pr-4 py-1.5 text-xs font-medium transition-colors duration-150 ${
+                                isDark
+                                  ? 'text-gray-300 hover:bg-gray-600/80 hover:text-emerald-400'
+                                  : 'text-gray-700 hover:bg-gray-100 hover:text-emerald-600'
+                              }`}
+                              onClick={() => {
+                                setIsProfileOpen(false);
+                                setIsToolsOpen(false);
+                              }}
+                            >
+                              <ShieldCheckIcon className="h-3.5 w-3.5 mr-2" />
+                              Halal Check
+                            </Link>
+                          </div>
+                        )}
+                      </div>
                       
                       {/* Dashboard for Super Admin (full) and Manager (funds only) */}
                       {canAccessDashboard && (
@@ -503,22 +585,22 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
       </div>
 
       {isOpen && (
-        <div className="xl:hidden">
-          <div className={`px-2 pt-2 pb-3 space-y-1 sm:px-3 border-t transition-colors duration-200 ${
-            isDark ? 'bg-gray-800 border-gray-700' : 'bg-white'
-          }`}>
+        <div className="xl:hidden max-h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain">
+          <div className={`px-2 pt-1.5 pb-4 space-y-0.5 sm:px-3 border-t transition-colors duration-200 ${
+            isDark ? 'bg-gray-900/95 border-gray-700/80' : 'bg-white/95 border-gray-200/80'
+          } backdrop-blur-2xl shadow-2xl`}>
             {navigation.map((item) => {
               if (item.name === 'Prayer') {
                 return (
                   <div
                     key={item.name}
-                    className="rounded-md border border-emerald-100 bg-emerald-50/40 px-2 py-2"
+                    className="rounded-md border border-emerald-100 bg-emerald-50/40 px-2 py-1"
                     ref={prayerMobileMenuRef}
                   >
                     <button
                       type="button"
                       onClick={() => setIsPrayerMenuOpen((prev) => !prev)}
-                      className={`w-full px-3 py-2 rounded-md text-base font-medium transition-colors duration-200 inline-flex items-center justify-between ${
+                      className={`w-full px-2.5 py-1.5 rounded-md text-sm sm:text-base font-medium transition-colors duration-200 inline-flex items-center justify-between ${
                         item.current
                           ? isDark
                             ? 'bg-emerald-900 text-emerald-300'
@@ -533,10 +615,10 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                     </button>
 
                     {isPrayerMenuOpen && (
-                      <div className="mt-1 space-y-1">
+                      <div className="mt-0.5 space-y-0.5">
                         <button
                           type="button"
-                          className={`block w-full px-4 py-2 rounded-md text-left text-sm font-medium ${
+                          className={`block w-full px-3 py-1.5 rounded-md text-left text-sm font-medium ${
                             isDark
                               ? 'text-gray-300 hover:bg-gray-700 hover:text-emerald-400'
                               : 'text-gray-700 hover:bg-emerald-50 hover:text-emerald-600'
@@ -547,7 +629,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                         </button>
                         <button
                           type="button"
-                          className={`block w-full px-4 py-2 rounded-md text-left text-sm font-medium ${
+                          className={`block w-full px-3 py-1.5 rounded-md text-left text-sm font-medium ${
                             isDark
                               ? 'text-gray-300 hover:bg-gray-700 hover:text-emerald-400'
                               : 'text-gray-700 hover:bg-emerald-50 hover:text-emerald-600'
@@ -558,7 +640,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                         </button>
                         <button
                           type="button"
-                          className={`block w-full px-4 py-2 rounded-md text-left text-sm font-medium ${
+                          className={`block w-full px-3 py-1.5 rounded-md text-left text-sm font-medium ${
                             isDark
                               ? 'text-gray-300 hover:bg-gray-700 hover:text-emerald-400'
                               : 'text-gray-700 hover:bg-emerald-50 hover:text-emerald-600'
@@ -577,13 +659,13 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                 return (
                   <div
                     key={item.name}
-                    className="rounded-md border border-emerald-100 bg-emerald-50/40 px-2 py-2"
+                    className="rounded-md border border-emerald-100 bg-emerald-50/40 px-2 py-1"
                     ref={quranMobileMenuRef}
                   >
                     <button
                       type="button"
                       onClick={() => setIsQuranMenuOpen((prev) => !prev)}
-                      className={`w-full px-3 py-2 rounded-md text-base font-medium transition-colors duration-200 inline-flex items-center justify-between ${
+                      className={`w-full px-2.5 py-1.5 rounded-md text-sm sm:text-base font-medium transition-colors duration-200 inline-flex items-center justify-between ${
                         item.current
                           ? isDark
                             ? 'bg-emerald-900 text-emerald-300'
@@ -598,10 +680,10 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                     </button>
 
                     {isQuranMenuOpen && (
-                      <div className="mt-1 space-y-1">
+                      <div className="mt-0.5 space-y-0.5">
                         <button
                           type="button"
-                          className={`block w-full px-4 py-2 rounded-md text-left text-sm font-medium ${
+                          className={`block w-full px-3 py-1.5 rounded-md text-left text-sm font-medium ${
                             isDark
                               ? 'text-gray-300 hover:bg-gray-700 hover:text-emerald-400'
                               : 'text-gray-700 hover:bg-emerald-50 hover:text-emerald-600'
@@ -612,7 +694,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                         </button>
                         <button
                           type="button"
-                          className={`block w-full px-4 py-2 rounded-md text-left text-sm font-medium ${
+                          className={`block w-full px-3 py-1.5 rounded-md text-left text-sm font-medium ${
                             isDark
                               ? 'text-gray-300 hover:bg-gray-700 hover:text-emerald-400'
                               : 'text-gray-700 hover:bg-emerald-50 hover:text-emerald-600'
@@ -631,7 +713,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                 <Link
                   key={item.name}
                   to={item.href}
-                  className={`block px-3 py-2 rounded-md text-base font-medium transition-colors duration-200 ${
+                  className={`block px-3 py-1.5 rounded-md text-sm sm:text-base font-medium transition-colors duration-200 ${
                     item.current
                       ? isDark
                         ? 'bg-emerald-900 text-emerald-300'
@@ -647,22 +729,22 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
               );
             })}
 
-            <div className={`pt-4 pb-3 border-t transition-colors duration-200 ${
+            <div className={`pt-2.5 pb-2 border-t transition-colors duration-200 ${
               isDark ? 'border-gray-700' : 'border-gray-200'
             }`}>
               {user ? (
                 <>
-                  <div className="px-3 py-2">
-                    <div className={`text-base font-medium ${
+                  <div className="px-3 py-1">
+                    <div className={`text-sm sm:text-base font-medium ${
                       isDark ? 'text-gray-200' : 'text-gray-800'
                     }`}>{user.name}</div>
-                    <div className={`text-sm ${
+                    <div className={`text-xs sm:text-sm ${
                       isDark ? 'text-gray-400' : 'text-gray-500'
                     }`}>{user.email}</div>
                   </div>
                   <Link
                     to="/profile"
-                    className={`block px-3 py-2 text-base font-medium transition-colors duration-200 ${
+                    className={`block px-3 py-1.5 text-sm sm:text-base font-medium rounded-md transition-colors duration-200 ${
                       isDark
                         ? 'text-gray-300 hover:text-emerald-400 hover:bg-gray-700'
                         : 'text-gray-700 hover:text-emerald-600 hover:bg-emerald-50'
@@ -671,21 +753,65 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                   >
                     Profile
                   </Link>
-                  <Link
-                    to="/salah-tracker"
-                    className={`block px-3 py-2 text-base font-medium transition-colors duration-200 ${
-                      isDark
-                        ? 'text-gray-300 hover:text-emerald-400 hover:bg-gray-700'
-                        : 'text-gray-700 hover:text-emerald-600 hover:bg-emerald-50'
-                    }`}
-                    onClick={() => setIsOpen(false)}
-                  >
-                    Muhasabah Tracker
-                  </Link>
+
+                  {/* Mobile Tools Collapsible */}
+                  <div className="rounded-md">
+                    <button
+                      type="button"
+                      onClick={() => setIsMobileToolsOpen((prev) => !prev)}
+                      className={`w-full px-3 py-1.5 rounded-md text-sm sm:text-base font-medium transition-colors duration-200 inline-flex items-center justify-between ${
+                        isDark
+                          ? 'text-gray-300 hover:text-emerald-400 hover:bg-gray-700'
+                          : 'text-gray-700 hover:text-emerald-600 hover:bg-emerald-50'
+                      }`}
+                      aria-expanded={isMobileToolsOpen}
+                    >
+                      <span className="inline-flex items-center">
+                        <WrenchScrewdriverIcon className="h-5 w-5 mr-2" />
+                        Tools
+                      </span>
+                      <ChevronDownIcon className={`h-4 w-4 transition-transform duration-200 ${isMobileToolsOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {isMobileToolsOpen && (
+                      <div className="mt-0.5 pl-3 space-y-0.5">
+                        <Link
+                          to="/salah-tracker"
+                          className={`flex items-center px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors duration-200 ${
+                            isDark
+                              ? 'text-gray-300 hover:text-emerald-400 hover:bg-gray-700'
+                              : 'text-gray-700 hover:text-emerald-600 hover:bg-emerald-50'
+                          }`}
+                          onClick={() => {
+                            setIsOpen(false);
+                            setIsMobileToolsOpen(false);
+                          }}
+                        >
+                          <CalendarDaysIcon className="h-4 w-4 mr-2" />
+                          Muhasabah Tracker
+                        </Link>
+                        <Link
+                          to="/halal-check"
+                          className={`flex items-center px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors duration-200 ${
+                            isDark
+                              ? 'text-gray-300 hover:text-emerald-400 hover:bg-gray-700'
+                              : 'text-gray-700 hover:text-emerald-600 hover:bg-emerald-50'
+                          }`}
+                          onClick={() => {
+                            setIsOpen(false);
+                            setIsMobileToolsOpen(false);
+                          }}
+                        >
+                          <ShieldCheckIcon className="h-4 w-4 mr-2" />
+                          Halal Check
+                        </Link>
+                      </div>
+                    )}
+                  </div>
                   {canAccessDashboard && (
                     <Link
                         to="/dashboard"
-                        className={`block px-3 py-2 text-base font-medium transition-colors duration-200 ${
+                        className={`block px-3 py-1.5 text-sm sm:text-base font-medium rounded-md transition-colors duration-200 ${
                           isDark
                             ? 'text-gray-300 hover:text-emerald-400 hover:bg-gray-700'
                             : 'text-gray-700 hover:text-emerald-600 hover:bg-emerald-50'
@@ -697,12 +823,13 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                   )}
                   <button
                     onClick={handleLogout}
-                    className={`block w-full text-left px-3 py-2 text-base font-medium transition-colors duration-200 ${
+                    className={`flex items-center w-full px-3 py-1.5 text-sm sm:text-base font-medium rounded-md transition-colors duration-200 ${
                       isDark
                         ? 'text-gray-300 hover:text-emerald-400 hover:bg-gray-700'
                         : 'text-gray-700 hover:text-emerald-600 hover:bg-emerald-50'
                     }`}
                   >
+                    <ArrowRightOnRectangleIcon className="h-5 w-5 mr-2" />
                     Sign out
                   </button>
                 </>

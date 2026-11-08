@@ -113,6 +113,8 @@ Edit `.env` at minimum:
 | `REFRESH_TOKEN_SECRET` | Long random string |
 | `REDIS_HOST` / `REDIS_PORT` | `localhost` / `6379` |
 | `ISLAMIC_API_KEY` | If required by your prayer/nisab provider |
+| `HALALCHECK_RAPIDAPI_KEY` | RapidAPI key for HalalCheck barcode verification; optional, free tier available |
+| `WEATHER_CACHE_TTL` / `WEATHER_STALE_CACHE_TTL` | Fresh weather cache / stale fallback window in minutes; defaults to `30` / `360` |
 | `REACT_APP_API_URL` | Leave as `/api` for local proxy, or full backend URL |
 | `REACT_APP_GOOGLE_MAPS_API_KEY` | Needed for Mosque Finder |
 | `REACT_APP_FIREBASE_VAPID_KEY` | Required for web push; set in Vercel and redeploy |

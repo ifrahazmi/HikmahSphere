@@ -25,6 +25,7 @@ import NotificationPermissionPrompt from './components/NotificationPermissionPro
 import PrayerAdhanScheduler from './components/PrayerAdhanScheduler';
 import AdhanPlayPrompt from './components/AdhanPlayPrompt';
 import StartupReadinessScreen from './components/StartupReadinessScreen';
+import ServerStatusModal from './components/ServerStatusModal';
 import ForcePasswordChangeModal from './components/ForcePasswordChangeModal';
 import ScrollManager from './components/ScrollManager';
 
@@ -48,6 +49,8 @@ import About from './pages/About';
 import Contact from './pages/Contact'; // Import Contact page
 import Maktab from './pages/Maktab';
 import HajjGuide from './pages/HajjGuide';
+import HalalCheck from './pages/HalalCheck';
+import SystemStatus from './pages/SystemStatus';
 
 // Hooks
 import { useAuth, AuthProvider } from './hooks/useAuth';
@@ -350,6 +353,14 @@ const AppContent: React.FC<{ startupReadiness: StartupReadinessController }> = (
           Reconnecting to the server…
         </div>
       )}
+      <ServerStatusModal
+        serverHasIssue={sessionStatus === 'reconnecting'}
+        issueDescription={
+          sessionStatus === 'reconnecting'
+            ? 'We are having trouble reaching the HikmahSphere server. Real-time updates and incident reports are available on our status page.'
+            : undefined
+        }
+      />
       {/* Navigation */}
       <Navbar user={user} />
 
@@ -363,6 +374,8 @@ const AppContent: React.FC<{ startupReadiness: StartupReadinessController }> = (
           <Route path="/maktab" element={<Maktab />} />
           <Route path="/contact" element={<Contact />} /> {/* Add Contact Route */}
           <Route path="/hajj-guide" element={<HajjGuide />} />
+          <Route path="/halal-check" element={<HalalCheck />} />
+          <Route path="/status" element={<SystemStatus />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/prayers" element={<PrayerTimes />} />
           <Route path="/prayers/qibla" element={<QiblaDirection />} />

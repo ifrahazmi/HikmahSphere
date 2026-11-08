@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "🕌 HikmahSphere - Modern Digital Platform for Global Muslim Community. Islamic app with Prayer Times, Quran Reader, Zakat Calculator, Community Features & AI Assistant. Built with React 18 + TypeScript + MongoDB.",
   "main": "index.js",
+  "engines": {
+    "node": ">=20.0.0 <=24.x"
+  },
   "scripts": {
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "cd backend && npm run dev",

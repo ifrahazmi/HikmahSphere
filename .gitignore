@@ -53,6 +53,29 @@ tmp/
 temp/
 backup/
 
+# Host-machine artifacts outside the project
+.dotnet/
+.gitconfig
+.bash_history
+.bash_logout
+.bashrc
+.cache/
+.config/
+.copilot/
+.lesshst
+.local/
+.npm/
+.pm2/
+.profile
+.ssh/
+.sudo_as_admin_successful
+.vscode-server/
+.wget-hsts
+Hikmah-v1.2.zip
+
+# Nested working copy and generated secrets/artifacts
+Hikmahsphere/
+
 # Deployment backups & env backups (keep on disk, never commit)
 db-backup/
 *.env.backup

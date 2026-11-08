@@ -26,8 +26,9 @@ import { startPrayerNotificationScheduler, stopPrayerNotificationScheduler } fro
 import { startPrayerTimesCacheScheduler, stopPrayerTimesCacheScheduler } from './services/prayerTimesCacheScheduler';
 import { startDhikrReminderScheduler, stopDhikrReminderScheduler } from './services/dhikrReminderScheduler';
 import { startMuhasabaReminderScheduler, stopMuhasabaReminderScheduler } from './services/muhasabaReminderScheduler';
-import { logZohoMailStatus } from './services/zohoMail';
-import { logObjectStorageStatus } from './services/objectStorage';
+import { isZohoMailConfigured, logZohoMailStatus } from './services/zohoMail';
+import { isR2Configured, logObjectStorageStatus } from './services/objectStorage';
+import { checkHalalApiKeyStatus } from './services/halalVerifier';
 
 // Import routes
 import authRoutes from './routes/auth';
@@ -45,6 +46,7 @@ import salahTrackerRoutes from './routes/salahTracker';
 import hajjGuideRoutes from './routes/hajjGuide';
 import gamesRoutes from './routes/games';
 import userRoutes from './routes/users';
+import halalRoutes from './routes/halal';
 
 // Load environment variables
 // Use __dirname to resolve paths correctly regardless of whether running from src/ or dist/
@@ -259,20 +261,41 @@ const quranLimiter = rateLimit({
 // CORS configuration — honor CORS_ORIGIN when set (comma-separated allowlist).
 // When unset, reflect the request origin (local Docker / IDX development).
 const corsOriginEnv = process.env.CORS_ORIGIN?.trim();
-const allowedOrigins = corsOriginEnv
+const configuredOrigins = corsOriginEnv
   ? corsOriginEnv.split(',').map((origin) => origin.trim()).filter(Boolean)
   : [];
 
+const isAllowedOrigin = (origin: string | undefined): boolean => {
+  if (!origin) return true;
+  if (configuredOrigins.length === 0) return true;
+  if (configuredOrigins.includes(origin)) return true;
+  // Local development
+  if (/^http:\/\/localhost(:\d+)?$/i.test(origin) || /^http:\/\/127\.0\.0\.1(:\d+)?$/i.test(origin)) {
+    return true;
+  }
+  // All Vercel deployments (production, staging, preview branches)
+  if (/^https:\/\/([a-z0-9_-]+\.)*vercel\.app$/i.test(origin)) {
+    return true;
+  }
+  // HikmahSphere official domains
+  if (/^https:\/\/([a-z0-9_-]+\.)*hikmahsphere\.(site|com)$/i.test(origin)) {
+    return true;
+  }
+  return false;
+};
+
+// Permissive CORS for public health inspection so monitoring and status checks are never blocked
+const publicHealthCors = cors({ origin: '*' });
+app.options(['/health', '/api/health', '/health/ready', '/api/health/ready', '/health/keepalive'], publicHealthCors);
+
 app.use(cors({
-  origin: allowedOrigins.length > 0
-    ? (origin, callback) => {
-        if (!origin || allowedOrigins.includes(origin)) {
-          callback(null, true);
-          return;
-        }
-        callback(null, false);
-      }
-    : true,
+  origin: (origin, callback) => {
+    if (isAllowedOrigin(origin)) {
+      callback(null, true);
+      return;
+    }
+    callback(null, false);
+  },
   credentials: true,
 }));
 
@@ -341,7 +364,7 @@ app.get(['/api', '/api/'], (req, res) => {
 });
 
 // Health check endpoint (supports both /health and /api/health)
-app.get(['/health', '/api/health'], async (req, res) => {
+app.get(['/health', '/api/health'], publicHealthCors, async (req, res) => {
   let redisStatus = 'disconnected';
   try {
       if (redisClient.isOpen) {
@@ -352,14 +375,46 @@ app.get(['/health', '/api/health'], async (req, res) => {
       redisStatus = 'error';
   }
 
+  const halalStatus = await checkHalalApiKeyStatus();
+  const r2Configured = isR2Configured();
+  const zohoConfigured = isZohoMailConfigured();
+  const tafsirConfigured = Boolean(process.env.TAFSIR_API_URL?.trim() || process.env.TAFSIR_V2_API_URL?.trim());
+  const islamicApiConfigured = Boolean(process.env.ISLAMIC_API_KEY?.trim());
+
   res.status(200).json({
     status: 'success',
     message: 'HikmahSphere API is running! 🕌',
     timestamp: new Date().toISOString(),
     version: '1.0.0',
     services: {
+        backend: 'operational',
         database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
-        redis: redisStatus
+        redis: redisStatus,
+        r2Storage: {
+          configured: r2Configured,
+          status: r2Configured ? 'operational' : 'not_configured',
+          publicBucket: process.env.R2_PUBLIC_BUCKET || 'hikmahsphere-uploads',
+          endpoint: 'Cloudflare R2',
+        },
+        zohoMail: {
+          configured: zohoConfigured,
+          status: zohoConfigured ? 'operational' : 'not_configured',
+        },
+        tafsirApi: {
+          configured: tafsirConfigured,
+          status: tafsirConfigured ? 'operational' : 'not_configured',
+        },
+        islamicApi: {
+          configured: islamicApiConfigured,
+          status: islamicApiConfigured ? 'operational' : 'not_configured',
+        },
+        halalCheckRapidApi: {
+          configured: halalStatus.configured,
+          status: halalStatus.status,
+          working: halalStatus.working,
+          message: halalStatus.message,
+          keyMasked: halalStatus.keyMasked,
+        }
     }
   });
 });
@@ -459,6 +514,7 @@ app.use('/api/salah-tracker', salahTrackerRoutes);
 app.use('/api/hajj-guide', hajjGuideRoutes);
 app.use('/api/games', gamesRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/halal', halalRoutes);
 
 // Admin Routes for User Management (Restricted to Super Admin)
 // Get All Users
@@ -728,6 +784,15 @@ const startServer = async () => {
       startPrayerTimesCacheScheduler();
       startDhikrReminderScheduler();
       startMuhasabaReminderScheduler();
+      void checkHalalApiKeyStatus().then((status) => {
+        if (!status.configured) {
+          console.log('ℹ️  [HalalCheck RapidAPI] Key not configured in environment (HALALCHECK_RAPIDAPI_KEY)');
+        } else if (status.working) {
+          console.log(`✅ [HalalCheck RapidAPI] Key configured (${status.keyMasked}) & verified working`);
+        } else {
+          console.warn(`⚠️  [HalalCheck RapidAPI] Key configured (${status.keyMasked}) but status is "${status.status}": ${status.message}`);
+        }
+      });
     });
 
     server.on('error', (error: NodeJS.ErrnoException) => {

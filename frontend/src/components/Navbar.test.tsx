@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Navbar from './Navbar';
 
@@ -72,5 +72,85 @@ describe('Navbar layout', () => {
 
     const desktopActions = screen.getAllByLabelText('Notifications')[0]?.parentElement;
     expect(desktopActions).toHaveClass('shrink-0', 'z-20');
+  });
+
+  it('groups Muhasabah Tracker and Halal Check under Tools in desktop profile dropdown', () => {
+    renderNavbar();
+
+    // Open desktop profile dropdown
+    const profileButton = screen.getByRole('button', { name: /User/i });
+    fireEvent.click(profileButton);
+
+    expect(screen.getByRole('link', { name: /^Profile$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Tools$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Sign out$/i })).toBeInTheDocument();
+
+    // Tools is collapsed by default to save vertical space
+    expect(screen.queryByRole('link', { name: /Muhasabah Tracker/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Halal Check/i })).not.toBeInTheDocument();
+
+    // Expand Tools
+    fireEvent.click(screen.getByRole('button', { name: /^Tools$/i }));
+
+    expect(screen.getByRole('link', { name: /Muhasabah Tracker/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Halal Check/i })).toBeInTheDocument();
+  });
+
+  it('provides scrollable container and groups Tools on mobile so Sign out is accessible', () => {
+    const { container } = renderNavbar();
+
+    // Open mobile hamburger menu
+    const menuButton = screen.getByLabelText('Open navigation menu');
+    fireEvent.click(menuButton);
+
+    // Verify mobile drawer has scrollable viewport-height constraint
+    const mobileDrawer = container.querySelector('.xl\\:hidden.max-h-\\[calc\\(100dvh-4rem\\)\\]');
+    expect(mobileDrawer).toBeInTheDocument();
+    expect(mobileDrawer).toHaveClass('overflow-y-auto');
+
+    // Sign out button must be in document and accessible
+    const signOutButtons = screen.getAllByRole('button', { name: /Sign out/i });
+    expect(signOutButtons.length).toBeGreaterThanOrEqual(1);
+
+    // Mobile Tools accordion is present
+    const toolsButtons = screen.getAllByRole('button', { name: /Tools/i });
+    const mobileToolsButton = toolsButtons[toolsButtons.length - 1];
+    expect(mobileToolsButton).toBeInTheDocument();
+
+    // Expand Tools on mobile
+    fireEvent.click(mobileToolsButton);
+
+    expect(screen.getByRole('link', { name: /Muhasabah Tracker/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Halal Check/i })).toBeInTheDocument();
+  });
+
+  it('renders a completely blurred backdrop in mobile mode only when menu is open and dismisses on click or Escape', () => {
+    const { container } = renderNavbar();
+
+    // Initially, backdrop is not present
+    expect(screen.queryByTestId('mobile-menu-backdrop')).not.toBeInTheDocument();
+
+    // Open mobile menu
+    fireEvent.click(screen.getByLabelText('Open navigation menu'));
+
+    // Backdrop blur overlay is present with mobile constraint and deep blur
+    const backdrop = screen.getByTestId('mobile-menu-backdrop');
+    expect(backdrop).toBeInTheDocument();
+    expect(backdrop).toHaveClass('xl:hidden', 'backdrop-blur-2xl', 'bg-black/60', 'fixed', 'inset-0');
+
+    // Drawer container also has backdrop-blur-2xl
+    const mobileDrawer = container.querySelector('.xl\\:hidden.max-h-\\[calc\\(100dvh-4rem\\)\\]');
+    const drawerInner = mobileDrawer?.firstElementChild;
+    expect(drawerInner).toHaveClass('backdrop-blur-2xl');
+
+    // Clicking the backdrop closes the menu
+    fireEvent.click(backdrop);
+    expect(screen.queryByTestId('mobile-menu-backdrop')).not.toBeInTheDocument();
+
+    // Reopen and test Escape key closes the menu
+    fireEvent.click(screen.getByLabelText('Open navigation menu'));
+    expect(screen.getByTestId('mobile-menu-backdrop')).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByTestId('mobile-menu-backdrop')).not.toBeInTheDocument();
   });
 });
