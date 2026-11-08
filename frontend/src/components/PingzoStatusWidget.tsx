@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { Link, useInRouterContext } from 'react-router-dom';
+import { checkLiveBackendHealth } from '../utils/backendHealth';
 
 export type PingzoStatus = 'green' | 'yellow' | 'maintenance' | 'red' | 'unavailable' | 'loading';
 
@@ -17,7 +19,7 @@ export interface PingzoStatusWidgetProps {
 }
 
 const DEFAULT_SITE_ID = 'cmv41n3wg018uk206v73c9fy9';
-const DEFAULT_STATUS_URL = 'https://pingzoapp.vercel.app/status/ifrahuddin-azmi';
+const DEFAULT_STATUS_URL = '/status';
 
 export const PingzoStatusWidget: React.FC<PingzoStatusWidgetProps> = ({
   siteId = DEFAULT_SITE_ID,
@@ -37,24 +39,57 @@ export const PingzoStatusWidget: React.FC<PingzoStatusWidgetProps> = ({
 
     const fetchStatus = async () => {
       try {
-        const response = await fetch(
-          `https://www.pingzoapp.com/api/widget-status?siteId=${encodeURIComponent(siteId)}`,
-          {
-            headers: { Accept: 'application/json' },
-          }
-        );
+        // 1. Direct verification against https://hikmahsphere-backend.onrender.com/health
+        const liveHealth = await checkLiveBackendHealth();
 
-        if (!response.ok) {
-          throw new Error(`Pingzo returned HTTP ${response.status}`);
+        if (liveHealth.status === 'healthy') {
+          if (active) {
+            setData({
+              status: 'green',
+              statusUrl,
+              siteId,
+            });
+            onStatusChange?.('green');
+          }
+          return;
         }
 
-        const json = await response.json();
-        if (active && json && json.status) {
-          const resolvedStatus: PingzoStatus = json.status;
-          const resolvedUrl = json.statusUrl || statusUrl;
+        if (liveHealth.status === 'degraded') {
+          if (active) {
+            setData({
+              status: 'yellow',
+              statusUrl,
+              siteId,
+            });
+            onStatusChange?.('yellow');
+          }
+          return;
+        }
+
+        // 2. If direct health check is down or unreachable, check Pingzo as fallback metadata
+        let resolvedStatus: PingzoStatus = 'red';
+        try {
+          const response = await fetch(
+            `https://www.pingzoapp.com/api/widget-status?siteId=${encodeURIComponent(siteId)}`,
+            {
+              headers: { Accept: 'application/json' },
+            }
+          );
+
+          if (response.ok) {
+            const json = await response.json();
+            if (json && json.status) {
+              resolvedStatus = json.status;
+            }
+          }
+        } catch {
+          resolvedStatus = 'unavailable';
+        }
+
+        if (active) {
           setData({
             status: resolvedStatus,
-            statusUrl: resolvedUrl,
+            statusUrl,
             siteId,
           });
           onStatusChange?.(resolvedStatus);
@@ -131,66 +166,85 @@ export const PingzoStatusWidget: React.FC<PingzoStatusWidgetProps> = ({
     };
   }
 
+  const inRouter = useInRouterContext();
+  const isInternalUrl = resolvedUrl.startsWith('/');
+  const shouldUseLink = inRouter && isInternalUrl;
+
+  const badgeContent = (
+    <span className="inline-flex items-center gap-2">
+      <span className="relative flex h-2 w-2">
+        {colorClasses.pulse && (
+          <span
+            className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${colorClasses.dot}`}
+          />
+        )}
+        <span className={`relative inline-flex rounded-full h-2 w-2 ${colorClasses.dot}`} />
+      </span>
+      <span>{colorClasses.label}</span>
+    </span>
+  );
+
+  const dotContent = (
+    <span className="inline-flex items-center gap-2">
+      <span className="relative flex h-2.5 w-2.5">
+        {colorClasses.pulse && (
+          <span
+            className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${colorClasses.dot}`}
+          />
+        )}
+        <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${colorClasses.dot}`} />
+      </span>
+      <span className="text-slate-700 dark:text-slate-200">{colorClasses.label}</span>
+    </span>
+  );
+
   if (variant === 'dot') {
     return (
       <div className={`inline-flex items-center gap-2 text-xs font-medium ${className}`}>
-        <a
-          href={resolvedUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 hover:opacity-80 transition-opacity"
-          title="View live server status on Pingzo"
-        >
-          <span className="relative flex h-2.5 w-2.5">
-            {colorClasses.pulse && (
-              <span
-                className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${colorClasses.dot}`}
-              />
-            )}
-            <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${colorClasses.dot}`} />
-          </span>
-          <span className="text-slate-700 dark:text-slate-200">{colorClasses.label}</span>
-        </a>
-        <span className="text-slate-300 dark:text-slate-600">·</span>
-        <a
-          href="https://www.pingzoapp.com"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-[11px] text-slate-400 hover:text-emerald-600 dark:text-slate-500 dark:hover:text-emerald-400 transition-colors"
-        >
-          by <strong className="font-semibold text-slate-600 dark:text-slate-400">Pingzo</strong>
-        </a>
+        {shouldUseLink ? (
+          <Link
+            to={resolvedUrl}
+            className="inline-flex items-center gap-2 hover:opacity-80 transition-opacity"
+            title="View live HikmahSphere systems status"
+          >
+            {dotContent}
+          </Link>
+        ) : (
+          <a
+            href={resolvedUrl}
+            target={isInternalUrl ? undefined : '_blank'}
+            rel={isInternalUrl ? undefined : 'noopener noreferrer'}
+            className="inline-flex items-center gap-2 hover:opacity-80 transition-opacity"
+            title="View live HikmahSphere systems status"
+          >
+            {dotContent}
+          </a>
+        )}
       </div>
     );
   }
 
   return (
     <div className={`inline-flex items-center gap-2 ${className}`}>
-      <a
-        href={resolvedUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold tracking-wide transition-all hover:scale-[1.02] active:scale-[0.98] ${colorClasses.bg}`}
-        title="View live server status on Pingzo"
-      >
-        <span className="relative flex h-2 w-2">
-          {colorClasses.pulse && (
-            <span
-              className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${colorClasses.dot}`}
-            />
-          )}
-          <span className={`relative inline-flex rounded-full h-2 w-2 ${colorClasses.dot}`} />
-        </span>
-        <span>{colorClasses.label}</span>
-      </a>
-      <a
-        href="https://www.pingzoapp.com"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-[11px] text-slate-400 hover:text-emerald-600 dark:text-slate-500 dark:hover:text-emerald-400 transition-colors hidden sm:inline"
-      >
-        by <strong className="font-semibold text-slate-600 dark:text-slate-400">Pingzo</strong>
-      </a>
+      {shouldUseLink ? (
+        <Link
+          to={resolvedUrl}
+          className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold tracking-wide transition-all hover:scale-[1.02] active:scale-[0.98] ${colorClasses.bg}`}
+          title="View live HikmahSphere systems status"
+        >
+          {badgeContent}
+        </Link>
+      ) : (
+        <a
+          href={resolvedUrl}
+          target={isInternalUrl ? undefined : '_blank'}
+          rel={isInternalUrl ? undefined : 'noopener noreferrer'}
+          className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold tracking-wide transition-all hover:scale-[1.02] active:scale-[0.98] ${colorClasses.bg}`}
+          title="View live HikmahSphere systems status"
+        >
+          {badgeContent}
+        </a>
+      )}
     </div>
   );
 };

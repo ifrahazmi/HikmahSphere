@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { Link, useInRouterContext } from 'react-router-dom';
 import { AlertCircle, ExternalLink, X } from 'lucide-react';
 import PingzoStatusWidget, { PingzoStatus } from './PingzoStatusWidget';
+import { checkLiveBackendHealth } from '../utils/backendHealth';
 
 export interface ServerStatusModalProps {
   forceOpen?: boolean;
@@ -38,7 +40,7 @@ export const ServerStatusModal: React.FC<ServerStatusModalProps> = ({
     onClose?.();
   }, [onClose]);
 
-  // Determine if popup should appear
+  // Determine if popup should appear with direct health verification
   useEffect(() => {
     if (forceOpen) {
       setIsOpen(true);
@@ -49,14 +51,51 @@ export const ServerStatusModal: React.FC<ServerStatusModalProps> = ({
       return;
     }
 
-    // Pingzo indicates issue or local probe indicates issue
-    const pingzoHasIssue =
-      pingzoStatus !== 'loading' &&
-      pingzoStatus !== 'green';
+    let active = true;
 
-    if (pingzoHasIssue || serverHasIssue) {
-      setIsOpen(true);
-    }
+    const evaluateIssueState = async () => {
+      // If serverHasIssue is explicitly true (e.g. startup timeout or reconnecting)
+      if (serverHasIssue) {
+        // Double check against real backend url
+        try {
+          const liveCheck = await checkLiveBackendHealth();
+          if (liveCheck.status === 'healthy') {
+            // Backend is actually healthy! Do not show false outage.
+            return;
+          }
+        } catch {
+          // Live check failed - confirmed issue
+        }
+
+        if (active) {
+          setIsOpen(true);
+        }
+        return;
+      }
+
+      // If pingzoStatus reported non-green
+      if (pingzoStatus !== 'loading' && pingzoStatus !== 'green') {
+        try {
+          const liveCheck = await checkLiveBackendHealth();
+          if (liveCheck.status === 'healthy') {
+            // Real backend is healthy, override stale monitor
+            return;
+          }
+        } catch {
+          // Confirmed issue
+        }
+
+        if (active) {
+          setIsOpen(true);
+        }
+      }
+    };
+
+    void evaluateIssueState();
+
+    return () => {
+      active = false;
+    };
   }, [forceOpen, serverHasIssue, pingzoStatus, isDismissedThisVisit]);
 
   // Close on ESC key for Windows/Desktop
@@ -70,9 +109,11 @@ export const ServerStatusModal: React.FC<ServerStatusModalProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, handleDismiss]);
 
+  const inRouter = useInRouterContext();
+
   return (
     <>
-      {/* Invisible listener widget to continuously monitor Pingzo status */}
+      {/* Invisible listener widget to continuously monitor live status */}
       <div className="sr-only" aria-hidden="true">
         <PingzoStatusWidget onStatusChange={setPingzoStatus} />
       </div>
@@ -95,7 +136,7 @@ export const ServerStatusModal: React.FC<ServerStatusModalProps> = ({
                 </div>
                 <div>
                   <span className="text-[11px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">
-                    System Notice
+                    HikmahSphere Notice
                   </span>
                   <h3 id="server-status-title" className="text-lg font-bold text-slate-900 dark:text-white">
                     Server Status Alert
@@ -114,7 +155,7 @@ export const ServerStatusModal: React.FC<ServerStatusModalProps> = ({
 
             <p className="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
               {issueDescription ||
-                'The server is currently waking up or experiencing an issue. Real-time updates and incident reports are available on our status page.'}
+                'The HikmahSphere server is currently waking up or experiencing an issue. Real-time updates and incident reports are available on our status page.'}
             </p>
 
             <div className="mt-4 flex flex-col items-center justify-center rounded-2xl border border-slate-100 bg-slate-50/80 p-3.5 dark:border-slate-800 dark:bg-slate-800/50">
@@ -125,15 +166,25 @@ export const ServerStatusModal: React.FC<ServerStatusModalProps> = ({
             </div>
 
             <div className="mt-5 flex flex-col sm:flex-row items-center gap-2.5">
-              <a
-                href="https://pingzoapp.vercel.app/status/ifrahuddin-azmi"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-emerald-700/20 hover:bg-emerald-700 active:scale-[0.99] transition"
-              >
-                <span>View Status Page</span>
-                <ExternalLink className="h-4 w-4" />
-              </a>
+              {inRouter ? (
+                <Link
+                  to="/status"
+                  onClick={handleDismiss}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-emerald-700/20 hover:bg-emerald-700 active:scale-[0.99] transition"
+                >
+                  <span>View Status Page</span>
+                  <ExternalLink className="h-4 w-4" />
+                </Link>
+              ) : (
+                <a
+                  href="/status"
+                  onClick={handleDismiss}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-emerald-700/20 hover:bg-emerald-700 active:scale-[0.99] transition"
+                >
+                  <span>View Status Page</span>
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              )}
               <button
                 type="button"
                 onClick={handleDismiss}

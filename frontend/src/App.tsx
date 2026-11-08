@@ -50,6 +50,7 @@ import Contact from './pages/Contact'; // Import Contact page
 import Maktab from './pages/Maktab';
 import HajjGuide from './pages/HajjGuide';
 import HalalCheck from './pages/HalalCheck';
+import SystemStatus from './pages/SystemStatus';
 
 // Hooks
 import { useAuth, AuthProvider } from './hooks/useAuth';
@@ -374,6 +375,7 @@ const AppContent: React.FC<{ startupReadiness: StartupReadinessController }> = (
           <Route path="/contact" element={<Contact />} /> {/* Add Contact Route */}
           <Route path="/hajj-guide" element={<HajjGuide />} />
           <Route path="/halal-check" element={<HalalCheck />} />
+          <Route path="/status" element={<SystemStatus />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/prayers" element={<PrayerTimes />} />
           <Route path="/prayers/qibla" element={<QiblaDirection />} />
