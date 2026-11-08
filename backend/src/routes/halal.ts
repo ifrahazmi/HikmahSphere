@@ -8,7 +8,7 @@ router.get('/status', async (_req: Request, res: Response) => {
   try {
     const status = await checkHalalApiKeyStatus();
     return res.json({ status: 'success', data: status });
-  } catch (error) {
+  } catch {
     return res.status(500).json({
       status: 'error',
       message: 'Failed to retrieve HalalCheck RapidAPI status',
