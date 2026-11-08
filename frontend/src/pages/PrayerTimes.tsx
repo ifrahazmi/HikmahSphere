@@ -27,6 +27,16 @@ import MosqueFinder from '../components/mosques/MosqueFinder';
 import { API_URL } from '../config';
 import { IslamicReminder, getCurrentPrayerWindow, selectReminder } from '../data/islamicReminders';
 import { writeTodayAdhanTimes } from '../utils/adhanStorage';
+import toast from 'react-hot-toast';
+import {
+  getStoredUserLocation,
+  saveStoredUserLocation,
+  checkLocationAccess,
+  shouldCheckLocationAccess,
+  recordLocationCheck,
+  TWO_HOURS_MS,
+  UserLocation,
+} from '../utils/locationManager';
 
 interface HijriDate {
   day: string;
@@ -584,7 +594,7 @@ const PrayerTimes: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [location, setLocation] = useState<{lat: number; lon: number; city?: string; country?: string} | null>(null);
+  const [location, setLocation] = useState<UserLocation | null>(null);
   const [detectedCountry, setDetectedCountry] = useState<string>('');
   const [cityQuery, setCityQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -871,6 +881,16 @@ const PrayerTimes: React.FC = () => {
     const bootstrapLocation = async () => {
       setLoading(true);
 
+      // Fast-load previously saved city or coordinates from local storage
+      const stored = getStoredUserLocation();
+      if (stored && Number.isFinite(stored.lat) && Number.isFinite(stored.lon)) {
+        allowDurableClientCacheRef.current = true;
+        setLocationPermissionNeeded(false);
+        setLocation(stored);
+        if (stored.city) setCityQuery(stored.city);
+        if (stored.country) setDetectedCountry(stored.country);
+      }
+
       // Logged-in: prefer saved DB location so we skip GPS and load from cache.
       if (user?.id) {
         const token = localStorage.getItem('token');
@@ -890,12 +910,15 @@ const PrayerTimes: React.FC = () => {
               ) {
                 allowDurableClientCacheRef.current = true;
                 setLocationPermissionNeeded(false);
-                setLocation({
+                const dbLoc: UserLocation = {
                   lat: Number(saved.latitude),
                   lon: Number(saved.longitude),
                   city: saved.city,
                   country: saved.country,
-                });
+                  mode: 'custom',
+                };
+                setLocation(dbLoc);
+                saveStoredUserLocation(dbLoc);
                 if (saved.city) setCityQuery(saved.city);
                 if (saved.country) setDetectedCountry(saved.country);
                 return;
@@ -907,6 +930,11 @@ const PrayerTimes: React.FC = () => {
         }
 
         if (cancelled) return;
+
+        // If local storage already had a valid location, use it
+        if (stored && Number.isFinite(stored.lat) && Number.isFinite(stored.lon)) {
+          return;
+        }
 
         // No saved location — ask every visit until granted.
         if (!navigator.geolocation) {
@@ -923,8 +951,18 @@ const PrayerTimes: React.FC = () => {
             const lon = position.coords.longitude;
             allowDurableClientCacheRef.current = true;
             setLocationPermissionNeeded(false);
-            setLocation({ lat, lon });
             const details = await resolveLocationDetails(lat, lon);
+            const newGpsLoc: UserLocation = {
+              lat,
+              lon,
+              city: details.city,
+              country: details.country,
+              mode: 'gps',
+              updatedAt: Date.now(),
+            };
+            setLocation(newGpsLoc);
+            saveStoredUserLocation(newGpsLoc);
+            recordLocationCheck();
             await persistUserLocation(lat, lon, details.city, details.country);
           },
           (err) => {
@@ -938,6 +976,11 @@ const PrayerTimes: React.FC = () => {
         return;
       }
 
+      // Guests: check stored location first
+      if (stored && Number.isFinite(stored.lat) && Number.isFinite(stored.lon)) {
+        return;
+      }
+
       // Guests: GPS with Bengaluru fallback; durable client cache allowed.
       allowDurableClientCacheRef.current = true;
       setLocationPermissionNeeded(false);
@@ -947,19 +990,43 @@ const PrayerTimes: React.FC = () => {
             if (cancelled) return;
             const lat = position.coords.latitude;
             const lon = position.coords.longitude;
-            setLocation({ lat, lon });
-            await resolveLocationDetails(lat, lon);
+            const details = await resolveLocationDetails(lat, lon);
+            const guestGpsLoc: UserLocation = {
+              lat,
+              lon,
+              city: details.city,
+              country: details.country,
+              mode: 'gps',
+              updatedAt: Date.now(),
+            };
+            setLocation(guestGpsLoc);
+            saveStoredUserLocation(guestGpsLoc);
+            recordLocationCheck();
           },
           (err) => {
             if (cancelled) return;
             console.warn('Geolocation denied or failed:', err);
-            setLocation({ lat: 12.96, lon: 77.57, city: 'Bengaluru', country: 'India' });
+            const defaultLoc: UserLocation = {
+              lat: 12.96,
+              lon: 77.57,
+              city: 'Bengaluru',
+              country: 'India',
+              mode: 'gps',
+            };
+            setLocation(defaultLoc);
             setDetectedCountry('India');
             setCityQuery('Bengaluru');
           },
         );
       } else {
-        setLocation({ lat: 12.96, lon: 77.57, city: 'Bengaluru', country: 'India' });
+        const defaultLoc: UserLocation = {
+          lat: 12.96,
+          lon: 77.57,
+          city: 'Bengaluru',
+          country: 'India',
+          mode: 'gps',
+        };
+        setLocation(defaultLoc);
         setDetectedCountry('India');
         setCityQuery('Bengaluru');
       }
@@ -1002,6 +1069,79 @@ const PrayerTimes: React.FC = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location, selectedMadhab, calculationMethod, highLatitudeRule, viewMode, selectedMonth, selectedYear]);
+
+  // Automated 2-hour location access check
+  useEffect(() => {
+    let isCancelled = false;
+
+    const performPeriodicLocationCheck = async (force = false) => {
+      // Don't run if less than 2 hours elapsed and force is false
+      if (!force && !shouldCheckLocationAccess(TWO_HOURS_MS)) {
+        return;
+      }
+
+      // If user selected a custom city manually, respect their choice unless forced
+      if (location?.mode === 'custom' && !force) {
+        recordLocationCheck();
+        return;
+      }
+
+      try {
+        const result = await checkLocationAccess({
+          force,
+          intervalMs: TWO_HOURS_MS,
+          currentLocation: location,
+          reverseGeocode: resolveLocationDetails,
+        });
+
+        if (isCancelled) return;
+
+        if (result.status === 'granted' && result.location && result.changed) {
+          console.log('📍 2-Hour location check updated location:', result.location);
+          setLocation(result.location);
+          if (result.location.city) {
+            setCityQuery(result.location.city);
+          }
+          if (result.location.country) {
+            setDetectedCountry(result.location.country);
+          }
+          if (user?.id) {
+            void persistUserLocation(
+              result.location.lat,
+              result.location.lon,
+              result.location.city,
+              result.location.country
+            );
+          }
+          toast.success(result.message || `📍 Location updated to ${result.location.city}`);
+        }
+      } catch (checkErr) {
+        console.warn('2-Hour location check error:', checkErr);
+      }
+    };
+
+    // Run on mount if >= 2 hours have passed
+    void performPeriodicLocationCheck();
+
+    // Check periodically (every 15 minutes to evaluate if 2 hours passed)
+    const intervalTimer = setInterval(() => {
+      void performPeriodicLocationCheck();
+    }, 15 * 60 * 1000);
+
+    // Check when tab becomes visible
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void performPeriodicLocationCheck();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      isCancelled = true;
+      clearInterval(intervalTimer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [location, resolveLocationDetails, persistUserLocation, user?.id]);
 
   const fetchData = useCallback(async (lat: number, lon: number, city?: string, country?: string) => {
     setLoading(true);
@@ -1902,11 +2042,13 @@ const PrayerTimes: React.FC = () => {
     console.log('📍 Selecting location:', { city, country, lat: result.lat, lon: result.lon });
 
     // Create a new location object to ensure React detects the change
-    const newLocation = {
+    const newLocation: UserLocation = {
       lat: parseFloat(result.lat),
       lon: parseFloat(result.lon),
       city: city,
       country: country,
+      mode: 'custom',
+      updatedAt: Date.now(),
     };
 
     setLocation(newLocation);
@@ -1915,11 +2057,16 @@ const PrayerTimes: React.FC = () => {
     setSearchResults([]);
     setShowSearch(false);
     setError(null);
+    allowDurableClientCacheRef.current = true;
+    setLocationPermissionNeeded(false);
+
+    // Persist immediately in localStorage so city persists across refreshes and tabs
+    saveStoredUserLocation(newLocation);
+
     if (user?.id) {
-      allowDurableClientCacheRef.current = true;
-      setLocationPermissionNeeded(false);
       void persistUserLocation(newLocation.lat, newLocation.lon, city, country);
     }
+    toast.success(`📍 Prayer location updated to ${city}${country && country !== 'Unknown' ? `, ${country}` : ''}`);
   };
 
   const handleUseCurrentLocation = (e?: React.MouseEvent) => {
@@ -1943,8 +2090,22 @@ const PrayerTimes: React.FC = () => {
         const lat = position.coords.latitude;
         const lon = position.coords.longitude;
 
-        setLocation({ lat, lon });
         const details = await resolveLocationDetails(lat, lon);
+        const newGpsLocation: UserLocation = {
+          lat,
+          lon,
+          city: details.city,
+          country: details.country,
+          mode: 'gps',
+          updatedAt: Date.now(),
+        };
+
+        setLocation(newGpsLocation);
+        if (details.city) setCityQuery(details.city);
+        if (details.country) setDetectedCountry(details.country);
+        saveStoredUserLocation(newGpsLocation);
+        recordLocationCheck();
+
         if (user?.id) {
           allowDurableClientCacheRef.current = true;
           setLocationPermissionNeeded(false);
@@ -1953,6 +2114,7 @@ const PrayerTimes: React.FC = () => {
         setLoading(false);
         setShowSearch(false);
         setSearchResults([]);
+        toast.success(`📍 Using current location: ${details.city || `${lat.toFixed(2)}, ${lon.toFixed(2)}`}`);
       },
       (geoError) => {
         console.warn('Failed to get current location:', geoError);
@@ -3329,7 +3491,13 @@ const PrayerTimes: React.FC = () => {
               >
                   <MapPinIcon className="h-4 w-4 sm:h-5 sm:w-5 mr-1.5 sm:mr-2" />
                   <span className="truncate max-w-[220px] sm:max-w-full">
-                      {location ? `${cityQuery || 'Current Location'}` : 'Select Location'}
+                      {location
+                        ? `${location.city || cityQuery || 'Current Location'}${
+                            location.country && location.country !== 'Unknown' && !location.city?.includes(location.country)
+                              ? `, ${location.country}`
+                              : ''
+                          }`
+                        : 'Select Location'}
                   </span>
               </button>
               <button

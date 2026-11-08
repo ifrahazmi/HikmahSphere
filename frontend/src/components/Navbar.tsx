@@ -557,7 +557,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
 
       {isOpen && (
         <div className="xl:hidden max-h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain">
-          <div className={`px-2 pt-2 pb-6 space-y-1 sm:px-3 border-t transition-colors duration-200 ${
+          <div className={`px-2 pt-1.5 pb-4 space-y-0.5 sm:px-3 border-t transition-colors duration-200 ${
             isDark ? 'bg-gray-800 border-gray-700' : 'bg-white'
           }`}>
             {navigation.map((item) => {
@@ -565,13 +565,13 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                 return (
                   <div
                     key={item.name}
-                    className="rounded-md border border-emerald-100 bg-emerald-50/40 px-2 py-2"
+                    className="rounded-md border border-emerald-100 bg-emerald-50/40 px-2 py-1"
                     ref={prayerMobileMenuRef}
                   >
                     <button
                       type="button"
                       onClick={() => setIsPrayerMenuOpen((prev) => !prev)}
-                      className={`w-full px-3 py-2 rounded-md text-base font-medium transition-colors duration-200 inline-flex items-center justify-between ${
+                      className={`w-full px-2.5 py-1.5 rounded-md text-sm sm:text-base font-medium transition-colors duration-200 inline-flex items-center justify-between ${
                         item.current
                           ? isDark
                             ? 'bg-emerald-900 text-emerald-300'
@@ -586,10 +586,10 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                     </button>
 
                     {isPrayerMenuOpen && (
-                      <div className="mt-1 space-y-1">
+                      <div className="mt-0.5 space-y-0.5">
                         <button
                           type="button"
-                          className={`block w-full px-4 py-2 rounded-md text-left text-sm font-medium ${
+                          className={`block w-full px-3 py-1.5 rounded-md text-left text-sm font-medium ${
                             isDark
                               ? 'text-gray-300 hover:bg-gray-700 hover:text-emerald-400'
                               : 'text-gray-700 hover:bg-emerald-50 hover:text-emerald-600'
@@ -600,7 +600,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                         </button>
                         <button
                           type="button"
-                          className={`block w-full px-4 py-2 rounded-md text-left text-sm font-medium ${
+                          className={`block w-full px-3 py-1.5 rounded-md text-left text-sm font-medium ${
                             isDark
                               ? 'text-gray-300 hover:bg-gray-700 hover:text-emerald-400'
                               : 'text-gray-700 hover:bg-emerald-50 hover:text-emerald-600'
@@ -611,7 +611,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                         </button>
                         <button
                           type="button"
-                          className={`block w-full px-4 py-2 rounded-md text-left text-sm font-medium ${
+                          className={`block w-full px-3 py-1.5 rounded-md text-left text-sm font-medium ${
                             isDark
                               ? 'text-gray-300 hover:bg-gray-700 hover:text-emerald-400'
                               : 'text-gray-700 hover:bg-emerald-50 hover:text-emerald-600'
@@ -630,13 +630,13 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                 return (
                   <div
                     key={item.name}
-                    className="rounded-md border border-emerald-100 bg-emerald-50/40 px-2 py-2"
+                    className="rounded-md border border-emerald-100 bg-emerald-50/40 px-2 py-1"
                     ref={quranMobileMenuRef}
                   >
                     <button
                       type="button"
                       onClick={() => setIsQuranMenuOpen((prev) => !prev)}
-                      className={`w-full px-3 py-2 rounded-md text-base font-medium transition-colors duration-200 inline-flex items-center justify-between ${
+                      className={`w-full px-2.5 py-1.5 rounded-md text-sm sm:text-base font-medium transition-colors duration-200 inline-flex items-center justify-between ${
                         item.current
                           ? isDark
                             ? 'bg-emerald-900 text-emerald-300'
@@ -651,10 +651,10 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                     </button>
 
                     {isQuranMenuOpen && (
-                      <div className="mt-1 space-y-1">
+                      <div className="mt-0.5 space-y-0.5">
                         <button
                           type="button"
-                          className={`block w-full px-4 py-2 rounded-md text-left text-sm font-medium ${
+                          className={`block w-full px-3 py-1.5 rounded-md text-left text-sm font-medium ${
                             isDark
                               ? 'text-gray-300 hover:bg-gray-700 hover:text-emerald-400'
                               : 'text-gray-700 hover:bg-emerald-50 hover:text-emerald-600'
@@ -665,7 +665,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                         </button>
                         <button
                           type="button"
-                          className={`block w-full px-4 py-2 rounded-md text-left text-sm font-medium ${
+                          className={`block w-full px-3 py-1.5 rounded-md text-left text-sm font-medium ${
                             isDark
                               ? 'text-gray-300 hover:bg-gray-700 hover:text-emerald-400'
                               : 'text-gray-700 hover:bg-emerald-50 hover:text-emerald-600'
@@ -684,7 +684,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                 <Link
                   key={item.name}
                   to={item.href}
-                  className={`block px-3 py-2 rounded-md text-base font-medium transition-colors duration-200 ${
+                  className={`block px-3 py-1.5 rounded-md text-sm sm:text-base font-medium transition-colors duration-200 ${
                     item.current
                       ? isDark
                         ? 'bg-emerald-900 text-emerald-300'
@@ -700,22 +700,22 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
               );
             })}
 
-            <div className={`pt-4 pb-3 border-t transition-colors duration-200 ${
+            <div className={`pt-2.5 pb-2 border-t transition-colors duration-200 ${
               isDark ? 'border-gray-700' : 'border-gray-200'
             }`}>
               {user ? (
                 <>
-                  <div className="px-3 py-2">
-                    <div className={`text-base font-medium ${
+                  <div className="px-3 py-1">
+                    <div className={`text-sm sm:text-base font-medium ${
                       isDark ? 'text-gray-200' : 'text-gray-800'
                     }`}>{user.name}</div>
-                    <div className={`text-sm ${
+                    <div className={`text-xs sm:text-sm ${
                       isDark ? 'text-gray-400' : 'text-gray-500'
                     }`}>{user.email}</div>
                   </div>
                   <Link
                     to="/profile"
-                    className={`block px-3 py-2 text-base font-medium rounded-md transition-colors duration-200 ${
+                    className={`block px-3 py-1.5 text-sm sm:text-base font-medium rounded-md transition-colors duration-200 ${
                       isDark
                         ? 'text-gray-300 hover:text-emerald-400 hover:bg-gray-700'
                         : 'text-gray-700 hover:text-emerald-600 hover:bg-emerald-50'
@@ -730,7 +730,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                     <button
                       type="button"
                       onClick={() => setIsMobileToolsOpen((prev) => !prev)}
-                      className={`w-full px-3 py-2 rounded-md text-base font-medium transition-colors duration-200 inline-flex items-center justify-between ${
+                      className={`w-full px-3 py-1.5 rounded-md text-sm sm:text-base font-medium transition-colors duration-200 inline-flex items-center justify-between ${
                         isDark
                           ? 'text-gray-300 hover:text-emerald-400 hover:bg-gray-700'
                           : 'text-gray-700 hover:text-emerald-600 hover:bg-emerald-50'
@@ -745,10 +745,10 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                     </button>
 
                     {isMobileToolsOpen && (
-                      <div className="mt-1 pl-4 space-y-1">
+                      <div className="mt-0.5 pl-3 space-y-0.5">
                         <Link
                           to="/salah-tracker"
-                          className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${
+                          className={`flex items-center px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors duration-200 ${
                             isDark
                               ? 'text-gray-300 hover:text-emerald-400 hover:bg-gray-700'
                               : 'text-gray-700 hover:text-emerald-600 hover:bg-emerald-50'
@@ -763,7 +763,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                         </Link>
                         <Link
                           to="/halal-check"
-                          className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${
+                          className={`flex items-center px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors duration-200 ${
                             isDark
                               ? 'text-gray-300 hover:text-emerald-400 hover:bg-gray-700'
                               : 'text-gray-700 hover:text-emerald-600 hover:bg-emerald-50'
@@ -782,7 +782,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                   {canAccessDashboard && (
                     <Link
                         to="/dashboard"
-                        className={`block px-3 py-2 text-base font-medium rounded-md transition-colors duration-200 ${
+                        className={`block px-3 py-1.5 text-sm sm:text-base font-medium rounded-md transition-colors duration-200 ${
                           isDark
                             ? 'text-gray-300 hover:text-emerald-400 hover:bg-gray-700'
                             : 'text-gray-700 hover:text-emerald-600 hover:bg-emerald-50'
@@ -794,7 +794,7 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                   )}
                   <button
                     onClick={handleLogout}
-                    className={`flex items-center w-full px-3 py-2 text-base font-medium rounded-md transition-colors duration-200 ${
+                    className={`flex items-center w-full px-3 py-1.5 text-sm sm:text-base font-medium rounded-md transition-colors duration-200 ${
                       isDark
                         ? 'text-gray-300 hover:text-emerald-400 hover:bg-gray-700'
                         : 'text-gray-700 hover:text-emerald-600 hover:bg-emerald-50'
