@@ -186,3 +186,4 @@ describe('locationManager utility', () => {
     });
   });
 });
+
