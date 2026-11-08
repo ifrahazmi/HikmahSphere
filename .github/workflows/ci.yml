@@ -102,12 +102,14 @@ jobs:
           # CRA treats warnings as errors when CI=true; keep build as a hard gate
           # without failing on leftover lint warnings.
           CI: false
+          NODE_OPTIONS: --openssl-legacy-provider
 
       - name: Tests with coverage (report only)
         continue-on-error: true
         run: npx react-scripts test --watchAll=false --passWithNoTests --coverage
         env:
           CI: true
+          NODE_OPTIONS: --openssl-legacy-provider
 
       - name: Upload frontend coverage
         if: always()
