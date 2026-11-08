@@ -162,6 +162,26 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
     };
   }, [isProfileOpen, isPrayerMenuOpen, isQuranMenuOpen]);
 
+  // Lock body scroll and listen for Escape key when mobile menu is open
+  useEffect(() => {
+    if (isOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+
+      const handleKeyDown = (event: KeyboardEvent) => {
+        if (event.key === 'Escape') {
+          setIsOpen(false);
+        }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+
+      return () => {
+        document.body.style.overflow = originalOverflow;
+        window.removeEventListener('keydown', handleKeyDown);
+      };
+    }
+  }, [isOpen]);
+
   // Check for Super Admin Role
   const isSuperAdmin = hasRole && hasRole(['superadmin']);
   // Super Admins get the full dashboard; Managers get Fund Management only.
@@ -172,9 +192,18 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
 
   return (
     <>
+      {/* Mobile Menu Backdrop: completely blurs the background in mobile mode only */}
+      {isOpen && (
+        <div
+          data-testid="mobile-menu-backdrop"
+          className="xl:hidden fixed inset-0 top-16 bg-black/60 backdrop-blur-2xl z-40 transition-opacity duration-200"
+          onClick={() => setIsOpen(false)}
+          aria-hidden="true"
+        />
+      )}
       <nav className={`shadow-lg fixed top-0 left-0 right-0 z-50 transition-colors duration-200 ${
-      isDark ? 'bg-gray-800' : 'bg-white'
-    }`}>
+        isDark ? 'bg-gray-800/95 backdrop-blur-md' : 'bg-white/95 backdrop-blur-md'
+      }`}>
       <div className="max-w-[90rem] mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center h-16 gap-2 min-w-0">
           {/* Natural width only: a growing brand would starve the centered menu,
@@ -558,8 +587,8 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
       {isOpen && (
         <div className="xl:hidden max-h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain">
           <div className={`px-2 pt-1.5 pb-4 space-y-0.5 sm:px-3 border-t transition-colors duration-200 ${
-            isDark ? 'bg-gray-800 border-gray-700' : 'bg-white'
-          }`}>
+            isDark ? 'bg-gray-900/95 border-gray-700/80' : 'bg-white/95 border-gray-200/80'
+          } backdrop-blur-2xl shadow-2xl`}>
             {navigation.map((item) => {
               if (item.name === 'Prayer') {
                 return (

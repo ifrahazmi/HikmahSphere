@@ -123,4 +123,34 @@ describe('Navbar layout', () => {
     expect(screen.getByRole('link', { name: /Muhasabah Tracker/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Halal Check/i })).toBeInTheDocument();
   });
+
+  it('renders a completely blurred backdrop in mobile mode only when menu is open and dismisses on click or Escape', () => {
+    const { container } = renderNavbar();
+
+    // Initially, backdrop is not present
+    expect(screen.queryByTestId('mobile-menu-backdrop')).not.toBeInTheDocument();
+
+    // Open mobile menu
+    fireEvent.click(screen.getByLabelText('Open navigation menu'));
+
+    // Backdrop blur overlay is present with mobile constraint and deep blur
+    const backdrop = screen.getByTestId('mobile-menu-backdrop');
+    expect(backdrop).toBeInTheDocument();
+    expect(backdrop).toHaveClass('xl:hidden', 'backdrop-blur-2xl', 'bg-black/60', 'fixed', 'inset-0');
+
+    // Drawer container also has backdrop-blur-2xl
+    const mobileDrawer = container.querySelector('.xl\\:hidden.max-h-\\[calc\\(100dvh-4rem\\)\\]');
+    const drawerInner = mobileDrawer?.firstElementChild;
+    expect(drawerInner).toHaveClass('backdrop-blur-2xl');
+
+    // Clicking the backdrop closes the menu
+    fireEvent.click(backdrop);
+    expect(screen.queryByTestId('mobile-menu-backdrop')).not.toBeInTheDocument();
+
+    // Reopen and test Escape key closes the menu
+    fireEvent.click(screen.getByLabelText('Open navigation menu'));
+    expect(screen.getByTestId('mobile-menu-backdrop')).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByTestId('mobile-menu-backdrop')).not.toBeInTheDocument();
+  });
 });
