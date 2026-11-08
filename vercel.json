@@ -1,0 +1,23 @@
+{
+  "framework": "create-react-app",
+  "installCommand": "npm ci --prefix frontend",
+  "buildCommand": "cd frontend && rm -rf build && CI=false npm run build",
+  "outputDirectory": "frontend/build",
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Permissions-Policy",
+          "value": "vibrate=(self)"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
