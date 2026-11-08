@@ -61,7 +61,9 @@ backup/
 .config/
 .copilot/
 .lesshst
+.local/
 .npm/
+.pm2/
 .profile
 .ssh/
 .sudo_as_admin_successful
