@@ -2,9 +2,14 @@ import {
   MOSQUE_SEARCH_EXPAND_RADIUS_M,
   MOSQUE_SEARCH_RADIUS_M,
   buildMosqueOverpassQuery,
+  buildNominatimBoundingBox,
+  clearMosqueCache,
   fetchNearbyMosques,
+  getCachedNearbyMosques,
+  parseNominatimMosques,
   parseOverpassMosques,
   searchPlaces,
+  setCachedNearbyMosques,
   shouldRefreshMosqueSearch,
   sortMosquesByDistance,
 } from './mosqueOsm';
@@ -80,5 +85,50 @@ describe('mosque OSM search', () => {
       { label: 'Hyderabad, India', lat: 17.385, lon: 78.486 },
     ]);
     await expect(searchPlaces('  ', { fetchImpl })).resolves.toEqual([]);
+  });
+
+  it('builds a bounding box and parses Nominatim mosques', () => {
+    const box = buildNominatimBoundingBox(19.076, 72.877, 5000);
+    expect(box).toMatch(/^[0-9.]+,[0-9.]+,[0-9.]+,[0-9.]+$/);
+
+    const parsed = parseNominatimMosques([
+      {
+        place_id: 123,
+        osm_type: 'node',
+        osm_id: 456,
+        lat: '19.076',
+        lon: '72.877',
+        name: 'Jama Masjid',
+        display_name: 'Jama Masjid, Station Road, Mumbai, Maharashtra, India',
+      },
+    ]);
+
+    expect(parsed).toEqual([
+      {
+        id: 'node/456',
+        name: 'Jama Masjid',
+        address: 'Station Road, Mumbai, Maharashtra',
+        lat: 19.076,
+        lon: 72.877,
+      },
+    ]);
+  });
+
+  it('caches mosques in memory and returns cached results instantly', async () => {
+    clearMosqueCache();
+    expect(getCachedNearbyMosques(19.076, 72.877)).toBeNull();
+
+    const sampleMosques = [
+      { id: 'node/1', name: 'Local Masjid', address: 'Main St', lat: 19.076, lon: 72.877 },
+    ];
+    setCachedNearbyMosques(19.076, 72.877, sampleMosques);
+
+    const cached = getCachedNearbyMosques(19.076, 72.877);
+    expect(cached).toEqual(sampleMosques);
+
+    const fetchImpl = jest.fn();
+    const result = await fetchNearbyMosques(19.076, 72.877, { fetchImpl });
+    expect(result).toEqual(sampleMosques);
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 });

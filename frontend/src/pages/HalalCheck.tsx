@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { BrowserMultiFormatReader } from '@zxing/browser';
 import {
   AlertTriangle,
   Camera,
@@ -46,7 +47,8 @@ const HalalCheck: React.FC = () => {
   const [isScanning, setIsScanning] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const scanFrameRef = useRef<number | null>(null);
+  const scanActiveRef = useRef(false);
+  const zxingControlsRef = useRef<{ stop: () => void } | null>(null);
 
   const lookup = useCallback(async (value = barcode) => {
     const normalized = value.replace(/\D/g, '');
@@ -73,12 +75,49 @@ const HalalCheck: React.FC = () => {
     }
   }, [barcode]);
 
-  const stopScanning = () => {
-    if (scanFrameRef.current !== null) cancelAnimationFrame(scanFrameRef.current);
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    streamRef.current = null;
+  const stopScanning = useCallback(() => {
+    scanActiveRef.current = false;
+    if (zxingControlsRef.current) {
+      try {
+        zxingControlsRef.current.stop();
+      } catch {
+        // ignore
+      }
+      zxingControlsRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
     setIsScanning(false);
-  };
+  }, []);
+
+  const handleBarcodeDetected = useCallback(
+    (detectedRaw: string) => {
+      if (!scanActiveRef.current) return;
+      const normalized = detectedRaw.replace(/\D/g, '');
+      if (normalized.length < 8 || normalized.length > 14) return;
+
+      scanActiveRef.current = false;
+
+      // Haptic confirmation
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        try {
+          navigator.vibrate([40, 30, 40]);
+        } catch {
+          // ignore
+        }
+      }
+
+      // Put the number in the box and close camera
+      setBarcode(normalized);
+      stopScanning();
+
+      // Auto start checking
+      void lookup(normalized);
+    },
+    [lookup, stopScanning]
+  );
 
   const startScanning = async () => {
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -87,11 +126,20 @@ const HalalCheck: React.FC = () => {
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      setError('');
+      scanActiveRef.current = true;
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+      });
       streamRef.current = stream;
       setIsScanning(true);
     } catch {
-      setError('Camera access was unavailable. Enter the barcode manually.');
+      scanActiveRef.current = false;
+      setError('Camera access was unavailable or denied. Enter the barcode manually.');
       stopScanning();
     }
   };
@@ -101,35 +149,81 @@ const HalalCheck: React.FC = () => {
 
     const video = videoRef.current;
     const stream = streamRef.current;
+    scanActiveRef.current = true;
+
+    // Connect stream to video element
     video.srcObject = stream;
     const playPromise = video.play();
-    const Detector = (window as Window & { BarcodeDetector?: BarcodeDetectorConstructor }).BarcodeDetector;
-    if (!Detector) return undefined;
-    const detector = new Detector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e'] });
-    let active = true;
 
-    const scan = async () => {
-      if (!active || !streamRef.current) return;
-      try {
-        const detections = await detector.detect(video);
-        const detected = detections[0]?.rawValue;
-        if (detected) {
-          stopScanning();
-          await lookup(detected);
-          return;
+    // 1. ZXing Cross-Platform Reader (works on iOS Safari, Android, Desktop)
+    const zxingReader = new BrowserMultiFormatReader();
+    zxingReader
+      .decodeFromStream(stream, video, (result, _error, controls) => {
+        if (controls) {
+          zxingControlsRef.current = controls;
         }
-      } catch {
-        setError('The camera could not read that barcode. Try better lighting or enter it manually.');
-      }
-      if (active) scanFrameRef.current = requestAnimationFrame(() => { void scan(); });
-    };
+        if (result && scanActiveRef.current) {
+          const text = typeof result.getText === 'function' ? result.getText() : String(result);
+          if (text) {
+            handleBarcodeDetected(text);
+          }
+        }
+      })
+      .catch(() => {
+        // ZXing stream error handling
+      });
 
-    void playPromise.then(() => scan());
+    // 2. Hardware BarcodeDetector acceleration (if supported)
+    let frameId: number | null = null;
+    const Detector = (window as Window & { BarcodeDetector?: BarcodeDetectorConstructor }).BarcodeDetector;
+    if (Detector) {
+      try {
+        const detector = new Detector({
+          formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'qr_code'],
+        });
+        const scan = async () => {
+          if (!scanActiveRef.current || !videoRef.current) return;
+          try {
+            const detections = await detector.detect(videoRef.current);
+            const detected = detections[0]?.rawValue;
+            if (detected && scanActiveRef.current) {
+              handleBarcodeDetected(detected);
+              return;
+            }
+          } catch {
+            // keep trying
+          }
+          if (scanActiveRef.current) {
+            frameId = requestAnimationFrame(() => {
+              void scan();
+            });
+          }
+        };
+        void playPromise.then(() => {
+          if (scanActiveRef.current) {
+            frameId = requestAnimationFrame(() => {
+              void scan();
+            });
+          }
+        });
+      } catch {
+        // Ignore detector creation errors, ZXing is already running
+      }
+    }
+
     return () => {
-      active = false;
-      if (scanFrameRef.current !== null) cancelAnimationFrame(scanFrameRef.current);
+      scanActiveRef.current = false;
+      if (frameId !== null) cancelAnimationFrame(frameId);
+      if (zxingControlsRef.current) {
+        try {
+          zxingControlsRef.current.stop();
+        } catch {
+          // ignore
+        }
+        zxingControlsRef.current = null;
+      }
     };
-  }, [isScanning, lookup]);
+  }, [isScanning, handleBarcodeDetected]);
 
   return (
     <>
@@ -170,7 +264,35 @@ const HalalCheck: React.FC = () => {
                 </div>
               </form>
               <button type="button" onClick={() => { void startScanning(); }} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 px-4 py-3 font-semibold text-emerald-800 transition hover:bg-emerald-50"><Camera size={18} /> Scan with camera</button>
-              {isScanning && <div className="mt-4 overflow-hidden rounded-xl border border-emerald-200 bg-slate-950"><video ref={videoRef} className="aspect-video w-full object-cover" muted playsInline /><button type="button" onClick={stopScanning} className="w-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Stop scanning</button></div>}
+              {isScanning && (
+                <div className="relative mt-4 overflow-hidden rounded-2xl border-2 border-emerald-500 bg-slate-950 shadow-xl">
+                  <video ref={videoRef} className="aspect-video w-full object-cover" muted playsInline />
+
+                  {/* Viewfinder Target Reticle */}
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6">
+                    <div className="relative h-36 w-60 max-w-[85%] rounded-xl border-2 border-dashed border-emerald-400 bg-emerald-500/10 shadow-[0_0_20px_rgba(16,185,129,0.3)]">
+                      <div className="absolute -left-1 -top-1 h-3.5 w-3.5 border-l-4 border-t-4 border-emerald-400" />
+                      <div className="absolute -right-1 -top-1 h-3.5 w-3.5 border-r-4 border-t-4 border-emerald-400" />
+                      <div className="absolute -bottom-1 -left-1 h-3.5 w-3.5 border-b-4 border-l-4 border-emerald-400" />
+                      <div className="absolute -bottom-1 -right-1 h-3.5 w-3.5 border-b-4 border-r-4 border-emerald-400" />
+                      <div className="absolute inset-x-0 top-1/2 h-0.5 -translate-y-1/2 bg-gradient-to-r from-transparent via-emerald-400 to-transparent shadow-[0_0_8px_#34d399]" />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between bg-slate-900/90 px-4 py-2.5 backdrop-blur-sm">
+                    <p className="text-xs font-medium text-emerald-400">
+                      Align barcode within box — auto-detecting…
+                    </p>
+                    <button
+                      type="button"
+                      onClick={stopScanning}
+                      className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-700"
+                    >
+                      Stop
+                    </button>
+                  </div>
+                </div>
+              )}
               {error && <p role="alert" className="mt-4 break-words rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
               <div className="mt-8 border-t border-slate-100 pt-5 text-sm leading-6 text-slate-500"><p className="flex gap-2"><ShieldQuestion size={18} className="mt-1 shrink-0 text-amber-600" />Ingredient data is informational. A missing label or unclear ingredient is not proof that a product is halal or haram.</p></div>
             </section>
@@ -201,9 +323,16 @@ const ProductDetails: React.FC<{ product: Product }> = ({ product }) => (
     {product.allergens.length > 0 && <div className="mt-6 rounded-xl bg-red-50 p-4"><h3 className="flex items-center gap-2 font-bold text-red-900"><XCircle size={18} /> Allergens listed</h3><p className="mt-2 break-words text-sm text-red-800">{product.allergens.join(', ')}</p></div>}
     <div className="mt-6 rounded-xl border border-slate-200 p-4"><h3 className="text-lg font-bold">Ingredients</h3><p className="mt-2 whitespace-pre-line break-words leading-7 text-slate-600">{product.ingredientsText || product.ingredients.join(', ') || 'No ingredient list was supplied.'}</p>{product.images.ingredients && <img src={product.images.ingredients} alt="Ingredients label" className="mt-4 max-h-72 w-full rounded-lg object-contain object-left" />}</div>
     {product.labels.length > 0 && <div className="mt-5"><h3 className="text-lg font-bold">Labels</h3><div className="mt-2 flex flex-wrap gap-2">{product.labels.map((label) => <span key={label} className="max-w-full break-words rounded-full bg-emerald-50 px-3 py-1 text-sm text-emerald-800">{label}</span>)}</div></div>}
-    <div className="mt-8 border-t border-slate-100 pt-5"><a href={product.source.url} target="_blank" rel="noreferrer" className="inline-flex max-w-full items-center gap-2 break-words text-sm font-bold text-emerald-700 hover:text-emerald-900">View source on OpenFoodFacts <ExternalLink size={16} className="shrink-0" /></a>
-    <p className="mt-2 text-xs text-slate-400">Data source: OpenFoodFacts, shared under the {product.source.license}.</p>
-    </div>
+    {product.source && (
+      <div className="mt-8 border-t border-slate-100 pt-5">
+        {product.source.url && (
+          <a href={product.source.url} target="_blank" rel="noreferrer" className="inline-flex max-w-full items-center gap-2 break-words text-sm font-bold text-emerald-700 hover:text-emerald-900">
+            View source on OpenFoodFacts <ExternalLink size={16} className="shrink-0" />
+          </a>
+        )}
+        <p className="mt-2 text-xs text-slate-400">Data source: OpenFoodFacts{product.source.license ? `, shared under the ${product.source.license}.` : '.'}</p>
+      </div>
+    )}
   </div>
 );
 

@@ -108,9 +108,11 @@ describe('Navbar layout', () => {
     expect(mobileDrawer).toBeInTheDocument();
     expect(mobileDrawer).toHaveClass('overflow-y-auto');
 
-    // Sign out button must be in document and accessible
+    // Sign out button must be in document, accessible, and styled as a colored box button
     const signOutButtons = screen.getAllByRole('button', { name: /Sign out/i });
     expect(signOutButtons.length).toBeGreaterThanOrEqual(1);
+    const mobileSignOut = signOutButtons[signOutButtons.length - 1];
+    expect(mobileSignOut).toHaveClass('rounded-xl', 'bg-rose-50', 'text-rose-700');
 
     // Mobile Tools accordion is present
     const toolsButtons = screen.getAllByRole('button', { name: /Tools/i });
