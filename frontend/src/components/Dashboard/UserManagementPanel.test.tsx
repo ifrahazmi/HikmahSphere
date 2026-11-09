@@ -21,6 +21,11 @@ const users: DashboardUser[] = [
     email: 'admin@hikmah.com',
     role: 'superadmin',
     isBlocked: false,
+    location: {
+      city: 'Hyderabad',
+      country: 'India',
+      coordinates: { latitude: 17.385, longitude: 78.4867 },
+    },
   },
   {
     _id: 'user-2',
@@ -104,6 +109,29 @@ describe('UserManagementPanel modals', () => {
           headers: { Authorization: 'Bearer test-token' },
         })
       );
+    });
+  });
+
+  it('displays user location in table and view details modal', async () => {
+    mockedAxios.get.mockResolvedValue({
+      data: {
+        status: 'success',
+        data: {
+          user: users[0],
+        },
+      },
+    });
+
+    renderPanel(false);
+
+    expect(screen.getAllByText('Hyderabad, India').length).toBeGreaterThanOrEqual(1);
+
+    const viewButtons = screen.getAllByRole('button', { name: /view/i });
+    fireEvent.click(viewButtons[0]);
+
+    await waitFor(() => {
+      expect(screen.getByText(/User Location/i)).toBeInTheDocument();
+      expect(screen.getByText(/GPS Coordinates: 17.3850°, 78.4867°/i)).toBeInTheDocument();
     });
   });
 });

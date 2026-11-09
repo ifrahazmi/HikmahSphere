@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import {
@@ -91,6 +91,8 @@ type StartupReadinessController = ReturnType<typeof useStartupReadiness>;
 const AppContent: React.FC<{ startupReadiness: StartupReadinessController }> = ({
   startupReadiness,
 }) => {
+  const location = useLocation();
+  const showFooter = location.pathname === '/' || location.pathname === '/about';
   const { user, loading, sessionStatus, logout, passwordChangeRequired, requirePasswordChange } = useAuth();
   const bootstrapWarmedRef = useRef(false);
   const logoutRef = useRef(logout);
@@ -424,8 +426,8 @@ const AppContent: React.FC<{ startupReadiness: StartupReadinessController }> = (
         </Routes>
       </main>
 
-      {/* Footer */}
-      <Footer />
+      {/* Footer - displayed only on Home and About pages */}
+      {showFooter && <Footer />}
 
       {/* Global Adhan scheduler (fires prayer notifications on any page) */}
       <PrayerAdhanScheduler />

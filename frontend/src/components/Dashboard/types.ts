@@ -39,6 +39,16 @@ export interface DashboardUser {
   profileAudit?: {
     history?: ProfileAuditEntry[];
   };
+  location?: {
+    city?: string;
+    country?: string;
+    coordinates?: {
+      latitude?: number;
+      longitude?: number;
+    };
+  };
+  city?: string;
+  country?: string;
 }
 
 export interface ActivityLog {

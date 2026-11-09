@@ -12,6 +12,8 @@ import {
   KeyIcon,
   LockClosedIcon,
   LockOpenIcon,
+  MapPinIcon,
+  ArrowTopRightOnSquareIcon,
   TrashIcon,
   UserPlusIcon,
   XMarkIcon,
@@ -35,6 +37,25 @@ interface UserManagementPanelProps {
   createUserOpen: boolean;
   onCreateUserOpenChange: (open: boolean) => void;
 }
+
+const formatUserLocation = (user?: DashboardUser | null): string => {
+  if (!user) return '';
+  const city = user.location?.city || user.city;
+  const country = user.location?.country || user.country;
+  if (city && country && !city.includes(country)) {
+    return `${city}, ${country}`;
+  }
+  return city || country || '';
+};
+
+const getUserCoordinates = (user?: DashboardUser | null): { lat: number; lon: number } | null => {
+  if (!user) return null;
+  const coords = user.location?.coordinates;
+  if (coords && typeof coords.latitude === 'number' && typeof coords.longitude === 'number') {
+    return { lat: coords.latitude, lon: coords.longitude };
+  }
+  return null;
+};
 
 const NotificationReadinessCard: React.FC<{ user: DashboardUser }> = ({ user }) => {
   const permission = user.notificationPermission || 'unknown';
@@ -418,6 +439,12 @@ const UserManagementPanel: React.FC<UserManagementPanelProps> = ({
                       <div className="min-w-0">
                         <p className="truncate font-semibold text-gray-900 dark:text-white">{user.username}</p>
                         <p className="truncate text-sm text-gray-500">{user.email}</p>
+                        {formatUserLocation(user) && (
+                          <p className="mt-1 flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                            <MapPinIcon className="h-3.5 w-3.5 shrink-0" />
+                            <span className="truncate">{formatUserLocation(user)}</span>
+                          </p>
+                        )}
                       </div>
                       <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
                         user.isBlocked
@@ -444,6 +471,7 @@ const UserManagementPanel: React.FC<UserManagementPanelProps> = ({
                 <thead className="bg-gray-50 dark:bg-gray-800/80">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">User</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Location</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Role</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Status</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Push</th>
@@ -458,6 +486,18 @@ const UserManagementPanel: React.FC<UserManagementPanelProps> = ({
                         <td className="px-4 py-4">
                           <p className="font-medium text-gray-900 dark:text-white">{user.username}</p>
                           <p className="text-sm text-gray-500">{user.email}</p>
+                        </td>
+                        <td className="px-4 py-4 text-sm">
+                          {formatUserLocation(user) ? (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
+                              <MapPinIcon className="h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                              <span className="max-w-[140px] truncate" title={formatUserLocation(user)}>
+                                {formatUserLocation(user)}
+                              </span>
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-400 dark:text-gray-500">—</span>
+                          )}
                         </td>
                         <td className="px-4 py-4">
                           <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${roleClass(role)}`}>
@@ -697,6 +737,38 @@ const UserManagementPanel: React.FC<UserManagementPanelProps> = ({
                   <p className="text-xs text-gray-500">Profile edits</p>
                   <p className="font-semibold text-gray-900 dark:text-white">{selectedUser.profileEditCount || 0}</p>
                 </div>
+              </div>
+              {/* User Location Card */}
+              <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-800">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                      <MapPinIcon className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">User Location</p>
+                      <p className="font-semibold text-gray-900 dark:text-white">
+                        {formatUserLocation(selectedUser) || 'Not specified'}
+                      </p>
+                    </div>
+                  </div>
+                  {getUserCoordinates(selectedUser) && (
+                    <a
+                      href={`https://www.google.com/maps?q=${getUserCoordinates(selectedUser)!.lat},${getUserCoordinates(selectedUser)!.lon}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-white px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-gray-700 dark:text-emerald-300 dark:hover:bg-gray-600"
+                    >
+                      <span>Map</span>
+                      <ArrowTopRightOnSquareIcon className="h-3 w-3" />
+                    </a>
+                  )}
+                </div>
+                {getUserCoordinates(selectedUser) && (
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    GPS Coordinates: {getUserCoordinates(selectedUser)!.lat.toFixed(4)}°, {getUserCoordinates(selectedUser)!.lon.toFixed(4)}°
+                  </p>
+                )}
               </div>
               <NotificationReadinessCard user={selectedUser} />
               <div className="rounded-2xl border border-gray-100 p-4 dark:border-gray-800">

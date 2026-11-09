@@ -821,17 +821,19 @@ const Navbar: React.FC<NavbarProps> = ({ user: propUser }) => {
                         {isSuperAdmin ? 'Dashboard' : 'Fund Management'}
                     </Link>
                   )}
-                  <button
-                    onClick={handleLogout}
-                    className={`flex items-center w-full px-3 py-1.5 text-sm sm:text-base font-medium rounded-md transition-colors duration-200 ${
-                      isDark
-                        ? 'text-gray-300 hover:text-emerald-400 hover:bg-gray-700'
-                        : 'text-gray-700 hover:text-emerald-600 hover:bg-emerald-50'
-                    }`}
-                  >
-                    <ArrowRightOnRectangleIcon className="h-5 w-5 mr-2" />
-                    Sign out
-                  </button>
+                  <div className="pt-2 px-1">
+                    <button
+                      onClick={handleLogout}
+                      className={`flex items-center justify-center w-full px-4 py-2.5 text-sm sm:text-base font-semibold rounded-xl border shadow-sm transition-all duration-200 active:scale-[0.98] ${
+                        isDark
+                          ? 'bg-rose-950/40 border-rose-900/60 text-rose-300 hover:bg-rose-900/60 hover:text-rose-200'
+                          : 'bg-rose-50 border-rose-200/90 text-rose-700 hover:bg-rose-100 hover:text-rose-800 hover:border-rose-300'
+                      }`}
+                    >
+                      <ArrowRightOnRectangleIcon className="h-5 w-5 mr-2 text-rose-600 dark:text-rose-400" />
+                      Sign out
+                    </button>
+                  </div>
                 </>
               ) : (
                 <Link
